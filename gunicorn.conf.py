@@ -9,8 +9,10 @@ worker_connections = 50
 timeout = 120          # generous for AI assistant calls (Anthropic can be slow)
 keepalive = 5
 
-# Binding — PaaS injects $PORT at runtime
-bind = "0.0.0.0:8080"
+# Binding — Railway injects $PORT at runtime (usually a random high port, NOT 8080)
+# We read it here so gunicorn uses the right port even without start.sh override
+import os
+bind = f"0.0.0.0:{os.environ.get('PORT', '8080')}"
 
 # Logging — send everything to stdout so PaaS dashboards capture it
 accesslog = "-"
