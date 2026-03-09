@@ -1,46 +1,53 @@
 # ── ProjectFlow v4.0 — Production Dockerfile ──────────────────────────────────
 # Targets: Railway / Render / Fly.io
-# Python 3.12 slim keeps the image small (~120 MB final)
 
 FROM python:3.12-slim
 
-# Metadata
 LABEL org.opencontainers.image.title="ProjectFlow"
 LABEL org.opencontainers.image.version="4.0"
 
-# System deps (sqlite3 CLI useful for debugging; curl for health checks)
+# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
       sqlite3 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Non-root user — PaaS best practice
+# Non-root user
 RUN useradd -m -u 1000 appuser
 
 WORKDIR /app
 
-# Install Python dependencies first (Docker layer cache)
+# Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
+# App files
 COPY app.py .
 COPY gunicorn.conf.py .
 COPY start.sh .
-
 RUN chmod +x start.sh
 
-# Directories the app will create at runtime — declare them so Docker knows
-# (actual data goes to /data volume, linked by start.sh)
-RUN mkdir -p /data/pf_uploads /data/pf_static \
+# ── Download JS libraries at BUILD TIME ───────────────────────────────────────
+# Railway containers block outbound HTTP at runtime.
+# Baking the libs into the image means app.py finds them already present
+# and skips its own download logic entirely.
+RUN mkdir -p /app/pf_static && \
+    curl -fsSL "https://unpkg.com/react@18/umd/react.production.min.js"         -o /app/pf_static/react.min.js      && \
+    curl -fsSL "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" -o /app/pf_static/react-dom.min.js  && \
+    curl -fsSL "https://unpkg.com/prop-types@15/prop-types.min.js"              -o /app/pf_static/prop-types.min.js && \
+    curl -fsSL "https://unpkg.com/recharts@2/umd/Recharts.js"                   -o /app/pf_static/recharts.min.js   && \
+    curl -fsSL "https://unpkg.com/htm@3/dist/htm.js"                            -o /app/pf_static/htm.min.js        && \
+    echo "JS libs baked in: $(du -sh /app/pf_static | cut -f1)"
+
+# Runtime data directories (volume at /data is linked by start.sh)
+RUN mkdir -p /data/pf_uploads \
     && chown -R appuser:appuser /app /data
 
 USER appuser
 
-# PaaS platforms inject $PORT — gunicorn reads it in start.sh
 EXPOSE 8080
 
-# Health check — PaaS uses this to know when the app is ready
+# Health check — / always returns 200; /api/auth/me returns 401 (breaks Railway)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-8080}/api/auth/me || exit 1
+  CMD curl -f "http://localhost:${PORT:-8080}/" || exit 1
 
 CMD ["./start.sh"]
