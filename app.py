@@ -1618,7 +1618,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
       <div style=${{padding:'14px 18px',background:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(34,211,238,.06))',borderRadius:14,border:'1px solid rgba(99,102,241,.2)',display:'flex',alignItems:'center',gap:13}}>
         <${Av} u=${cu} size=${42}/>
         <div style=${{flex:1}}>
-          <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)'}}>Good day, ${cu.name.split(' ')[0]}! 👋</h2>
+          <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
           <p style=${{color:'var(--tx2)',fontSize:13,marginTop:2}}>You have <b style=${{color:'var(--ac2)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac2)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
         <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
