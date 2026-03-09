@@ -1,6 +1,5 @@
 #!/bin/sh
 # start.sh — ProjectFlow production startup
-# Persists DB, uploads and session secret to /data volume across redeploys.
 
 DATA_DIR="${DATA_DIR:-/data}"
 APP_DIR="$(dirname "$(realpath "$0")")"
@@ -10,10 +9,22 @@ echo "  App dir  : $APP_DIR"
 echo "  Data dir : $DATA_DIR"
 echo "  Port     : ${PORT:-8080}"
 
-# Ensure persistent data directories exist
 mkdir -p "$DATA_DIR/pf_uploads"
 
-# ── Persist the database ──────────────────────────────────────────────────────
+# ── Check if existing DB is valid (has tables) ────────────────────────────────
+# Previous failed deploys may have left a 0-byte or corrupt DB on the volume.
+# If the DB exists but has no tables, delete it so init_db() recreates it fresh.
+if [ -f "$DATA_DIR/projectflow.db" ]; then
+  TABLE_COUNT=$(sqlite3 "$DATA_DIR/projectflow.db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
+  if [ "$TABLE_COUNT" = "0" ]; then
+    echo "  ⚠ Corrupt/empty DB found — removing so app can recreate it"
+    rm -f "$DATA_DIR/projectflow.db"
+  else
+    echo "  ✓ Existing DB is healthy ($TABLE_COUNT tables)"
+  fi
+fi
+
+# ── Symlink DB ────────────────────────────────────────────────────────────────
 if [ ! -L "$APP_DIR/projectflow.db" ]; then
   if [ -f "$APP_DIR/projectflow.db" ] && [ ! -f "$DATA_DIR/projectflow.db" ]; then
     echo "  Migrating DB to volume..."
@@ -24,7 +35,7 @@ if [ ! -L "$APP_DIR/projectflow.db" ]; then
   echo "  ✓ DB -> $DATA_DIR/projectflow.db"
 fi
 
-# ── Persist uploaded files ────────────────────────────────────────────────────
+# ── Symlink uploads ───────────────────────────────────────────────────────────
 if [ ! -L "$APP_DIR/pf_uploads" ]; then
   if [ -d "$APP_DIR/pf_uploads" ]; then
     cp -r "$APP_DIR/pf_uploads/." "$DATA_DIR/pf_uploads/" 2>/dev/null || true
@@ -34,8 +45,7 @@ if [ ! -L "$APP_DIR/pf_uploads" ]; then
   echo "  ✓ Uploads -> $DATA_DIR/pf_uploads"
 fi
 
-# ── Persist the session secret key ───────────────────────────────────────────
-# Without this, every redeploy invalidates all user sessions (forced logout)
+# ── Symlink session secret ────────────────────────────────────────────────────
 if [ ! -L "$APP_DIR/.pf_secret" ]; then
   if [ -f "$APP_DIR/.pf_secret" ] && [ ! -f "$DATA_DIR/.pf_secret" ]; then
     cp "$APP_DIR/.pf_secret" "$DATA_DIR/.pf_secret"
@@ -44,9 +54,6 @@ if [ ! -L "$APP_DIR/.pf_secret" ]; then
   ln -sf "$DATA_DIR/.pf_secret" "$APP_DIR/.pf_secret"
   echo "  ✓ Secret key -> $DATA_DIR/.pf_secret"
 fi
-
-# NOTE: pf_static (JS libs) is NOT symlinked — it's baked into the Docker image
-# at build time so we never need to download it at runtime.
 
 echo ""
 echo "  Launching gunicorn on port ${PORT:-8080}..."
