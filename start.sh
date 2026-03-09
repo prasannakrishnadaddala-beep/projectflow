@@ -9,25 +9,24 @@ echo "  App dir  : $APP_DIR"
 echo "  Data dir : $DATA_DIR"
 echo "  Port     : ${PORT:-8080}"
 
+# Ensure persistent data directories exist
 mkdir -p "$DATA_DIR/pf_uploads"
 
-# ── Check if existing DB is valid (has tables) ────────────────────────────────
-# Previous failed deploys may have left a 0-byte or corrupt DB on the volume.
-# If the DB exists but has no tables, delete it so init_db() recreates it fresh.
+# ── Check if existing DB is valid ─────────────────────────────────────────────
 if [ -f "$DATA_DIR/projectflow.db" ]; then
-  TABLE_COUNT=$(sqlite3 "$DATA_DIR/projectflow.db" "SELECT COUNT(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
+  TABLE_COUNT=$(sqlite3 "$DATA_DIR/projectflow.db" \
+    "SELECT COUNT(*) FROM sqlite_master WHERE type='table';" 2>/dev/null || echo "0")
   if [ "$TABLE_COUNT" = "0" ]; then
-    echo "  ⚠ Corrupt/empty DB found — removing so app can recreate it"
+    echo "  ⚠ Empty/corrupt DB on volume — removing it"
     rm -f "$DATA_DIR/projectflow.db"
   else
-    echo "  ✓ Existing DB is healthy ($TABLE_COUNT tables)"
+    echo "  ✓ Existing DB healthy ($TABLE_COUNT tables)"
   fi
 fi
 
 # ── Symlink DB ────────────────────────────────────────────────────────────────
 if [ ! -L "$APP_DIR/projectflow.db" ]; then
   if [ -f "$APP_DIR/projectflow.db" ] && [ ! -f "$DATA_DIR/projectflow.db" ]; then
-    echo "  Migrating DB to volume..."
     cp "$APP_DIR/projectflow.db" "$DATA_DIR/projectflow.db"
     rm -f "$APP_DIR/projectflow.db"
   fi
@@ -52,8 +51,19 @@ if [ ! -L "$APP_DIR/.pf_secret" ]; then
     rm -f "$APP_DIR/.pf_secret"
   fi
   ln -sf "$DATA_DIR/.pf_secret" "$APP_DIR/.pf_secret"
-  echo "  ✓ Secret key -> $DATA_DIR/.pf_secret"
+  echo "  ✓ Secret -> $DATA_DIR/.pf_secret"
 fi
+
+# ── THE CRITICAL FIX ──────────────────────────────────────────────────────────
+# app.py calls init_db() only inside "if __name__ == '__main__'" which means
+# gunicorn (which imports app as a module) NEVER calls it — leaving an empty DB.
+# We explicitly call it here before gunicorn starts.
+echo "  Initializing database tables..."
+cd "$APP_DIR" && python -c "
+from app import init_db
+init_db()
+print('  ✓ Database tables ready')
+"
 
 echo ""
 echo "  Launching gunicorn on port ${PORT:-8080}..."
