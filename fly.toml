@@ -1,0 +1,46 @@
+# fly.toml — Fly.io deployment configuration
+# Docs: https://fly.io/docs/reference/configuration/
+
+app = "projectflow"          # CHANGE THIS to your chosen app name (must be unique on fly.io)
+primary_region = "sin"       # Singapore — change to nearest: lax/ord/iad/lhr/ams/nrt/syd
+                             # Full list: fly.io/docs/reference/regions/
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT     = "8080"
+  DATA_DIR = "/data"
+
+[http_service]
+  internal_port       = 8080
+  force_https         = true     # Fly handles SSL — your app stays HTTP internally
+  auto_stop_machines  = true     # Saves cost: machine sleeps when idle
+  auto_start_machines = true     # Wakes up on first request (~2s cold start)
+  min_machines_running = 0       # Set to 1 if you can't tolerate cold starts ($~3/mo)
+
+  [http_service.concurrency]
+    type       = "requests"
+    hard_limit = 50
+    soft_limit = 40
+
+[[vm]]
+  memory = "512mb"    # Enough for 1-20 users; bump to 1gb if you see OOM errors
+  cpus   = 1
+
+# Persistent volume — REQUIRED so DB survives redeploys
+# Create it BEFORE first deploy with:
+#   fly volumes create projectflow_data --size 1 --region sin
+[[mounts]]
+  source      = "projectflow_data"   # must match the volume name you created
+  destination = "/data"
+
+[checks]
+  [checks.health]
+    grace_period = "30s"
+    interval     = "30s"
+    method       = "GET"
+    path         = "/api/auth/me"
+    port         = 8080
+    timeout      = "10s"
+    type         = "http"

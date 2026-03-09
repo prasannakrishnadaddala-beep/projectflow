@@ -1,0 +1,40 @@
+# render.yaml — Render deployment configuration
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: projectflow
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # $7/mo — includes 512 MB RAM, enough for 1-20 users
+                           # upgrade to "standard" ($25/mo) if you need more RAM
+
+    healthCheckPath: /api/auth/me
+
+    # Persistent Disk — REQUIRED so the database survives redeploys
+    disk:
+      name: projectflow-data
+      mountPath: /data      # start.sh links this into the app automatically
+      sizeGB: 1             # 1 GB is plenty for a small team
+
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: DATA_DIR
+        value: /data
+
+    # Optional: auto-deploy when you push to GitHub
+    # autoDeploy: true
+
+# ── Steps to deploy on Render ──────────────────────────────────────────────────
+# Option A — Blueprint (easiest):
+#   1. Push these files to a GitHub repo
+#   2. Go to render.com → "New" → "Blueprint"
+#   3. Connect your repo — Render reads this file automatically
+#
+# Option B — Manual:
+#   1. render.com → "New" → "Web Service"
+#   2. Connect GitHub repo, choose "Docker" runtime
+#   3. Add the environment variables above
+#   4. Under "Disks", add a disk mounted at /data
+# ─────────────────────────────────────────────────────────────────────────────

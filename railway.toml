@@ -1,0 +1,25 @@
+# railway.toml — Railway deployment configuration
+# Docs: https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "./start.sh"
+healthcheckPath = "/api/auth/me"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# ── How to add persistent storage on Railway ───────────────────────────────────
+# Railway calls it a "Volume". You MUST create one in the Railway dashboard:
+#
+#  1. Open your project on railway.app
+#  2. Click your service → "Volumes" tab → "Add Volume"
+#  3. Set Mount Path to:  /data
+#  4. Choose size: 1 GB is plenty for a small team
+#  5. Redeploy — start.sh will automatically link /data into the app
+#
+# Without a volume, the database resets on every redeploy!
+# ─────────────────────────────────────────────────────────────────────────────

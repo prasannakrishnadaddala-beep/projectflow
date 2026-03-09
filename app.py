@@ -1,0 +1,2126 @@
+#!/usr/bin/env python3
+"""
+ProjectFlow v4.0
+Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
+"""
+import os, sys, json, hashlib, sqlite3, secrets, random, urllib.request, urllib.error
+import socket, threading, time, webbrowser, mimetypes, base64
+from datetime import datetime
+from functools import wraps
+from flask import Flask, request, jsonify, session, Response, send_file
+from flask_cors import CORS
+
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+DB         = os.path.join(BASE_DIR, "projectflow.db")
+JS_DIR     = os.path.join(BASE_DIR, "pf_static")
+UPLOAD_DIR = os.path.join(BASE_DIR, "pf_uploads")
+KEY_FILE   = os.path.join(BASE_DIR, ".pf_secret")
+
+def get_secret_key():
+    if os.path.exists(KEY_FILE):
+        try:
+            with open(KEY_FILE,"r") as f:
+                k=f.read().strip()
+                if len(k)==64: return k
+        except: pass
+    k=secrets.token_hex(32)
+    try:
+        with open(KEY_FILE,"w") as f: f.write(k)
+    except: pass
+    return k
+
+app = Flask(__name__)
+app.secret_key = get_secret_key()
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=False,PERMANENT_SESSION_LIFETIME=86400*7,
+    MAX_CONTENT_LENGTH=20*1024*1024)
+CORS(app, supports_credentials=True)
+
+CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#6366f1"]
+
+def get_db():
+    c=sqlite3.connect(DB); c.row_factory=sqlite3.Row; return c
+def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
+def ts(): return datetime.now().isoformat()
+
+# ── DB Init & Migration ───────────────────────────────────────────────────────
+def init_db():
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    with get_db() as db:
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id TEXT PRIMARY KEY, name TEXT, invite_code TEXT,
+                owner_id TEXT, ai_api_key TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, email TEXT,
+                password TEXT, role TEXT, avatar TEXT, color TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, description TEXT,
+                owner TEXT, members TEXT DEFAULT '[]', start_date TEXT,
+                target_date TEXT, progress INTEGER DEFAULT 0, color TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
+                project TEXT, assignee TEXT, priority TEXT, stage TEXT,
+                created TEXT, due TEXT, pct INTEGER DEFAULT 0, comments TEXT DEFAULT '[]');
+            CREATE TABLE IF NOT EXISTS files (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, size INTEGER,
+                mime TEXT, task_id TEXT, project_id TEXT, uploaded_by TEXT, ts TEXT);
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY, workspace_id TEXT, sender TEXT,
+                project TEXT, content TEXT, ts TEXT);
+            CREATE TABLE IF NOT EXISTS direct_messages (
+                id TEXT PRIMARY KEY, workspace_id TEXT, sender TEXT,
+                recipient TEXT, content TEXT, read INTEGER DEFAULT 0, ts TEXT);
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY, workspace_id TEXT, type TEXT, content TEXT,
+                user_id TEXT, read INTEGER DEFAULT 0, ts TEXT);
+        """)
+        # Migrate legacy data (no workspace_id)
+        existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
+        if not existing_ws:
+            # Check if legacy users exist (without workspace_id)
+            legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
+            ws_id = f"ws{int(datetime.now().timestamp()*1000)}"
+            invite = secrets.token_hex(4).upper()
+            db.execute("INSERT OR IGNORE INTO workspaces VALUES (?,?,?,?,?,?)",
+                       (ws_id,"Demo Workspace",invite,"u1",None,ts()))
+            if legacy_users:
+                for tbl in ["users","projects","tasks","files","messages","direct_messages","notifications"]:
+                    try: db.execute(f"UPDATE {tbl} SET workspace_id=? WHERE workspace_id IS NULL",(ws_id,))
+                    except: pass
+            else:
+                _seed_demo(db, ws_id)
+
+def _seed_demo(db, ws_id):
+    for u in [
+        ("u1","Alice Chen",  "alice@dev.io",hash_pw("pass123"),"Admin",    "AC","#7c3aed"),
+        ("u2","Bob Martinez","bob@dev.io",  hash_pw("pass123"),"Developer","BM","#2563eb"),
+        ("u3","Carol Smith", "carol@dev.io",hash_pw("pass123"),"Tester",   "CS","#059669"),
+        ("u4","David Kim",   "david@dev.io",hash_pw("pass123"),"Developer","DK","#d97706"),
+        ("u5","Eva Wilson",  "eva@dev.io",  hash_pw("pass123"),"Viewer",   "EW","#dc2626"),
+    ]:
+        try: db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",(u[0],ws_id,*u[1:],ts()))
+        except: pass
+    for p in [
+        ("p1","E-Commerce Platform",   "Modern e-commerce with payment integration & inventory.",       "u1",'["u1","u2","u3","u4"]',"2025-01-15","2025-06-30",65,"#7c3aed"),
+        ("p2","Mobile Banking App",    "Secure mobile banking with biometric auth & real-time transfers.","u2",'["u1","u2","u5"]',     "2025-02-01","2025-08-15",40,"#2563eb"),
+        ("p3","AI Analytics Dashboard","Real-time analytics powered by ML for business intelligence.",   "u1",'["u1","u3","u4"]',     "2025-03-01","2025-09-30",20,"#059669"),
+    ]:
+        try: db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",(p[0],ws_id,*p[1:],ts()))
+        except: pass
+    for t in [
+        ("T-001","Design system setup",        "Configure design tokens and component library.",       "p1","u2","high",  "completed",  "2025-02-15",100),
+        ("T-002","User authentication API",    "JWT auth with refresh tokens.",                       "p1","u2","high",  "production", "2025-03-01",100),
+        ("T-003","Product catalog UI",         "Product listing, filtering and search.",              "p1","u4","medium","development","2025-04-30", 60),
+        ("T-004","Payment gateway integration","Stripe integration with webhooks.",                   "p1","u2","high",  "code_review","2025-05-15", 80),
+        ("T-005","Cart & checkout flow",       "Shopping cart with multi-step checkout.",             "p1","u4","high",  "testing",    "2025-05-30", 70),
+        ("T-006","Inventory management",       "Stock tracking and bulk import.",                     "p1","u2","medium","planning",   "2025-06-15", 10),
+        ("T-007","Performance testing",        "Load testing and optimization.",                      "p1","u3","medium","backlog",    "2025-06-25",  0),
+        ("T-008","Biometric auth flow",        "Face ID and fingerprint auth.",                       "p2","u2","high",  "development","2025-04-30", 55),
+        ("T-009","Real-time transfers",        "WebSocket transfer notifications.",                   "p2","u2","high",  "planning",   "2025-05-30", 20),
+        ("T-010","Security audit",             "Penetration testing and compliance.",                 "p2","u3","high",  "backlog",    "2025-07-15",  0),
+        ("T-011","ML model integration",       "Connect ML models via REST API.",                     "p3","u4","high",  "development","2025-07-30", 25),
+        ("T-012","Chart components",           "Interactive visualization components.",               "p3","u4","medium","code_review","2025-06-15", 85),
+        ("T-013","Data pipeline setup",        "ETL pipeline for real-time data ingestion.",          "p3","u2","high",  "blocked",    "2025-06-01", 30),
+    ]:
+        try: db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",(t[0],ws_id,t[1],t[2],t[3],t[4],t[5],t[6],ts(),t[7],t[8],"[]"))
+        except: pass
+    for m in [
+        ("m1","u2","p1","Just pushed the auth API to staging!"),
+        ("m2","u3","p1","Running test suite, will report results."),
+        ("m3","u4","p1","@alice Can you review the product catalog PR?"),
+        ("m4","u1","p1","Sure! Checking it after standup."),
+    ]:
+        try: db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?)",(m[0],ws_id,m[1],m[2],m[3],ts()))
+        except: pass
+    for n in [
+        ("n1","task_assigned","You have been assigned to Cart & checkout flow","u4",0),
+        ("n2","status_change","Task Payment gateway moved to Code Review","u2",0),
+        ("n3","comment","Bob commented on Product catalog UI","u4",1),
+    ]:
+        try: db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts()))
+        except: pass
+
+def login_required(f):
+    @wraps(f)
+    def d(*a,**kw):
+        if "user_id" not in session: return jsonify({"error":"Unauthorized"}),401
+        return f(*a,**kw)
+    return d
+
+def wid(): return session.get("workspace_id","")
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+@app.route("/api/auth/login",methods=["POST"])
+def login():
+    d=request.json or {}
+    with get_db() as db:
+        u=db.execute("SELECT * FROM users WHERE email=? AND password=?",
+                     (d.get("email",""),hash_pw(d.get("password","")))).fetchone()
+        if not u: return jsonify({"error":"Invalid email or password"}),401
+        session.permanent=True
+        session["user_id"]=u["id"]
+        session["workspace_id"]=u["workspace_id"]
+        return jsonify(dict(u))
+
+@app.route("/api/auth/logout",methods=["POST"])
+def logout(): session.clear(); return jsonify({"ok":True})
+
+@app.route("/api/auth/register",methods=["POST"])
+def register():
+    d=request.json or {}
+    mode=d.get("mode","create")  # 'create' or 'join'
+    if not d.get("name") or not d.get("email") or not d.get("password"):
+        return jsonify({"error":"All fields required"}),400
+    uid=f"u{int(datetime.now().timestamp()*1000)}"
+    av="".join(w[0] for w in d["name"].split())[:2].upper()
+    c=random.choice(CLRS)
+    ws_id=None
+    if mode=="create":
+        if not d.get("workspace_name"):
+            return jsonify({"error":"Workspace name required"}),400
+        ws_id=f"ws{int(datetime.now().timestamp()*1000)}"
+        invite=secrets.token_hex(4).upper()
+        with get_db() as db:
+            db.execute("INSERT INTO workspaces VALUES (?,?,?,?,?,?)",
+                       (ws_id,d["workspace_name"],invite,uid,None,ts()))
+    elif mode=="join":
+        code=d.get("invite_code","").strip().upper()
+        with get_db() as db:
+            ws=db.execute("SELECT id FROM workspaces WHERE invite_code=?",(code,)).fetchone()
+            if not ws: return jsonify({"error":"Invalid invite code"}),400
+            ws_id=ws["id"]
+    else:
+        return jsonify({"error":"Invalid mode"}),400
+    try:
+        with get_db() as db:
+            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",
+                       (uid,ws_id,d["name"],d["email"],hash_pw(d["password"]),
+                        d.get("role","Developer"),av,c,ts()))
+            session.permanent=True
+            session["user_id"]=uid
+            session["workspace_id"]=ws_id
+            return jsonify({"id":uid,"workspace_id":ws_id,"name":d["name"],"email":d["email"],
+                            "role":d.get("role","Developer"),"avatar":av,"color":c})
+    except Exception as e:
+        if "UNIQUE" in str(e): return jsonify({"error":"Email already registered"}),400
+        return jsonify({"error":str(e)}),500
+
+@app.route("/api/auth/me")
+def me():
+    if "user_id" not in session: return jsonify({"error":"Not logged in"}),401
+    with get_db() as db:
+        u=db.execute("SELECT * FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not u: session.clear(); return jsonify({"error":"Not found"}),404
+        if u["workspace_id"]: session["workspace_id"]=u["workspace_id"]
+        return jsonify(dict(u))
+
+# ── Workspace ─────────────────────────────────────────────────────────────────
+@app.route("/api/workspace")
+@login_required
+def get_workspace():
+    with get_db() as db:
+        ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        if not ws: return jsonify({"error":"Workspace not found"}),404
+        return jsonify(dict(ws))
+
+@app.route("/api/workspace",methods=["PUT"])
+@login_required
+def update_workspace():
+    d=request.json or {}
+    with get_db() as db:
+        if "name" in d: db.execute("UPDATE workspaces SET name=? WHERE id=?",(d["name"],wid()))
+        if "ai_api_key" in d: db.execute("UPDATE workspaces SET ai_api_key=? WHERE id=?",(d["ai_api_key"],wid()))
+        ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        return jsonify(dict(ws))
+
+@app.route("/api/workspace/new-invite",methods=["POST"])
+@login_required
+def new_invite():
+    invite=secrets.token_hex(4).upper()
+    with get_db() as db:
+        db.execute("UPDATE workspaces SET invite_code=? WHERE id=?",(invite,wid()))
+        return jsonify({"invite_code":invite})
+
+# ── Users ─────────────────────────────────────────────────────────────────────
+@app.route("/api/users")
+@login_required
+def get_users():
+    with get_db() as db:
+        return jsonify([dict(r) for r in db.execute(
+            "SELECT * FROM users WHERE workspace_id=? ORDER BY name",(wid(),)).fetchall()])
+
+@app.route("/api/users",methods=["POST"])
+@login_required
+def add_user():
+    d=request.json or {}
+    if not d.get("name") or not d.get("email") or not d.get("password"):
+        return jsonify({"error":"All fields required"}),400
+    uid=f"u{int(datetime.now().timestamp()*1000)}"
+    av="".join(w[0] for w in d["name"].split())[:2].upper()
+    c=random.choice(CLRS)
+    try:
+        with get_db() as db:
+            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",
+                       (uid,wid(),d["name"],d["email"],hash_pw(d["password"]),
+                        d.get("role","Developer"),av,c,ts()))
+            return jsonify({"id":uid,"workspace_id":wid(),"name":d["name"],
+                            "email":d["email"],"role":d.get("role","Developer"),"avatar":av,"color":c})
+    except Exception as e:
+        if "UNIQUE" in str(e): return jsonify({"error":"Email already in use"}),400
+        return jsonify({"error":str(e)}),500
+
+@app.route("/api/users/<uid>",methods=["PUT"])
+@login_required
+def update_user(uid):
+    d=request.json or {}
+    with get_db() as db:
+        if "role" in d: db.execute("UPDATE users SET role=? WHERE id=? AND workspace_id=?",(d["role"],uid,wid()))
+        u=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
+        return jsonify(dict(u) if u else {})
+
+@app.route("/api/users/<uid>",methods=["DELETE"])
+@login_required
+def del_user(uid):
+    with get_db() as db:
+        db.execute("DELETE FROM users WHERE id=? AND workspace_id=?",(uid,wid()))
+        return jsonify({"ok":True})
+
+# ── Projects ──────────────────────────────────────────────────────────────────
+@app.route("/api/projects")
+@login_required
+def get_projects():
+    with get_db() as db:
+        return jsonify([dict(r) for r in db.execute(
+            "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
+
+@app.route("/api/projects",methods=["POST"])
+@login_required
+def create_project():
+    d=request.json or {}
+    if not d.get("name"): return jsonify({"error":"Name required"}),400
+    pid=f"p{int(datetime.now().timestamp()*1000)}"
+    members=d.get("members",[session["user_id"]])
+    if session["user_id"] not in members: members.insert(0,session["user_id"])
+    with get_db() as db:
+        db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                   (pid,wid(),d["name"],d.get("description",""),session["user_id"],
+                    json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
+                    d.get("color","#6366f1"),ts()))
+        p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
+        return jsonify(dict(p))
+
+@app.route("/api/projects/<pid>",methods=["PUT"])
+@login_required
+def update_project(pid):
+    d=request.json or {}
+    with get_db() as db:
+        p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
+        if not p: return jsonify({"error":"Not found"}),404
+        db.execute("""UPDATE projects SET name=?,description=?,target_date=?,color=?,members=?
+                      WHERE id=? AND workspace_id=?""",
+                   (d.get("name",p["name"]),d.get("description",p["description"]),
+                    d.get("target_date",p["target_date"]),d.get("color",p["color"]),
+                    json.dumps(d.get("members",json.loads(p["members"]))),pid,wid()))
+        return jsonify(dict(db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()))
+
+@app.route("/api/projects/<pid>",methods=["DELETE"])
+@login_required
+def del_project(pid):
+    with get_db() as db:
+        db.execute("DELETE FROM projects WHERE id=? AND workspace_id=?",(pid,wid()))
+        db.execute("DELETE FROM tasks WHERE project=? AND workspace_id=?",(pid,wid()))
+        db.execute("DELETE FROM files WHERE project_id=? AND workspace_id=?",(pid,wid()))
+        return jsonify({"ok":True})
+
+# ── Tasks ─────────────────────────────────────────────────────────────────────
+@app.route("/api/tasks")
+@login_required
+def get_tasks():
+    with get_db() as db:
+        return jsonify([dict(r) for r in db.execute(
+            "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
+
+def next_task_id(db, ws):
+    count=db.execute("SELECT COUNT(*) FROM tasks WHERE workspace_id=?",(ws,)).fetchone()[0]
+    return f"T-{count+1:03d}"
+
+@app.route("/api/tasks",methods=["POST"])
+@login_required
+def create_task():
+    d=request.json or {}
+    if not d.get("title"): return jsonify({"error":"Title required"}),400
+    with get_db() as db:
+        tid=next_task_id(db,wid())
+        db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (tid,wid(),d["title"],d.get("description",""),d.get("project",""),
+                    d.get("assignee",""),d.get("priority","medium"),d.get("stage","backlog"),
+                    ts(),d.get("due",""),d.get("pct",0),json.dumps(d.get("comments",[]))))
+        # Notify assignee
+        if d.get("assignee") and d["assignee"]!=session["user_id"]:
+            nid=f"n{int(datetime.now().timestamp()*1000)}"
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"task_assigned",f"You were assigned to '{d['title']}'",d["assignee"],0,ts()))
+        t=db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()
+        return jsonify(dict(t))
+
+@app.route("/api/tasks/<tid>",methods=["PUT"])
+@login_required
+def update_task(tid):
+    d=request.json or {}
+    with get_db() as db:
+        t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
+        if not t: return jsonify({"error":"Not found"}),404
+        old_stage=t["stage"]
+        db.execute("""UPDATE tasks SET title=?,description=?,project=?,assignee=?,
+                      priority=?,stage=?,due=?,pct=?,comments=? WHERE id=? AND workspace_id=?""",
+                   (d.get("title",t["title"]),d.get("description",t["description"]),
+                    d.get("project",t["project"]),d.get("assignee",t["assignee"]),
+                    d.get("priority",t["priority"]),d.get("stage",t["stage"]),
+                    d.get("due",t["due"]),d.get("pct",t["pct"]),
+                    json.dumps(d.get("comments",json.loads(t["comments"]))),tid,wid()))
+        if d.get("stage") and d["stage"]!=old_stage:
+            nid=f"n{int(datetime.now().timestamp()*1000)}"
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"status_change",f"Task '{t['title']}' moved to {d['stage']}",
+                        t["assignee"],0,ts()))
+        return jsonify(dict(db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()))
+
+@app.route("/api/tasks/<tid>",methods=["DELETE"])
+@login_required
+def del_task(tid):
+    with get_db() as db:
+        db.execute("DELETE FROM tasks WHERE id=? AND workspace_id=?",(tid,wid()))
+        return jsonify({"ok":True})
+
+# ── Files ─────────────────────────────────────────────────────────────────────
+@app.route("/api/files")
+@login_required
+def get_files():
+    task_id=request.args.get("task_id"); project_id=request.args.get("project_id")
+    with get_db() as db:
+        if task_id:
+            rows=db.execute("SELECT * FROM files WHERE task_id=? AND workspace_id=? ORDER BY ts DESC",(task_id,wid())).fetchall()
+        elif project_id:
+            rows=db.execute("SELECT * FROM files WHERE project_id=? AND workspace_id=? ORDER BY ts DESC",(project_id,wid())).fetchall()
+        else: rows=[]
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/files",methods=["POST"])
+@login_required
+def upload_file():
+    f=request.files.get("file")
+    if not f: return jsonify({"error":"No file"}),400
+    fid=f"f{int(datetime.now().timestamp()*1000)}"
+    data=f.read()
+    if len(data)>20*1024*1024: return jsonify({"error":"File too large (max 20MB)"}),400
+    path=os.path.join(UPLOAD_DIR,fid)
+    with open(path,"wb") as fp: fp.write(data)
+    task_id=request.form.get("task_id","")
+    project_id=request.form.get("project_id","")
+    with get_db() as db:
+        db.execute("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?)",
+                   (fid,wid(),f.filename,len(data),f.content_type,task_id,project_id,session["user_id"],ts()))
+        row=db.execute("SELECT * FROM files WHERE id=?",(fid,)).fetchone()
+        return jsonify(dict(row))
+
+@app.route("/api/files/<fid>")
+@login_required
+def download_file(fid):
+    with get_db() as db:
+        row=db.execute("SELECT * FROM files WHERE id=? AND workspace_id=?",(fid,wid())).fetchone()
+        if not row: return jsonify({"error":"Not found"}),404
+    path=os.path.join(UPLOAD_DIR,fid)
+    if not os.path.exists(path): return jsonify({"error":"File missing"}),404
+    return send_file(path,download_name=row["name"],as_attachment=True,mimetype=row["mime"])
+
+@app.route("/api/files/<fid>",methods=["DELETE"])
+@login_required
+def del_file(fid):
+    with get_db() as db:
+        db.execute("DELETE FROM files WHERE id=? AND workspace_id=?",(fid,wid()))
+    path=os.path.join(UPLOAD_DIR,fid)
+    if os.path.exists(path): os.remove(path)
+    return jsonify({"ok":True})
+
+# ── Messages ──────────────────────────────────────────────────────────────────
+@app.route("/api/messages")
+@login_required
+def get_messages():
+    project=request.args.get("project","")
+    with get_db() as db:
+        rows=db.execute("SELECT * FROM messages WHERE project=? AND workspace_id=? ORDER BY ts",
+                        (project,wid())).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/messages",methods=["POST"])
+@login_required
+def send_message():
+    d=request.json or {}
+    mid=f"m{int(datetime.now().timestamp()*1000)}"
+    with get_db() as db:
+        db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?)",
+                   (mid,wid(),session["user_id"],d.get("project",""),d.get("content",""),ts()))
+        return jsonify(dict(db.execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()))
+
+# ── Direct Messages ───────────────────────────────────────────────────────────
+@app.route("/api/dm/<other_id>")
+@login_required
+def get_dm(other_id):
+    me=session["user_id"]
+    with get_db() as db:
+        rows=db.execute("""SELECT * FROM direct_messages
+            WHERE workspace_id=? AND ((sender=? AND recipient=?) OR (sender=? AND recipient=?))
+            ORDER BY ts""",(wid(),me,other_id,other_id,me)).fetchall()
+        db.execute("UPDATE direct_messages SET read=1 WHERE workspace_id=? AND sender=? AND recipient=? AND read=0",
+                   (wid(),other_id,me))
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/dm",methods=["POST"])
+@login_required
+def send_dm():
+    d=request.json or {}
+    if not d.get("content","").strip(): return jsonify({"error":"Empty"}),400
+    mid=f"dm{int(datetime.now().timestamp()*1000)}"
+    with get_db() as db:
+        db.execute("INSERT INTO direct_messages VALUES (?,?,?,?,?,?,?)",
+                   (mid,wid(),session["user_id"],d["recipient"],d["content"],0,ts()))
+        return jsonify(dict(db.execute("SELECT * FROM direct_messages WHERE id=?",(mid,)).fetchone()))
+
+@app.route("/api/dm/unread")
+@login_required
+def dm_unread():
+    with get_db() as db:
+        rows=db.execute("""SELECT sender,COUNT(*) as cnt FROM direct_messages
+            WHERE workspace_id=? AND recipient=? AND read=0 GROUP BY sender""",
+            (wid(),session["user_id"])).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+@app.route("/api/notifications")
+@login_required
+def get_notifs():
+    with get_db() as db:
+        rows=db.execute("""SELECT * FROM notifications WHERE workspace_id=? AND user_id=?
+            ORDER BY ts DESC LIMIT 50""",(wid(),session["user_id"])).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/notifications/<nid>/read",methods=["PUT"])
+@login_required
+def read_notif(nid):
+    with get_db() as db:
+        db.execute("UPDATE notifications SET read=1 WHERE id=? AND workspace_id=?",(nid,wid()))
+        return jsonify({"ok":True})
+
+@app.route("/api/notifications/read-all",methods=["PUT"])
+@login_required
+def read_all_notifs():
+    with get_db() as db:
+        db.execute("UPDATE notifications SET read=1 WHERE workspace_id=? AND user_id=?",(wid(),session["user_id"]))
+        return jsonify({"ok":True})
+
+# ── AI Assistant ──────────────────────────────────────────────────────────────
+@app.route("/api/ai/chat",methods=["POST"])
+@login_required
+def ai_chat():
+    d=request.json or {}
+    user_msg=d.get("message","").strip()
+    history=d.get("history",[])
+    if not user_msg: return jsonify({"error":"Empty message"}),400
+
+    with get_db() as db:
+        ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        api_key=(ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
+        if not api_key:
+            return jsonify({"error":"NO_KEY","message":"Please configure your Anthropic API key in Workspace Settings (⚙) to enable AI features."}),400
+
+        # Build context
+        projects=db.execute("SELECT id,name,description,target_date,color FROM projects WHERE workspace_id=?",(wid(),)).fetchall()
+        tasks=db.execute("SELECT id,title,stage,priority,assignee,project,due,pct FROM tasks WHERE workspace_id=?",(wid(),)).fetchall()
+        users=db.execute("SELECT id,name,role FROM users WHERE workspace_id=?",(wid(),)).fetchall()
+        cu=db.execute("SELECT * FROM users WHERE id=?",(session["user_id"],)).fetchone()
+
+    proj_ctx="\n".join([f"- {p['name']} (id:{p['id']}, due:{p['target_date']})" for p in projects])
+    task_ctx="\n".join([f"- [{t['id']}] {t['title']} | stage:{t['stage']} | priority:{t['priority']} | pct:{t['pct']}%" for t in tasks])
+    user_ctx="\n".join([f"- {u['name']} (id:{u['id']}, role:{u['role']})" for u in users])
+
+    system=f"""You are an AI assistant for ProjectFlow — a project management tool used by the workspace "{ws['name'] if ws else 'Unknown'}".
+Current user: {cu['name']} (role: {cu['role']})
+Today: {datetime.now().strftime('%Y-%m-%d')}
+
+PROJECTS:
+{proj_ctx or 'No projects yet.'}
+
+TASKS:
+{task_ctx or 'No tasks yet.'}
+
+TEAM MEMBERS:
+{user_ctx}
+
+You can answer questions, analyze status, and PERFORM ACTIONS by including JSON in your reply like:
+<action>{{"type":"create_task","title":"Task name","project":"project_id","priority":"high","stage":"backlog","assignee":"user_id","due":"YYYY-MM-DD","description":"details"}}</action>
+<action>{{"type":"update_task","task_id":"T-001","stage":"testing","pct":75}}</action>
+<action>{{"type":"create_project","name":"Project Name","description":"desc","color":"#6366f1","members":["user_id"]}}</action>
+<action>{{"type":"eod_report"}}</action>
+
+IMPORTANT: Always be helpful and concise. When performing actions, explain what you did. For EOD reports, summarize all task statuses by project."""
+
+    msgs=[{"role":"user" if m["role"]=="user" else "assistant","content":m["content"]} for m in history[-10:]]
+    msgs.append({"role":"user","content":user_msg})
+
+    try:
+        req_data=json.dumps({"model":"claude-sonnet-4-5","max_tokens":1500,"system":system,"messages":msgs}).encode()
+        req=urllib.request.Request("https://api.anthropic.com/v1/messages",
+            data=req_data,method="POST",
+            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
+        with urllib.request.urlopen(req,timeout=30) as resp:
+            result=json.loads(resp.read().decode())
+            ai_text=result["content"][0]["text"]
+    except urllib.error.HTTPError as e:
+        body=e.read().decode()
+        if e.code==401: return jsonify({"error":"INVALID_KEY","message":"Invalid API key. Check your key in Workspace Settings."}),400
+        return jsonify({"error":"API_ERROR","message":f"Anthropic API error: {body[:200]}"}),500
+    except Exception as e:
+        return jsonify({"error":"NETWORK_ERROR","message":f"Could not reach AI: {str(e)}"}),500
+
+    # Parse and execute actions
+    import re
+    actions_raw=re.findall(r'<action>(.*?)</action>',ai_text,re.DOTALL)
+    action_results=[]
+    clean_text=re.sub(r'<action>.*?</action>','',ai_text,flags=re.DOTALL).strip()
+
+    for ar in actions_raw:
+        try:
+            act=json.loads(ar.strip())
+            atype=act.get("type","")
+            with get_db() as db:
+                if atype=="create_task":
+                    tid=next_task_id(db,wid())
+                    db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (tid,wid(),act.get("title","New Task"),act.get("description",""),
+                                act.get("project",""),act.get("assignee",""),
+                                act.get("priority","medium"),act.get("stage","backlog"),
+                                ts(),act.get("due",""),0,"[]"))
+                    action_results.append({"type":"create_task","id":tid,"title":act.get("title")})
+                elif atype=="update_task":
+                    tid=act.get("task_id","")
+                    t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
+                    if t:
+                        db.execute("UPDATE tasks SET stage=?,pct=?,priority=?,assignee=? WHERE id=? AND workspace_id=?",
+                                   (act.get("stage",t["stage"]),act.get("pct",t["pct"]),
+                                    act.get("priority",t["priority"]),act.get("assignee",t["assignee"]),tid,wid()))
+                        action_results.append({"type":"update_task","id":tid})
+                elif atype=="create_project":
+                    pid=f"p{int(datetime.now().timestamp()*1000)}"
+                    mems=act.get("members",[session["user_id"]])
+                    db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                               (pid,wid(),act.get("name","New Project"),act.get("description",""),
+                                session["user_id"],json.dumps(mems),"",act.get("target_date",""),0,
+                                act.get("color","#6366f1"),ts()))
+                    action_results.append({"type":"create_project","id":pid,"name":act.get("name")})
+                elif atype=="eod_report":
+                    rows=db.execute("SELECT t.*,p.name as pname FROM tasks t LEFT JOIN projects p ON t.project=p.id WHERE t.workspace_id=?",(wid(),)).fetchall()
+                    by_stage={}
+                    for r in rows:
+                        s=r["stage"]
+                        by_stage.setdefault(s,[]).append(r["title"])
+                    report_lines=[]
+                    for st,titles in by_stage.items():
+                        report_lines.append(f"**{st.upper()}** ({len(titles)}): "+", ".join(titles[:3])+("..." if len(titles)>3 else ""))
+                    action_results.append({"type":"eod_report","summary":"\n".join(report_lines)})
+        except Exception as ex:
+            action_results.append({"type":"error","message":str(ex)})
+
+    return jsonify({"message":clean_text,"actions":action_results,"raw":ai_text})
+
+# ── Export ────────────────────────────────────────────────────────────────────
+@app.route("/api/export/csv")
+@login_required
+def export_csv():
+    with get_db() as db:
+        tasks=db.execute("SELECT * FROM tasks WHERE workspace_id=?",(wid(),)).fetchall()
+    lines=["id,title,project,assignee,priority,stage,due,pct"]
+    for t in tasks:
+        lines.append(f'"{t["id"]}","{t["title"]}","{t["project"]}","{t["assignee"]}","{t["priority"]}","{t["stage"]}","{t["due"]}","{t["pct"]}"')
+    return Response("\n".join(lines),mimetype="text/csv",
+                    headers={"Content-Disposition":"attachment;filename=tasks.csv"})
+
+# ── Serve ─────────────────────────────────────────────────────────────────────
+@app.route("/js/<path:fn>")
+def serve_js(fn):
+    path=os.path.join(JS_DIR,fn)
+    if not os.path.exists(path): return "Not Found",404
+    mime,_=mimetypes.guess_type(fn)
+    return Response(open(path,"rb").read(),mimetype=mime or "application/javascript",
+                    headers={"Cache-Control":"public,max-age=86400"})
+
+@app.route("/",defaults={"p":""})
+@app.route("/<path:p>")
+def root(p): return HTML
+
+HTML = r"""<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ProjectFlow</title>
+<script src="/js/react.min.js"></script><script src="/js/react-dom.min.js"></script>
+<script src="/js/prop-types.min.js"></script><script src="/js/recharts.min.js"></script>
+<script src="/js/htm.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%;width:100%;overflow:hidden}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx)}
+:root{--bg:#07090f;--sf:#0d0f18;--sf2:#131623;--bd:#1c1f2e;--tx:#e2e8f0;--tx2:#8892a4;--tx3:#4a5568;
+  --ac:#6366f1;--ac2:#818cf8;--cy:#22d3ee;--gn:#4ade80;--am:#fbbf24;--rd:#f87171;--pu:#a78bfa;}
+.lm{--bg:#f0f4fa;--sf:#fff;--sf2:#f5f7fc;--bd:#dde3ee;--tx:#0f172a;--tx2:#475569;--tx3:#94a3b8}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:20px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .17s;white-space:nowrap;line-height:1.2}
+.bp{background:var(--ac);color:#fff!important}.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 18px rgba(99,102,241,.4)}.bp:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.bg{background:transparent;color:var(--tx2)!important;border:1px solid var(--bd)}.bg:hover{background:var(--sf2);color:var(--tx)!important}
+.brd{background:rgba(248,113,113,.08);color:var(--rd)!important;border:1px solid rgba(248,113,113,.25)}.brd:hover{background:rgba(248,113,113,.18)}
+.bam{background:rgba(251,191,36,.08);color:var(--am)!important;border:1px solid rgba(251,191,36,.25)}.bam:hover{background:rgba(251,191,36,.18)}
+.inp{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;padding:9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;transition:border-color .17s;font-family:inherit}
+.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(99,102,241,.1)}.inp::placeholder{color:var(--tx3)}
+textarea.inp{resize:vertical;min-height:68px}
+.sel{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;padding:9px 32px 9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%238892a4' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+.sel:focus{border-color:var(--ac)}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;font-family:monospace}
+.nb{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .14s;border:none;background:transparent;width:100%;text-align:left}
+.nb:hover{background:var(--sf2);color:var(--tx)}.nb.act{background:rgba(99,102,241,.14);color:var(--ac2)}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(6px)}
+.mo{background:var(--sf);border:1px solid var(--bd);border-radius:18px;padding:26px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto}
+.mo-xl{max-width:920px}
+.tkc{background:var(--sf);border:1px solid var(--bd);border-radius:11px;padding:13px;cursor:pointer;transition:all .18s}
+.tkc:hover{border-color:var(--ac);transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.15)}
+.prog{height:5px;background:var(--bd);border-radius:3px;overflow:hidden}
+.progf{height:100%;border-radius:3px;transition:width .5s}
+.tb{padding:6px 13px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--tx2);transition:all .14s;font-family:inherit}
+.tb.act{background:var(--sf);color:var(--tx);box-shadow:0 1px 4px rgba(0,0,0,.2)}.tb:hover:not(.act){color:var(--tx)}
+.av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;letter-spacing:-.5px}
+.lbl{color:var(--tx2);font-size:11px;font-family:monospace;margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.5px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;transition:all .14s}
+.chip:hover{border-color:var(--ac);color:var(--ac2)}.chip.on{background:rgba(99,102,241,.15);border-color:var(--ac);color:var(--ac2)}
+.drop-zone{border:2px dashed var(--bd);border-radius:11px;padding:22px;text-align:center;cursor:pointer;transition:all .2s;color:var(--tx3);font-size:13px}
+.drop-zone:hover,.drop-zone.over{border-color:var(--ac);color:var(--ac);background:rgba(99,102,241,.05)}
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.fi{animation:fi .2s ease}
+@keyframes sp{to{transform:rotate(360deg)}}.spin{display:inline-block;width:16px;height:16px;border:2.5px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}.pulse{animation:pulse 1.5s ease-in-out infinite}
+/* AI panel */
+.ai-btn{position:fixed;bottom:22px;right:22px;z-index:1800;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a78bfa);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(99,102,241,.5);transition:all .2s}
+.ai-btn:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(99,102,241,.7)}
+.ai-panel{position:fixed;bottom:86px;right:22px;z-index:1800;width:400px;height:560px;background:var(--sf);border:1px solid var(--bd);border-radius:18px;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.4);overflow:hidden}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}.ai-panel{animation:slideUp .2s ease}
+.ai-msg-user{align-self:flex-end;background:var(--ac);color:#fff;border-radius:14px 14px 3px 14px;padding:9px 13px;font-size:13px;max-width:80%;line-height:1.5}
+.ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:14px 14px 14px 3px;padding:9px 13px;font-size:13px;max-width:90%;line-height:1.6;white-space:pre-wrap}
+.ai-action{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:9px;padding:8px 11px;font-size:11px;color:var(--gn);font-family:monospace;margin-top:5px}
+</style></head><body>
+<div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center">
+  <div style="text-align:center">
+    <div style="font-size:44px;margin-bottom:14px;filter:drop-shadow(0 0 22px #6366f1)">⚡</div>
+    <div class="spin" style="width:22px;height:22px;border-width:3px"></div>
+    <p style="color:var(--tx2);font-size:13px;margin-top:14px">Loading ProjectFlow...</p>
+    <div id="LE" style="display:none;color:var(--rd);font-size:12px;margin-top:12px;max-width:360px;padding:12px 16px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:10px"></div>
+  </div>
+</div>
+<script>
+window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
+</script>
+<script>
+(function(){
+'use strict';
+if(typeof React==='undefined'||typeof Recharts==='undefined'){
+  var el=document.getElementById('LE');
+  if(el){el.style.display='block';el.innerHTML='<b>Missing libraries.</b> Delete the <b>pf_static\\</b> folder and restart.';}
+  return;
+}
+const html=htm.bind(React.createElement);
+const {useState,useEffect,useRef,useCallback,useMemo}=React;
+const RC=Recharts;
+
+const api={
+  get:u=>fetch(u,{credentials:'include'}).then(r=>r.json()).catch(()=>({})),
+  post:(u,b)=>fetch(u,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})),
+  put:(u,b)=>fetch(u,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})),
+  del:u=>fetch(u,{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(()=>({})),
+  upload:(u,fd)=>fetch(u,{method:'POST',credentials:'include',body:fd}).then(r=>r.json()).catch(()=>({})),
+};
+
+const STAGES={
+  backlog:    {label:'Backlog',    color:'#94a3b8',bg:'rgba(148,163,184,.13)'},
+  planning:   {label:'Planning',  color:'#60a5fa',bg:'rgba(96,165,250,.13)'},
+  development:{label:'Dev',       color:'#a78bfa',bg:'rgba(167,139,250,.13)'},
+  code_review:{label:'Review',    color:'#22d3ee',bg:'rgba(34,211,238,.13)'},
+  testing:    {label:'Testing',   color:'#fbbf24',bg:'rgba(251,191,36,.13)'},
+  uat:        {label:'UAT',       color:'#f472b6',bg:'rgba(244,114,182,.13)'},
+  release:    {label:'Release',   color:'#fb923c',bg:'rgba(251,146,60,.13)'},
+  production: {label:'Production',color:'#34d399',bg:'rgba(52,211,153,.13)'},
+  completed:  {label:'Completed', color:'#4ade80',bg:'rgba(74,222,128,.13)'},
+  blocked:    {label:'Blocked',   color:'#f87171',bg:'rgba(248,113,113,.13)'},
+};
+const KCOLS=['backlog','planning','development','code_review','testing','uat','release','production','completed','blocked'];
+const PRIS={critical:{label:'Critical',color:'#ff4444',sym:'🔴'},high:{label:'High',color:'#f87171',sym:'↑'},medium:{label:'Medium',color:'#fbbf24',sym:'→'},low:{label:'Low',color:'#60a5fa',sym:'↓'}};
+const ROLES=['Admin','Developer','Tester','Viewer'];
+const PAL=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#6366f1'];
+const fmtD=d=>{if(!d)return'—';try{return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return d;}};
+const ago=iso=>{const m=Math.floor((Date.now()-new Date(iso))/60000);if(m<1)return'just now';if(m<60)return m+'m ago';if(m<1440)return Math.floor(m/60)+'h ago';return Math.floor(m/1440)+'d ago';};
+const safe=a=>(Array.isArray(a)?a:[]);
+
+function Av({u,size=32}){
+  return html`<div class="av" style=${{width:size,height:size,background:(u&&u.color)||'#6366f1',color:'#fff',fontSize:Math.max(9,Math.floor(size*.33))}}>
+    ${(u&&u.avatar)||'?'}
+  </div>`;
+}
+function SP({s}){
+  const d=STAGES[s]||{label:s,color:'#94a3b8',bg:'rgba(148,163,184,.13)'};
+  return html`<span class="badge" style=${{color:d.color,background:d.bg}}>${d.label}</span>`;
+}
+function PB({p}){
+  const d=PRIS[p]||{label:p,color:'#94a3b8',sym:'·'};
+  const isC=p==='critical';
+  return html`<span class="badge" style=${{color:d.color,background:d.color+'22',boxShadow:isC?'0 0 6px '+d.color+'55':'none',animation:isC?'pulse 1.5s infinite':'none'}}>${d.sym} ${d.label}</span>`;
+}
+function Prog({pct,color}){
+  return html`<div class="prog"><div class="progf" style=${{width:Math.min(100,Math.max(0,pct||0))+'%',background:color||'var(--ac)'}}></div></div>`;
+}
+class ErrorBoundary extends React.Component{
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(e){return{err:e};}
+  render(){
+    if(this.state.err)return html`<div style=${{padding:40,textAlign:'center',color:'var(--rd)'}}>
+      <div style=${{fontSize:28,marginBottom:10}}>⚠</div>
+      <p style=${{marginBottom:14}}>${this.state.err.message}</p>
+      <button class="btn bp" onClick=${()=>this.setState({err:null})}>Retry</button></div>`;
+    return this.props.children;
+  }
+}
+
+/* ─── AuthScreen with Workspace ──────────────────────────────────────────── */
+function AuthScreen({onLogin}){
+  const [tab,setTab]=useState('login');
+  const [regMode,setRegMode]=useState('create'); // 'create' or 'join'
+  const [wsName,setWsName]=useState('');
+  const [inviteCode,setInviteCode]=useState('');
+  const [name,setName]=useState('');
+  const [email,setEmail]=useState('');
+  const [pw,setPw]=useState('');
+  const [role,setRole]=useState('Developer');
+  const [showPw,setShowPw]=useState(false);
+  const [err,setErr]=useState('');
+  const [busy,setBusy]=useState(false);
+
+  const go=async()=>{
+    setErr('');setBusy(true);
+    if(tab==='login'){
+      const r=await api.post('/api/auth/login',{email,password:pw});
+      if(r.error)setErr(r.error); else onLogin(r);
+    } else {
+      if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
+      if(regMode==='create'&&!wsName){setErr('Workspace name required.');setBusy(false);return;}
+      if(regMode==='join'&&!inviteCode){setErr('Invite code required.');setBusy(false);return;}
+      const r=await api.post('/api/auth/register',{mode:regMode,workspace_name:wsName,invite_code:inviteCode,name,email,password:pw,role});
+      if(r.error)setErr(r.error); else onLogin(r);
+    }
+    setBusy(false);
+  };
+
+  return html`
+    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div class="fi" style=${{width:'100%',maxWidth:460}}>
+        <div style=${{textAlign:'center',marginBottom:24}}>
+          <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:56,height:56,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:15,marginBottom:12,fontSize:26,boxShadow:'0 0 36px rgba(99,102,241,.5)'}}>⚡</div>
+          <h1 style=${{fontSize:26,fontWeight:800,color:'var(--tx)',letterSpacing:-.5}}>ProjectFlow</h1>
+          <p style=${{color:'var(--tx2)',fontSize:13,marginTop:4}}>Team project management, your way</p>
+        </div>
+        <div class="card" style=${{padding:28}}>
+          <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:10,padding:4,marginBottom:20}}>
+            ${['login','register'].map(t=>html`
+              <button key=${t} class=${'tb'+(tab===t?' act':'')} style=${{flex:1,padding:'7px 0'}}
+                onClick=${()=>{setTab(t);setErr('');}}>
+                ${t==='login'?'Sign In':'Create Account'}
+              </button>`)}
+          </div>
+
+          ${tab==='register'?html`
+            <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:16}}>
+              ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
+                <button key=${m} class=${'tb'+(regMode===m?' act':'')} style=${{flex:1,padding:'6px 0',fontSize:11}}
+                  onClick=${()=>setRegMode(m)}>${lbl}</button>`)}
+            </div>
+            ${regMode==='create'?html`
+              <div style=${{marginBottom:12}}><label class="lbl">Workspace Name</label>
+                <input class="inp" placeholder="e.g. Acme Corp, My Startup" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
+            ${regMode==='join'?html`
+              <div style=${{marginBottom:12,padding:'10px 13px',background:'rgba(99,102,241,.07)',borderRadius:9,border:'1px solid rgba(99,102,241,.2)'}}>
+                <label class="lbl">Invite Code</label>
+                <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode} 
+                  onInput=${e=>setInviteCode(e.target.value.toUpperCase())}
+                  style=${{fontFamily:'monospace',letterSpacing:2,fontSize:15,textAlign:'center'}}/>
+                <p style=${{fontSize:11,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Get this code from your workspace admin</p>
+              </div>`:null}`:null}
+
+          <div style=${{display:'flex',flexDirection:'column',gap:12}}>
+            ${tab==='register'?html`<div><label class="lbl">Full Name</label>
+              <input class="inp" placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
+            <div><label class="lbl">Email</label>
+              <input class="inp" type="email" placeholder="you@company.com" value=${email}
+                onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
+            <div><label class="lbl">Password</label>
+              <div style=${{position:'relative'}}>
+                <input class="inp" style=${{paddingRight:40}} type=${showPw?'text':'password'}
+                  placeholder="••••••••" value=${pw}
+                  onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
+                <button onClick=${()=>setShowPw(!showPw)}
+                  style=${{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14}}>
+                  ${showPw?'🙈':'👁'}
+                </button>
+              </div>
+            </div>
+            ${tab==='register'?html`<div><label class="lbl">Role</label>
+              <select class="sel" value=${role} onChange=${e=>setRole(e.target.value)}>
+                ${ROLES.map(r=>html`<option key=${r}>${r}</option>`)}
+              </select></div>`:null}
+            ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'8px 12px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)'}}>${err}</div>`:null}
+            <button class="btn bp" style=${{justifyContent:'center',height:42}} onClick=${go} disabled=${busy}>
+              ${busy?html`<span class="spin"></span>`:(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join & Create Account →')}
+            </button>
+          </div>
+          ${tab==='login'?html`
+            <div style=${{marginTop:16,padding:'10px 13px',background:'var(--sf2)',borderRadius:9,fontSize:11,fontFamily:'monospace',color:'var(--tx3)',lineHeight:2.1,border:'1px solid var(--bd)'}}>
+              <b style=${{color:'var(--tx2)',display:'block',marginBottom:2}}>Demo Accounts</b>
+              alice@dev.io / pass123 (Admin) &nbsp; bob@dev.io / pass123 (Dev)
+            </div>`:null}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
+function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
+  const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+  const items=[
+    {id:'dashboard',icon:'⊞',label:'Dashboard'},
+    {id:'projects', icon:'📁',label:'Projects'},
+    {id:'tasks',    icon:'☑', label:'Tasks'},
+    {id:'messages', icon:'💬',label:'Channels'},
+    {id:'dm',       icon:'✉', label:'Direct Messages',badge:totalDm},
+    {id:'notifs',   icon:'🔔',label:'Notifications',badge:unread},
+    ...(cu&&cu.role==='Admin'?[{id:'team',icon:'👥',label:'Team'},{id:'settings',icon:'⚙',label:'Settings'}]:[]),
+  ];
+  const w=col?60:224;
+  return html`
+    <aside style=${{width:w,minWidth:w,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,transition:'width .22s',overflow:'hidden',position:'relative'}}>
+      <div style=${{padding:col?'14px 13px':'14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,minHeight:60}}>
+        <div style=${{width:33,height:33,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:17,boxShadow:'0 0 14px rgba(99,102,241,.35)'}}>⚡</div>
+        ${!col?html`<div style=${{minWidth:0}}>
+          <div style=${{fontWeight:800,fontSize:14,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>ProjectFlow</div>
+          ${wsName?html`<div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:140}}>${wsName}</div>`:null}
+        </div>`:null}
+      </div>
+      <nav style=${{flex:1,padding:'7px 6px',display:'flex',flexDirection:'column',gap:2,overflowY:'auto',overflowX:'hidden'}}>
+        ${items.map(it=>html`
+          <button key=${it.id} class=${'nb'+(view===it.id?' act':'')} title=${col?it.label:''}
+            onClick=${()=>setView(it.id)}
+            style=${{justifyContent:col?'center':'flex-start',padding:col?'10px 0':'8px 12px',position:'relative'}}>
+            <span style=${{fontSize:16,flexShrink:0}}>${it.icon}</span>
+            ${!col?html`<span style=${{flex:1}}>${it.label}</span>`:null}
+            ${!col&&it.badge>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${it.badge}</span>`:null}
+            ${col&&it.badge>0?html`<div style=${{position:'absolute',width:7,height:7,borderRadius:'50%',background:'var(--rd)',top:6,right:6,border:'1.5px solid var(--sf)'}}></div>`:null}
+          </button>`)}
+      </nav>
+      <div style=${{padding:'7px 6px',borderTop:'1px solid var(--bd)'}}>
+        ${!col?html`
+          <div style=${{display:'flex',alignItems:'center',gap:9,padding:'8px 10px',marginBottom:4,borderRadius:9,background:'var(--sf2)'}}>
+            <${Av} u=${cu}/>
+            <div style=${{flex:1,minWidth:0}}>
+              <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${cu&&cu.name}</div>
+              <div style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${cu&&cu.role}</div>
+            </div>
+          </div>`:null}
+        <button class="nb" onClick=${onLogout} title=${col?'Sign Out':''} style=${{color:'var(--rd)',justifyContent:col?'center':'flex-start',padding:col?'10px 0':'8px 12px'}}>
+          <span style=${{fontSize:15}}>⤴</span>
+          ${!col?html`<span>Sign Out</span>`:null}
+        </button>
+      </div>
+      <button onClick=${()=>setCol(!col)} style=${{position:'absolute',top:16,right:-13,width:26,height:26,borderRadius:'50%',background:'var(--sf)',border:'1px solid var(--bd)',cursor:'pointer',color:'var(--tx2)',fontSize:13,boxShadow:'0 2px 8px rgba(0,0,0,.3)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:10}}>
+        ${col?'›':'‹'}
+      </button>
+    </aside>`;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+function Header({title,sub,dark,setDark,extra}){
+  return html`
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 22px',borderBottom:'1px solid var(--bd)',background:'var(--sf)',height:60,flexShrink:0}}>
+      <div>
+        <h1 style=${{fontSize:18,fontWeight:800,color:'var(--tx)',letterSpacing:-.3}}>${title}</h1>
+        ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:1}}>${sub}</p>`:null}
+      </div>
+      <div style=${{display:'flex',alignItems:'center',gap:7}}>
+        ${extra||null}
+        <button class="btn bg" style=${{padding:'7px 10px',fontSize:15}} onClick=${()=>setDark(!dark)}>${dark?'☀':'🌙'}</button>
+      </div>
+    </div>`;
+}
+
+/* ─── MemberPicker ────────────────────────────────────────────────────────── */
+function MemberPicker({allUsers,selected,onChange}){
+  return html`<div style=${{display:'flex',flexWrap:'wrap',gap:7,marginTop:4}}>
+    ${safe(allUsers).map(u=>html`
+      <button key=${u.id} class=${'chip'+(selected.includes(u.id)?' on':'')}
+        onClick=${()=>onChange(selected.includes(u.id)?selected.filter(x=>x!==u.id):[...selected,u.id])}>
+        <${Av} u=${u} size=${18}/><span>${u.name}</span>
+        ${selected.includes(u.id)?html`<span style=${{color:'var(--ac2)',fontSize:11}}>✓</span>`:null}
+      </button>`)}
+  </div>`;
+}
+
+/* ─── FileAttachments ─────────────────────────────────────────────────────── */
+function FileAttachments({taskId,projectId,readOnly}){
+  const [files,setFiles]=useState([]);const [busy,setBusy]=useState(false);const [drag,setDrag]=useState(false);const ref=useRef(null);
+  const load=useCallback(async()=>{
+    const url=taskId?'/api/files?task_id='+taskId:projectId?'/api/files?project_id='+projectId:'';
+    if(!url)return;const d=await api.get(url);setFiles(Array.isArray(d)?d:[]);
+  },[taskId,projectId]);
+  useEffect(()=>{load();},[load]);
+  const upload=async fl=>{
+    if(!fl||!fl.length)return;setBusy(true);
+    for(let i=0;i<fl.length;i++){const fd=new FormData();fd.append('file',fl[i]);if(taskId)fd.append('task_id',taskId);if(projectId)fd.append('project_id',projectId);await api.upload('/api/files',fd);}
+    await load();setBusy(false);
+  };
+  const del=async id=>{if(!window.confirm('Delete this file?'))return;await api.del('/api/files/'+id);setFiles(f=>f.filter(x=>x.id!==id));};
+  const icon=m=>{if(!m)return'📄';if(m.startsWith('image/'))return'🖼';if(m.includes('pdf'))return'📕';if(m.includes('word'))return'📝';if(m.includes('sheet'))return'📊';if(m.includes('zip'))return'🗜';return'📄';};
+  const sz=b=>b<1024?b+'B':b<1048576?+(b/1024).toFixed(1)+'KB':+(b/1048576).toFixed(1)+'MB';
+  return html`<div style=${{display:'flex',flexDirection:'column',gap:10}}>
+    ${!readOnly?html`<div class=${'drop-zone'+(drag?' over':'')} onClick=${()=>ref.current&&ref.current.click()}
+      onDragOver=${e=>{e.preventDefault();setDrag(true);}} onDragLeave=${()=>setDrag(false)}
+      onDrop=${e=>{e.preventDefault();setDrag(false);upload(e.dataTransfer.files);}}>
+      ${busy?html`<span class="spin"></span><span style=${{marginLeft:8}}>Uploading...</span>`:
+        html`<div style=${{fontSize:22,marginBottom:6}}>📎</div><div style=${{fontWeight:500}}>Click or drag to attach files</div><div style=${{fontSize:11,marginTop:3}}>Max 20 MB</div>`}
+      <input ref=${ref} type="file" multiple style=${{display:'none'}} onChange=${e=>upload(e.target.files)}/></div>`:null}
+    ${files.map(f=>html`
+      <div key=${f.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)'}}>
+        <span style=${{fontSize:18}}>${icon(f.mime)}</span>
+        <div style=${{flex:1,minWidth:0}}>
+          <a href=${'/api/files/'+f.id} style=${{fontSize:13,color:'var(--ac2)',fontWeight:500,textDecoration:'none',display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${f.name}</a>
+          <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${sz(f.size)} · ${ago(f.ts)}</span>
+        </div>
+        ${!readOnly?html`<button class="btn brd" style=${{padding:'4px 9px',fontSize:11}} onClick=${()=>del(f.id)}>✕</button>`:null}
+      </div>`)}
+  </div>`;
+}
+
+/* ─── TaskModal ───────────────────────────────────────────────────────────── */
+function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
+  const [title,setTitle]=useState((task&&task.title)||'');
+  const [desc,setDesc]=useState((task&&task.description)||'');
+  const [pid,setPid]=useState((task&&task.project)||defaultPid||(projects[0]&&projects[0].id)||'');
+  const [ass,setAss]=useState((task&&task.assignee)||'');
+  const [pri,setPri]=useState((task&&task.priority)||'medium');
+  const [stage,setStage]=useState((task&&task.stage)||'backlog');
+  const [due,setDue]=useState((task&&task.due)||'');
+  const [pct,setPct]=useState((task&&task.pct)||0);
+  const [cmts,setCmts]=useState(safe(task&&task.comments));
+  const [nc,setNc]=useState('');
+  const [tab,setTab]=useState('details');
+  const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState('');
+  const isEdit=!!(task&&task.id);
+
+  const addCmt=()=>{
+    if(!nc.trim())return;
+    setCmts(prev=>[...prev,{id:Date.now()+'',uid:cu.id,text:nc.trim(),ts:new Date().toISOString()}]);
+    setNc('');
+  };
+  const save=async()=>{
+    if(!title.trim()){setErr('Title required.');return;}
+    setSaving(true);setErr('');
+    const payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts};
+    if(task&&task.id)payload.id=task.id;
+    await onSave(payload);setSaving(false);onClose();
+  };
+
+  return html`
+    <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
+      <div class="mo fi">
+        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+          <div>
+            <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>${isEdit?'Edit Task':'New Task'}</h2>
+            ${isEdit?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${task.id}</span>`:null}
+          </div>
+          <div style=${{display:'flex',gap:7}}>
+            ${isEdit&&onDel?html`<button class="btn brd" style=${{fontSize:12,padding:'6px 11px'}}
+              onClick=${async()=>{if(window.confirm('Delete this task?')){await onDel(task.id);onClose();}}}>🗑</button>`:null}
+            <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
+          </div>
+        </div>
+        ${isEdit?html`
+          <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:14,width:'fit-content'}}>
+            ${['details','comments','files'].map(t=>html`
+              <button key=${t} class=${'tb'+(tab===t?' act':'')} onClick=${()=>setTab(t)}>
+                ${t==='details'?'Details':t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
+              </button>`)}
+          </div>`:null}
+
+        ${tab==='details'?html`
+          <div style=${{display:'grid',gap:12}}>
+            <div><label class="lbl">Title *</label>
+              <input class="inp" placeholder="Task title..." value=${title} onInput=${e=>setTitle(e.target.value)}/></div>
+            <div><label class="lbl">Description</label>
+              <textarea class="inp" rows="3" placeholder="Describe the task..." onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
+            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+              <div><label class="lbl">Project</label>
+                <select class="sel" value=${pid} onChange=${e=>setPid(e.target.value)}>
+                  ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+                </select></div>
+              <div><label class="lbl">Assignee</label>
+                <select class="sel" value=${ass} onChange=${e=>setAss(e.target.value)}>
+                  <option value="">Unassigned</option>
+                  ${safe(users).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
+                </select></div>
+            </div>
+            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:11}}>
+              <div><label class="lbl">Priority</label>
+                <select class="sel" value=${pri} onChange=${e=>setPri(e.target.value)}>
+                  ${Object.entries(PRIS).map(([k,v])=>html`<option key=${k} value=${k}>${v.sym} ${v.label}</option>`)}
+                </select></div>
+              <div><label class="lbl">Stage</label>
+                <select class="sel" value=${stage} onChange=${e=>{
+                  const ns=e.target.value;setStage(ns);
+                  const ap=STAGE_PCT[ns];if(ap!==null&&ap!==undefined)setPct(ap);
+                  if(!due&&ns!=='backlog'&&ns!=='blocked'){const days=STAGE_DAYS[ns];if(days>0)setDue(addDays(days));}
+                }}>
+                  ${Object.entries(STAGES).map(([k,v])=>html`<option key=${k} value=${k}>${v.label}</option>`)}
+                </select></div>
+              <div><label class="lbl">Due Date</label>
+                <input class="inp" type="date" value=${due} onChange=${e=>setDue(e.target.value)}/></div>
+            </div>
+            <div><label class="lbl">Completion: ${pct}%</label>
+              <div style=${{display:'flex',alignItems:'center',gap:12}}>
+                <input type="range" min="0" max="100" value=${pct} style=${{flex:1,accentColor:'var(--ac)',cursor:'pointer'}} onChange=${e=>setPct(parseInt(e.target.value))}/>
+                <span style=${{fontSize:13,color:'var(--ac)',fontWeight:700,fontFamily:'monospace',width:34,textAlign:'right'}}>${pct}%</span>
+              </div>
+            </div>
+            ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
+            <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
+              <button class="btn bg" onClick=${onClose}>Cancel</button>
+              <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
+            </div>
+          </div>`:null}
+
+        ${tab==='comments'?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:10}}>
+            ${cmts.length>0?html`<div style=${{display:'flex',flexDirection:'column',gap:8,maxHeight:240,overflowY:'auto'}}>
+              ${cmts.map((c,i)=>{
+                const au=safe(users).find(u=>u.id===c.uid);
+                return html`<div key=${i} style=${{display:'flex',gap:9,padding:'9px 12px',background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)'}}>
+                  <${Av} u=${au} size=${24}/>
+                  <div style=${{flex:1}}>
+                    <div style=${{display:'flex',gap:7,alignItems:'center',marginBottom:3}}>
+                      <span style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>${(au&&au.name)||'?'}</span>
+                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(c.ts)}</span>
+                    </div>
+                    <p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.5}}>${c.text}</p>
+                  </div>
+                </div>`;})}
+            </div>`:null}
+            <div style=${{display:'flex',gap:8}}>
+              <input class="inp" style=${{flex:1}} placeholder="Add a comment..." value=${nc}
+                onInput=${e=>setNc(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&addCmt()}/>
+              <button class="btn bp" onClick=${addCmt}>Post</button>
+            </div>
+            <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
+              <button class="btn bg" onClick=${onClose}>Close</button>
+              <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:'Save'}</button>
+            </div>
+          </div>`:null}
+
+        ${tab==='files'&&isEdit?html`<${FileAttachments} taskId=${task.id} readOnly=${cu&&cu.role==='Viewer'}/>`:null}
+      </div>
+    </div>`;
+}
+
+/* ─── ProjectDetail ───────────────────────────────────────────────────────── */
+function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload}){
+  const [tab,setTab]=useState('tasks');const [edit,setEdit]=useState(false);
+  const [name,setName]=useState(project.name||'');const [desc,setDesc]=useState(project.description||'');
+  const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#6366f1');
+  const [members,setMembers]=useState(safe(project.members));const [saving,setSaving]=useState(false);
+  const [showNew,setShowNew]=useState(false);const [editTask,setEditTask]=useState(null);
+
+  const projTasks=useMemo(()=>safe(allTasks).filter(t=>t.project===project.id),[allTasks,project.id]);
+  const projUsers=useMemo(()=>safe(members).map(id=>safe(allUsers).find(u=>u.id===id)).filter(Boolean),[members,allUsers]);
+  const done=projTasks.filter(t=>t.stage==='completed').length;
+  const pc=projTasks.length?Math.round(projTasks.reduce((a,t)=>a+(t.pct||0),0)/projTasks.length):(project.progress||0);
+  const stageGroups=KCOLS.map(s=>({s,tasks:projTasks.filter(t=>t.stage===s)})).filter(g=>g.tasks.length>0);
+
+  const saveEdit=async()=>{setSaving(true);await api.put('/api/projects/'+project.id,{name,description:desc,target_date:tDate,color,members});await onReload();setSaving(false);setEdit(false);};
+  const delProject=async()=>{if(!window.confirm('Delete project and all its tasks? Cannot be undone.'))return;await api.del('/api/projects/'+project.id);await onReload();onClose();};
+  const saveTask=async p=>{if(p.id&&allTasks.find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',{...p,project:project.id});await onReload();};
+  const delTask=async id=>{await api.del('/api/tasks/'+id);await onReload();};
+
+  return html`
+    <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
+      <div class="mo mo-xl fi" style=${{height:'90vh',display:'flex',flexDirection:'column',padding:0,overflow:'hidden'}}>
+
+        <div style=${{padding:'20px 24px 0',flexShrink:0}}>
+          <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:14}}>
+            <div style=${{display:'flex',alignItems:'center',gap:11}}>
+              <div style=${{width:11,height:11,borderRadius:3,background:edit?color:project.color,flexShrink:0,marginTop:4}}></div>
+              ${edit?html`<input class="inp" style=${{fontSize:17,fontWeight:800,padding:'4px 8px'}} value=${name} onInput=${e=>setName(e.target.value)}/>`:
+                      html`<h2 style=${{fontSize:18,fontWeight:800,color:'var(--tx)'}}>${project.name}</h2>`}
+            </div>
+            <div style=${{display:'flex',gap:7,flexShrink:0}}>
+              ${cu&&cu.role!=='Viewer'&&!edit?html`<button class="btn bg" style=${{fontSize:12,padding:'7px 12px'}} onClick=${()=>setEdit(true)}>✏ Edit</button>`:null}
+              ${edit?html`<button class="btn bg" onClick=${()=>setEdit(false)}>Cancel</button><button class="btn bp" onClick=${saveEdit} disabled=${saving}>${saving?html`<span class="spin"></span>`:'Save'}</button>`:null}
+              ${cu&&cu.role==='Admin'&&!edit?html`<button class="btn brd" style=${{fontSize:12,padding:'7px 12px'}} onClick=${delProject}>🗑</button>`:null}
+              <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
+            </div>
+          </div>
+          ${edit?html`
+            <div style=${{display:'flex',flexDirection:'column',gap:11,marginBottom:12}}>
+              <textarea class="inp" rows="2" value=${desc} onInput=${e=>setDesc(e.target.value)}>${desc}</textarea>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+                <div><label class="lbl">Target Date</label><input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)}/></div>
+                <div><label class="lbl">Color</label>
+                  <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
+                    ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)} style=${{width:26,height:26,borderRadius:6,background:c,border:'3px solid '+(color===c?'#fff':'transparent'),cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
+                  </div>
+                </div>
+              </div>
+              <div><label class="lbl">Members</label><${MemberPicker} allUsers=${allUsers} selected=${members} onChange=${setMembers}/></div>
+            </div>
+            <div style=${{height:1,background:'var(--bd)',marginBottom:12}}></div>`:html`
+            <p style=${{color:'var(--tx2)',fontSize:13,marginBottom:11,lineHeight:1.55}}>${project.description||'No description.'}</p>
+            <div style=${{display:'flex',alignItems:'center',gap:18,marginBottom:10}}>
+              <div style=${{flex:1}}><${Prog} pct=${pc} color=${project.color}/></div>
+              <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
+              <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>Due ${fmtD(project.target_date)}</span>
+            </div>
+            <div style=${{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
+              <span style=${{fontSize:12,color:'var(--tx2)'}}><b style=${{color:'var(--tx)'}}>${projTasks.length}</b> tasks · <b style=${{color:'var(--gn)'}}>${done}</b> done · <b style=${{color:'var(--am)'}}>${projTasks.length-done}</b> open</span>
+              <div style=${{display:'flex'}}>
+                ${projUsers.slice(0,7).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-8:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:7-i}}><${Av} u=${m} size=${24}/></div>`)}
+              </div>
+            </div>`}
+          <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:10,padding:3,width:'fit-content',marginBottom:12}}>
+            ${[['tasks','☑ Tasks'],['files','📎 Files'],['members','👥 Members']].map(([id,lbl])=>html`
+              <button key=${id} class=${'tb'+(tab===id?' act':'')} onClick=${()=>setTab(id)}>${lbl}</button>`)}
+          </div>
+          <div style=${{height:1,background:'var(--bd)'}}></div>
+        </div>
+
+        <div style=${{flex:1,overflowY:'auto',padding:'16px 24px'}}>
+          ${tab==='tasks'?html`
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+              <span style=${{fontSize:13,color:'var(--tx2)'}}>${projTasks.length} task${projTasks.length!==1?'s':''}</span>
+              ${cu&&cu.role!=='Viewer'?html`<button class="btn bp" style=${{fontSize:12,padding:'7px 13px'}} onClick=${()=>setShowNew(true)}>+ Add Task</button>`:null}
+            </div>
+            ${projTasks.length===0?html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)',fontSize:13}}><div style=${{fontSize:28,marginBottom:10}}>📋</div>No tasks yet. Click "+ Add Task" to get started.</div>`:null}
+            ${stageGroups.map(g=>{
+              const si=STAGES[g.s]||{label:g.s,color:'#94a3b8'};
+              return html`<div key=${g.s} style=${{marginBottom:18}}>
+                <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                  <div style=${{width:8,height:8,borderRadius:2,background:si.color}}></div>
+                  <span style=${{fontSize:11,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:.5,fontFamily:'monospace'}}>${si.label}</span>
+                  <span style=${{fontSize:10,color:'var(--tx3)',background:'var(--bd)',padding:'1px 6px',borderRadius:4,fontFamily:'monospace'}}>${g.tasks.length}</span>
+                </div>
+                ${g.tasks.map(tk=>{
+                  const au=safe(allUsers).find(u=>u.id===tk.assignee);
+                  return html`<div key=${tk.id} class="tkc" style=${{marginBottom:7,display:'flex',gap:10,alignItems:'center'}} onClick=${()=>setEditTask(tk)}>
+                    <div style=${{flex:1,minWidth:0}}>
+                      <div style=${{display:'flex',gap:7,alignItems:'center',marginBottom:4}}><span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.id}</span><${PB} p=${tk.priority}/></div>
+                      <div style=${{fontSize:13,fontWeight:500,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${tk.title}</div>
+                      ${tk.pct>0?html`<div style=${{marginTop:5}}><${Prog} pct=${tk.pct} color=${si.color}/></div>`:null}
+                    </div>
+                    <div style=${{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:5,flexShrink:0}}>
+                      ${au?html`<${Av} u=${au} size=${24}/>`:html`<div style=${{width:24,height:24,borderRadius:'50%',background:'var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'var(--tx3)'}}>?</div>`}
+                      ${tk.due?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtD(tk.due)}</span>`:null}
+                    </div>
+                  </div>`;
+                })}
+              </div>`;
+            })}`:null}
+          ${tab==='files'?html`<${FileAttachments} projectId=${project.id} readOnly=${cu&&cu.role==='Viewer'}/>`:null}
+          ${tab==='members'?html`
+            <div style=${{display:'flex',flexDirection:'column',gap:8}}>
+              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <span style=${{color:'var(--tx2)',fontSize:13}}>${projUsers.length} members</span>
+                ${cu&&cu.role!=='Viewer'?html`<button class="btn bg" style=${{fontSize:12,padding:'7px 12px'}} onClick=${()=>{setEdit(true);setTab('tasks');}}>Edit Members</button>`:null}
+              </div>
+              ${projUsers.map(m=>html`<div key=${m.id} style=${{display:'flex',alignItems:'center',gap:12,padding:'11px 14px',background:'var(--sf2)',borderRadius:10,border:'1px solid var(--bd)'}}>
+                <${Av} u=${m} size=${36}/>
+                <div style=${{flex:1}}><div style=${{fontSize:13,fontWeight:600,color:'var(--tx)'}}>${m.name}</div><div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${m.email}</div></div>
+                <span class="badge" style=${{background:'var(--ac)22',color:'var(--ac2)'}}>${m.role}</span>
+              </div>`)}
+            </div>`:null}
+        </div>
+      </div>
+
+      ${showNew?html`<${TaskModal} task=${null} onClose=${()=>setShowNew(false)} onSave=${saveTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id}/>`:null}
+      ${editTask?html`<${TaskModal} task=${editTask} onClose=${()=>setEditTask(null)} onSave=${saveTask} onDel=${delTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id}/>`:null}
+    </div>`;
+}
+
+/* ─── ProjectsView ────────────────────────────────────────────────────────── */
+function ProjectsView({projects,tasks,users,cu,reload}){
+  const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
+  const [name,setName]=useState('');const [desc,setDesc]=useState('');const [tDate,setTDate]=useState('');
+  const [color,setColor]=useState('#6366f1');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
+
+  useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
+
+  const create=async()=>{
+    if(!name.trim()){setErr('Project name required.');return;}setErr('');
+    const mems=members.includes(cu.id)?members:[cu.id,...members];
+    await api.post('/api/projects',{name:name.trim(),description:desc,targetDate:tDate,color,members:mems,startDate:new Date().toISOString().split('T')[0]});
+    await reload();setShowNew(false);setName('');setDesc('');setTDate('');setColor('#6366f1');setMembers([]);
+  };
+
+  return html`
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
+      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+        <span style=${{fontSize:13,color:'var(--tx2)'}}>${safe(projects).length} project${safe(projects).length!==1?'s':''}</span>
+        ${cu&&cu.role!=='Viewer'?html`<button class="btn bp" onClick=${()=>setShowNew(true)}>+ New Project</button>`:null}
+      </div>
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:15}}>
+        ${safe(projects).map(p=>{
+          const pt=safe(tasks).filter(t=>t.project===p.id);
+          const done=pt.filter(t=>t.stage==='completed').length;
+          const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
+          const mems=safe(p.members).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
+          return html`
+            <div key=${p.id} class="card" style=${{cursor:'pointer',transition:'all .18s',borderTop:'3px solid '+p.color}}
+              onClick=${()=>setDetail(p)}
+              onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 8px 24px rgba(0,0,0,.2)';}}
+              onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
+              <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
+                <h3 style=${{fontSize:15,fontWeight:700,color:'var(--tx)',flex:1,marginRight:6}}>${p.name}</h3>
+                <span class="badge" style=${{background:p.color+'22',color:p.color,flexShrink:0}}>${pt.length} tasks</span>
+              </div>
+              <p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.5,marginBottom:12,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
+              <div style=${{marginBottom:12}}>
+                <div style=${{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+                  <span style=${{fontSize:11,color:'var(--tx3)'}}>Progress</span>
+                  <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
+                </div>
+                <${Prog} pct=${pc} color=${p.color}/>
+              </div>
+              <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7,marginBottom:12}}>
+                ${[['Tasks',pt.length,'var(--tx)'],['Done',done,'var(--gn)'],['Open',pt.length-done,'var(--am)']].map(([l,v,c])=>html`
+                  <div key=${l} style=${{textAlign:'center',padding:'9px 4px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)'}}>
+                    <div style=${{fontSize:18,fontWeight:800,color:c}}>${v}</div>
+                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${l}</div>
+                  </div>`)}
+              </div>
+              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div style=${{display:'flex'}}>
+                  ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-7:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${25}/></div>`)}
+                </div>
+                <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>Due ${fmtD(p.target_date)}</span>
+              </div>
+            </div>`;
+        })}
+      </div>
+
+      ${showNew?html`
+        <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
+          <div class="mo fi" style=${{maxWidth:500}}>
+            <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}>
+              <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>New Project</h2>
+              <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowNew(false)}>✕</button>
+            </div>
+            <div style=${{display:'flex',flexDirection:'column',gap:12}}>
+              <div><label class="lbl">Project Name *</label><input class="inp" placeholder="E.g. Mobile App Redesign" value=${name} onInput=${e=>setName(e.target.value)}/></div>
+              <div><label class="lbl">Description</label><textarea class="inp" rows="3" placeholder="What is this project about?" onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+                <div><label class="lbl">Target Date</label><input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)}/></div>
+                <div><label class="lbl">Color</label>
+                  <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
+                    ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)} style=${{width:26,height:26,borderRadius:6,background:c,border:'3px solid '+(color===c?'#fff':'transparent'),cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
+                  </div>
+                </div>
+              </div>
+              <div><label class="lbl">Add Members</label><${MemberPicker} allUsers=${users} selected=${members} onChange=${setMembers}/></div>
+              ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
+              <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4}}>
+                <button class="btn bg" onClick=${()=>setShowNew(false)}>Cancel</button>
+                <button class="btn bp" onClick=${create}>Create Project</button>
+              </div>
+            </div>
+          </div>
+        </div>`:null}
+      ${detail?html`<${ProjectDetail} project=${detail} allTasks=${tasks} allUsers=${users} cu=${cu} onClose=${()=>setDetail(null)} onReload=${reload}/>`:null}
+    </div>`;
+}
+
+/* ─── TasksView with inline stage dropdown ────────────────────────────────── */
+// SDLC stage → typical days from today & auto completion %
+const STAGE_DAYS={backlog:0,planning:7,development:21,code_review:28,testing:35,uat:42,release:49,production:56,completed:60,blocked:0};
+const STAGE_PCT={backlog:0,planning:10,development:35,code_review:55,testing:70,uat:80,release:90,production:95,completed:100,blocked:null};
+function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
+
+function TasksView({tasks,projects,users,cu,reload}){
+  const [mode,setMode]=useState('kanban');
+  const [pid,setPid]=useState('all');
+  const [priF,setPriF]=useState('all');
+  const [stageF,setStageF]=useState('all');
+  const [assF,setAssF]=useState('all');
+  const [dueF,setDueF]=useState('all'); // 'all','overdue','today','week','month'
+  const [search,setSearch]=useState('');
+  const [showFilters,setShowFilters]=useState(false);
+  const [sortCol,setSortCol]=useState(null);  // 'assignee'|'priority'|'stage'|'due'|'pct'
+  const [sortDir,setSortDir]=useState('asc'); // 'asc'|'desc'
+  const [editT,setEditT]=useState(null);const [newT,setNewT]=useState(false);
+
+  const activeFilters=[pid,priF,stageF,assF,dueF].filter(v=>v!=='all').length;
+  const clearAll=()=>{setPid('all');setPriF('all');setStageF('all');setAssF('all');setDueF('all');setSearch('');};
+
+  const filtered=useMemo(()=>{
+    const today=new Date();today.setHours(0,0,0,0);
+    const endOfWeek=new Date(today);endOfWeek.setDate(today.getDate()+7);
+    const endOfMonth=new Date(today);endOfMonth.setDate(today.getDate()+30);
+    return safe(tasks).filter(t=>{
+      if(pid!=='all'&&t.project!==pid)return false;
+      if(priF!=='all'&&t.priority!==priF)return false;
+      if(stageF!=='all'&&t.stage!==stageF)return false;
+      if(assF!=='all'&&t.assignee!==assF)return false;
+      if(search&&!t.title.toLowerCase().includes(search.toLowerCase()))return false;
+      if(dueF!=='all'&&t.due){
+        const d=new Date(t.due);d.setHours(0,0,0,0);
+        if(dueF==='overdue'&&d>=today)return false;
+        if(dueF==='today'&&d.getTime()!==today.getTime())return false;
+        if(dueF==='week'&&(d<today||d>endOfWeek))return false;
+        if(dueF==='month'&&(d<today||d>endOfMonth))return false;
+      } else if(dueF!=='all'&&!t.due) return false;
+      return true;
+    });
+  },[tasks,pid,priF,stageF,assF,dueF,search]);
+
+  const toggleSort=col=>{if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}};
+
+  const PRI_ORD={critical:0,high:1,medium:2,low:3};
+  const STAGE_ORD={backlog:0,planning:1,development:2,code_review:3,testing:4,uat:5,release:6,production:7,completed:8,blocked:9};
+
+  const sorted=useMemo(()=>{
+    if(!sortCol)return filtered;
+    return [...filtered].sort((a,b)=>{
+      let av,bv;
+      if(sortCol==='assignee'){const au=safe(users).find(u=>u.id===a.assignee);const bu=safe(users).find(u=>u.id===b.assignee);av=(au&&au.name)||'';bv=(bu&&bu.name)||'';}
+      else if(sortCol==='priority'){av=PRI_ORD[a.priority]??99;bv=PRI_ORD[b.priority]??99;return sortDir==='asc'?av-bv:bv-av;}
+      else if(sortCol==='stage'){av=STAGE_ORD[a.stage]??99;bv=STAGE_ORD[b.stage]??99;return sortDir==='asc'?av-bv:bv-av;}
+      else if(sortCol==='due'){av=a.due||'9999';bv=b.due||'9999';}
+      else if(sortCol==='pct'){av=a.pct||0;bv=b.pct||0;return sortDir==='asc'?av-bv:bv-av;}
+      return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av);
+    });
+  },[filtered,sortCol,sortDir,users]);
+
+  const saveT=async p=>{if(p.id&&safe(tasks).find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',p);reload();};
+  const delT=async id=>{await api.del('/api/tasks/'+id);reload();};
+  const quickStage=async(tid,stage)=>{
+    const autoPct=STAGE_PCT[stage];
+    const payload={stage};
+    if(autoPct!==null&&autoPct!==undefined)payload.pct=autoPct;
+    await api.put('/api/tasks/'+tid,payload);reload();
+  };
+
+  return html`
+    <div class="fi" style=${{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
+      <div style=${{padding:'8px 18px',borderBottom:'1px solid var(--bd)',background:'var(--sf)',flexShrink:0}}>
+        <div style=${{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          <div style=${{position:'relative',flex:'1 1 160px',minWidth:130}}>
+            <span style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',fontSize:13}}>🔍</span>
+            <input class="inp" style=${{paddingLeft:30}} placeholder="Search tasks..." value=${search} onInput=${e=>setSearch(e.target.value)}/>
+          </div>
+          <button class=${'btn bg'+(showFilters?' act':'')} style=${{position:'relative',padding:'8px 13px',fontSize:12,borderColor:activeFilters>0?'var(--ac)':'',color:activeFilters>0?'var(--ac2)':''}}
+            onClick=${()=>setShowFilters(!showFilters)}>
+            ⚙ Filters${activeFilters>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,fontSize:9,padding:'1px 5px',marginLeft:3,fontFamily:'monospace'}}>${activeFilters}</span>`:''}
+          </button>
+          ${activeFilters>0?html`<button class="btn bam" style=${{padding:'7px 11px',fontSize:11}} onClick=${clearAll}>✕ Clear</button>`:null}
+          <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
+            <button class=${'tb'+(mode==='kanban'?' act':'')} onClick=${()=>setMode('kanban')}>⊞ Board</button>
+            <button class=${'tb'+(mode==='list'?' act':'')} onClick=${()=>setMode('list')}>☰ List</button>
+          </div>
+          <button class="btn bp" style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}} onClick=${()=>setNewT(true)}>+ New Task</button>
+        </div>
+        ${showFilters?html`
+          <div style=${{display:'flex',gap:8,flexWrap:'wrap',marginTop:9,paddingTop:9,borderTop:'1px solid var(--bd)'}}>
+            <div style=${{display:'flex',flexDirection:'column',gap:3}}>
+              <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Project</label>
+              <select class="sel" style=${{width:155,fontSize:12}} value=${pid} onChange=${e=>setPid(e.target.value)}>
+                <option value="all">All Projects</option>
+                ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+              </select>
+            </div>
+            <div style=${{display:'flex',flexDirection:'column',gap:3}}>
+              <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Assignee</label>
+              <select class="sel" style=${{width:140,fontSize:12}} value=${assF} onChange=${e=>setAssF(e.target.value)}>
+                <option value="all">All Members</option>
+                ${safe(users).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
+              </select>
+            </div>
+            <div style=${{display:'flex',flexDirection:'column',gap:3}}>
+              <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Priority</label>
+              <select class="sel" style=${{width:125,fontSize:12}} value=${priF} onChange=${e=>setPriF(e.target.value)}>
+                <option value="all">All Priority</option>
+                ${Object.entries(PRIS).map(([k,v])=>html`<option key=${k} value=${k}>${v.sym} ${v.label}</option>`)}
+              </select>
+            </div>
+            <div style=${{display:'flex',flexDirection:'column',gap:3}}>
+              <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Stage</label>
+              <select class="sel" style=${{width:130,fontSize:12}} value=${stageF} onChange=${e=>setStageF(e.target.value)}>
+                <option value="all">All Stages</option>
+                ${Object.entries(STAGES).map(([k,v])=>html`<option key=${k} value=${k}>${v.label}</option>`)}
+              </select>
+            </div>
+            <div style=${{display:'flex',flexDirection:'column',gap:3}}>
+              <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Due Date</label>
+              <select class="sel" style=${{width:130,fontSize:12}} value=${dueF} onChange=${e=>setDueF(e.target.value)}>
+                <option value="all">Any Due Date</option>
+                <option value="overdue">⚠ Overdue</option>
+                <option value="today">📅 Due Today</option>
+                <option value="week">📆 Due This Week</option>
+                <option value="month">🗓 Due This Month</option>
+              </select>
+            </div>
+            <div style=${{display:'flex',alignItems:'flex-end',paddingBottom:1}}>
+              <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',padding:'0 4px'}}>${filtered.length} task${filtered.length!==1?'s':''} shown</span>
+            </div>
+          </div>`:null}
+      </div>
+
+      ${mode==='kanban'?html`
+        <div style=${{flex:1,overflowX:'auto',overflowY:'hidden',padding:'13px 18px'}}>
+          <div style=${{display:'flex',gap:11,height:'100%',minWidth:'fit-content'}}>
+            ${KCOLS.map(st=>{
+              const col=filtered.filter(t=>t.stage===st);const si=STAGES[st];
+              return html`<div key=${st} style=${{flex:'0 0 220px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:11,padding:10,display:'flex',flexDirection:'column',gap:7,borderTop:'3px solid '+si.color,maxHeight:'100%'}}>
+                <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',paddingBottom:7,borderBottom:'1px solid var(--bd)'}}>
+                  <div style=${{display:'flex',alignItems:'center',gap:6}}><div style=${{width:7,height:7,borderRadius:2,background:si.color}}></div><span style=${{fontSize:11,fontWeight:700,color:'var(--tx)'}}>${si.label}</span></div>
+                  <span style=${{fontSize:9,color:'var(--tx3)',background:'var(--bd)',padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>${col.length}</span>
+                </div>
+                <div style=${{overflowY:'auto',display:'flex',flexDirection:'column',gap:7,flex:1}}>
+                  ${col.map(tk=>{
+                    const au=safe(users).find(u=>u.id===tk.assignee);
+                    return html`<div key=${tk.id} class="tkc" onClick=${()=>setEditT(tk)}>
+                      <div style=${{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.id}</span><${PB} p=${tk.priority}/></div>
+                      <p style=${{fontSize:13,fontWeight:500,color:'var(--tx)',marginBottom:6,lineHeight:1.4}}>${tk.title}</p>
+                      ${tk.pct>0?html`<div style=${{marginBottom:6}}><${Prog} pct=${tk.pct} color=${si.color}/></div>`:null}
+                      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                        ${au?html`<${Av} u=${au} size=${20}/>`:html`<div style=${{width:20,height:20,borderRadius:'50%',background:'var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'var(--tx3)'}}>?</div>`}
+                        ${tk.due?html`<span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtD(tk.due)}</span>`:null}
+                      </div>
+                    </div>`;
+                  })}
+                  ${col.length===0?html`<div style=${{padding:'14px 0',textAlign:'center',color:'var(--tx3)',fontSize:12}}>Empty</div>`:null}
+                </div>
+              </div>`;
+            })}
+          </div>
+        </div>`:null}
+
+      ${mode==='list'?html`
+        <div style=${{flex:1,overflowY:'auto',padding:'13px 18px'}}>
+          <div class="card" style=${{padding:0,overflow:'hidden'}}>
+            <table style=${{width:'100%',borderCollapse:'collapse'}}>
+              <thead>
+                <tr style=${{borderBottom:'2px solid var(--bd)',background:'var(--sf2)'}}>
+                  ${[
+                    {k:'id',      lbl:'ID',       s:null},
+                    {k:'title',   lbl:'Title',    s:null},
+                    {k:'project', lbl:'Project',  s:null},
+                    {k:'assignee',lbl:'Assignee', s:'assignee'},
+                    {k:'priority',lbl:'Priority', s:'priority'},
+                    {k:'stage',   lbl:'Stage',    s:'stage'},
+                    {k:'due',     lbl:'Due',      s:'due'},
+                    {k:'pct',     lbl:'%',        s:'pct'},
+                  ].map(h=>{
+                    const isA=sortCol===h.s;const can=!!h.s;
+                    return html`<th key=${h.k}
+                      onClick=${can?()=>toggleSort(h.s):null}
+                      style=${{padding:'10px 13px',textAlign:'left',fontSize:10,fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5,userSelect:'none',cursor:can?'pointer':'default',whiteSpace:'nowrap',color:isA?'var(--ac2)':'var(--tx3)',borderBottom:isA?'2px solid var(--ac)':'2px solid transparent',transition:'all .15s',background:isA?'rgba(99,102,241,.07)':'',position:'relative'}}>
+                      <div style=${{display:'flex',alignItems:'center',gap:5}}>
+                        <span>${h.lbl}</span>
+                        ${can?html`<span style=${{display:'flex',flexDirection:'column',lineHeight:.8,fontSize:8,gap:1}}>
+                          <span style=${{color:isA&&sortDir==='asc'?'var(--ac2)':'var(--tx3)',opacity:isA&&sortDir==='asc'?1:.4}}>▲</span>
+                          <span style=${{color:isA&&sortDir==='desc'?'var(--ac2)':'var(--tx3)',opacity:isA&&sortDir==='desc'?1:.4}}>▼</span>
+                        </span>`:null}
+                      </div>
+                    </th>`;
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                ${sorted.map((tk,i)=>{
+                  const pr=safe(projects).find(p=>p.id===tk.project);
+                  const au=safe(users).find(u=>u.id===tk.assignee);
+                  const si=STAGES[tk.stage]||{color:'#94a3b8'};
+                  return html`
+                    <tr key=${tk.id} style=${{borderBottom:i<sorted.length-1?'1px solid var(--bd)':'none'}}
+                      onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
+                      onMouseLeave=${e=>e.currentTarget.style.background=''}>
+                      <td style=${{padding:'9px 13px'}}><span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.id}</span></td>
+                      <td style=${{padding:'9px 13px',cursor:'pointer'}} onClick=${()=>setEditT(tk)}><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${tk.title}</span></td>
+                      <td style=${{padding:'9px 13px'}}>${pr?html`<div style=${{display:'flex',alignItems:'center',gap:5}}><div style=${{width:6,height:6,borderRadius:2,background:pr.color}}></div><span style=${{fontSize:12,color:'var(--tx2)'}}>${pr.name}</span></div>`:null}</td>
+                      <td style=${{padding:'9px 13px'}}>${au?html`<div style=${{display:'flex',alignItems:'center',gap:6}}><${Av} u=${au} size=${19}/><span style=${{fontSize:12,color:'var(--tx2)'}}>${au.name}</span></div>`:html`<span style=${{color:'var(--tx3)',fontSize:12}}>—</span>`}</td>
+                      <td style=${{padding:'7px 11px'}}><${PB} p=${tk.priority}/></td>
+                      <td style=${{padding:'5px 9px'}}>
+                        <div style=${{position:'relative',display:'inline-flex',alignItems:'center'}}>
+                          <select
+                            value=${tk.stage}
+                            onChange=${e=>{e.stopPropagation();quickStage(tk.id,e.target.value);}}
+                            onClick=${e=>e.stopPropagation()}
+                            style=${{background:si.color+'1a',border:'2px solid '+si.color,color:si.color,borderRadius:8,padding:'5px 26px 5px 9px',fontSize:11,fontFamily:'monospace',fontWeight:700,cursor:'pointer',outline:'none',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',minWidth:90}}>
+                            ${Object.entries(STAGES).map(([k,v])=>html`<option key=${k} value=${k} style=${{background:'#0d0f18',color:'#e2e8f0'}}>${v.label}</option>`)}
+                          </select>
+                          <span style=${{position:'absolute',right:7,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',fontSize:9,color:si.color,fontWeight:900}}>▾</span>
+                        </div>
+                      </td>
+                      <td style=${{padding:'9px 11px'}}>${(()=>{const isOD=tk.due&&new Date(tk.due)<new Date()&&tk.stage!=='completed';return html`<span style=${{fontSize:11,color:isOD?'var(--rd)':'var(--tx2)',fontFamily:'monospace',fontWeight:isOD?700:400}}>${isOD?'⚠ ':''}${fmtD(tk.due)}</span>`;})()}</td>
+                      <td style=${{padding:'9px 11px',minWidth:100}}>
+                        <div style=${{display:'flex',alignItems:'center',gap:7}}>
+                          <div style=${{flex:1}}><${Prog} pct=${tk.pct} color=${si.color}/></div>
+                          <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',width:28,textAlign:'right',fontWeight:700}}>${tk.pct}%</span>
+                        </div>
+                      </td>
+                    </tr>`;
+                })}
+              </tbody>
+            </table>
+            ${sorted.length===0?html`<div style=${{padding:40,textAlign:'center',color:'var(--tx3)',fontSize:13}}><div style=${{fontSize:28,marginBottom:8}}>🔍</div>No tasks match your filters.</div>`:null}
+          </div>
+        </div>`:null}
+
+      ${editT?html`<${TaskModal} task=${editT} onClose=${()=>setEditT(null)} onSave=${saveT} onDel=${delT} projects=${projects} users=${users} cu=${cu}/>`:null}
+      ${newT?html`<${TaskModal} task=${null} onClose=${()=>setNewT(false)} onSave=${saveT} projects=${projects} users=${users} cu=${cu}/>`:null}
+    </div>`;
+}
+
+/* ─── Dashboard ───────────────────────────────────────────────────────────── */
+function Dashboard({cu,tasks,projects,users,onNav}){
+  const t=safe(tasks);const p=safe(projects);const u=safe(users);
+  const myT=t.filter(x=>x.assignee===cu.id);
+  const done=t.filter(x=>x.stage==='completed').length;
+  const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
+  const blocked=t.filter(x=>x.stage==='blocked').length;
+  const stageChart=Object.entries(STAGES).map(([k,v])=>({name:v.label,count:t.filter(x=>x.stage===k).length,color:v.color})).filter(d=>d.count>0);
+  const priChart=[{name:'High',value:t.filter(x=>x.priority==='high').length,color:'#f87171'},{name:'Medium',value:t.filter(x=>x.priority==='medium').length,color:'#fbbf24'},{name:'Low',value:t.filter(x=>x.priority==='low').length,color:'#60a5fa'}];
+  const stats=[
+    {label:'Total Projects',val:p.length,   color:'var(--ac)',bg:'rgba(99,102,241,.1)', icon:'📁',nav:'projects'},
+    {label:'Active Tasks',  val:active,     color:'var(--cy)',bg:'rgba(34,211,238,.1)', icon:'⚡',nav:'tasks'},
+    {label:'Completed',     val:done,       color:'var(--gn)',bg:'rgba(74,222,128,.1)', icon:'✅',nav:'tasks'},
+    {label:'Blocked',       val:blocked,    color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚫',nav:'tasks'},
+    {label:'My Tasks',      val:myT.length, color:'var(--am)',bg:'rgba(251,191,36,.1)', icon:'⭐',nav:'tasks'},
+    {label:'Team Members',  val:u.length,   color:'var(--pu)',bg:'rgba(167,139,250,.1)',icon:'👥',nav:'team'},
+  ];
+  return html`
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',display:'flex',flexDirection:'column',gap:16}}>
+      <div style=${{padding:'14px 18px',background:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(34,211,238,.06))',borderRadius:14,border:'1px solid rgba(99,102,241,.2)',display:'flex',alignItems:'center',gap:13}}>
+        <${Av} u=${cu} size=${42}/>
+        <div style=${{flex:1}}>
+          <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)'}}>Good day, ${cu.name.split(' ')[0]}! 👋</h2>
+          <p style=${{color:'var(--tx2)',fontSize:13,marginTop:2}}>You have <b style=${{color:'var(--ac2)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac2)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
+        </div>
+        <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
+      </div>
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:11}}>
+        ${stats.map((s,i)=>html`
+          <div key=${i} class="card" onClick=${()=>onNav(s.nav)}
+            style=${{padding:'13px 15px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .18s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderColor=s.color;e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,.2)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.borderColor='';e.currentTarget.style.boxShadow='';}}>
+            <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:s.color,borderRadius:'14px 14px 0 0'}}></div>
+            <div style=${{width:32,height:32,borderRadius:8,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8,fontSize:16}}>${s.icon}</div>
+            <div style=${{fontSize:24,fontWeight:800,color:'var(--tx)',lineHeight:1}}>${s.val}</div>
+            <div style=${{fontSize:11,color:'var(--tx2)',marginTop:4}}>${s.label}</div>
+            <div style=${{fontSize:9,color:s.color,marginTop:2,fontFamily:'monospace',opacity:.7}}>click →</div>
+          </div>`)}
+      </div>
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 270px',gap:14}}>
+        <div class="card">
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:13}}>Tasks by Lifecycle Stage</h3>
+          <${RC.ResponsiveContainer} width="100%" height=${180}>
+            <${RC.BarChart} data=${stageChart} barSize=${18} margin=${{top:0,right:0,bottom:0,left:-20}}>
+              <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
+              <${RC.XAxis} dataKey="name" tick=${{fill:'var(--tx2)',fontSize:10,fontFamily:'monospace'}} axisLine=${false} tickLine=${false}/>
+              <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
+              <${RC.Tooltip} contentStyle=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,color:'var(--tx)',fontSize:12}}/>
+              <${RC.Bar} dataKey="count" radius=${[4,4,0,0]}>${stageChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
+            <//>
+          <//>
+        </div>
+        <div class="card">
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:11}}>Priority Split</h3>
+          <${RC.ResponsiveContainer} width="100%" height=${120}>
+            <${RC.PieChart}>
+              <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4}>
+                ${priChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
+              <${RC.Tooltip} contentStyle=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,color:'var(--tx)',fontSize:12}}/>
+            <//>
+          <//>
+          ${priChart.map((item,i)=>html`<div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<2?'1px solid var(--bd)':'none'}}>
+            <div style=${{display:'flex',alignItems:'center',gap:7}}><div style=${{width:7,height:7,borderRadius:2,background:item.color}}></div><span style=${{fontSize:12,color:'var(--tx2)'}}>${item.name}</span></div>
+            <span style=${{fontSize:12,color:'var(--tx)',fontFamily:'monospace',fontWeight:700}}>${item.value}</span>
+          </div>`)}
+        </div>
+      </div>
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+        <div class="card">
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:12}}>Project Progress</h3>
+          ${p.map(proj=>{
+            const pt=t.filter(x=>x.project===proj.id);const pc=pt.length?Math.round(pt.reduce((a,x)=>a+(x.pct||0),0)/pt.length):(proj.progress||0);
+            return html`<div key=${proj.id} style=${{marginBottom:11}}><div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}><div style=${{display:'flex',alignItems:'center',gap:6}}><div style=${{width:7,height:7,borderRadius:2,background:proj.color}}></div><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${proj.name}</span></div><span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace'}}>${pc}%</span></div><${Prog} pct=${pc} color=${proj.color}/></div>`;
+          })}
+        </div>
+        <div class="card">
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:12}}>My Recent Tasks</h3>
+          ${myT.slice(0,6).map((tk,i)=>html`<div key=${tk.id} style=${{display:'flex',gap:9,padding:'7px 0',borderBottom:i<Math.min(myT.length,6)-1?'1px solid var(--bd)':'none',alignItems:'center'}}>
+            <div style=${{width:6,height:6,borderRadius:2,background:(STAGES[tk.stage]&&STAGES[tk.stage].color)||'var(--ac)',flexShrink:0}}></div>
+            <div style=${{flex:1,minWidth:0}}><div style=${{fontSize:13,color:'var(--tx)',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${tk.title}</div><div style=${{display:'flex',gap:5,marginTop:2}}><${SP} s=${tk.stage}/><${PB} p=${tk.priority}/></div></div>
+            <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.pct}%</span>
+          </div>`)}
+          ${myT.length===0?html`<div style=${{color:'var(--tx3)',fontSize:13,textAlign:'center',paddingTop:16}}>No tasks assigned.</div>`:null}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ─── MessagesView ────────────────────────────────────────────────────────── */
+function MessagesView({projects,users,cu}){
+  const [pid,setPid]=useState((safe(projects)[0]&&safe(projects)[0].id)||'');
+  const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
+  useEffect(()=>{if(!pid)return;api.get('/api/messages?project='+pid).then(d=>setMsgs(Array.isArray(d)?d:[]));},[ pid]);
+  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
+  const sp=safe(projects).find(p=>p.id===pid);
+  const send=async()=>{if(!txt.trim())return;const c=txt.trim();setTxt('');const m=await api.post('/api/messages',{project:pid,content:c});setMsgs(prev=>[...prev,m]);};
+  return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
+    <div style=${{width:210,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
+      <div style=${{padding:'11px 12px',borderBottom:'1px solid var(--bd)'}}><span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7}}>Channels</span></div>
+      <div style=${{flex:1,overflowY:'auto',padding:6}}>
+        ${safe(projects).map(p=>html`<button key=${p.id} class=${'nb'+(pid===p.id?' act':'')} style=${{marginBottom:2,fontSize:12}} onClick=${()=>setPid(p.id)}><div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div><span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}># ${p.name}</span></button>`)}
+      </div>
+    </div>
+    <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div style=${{padding:'11px 15px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
+        ${sp?html`<div style=${{width:8,height:8,borderRadius:2,background:sp.color}}></div>`:null}
+        <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${sp?'# '+sp.name:'Select a channel'}</span>
+      </div>
+      <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:11}}>
+        ${msgs.map(m=>{const s=safe(users).find(u=>u.id===m.sender);const isMe=m.sender===cu.id;return html`
+          <div key=${m.id} style=${{display:'flex',gap:8,alignItems:'flex-end',flexDirection:isMe?'row-reverse':'row'}}>
+            ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
+            <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
+              ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
+              <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5,background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'#fff':'var(--tx)',border:isMe?'none':'1px solid var(--bd)',borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
+              <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(m.ts)}</span>
+            </div>
+          </div>`;})}
+        ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:48,color:'var(--tx3)',fontSize:13}}>No messages yet. Say hi! 👋</div>`:null}
+      </div>
+      <div style=${{padding:'10px 15px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
+        <input class="inp" style=${{flex:1}} placeholder=${'Message in #'+((sp&&sp.name)||'...')} value=${txt}
+          onInput=${e=>setTxt(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}/>
+        <button class="btn bp" style=${{padding:'8px 14px',fontSize:12}} onClick=${send}>➤</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ─── DirectMessages ──────────────────────────────────────────────────────── */
+function DirectMessages({cu,users,dmUnread,onDmRead}){
+  const others=safe(users).filter(u=>u.id!==cu.id);
+  const [toId,setToId]=useState(others[0]&&others[0].id||'');const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const [search,setSearch]=useState('');const ref=useRef(null);
+  const loadMsgs=useCallback(async(id)=>{if(!id)return;const d=await api.get('/api/dm/'+id);setMsgs(Array.isArray(d)?d:[]);onDmRead(id);},[onDmRead]);
+  useEffect(()=>{loadMsgs(toId);},[toId]);
+  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
+  const send=async()=>{if(!txt.trim()||!toId)return;const c=txt.trim();setTxt('');const m=await api.post('/api/dm',{recipient:toId,content:c});setMsgs(prev=>[...prev,m]);};
+  const filtered=others.filter(u=>u.name.toLowerCase().includes(search.toLowerCase()));
+  const toUser=safe(users).find(u=>u.id===toId);
+  const unreadFor=id=>(dmUnread.find(x=>x.sender===id)||{cnt:0}).cnt;
+  return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
+    <div style=${{width:220,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
+      <div style=${{padding:'11px 12px',borderBottom:'1px solid var(--bd)'}}><div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>Direct Messages</div><input class="inp" style=${{fontSize:12,padding:'6px 10px'}} placeholder="Search..." value=${search} onInput=${e=>setSearch(e.target.value)}/></div>
+      <div style=${{flex:1,overflowY:'auto',padding:6}}>
+        ${filtered.map(u=>{const unr=unreadFor(u.id);const isA=toId===u.id;return html`
+          <button key=${u.id} onClick=${()=>setToId(u.id)} style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',border:'none',borderRadius:9,cursor:'pointer',marginBottom:2,background:isA?'rgba(99,102,241,.14)':'transparent',transition:'all .14s'}}>
+            <div style=${{position:'relative',flexShrink:0}}><${Av} u=${u} size=${32}/><div style=${{position:'absolute',bottom:0,right:0,width:8,height:8,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div>
+            <div style=${{flex:1,minWidth:0,textAlign:'left'}}><div style=${{fontSize:13,fontWeight:600,color:isA?'var(--ac2)':'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div><div style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${u.role}</div></div>
+            ${unr>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${unr}</span>`:null}
+          </button>`;})}
+      </div>
+    </div>
+    <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
+        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div style=${{fontSize:11,color:'var(--tx3)'}}>${toUser.role}</div></div>`:html`<span style=${{color:'var(--tx3)'}}>Select someone to chat</span>`}
+      </div>
+      <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'16px',display:'flex',flexDirection:'column',gap:12}}>
+        ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:60,color:'var(--tx3)',fontSize:13}}><div style=${{fontSize:36,marginBottom:10}}>👋</div><div style=${{fontWeight:600,marginBottom:4,color:'var(--tx2)'}}>${toUser?'Start a conversation with '+toUser.name:'Select someone'}</div></div>`:null}
+        ${msgs.map((m,i)=>{const isMe=m.sender===cu.id;const showT=i===msgs.length-1||msgs[i+1].sender!==m.sender;return html`
+          <div key=${m.id} style=${{display:'flex',gap:8,alignItems:'flex-end',flexDirection:isMe?'row-reverse':'row'}}>
+            <div style=${{width:28,flexShrink:0}}>${!isMe&&(i===0||msgs[i-1].sender!==m.sender)?html`<${Av} u=${toUser} size=${28}/>`:null}</div>
+            <div style=${{display:'flex',flexDirection:'column',gap:2,alignItems:isMe?'flex-end':'flex-start',maxWidth:'68%'}}>
+              <div style=${{padding:'9px 13px',borderRadius:14,fontSize:13,lineHeight:1.55,wordBreak:'break-word',background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'#fff':'var(--tx)',border:isMe?'none':'1px solid var(--bd)',borderBottomRightRadius:isMe?3:14,borderBottomLeftRadius:isMe?14:3}}>${m.content}</div>
+              ${showT?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',margin:'0 2px'}}>${ago(m.ts)}</span>`:null}
+            </div>
+          </div>`;})}
+      </div>
+      <div style=${{padding:'11px 16px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
+        <textarea class="inp" style=${{flex:1,minHeight:40,maxHeight:100,resize:'none',padding:'9px 13px',lineHeight:1.5}} placeholder=${'Message '+((toUser&&toUser.name)||'...')} value=${txt} onInput=${e=>setTxt(e.target.value)} onKeyDown=${e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}}></textarea>
+        <button class="btn bp" style=${{padding:'9px 15px',flexShrink:0}} onClick=${send} disabled=${!txt.trim()||!toId}>➤</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ─── NotifsView ──────────────────────────────────────────────────────────── */
+function NotifsView({notifs,reload}){
+  const NT={task_assigned:{icon:'☑',c:'var(--ac)'},status_change:{icon:'⚡',c:'var(--cy)'},comment:{icon:'💬',c:'var(--pu)'},deadline:{icon:'⚠',c:'var(--am)'}};
+  const unread=safe(notifs).filter(n=>!n.read).length;
+  return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
+    <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+      <span style=${{fontSize:13,color:'var(--tx2)'}}>${unread>0?html`<b style=${{color:'var(--ac)'}}>${unread}</b> unread`:'All caught up!'}</span>
+      ${unread>0?html`<button class="btn bg" onClick=${()=>api.put('/api/notifications/read-all',{}).then(reload)}>✓ Mark all read</button>`:null}
+    </div>
+    <div style=${{display:'flex',flexDirection:'column',gap:8,maxWidth:780}}>
+      ${safe(notifs).map(n=>{const T=NT[n.type]||NT.comment;return html`
+        <div key=${n.id} onClick=${()=>!n.read&&api.put('/api/notifications/'+n.id+'/read',{}).then(reload)}
+          style=${{display:'flex',gap:12,padding:'12px 15px',background:n.read?'var(--sf)':'rgba(99,102,241,.07)',border:'1px solid '+(n.read?'var(--bd)':'rgba(99,102,241,.22)'),borderRadius:12,cursor:n.read?'default':'pointer',alignItems:'center'}}>
+          <div style=${{width:34,height:34,borderRadius:9,background:T.c+'18',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:17}}>${T.icon}</div>
+          <div style=${{flex:1}}><p style=${{fontSize:13,color:'var(--tx)',fontWeight:n.read?400:600,marginBottom:2}}>${n.content}</p><span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span></div>
+          ${!n.read?html`<div style=${{width:7,height:7,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
+        </div>`;})}
+    </div>
+  </div>`;
+}
+
+/* ─── TeamView ────────────────────────────────────────────────────────────── */
+function TeamView({users,cu,reload}){
+  const [showNew,setShowNew]=useState(false);const [name,setName]=useState('');const [email,setEmail]=useState('');const [pw,setPw]=useState('');const [role,setRole]=useState('Developer');const [err,setErr]=useState('');
+  const add=async()=>{if(!name||!email||!pw){setErr('All fields required.');return;}setErr('');const r=await api.post('/api/users',{name,email,password:pw,role});if(r.error)setErr(r.error);else{await reload();setShowNew(false);setName('');setEmail('');setPw('');}};
+  return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
+    <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+      <span style=${{fontSize:13,color:'var(--tx2)'}}>${safe(users).length} members in workspace</span>
+      <button class="btn bp" onClick=${()=>setShowNew(true)}>+ Add Member</button>
+    </div>
+    <div class="card" style=${{padding:0,overflow:'hidden',maxWidth:820}}>
+      <table style=${{width:'100%',borderCollapse:'collapse'}}>
+        <thead><tr style=${{borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
+          ${['Member','Email','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
+        </tr></thead>
+        <tbody>
+          ${safe(users).map((u,i)=>html`<tr key=${u.id} style=${{borderBottom:i<safe(users).length-1?'1px solid var(--bd)':'none'}}>
+            <td style=${{padding:'11px 15px'}}><div style=${{display:'flex',alignItems:'center',gap:10}}><${Av} u=${u} size=${32}/><div><div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>${u.name}${u.id===cu.id?html`<span style=${{fontSize:9,color:'var(--ac)',background:'rgba(99,102,241,.14)',padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>YOU</span>`:null}</div></div></div></td>
+            <td style=${{padding:'11px 15px'}}><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${u.email}</span></td>
+            <td style=${{padding:'11px 15px'}}><select class="sel" style=${{width:130,padding:'6px 28px 6px 10px'}} value=${u.role} onChange=${e=>api.put('/api/users/'+u.id,{role:e.target.value}).then(reload)} disabled=${u.id===cu.id}>${ROLES.map(r=>html`<option key=${r}>${r}</option>`)}</select></td>
+            <td style=${{padding:'11px 15px'}}>${u.id!==cu.id?html`<button class="btn brd" style=${{padding:'5px 11px',fontSize:12}} onClick=${()=>window.confirm('Remove '+u.name+'?')&&api.del('/api/users/'+u.id).then(reload)}>🗑 Remove</button>`:null}</td>
+          </tr>`)}
+        </tbody>
+      </table>
+    </div>
+    ${showNew?html`<div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
+      <div class="mo fi" style=${{maxWidth:400}}>
+        <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}><h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>Add Member</h2><button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowNew(false)}>✕</button></div>
+        <div style=${{display:'flex',flexDirection:'column',gap:11}}>
+          <input class="inp" placeholder="Full Name" value=${name} onInput=${e=>setName(e.target.value)}/>
+          <input class="inp" type="email" placeholder="Email" value=${email} onInput=${e=>setEmail(e.target.value)}/>
+          <input class="inp" type="password" placeholder="Password" value=${pw} onInput=${e=>setPw(e.target.value)}/>
+          <select class="sel" value=${role} onChange=${e=>setRole(e.target.value)}>${ROLES.map(r=>html`<option key=${r}>${r}</option>`)}</select>
+          ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
+          <div style=${{display:'flex',gap:9,justifyContent:'flex-end'}}>
+            <button class="btn bg" onClick=${()=>setShowNew(false)}>Cancel</button>
+            <button class="btn bp" onClick=${add}>Add Member</button>
+          </div>
+        </div>
+      </div>
+    </div>`:null}
+  </div>`;
+}
+
+/* ─── WorkspaceSettings ───────────────────────────────────────────────────── */
+function WorkspaceSettings({cu,onReload}){
+  const [ws,setWs]=useState(null);const [wsName,setWsName]=useState('');const [aiKey,setAiKey]=useState('');const [showKey,setShowKey]=useState(false);const [saving,setSaving]=useState(false);const [saved,setSaved]=useState(false);
+
+  useEffect(()=>{api.get('/api/workspace').then(d=>{if(!d.error){setWs(d);setWsName(d.name||'');setAiKey(d.ai_api_key?'•'.repeat(20):'');}});},[]);
+
+  const save=async()=>{
+    setSaving(true);
+    const payload={name:wsName};
+    if(aiKey&&!aiKey.startsWith('•'))payload.ai_api_key=aiKey;
+    await api.put('/api/workspace',payload);
+    setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
+    await onReload();
+  };
+
+  const newInvite=async()=>{
+    if(!window.confirm('Generate a new invite code? The old one will stop working.'))return;
+    const r=await api.post('/api/workspace/new-invite',{});
+    setWs(prev=>({...prev,invite_code:r.invite_code}));
+  };
+
+  const copy=text=>{navigator.clipboard&&navigator.clipboard.writeText(text);};
+
+  if(!ws)return html`<div style=${{padding:40,textAlign:'center'}}><span class="spin"></span></div>`;
+
+  return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'24px'}}>
+    <div style=${{maxWidth:640}}>
+      <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',marginBottom:20}}>⚙ Workspace Settings</h2>
+
+      <div class="card" style=${{marginBottom:16}}>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:16}}>🏢 Workspace</h3>
+        <div style=${{display:'flex',flexDirection:'column',gap:12}}>
+          <div><label class="lbl">Workspace Name</label><input class="inp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>
+          <div><label class="lbl">Workspace ID</label><div style=${{fontSize:12,color:'var(--tx3)',fontFamily:'monospace',padding:'8px 12px',background:'var(--sf2)',borderRadius:8}}>${ws.id}</div></div>
+        </div>
+      </div>
+
+      <div class="card" style=${{marginBottom:16}}>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🔗 Invite Code</h3>
+        <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Share this code with teammates to join your workspace.</p>
+        <div style=${{display:'flex',alignItems:'center',gap:10}}>
+          <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(167,139,250,.08))',borderRadius:12,border:'1px solid rgba(99,102,241,.2)'}}>
+            <div style=${{fontSize:28,fontWeight:800,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:4}}>${ws.invite_code}</div>
+          </div>
+          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
+            <button class="btn bp" style=${{fontSize:12,padding:'8px 14px'}} onClick=${()=>copy(ws.invite_code)}>📋 Copy</button>
+            <button class="btn bam" style=${{fontSize:12,padding:'8px 14px'}} onClick=${newInvite}>↻ New Code</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style=${{marginBottom:16}}>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🤖 AI Assistant</h3>
+        <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Paste your Anthropic API key to enable the AI assistant. The key is stored securely in your workspace only.</p>
+        <div><label class="lbl">Anthropic API Key</label>
+          <div style=${{position:'relative'}}>
+            <input class="inp" style=${{paddingRight:40,fontFamily:showKey?'monospace':'monospace',letterSpacing:aiKey.startsWith('•')?0:0}} type=${showKey?'text':'password'} placeholder="sk-ant-api..." value=${aiKey}
+              onInput=${e=>setAiKey(e.target.value)} onFocus=${()=>{if(aiKey.startsWith('•'))setAiKey('');}}/>
+            <button onClick=${()=>setShowKey(!showKey)} style=${{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)'}}>${showKey?'🙈':'👁'}</button>
+          </div>
+        </div>
+        <div style=${{marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',borderRadius:8,border:'1px solid rgba(99,102,241,.15)',fontSize:12,color:'var(--tx2)'}}>
+          💡 Get your API key at <b style=${{color:'var(--ac2)'}}>console.anthropic.com</b>. The AI can answer questions, create tasks, update statuses, and generate EOD reports.
+        </div>
+      </div>
+
+      <div style=${{display:'flex',gap:10,justifyContent:'flex-end'}}>
+        <button class="btn bp" onClick=${save} disabled=${saving}>
+          ${saving?html`<span class="spin"></span>`:saved?'✓ Saved!':'Save Settings'}
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ─── AIAssistant floating panel ──────────────────────────────────────────── */
+function AIAssistant({cu,projects,tasks,users}){
+  const [open,setOpen]=useState(false);const [msgs,setMsgs]=useState([]);const [input,setInput]=useState('');const [busy,setBusy]=useState(false);const ref=useRef(null);const iref=useRef(null);
+
+  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
+
+  const QUICK=[
+    {label:'📊 EOD Report',msg:'Generate an end-of-day status report for all projects'},
+    {label:'🔴 Blocked tasks',msg:'What tasks are blocked and need attention?'},
+    {label:'📈 Progress summary',msg:'Give me a quick summary of overall project progress'},
+    {label:'⚠️ Overdue',msg:'Are there any overdue tasks?'},
+  ];
+
+  const send=async(text)=>{
+    const m=text||input.trim();
+    if(!m||busy)return;
+    setInput('');
+    const userMsg={role:'user',content:m};
+    setMsgs(prev=>[...prev,userMsg]);
+    setBusy(true);
+    const history=[...msgs,userMsg];
+    const r=await api.post('/api/ai/chat',{message:m,history:history.slice(-10)});
+    setBusy(false);
+    if(r.error&&r.error==='NO_KEY'){
+      setMsgs(prev=>[...prev,{role:'ai',content:'⚙️ No API key configured.\n\nGo to **Settings → AI Assistant** and paste your Anthropic API key to get started.',actions:[]}]);
+    } else if(r.error){
+      setMsgs(prev=>[...prev,{role:'ai',content:'Error: '+(r.message||r.error),actions:[]}]);
+    } else {
+      setMsgs(prev=>[...prev,{role:'ai',content:r.message||'',actions:r.actions||[]}]);
+    }
+  };
+
+  const actionLabel=a=>{
+    if(a.type==='create_task')return'✅ Created task: '+a.title+' ('+a.id+')';
+    if(a.type==='update_task')return'✏️ Updated task: '+a.id;
+    if(a.type==='create_project')return'📁 Created project: '+a.name;
+    if(a.type==='eod_report')return'📊 EOD Report generated';
+    if(a.type==='error')return'⚠️ Error: '+a.message;
+    return'✓ '+a.type;
+  };
+
+  return html`
+    <button class="ai-btn" onClick=${()=>setOpen(!open)} title="AI Assistant">
+      ${open?'✕':'🤖'}
+    </button>
+    ${open?html`
+      <div class="ai-panel">
+        <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+          <div style=${{width:32,height:32,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🤖</div>
+          <div style=${{flex:1}}>
+            <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>AI Assistant</div>
+            <div style=${{fontSize:10,color:'var(--tx3)'}}>Powered by Claude</div>
+          </div>
+          ${msgs.length>0?html`<button class="btn bg" style=${{fontSize:10,padding:'4px 9px'}} onClick=${()=>setMsgs([])}>Clear</button>`:null}
+        </div>
+
+        <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:10}}>
+          ${msgs.length===0?html`
+            <div style=${{paddingTop:8}}>
+              <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:12,textAlign:'center'}}>Ask me anything about your projects, or try a quick action:</p>
+              <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+                ${QUICK.map(q=>html`<button key=${q.label} class="btn bg" style=${{justifyContent:'flex-start',fontSize:12,padding:'8px 12px',textAlign:'left'}} onClick=${()=>send(q.msg)}>${q.label}</button>`)}
+              </div>
+            </div>`:null}
+          ${msgs.map((m,i)=>html`
+            <div key=${i}>
+              ${m.role==='user'?html`<div class="ai-msg-user">${m.content}</div>`:null}
+              ${m.role==='ai'?html`
+                <div class="ai-msg-ai">${m.content}</div>
+                ${(m.actions||[]).length>0?html`<div style=${{display:'flex',flexDirection:'column',gap:5,marginTop:6}}>
+                  ${(m.actions||[]).map((a,j)=>html`<div key=${j} class="ai-action">${actionLabel(a)}${a.type==='eod_report'&&a.summary?html`<pre style=${{marginTop:6,fontSize:10,whiteSpace:'pre-wrap',color:'var(--gn)',lineHeight:1.6}}>${a.summary}</pre>`:null}</div>`)}
+                </div>`:null}`:null}
+            </div>`)}
+          ${busy?html`<div class="ai-msg-ai pulse" style=${{display:'flex',gap:4,alignItems:'center'}}><span style=${{fontSize:16}}>🤖</span><span style=${{fontSize:12}}>Thinking...</span><span class="spin" style=${{width:12,height:12,borderWidth:2}}></span></div>`:null}
+        </div>
+
+        <div style=${{padding:'10px 12px',borderTop:'1px solid var(--bd)',flexShrink:0}}>
+          <div style=${{display:'flex',gap:7}}>
+            <input ref=${iref} class="inp" style=${{flex:1,fontSize:13}} placeholder="Ask about your projects..." value=${input}
+              onInput=${e=>setInput(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}
+              disabled=${busy}/>
+            <button class="btn bp" style=${{padding:'8px 12px',flexShrink:0}} onClick=${()=>send()} disabled=${!input.trim()||busy}>➤</button>
+          </div>
+        </div>
+      </div>`:null}`;
+}
+
+/* ─── App ─────────────────────────────────────────────────────────────────── */
+function App(){
+  const [dark,setDark]=useState(true);const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
+  const [view,setView]=useState('dashboard');const [col,setCol]=useState(false);
+  const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[]});
+  const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
+
+  const load=useCallback(async()=>{
+    if(!cu)return;
+    try{
+      const [users,projects,tasks,notifs,dmu,ws]=await Promise.all([
+        api.get('/api/users'),api.get('/api/projects'),api.get('/api/tasks'),
+        api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'),
+      ]);
+      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[]});
+      setDmUnread(Array.isArray(dmu)?dmu:[]);
+      if(ws&&ws.name)setWsName(ws.name);
+    }catch(e){console.error(e);}
+  },[cu]);
+
+  useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
+  useEffect(()=>{load();},[load]);
+  useEffect(()=>{document.body.className=dark?'':'lm';},[dark]);
+  useEffect(()=>{if(!cu)return;const id=setInterval(()=>{api.get('/api/dm/unread').then(d=>{if(Array.isArray(d))setDmUnread(d);});},12000);return()=>clearInterval(id);},[cu]);
+
+  const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
+  const logout=async()=>{await api.post('/api/auth/logout',{});setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);};
+
+  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column',gap:14}}><div style=${{fontSize:42,filter:'drop-shadow(0 0 20px #6366f1)'}}>⚡</div><div class="spin" style=${{width:22,height:22,borderWidth:3}}></div><p style=${{color:'var(--tx2)',fontSize:13}}>Loading...</p></div>`;
+  if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
+
+  const unread=safe(data.notifs).filter(n=>!n.read).length;
+  const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+  const TITLES={
+    dashboard:{title:'Dashboard',sub:'Overview of your work'},
+    projects:{title:'Projects',sub:data.projects.length+' projects'},
+    tasks:{title:'Task Board',sub:data.tasks.length+' total tasks'},
+    messages:{title:'Channels',sub:'Project team channels'},
+    dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'},
+    notifs:{title:'Notifications',sub:unread+' unread'},
+    team:{title:'Team',sub:data.users.length+' members'},
+    settings:{title:'Settings',sub:wsName||'Workspace configuration'},
+  };
+  const info=TITLES[view]||{title:view,sub:''};
+  const extra=html`<button class="btn bg" style=${{fontSize:12,padding:'6px 11px'}} onClick=${load}>↻ Refresh</button>${view==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null}`;
+
+  return html`
+    <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
+      <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}/>
+      <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
+        <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}/>
+        <div style=${{flex:1,overflow:'hidden'}}>
+          <${ErrorBoundary}>
+            ${view==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
+            ${view==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
+            ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
+            ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load}/>`:null}
+            ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${view==='settings'&&cu.role==='Admin'?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
+          <//>
+        </div>
+      </div>
+    </div>
+    <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>`;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary}><${App}<//>`);
+})();
+</script>
+</body>
+</html>"""
+
+# ── Utilities ──────────────────────────────────────────────────────────────────
+def find_free_port(preferred=5000):
+    for port in range(preferred, preferred+10):
+        try:
+            s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+            s.bind(("",port)); s.close(); return port
+        except: pass
+    return preferred
+
+def download_js():
+    os.makedirs(JS_DIR,exist_ok=True)
+    libs=[
+        ("react.min.js",     "https://unpkg.com/react@18/umd/react.production.min.js"),
+        ("react-dom.min.js", "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"),
+        ("prop-types.min.js","https://unpkg.com/prop-types@15/prop-types.min.js"),
+        ("recharts.min.js",  "https://unpkg.com/recharts@2/umd/Recharts.js"),
+        ("htm.min.js",       "https://unpkg.com/htm@3/dist/htm.js"),
+    ]
+    all_ok=True
+    for fn,url in libs:
+        path=os.path.join(JS_DIR,fn)
+        if os.path.exists(path) and os.path.getsize(path)>1000: continue
+        print(f"  Downloading {fn}...",end="",flush=True)
+        try:
+            with urllib.request.urlopen(url,timeout=15) as r:
+                with open(path,"wb") as f: f.write(r.read())
+            print(" ✓")
+        except Exception as e:
+            print(f" ✗ ({e})"); all_ok=False
+    return all_ok
+
+def open_browser(port):
+    time.sleep(1.4)
+    webbrowser.open(f"http://localhost:{port}")
+
+if __name__=="__main__":
+    print("\n⚡ ProjectFlow v4.0 — Multi-Tenant | AI | Workspaces")
+    print("="*54)
+    print("  Initializing database...")
+    init_db()
+    print("  Checking JS libraries...")
+    if not download_js():
+        print("  ⚠ Some libraries failed. Check your internet connection.")
+    port=find_free_port(5000)
+    print(f"\n  ✓ Running at  http://localhost:{port}")
+    print(f"  ✓ Database:   {DB}")
+    print(f"  ✓ Uploads:    {UPLOAD_DIR}")
+    print(f"\n  Demo: alice@dev.io / pass123 (Admin)")
+    print(f"  New company? Click 'Create Account' → 'New Workspace'")
+    print(f"  Invite others? Share your code from Settings ⚙\n")
+    threading.Thread(target=open_browser,args=(port,),daemon=True).start()
+    app.run(host="0.0.0.0",port=port,debug=False,use_reloader=False)
