@@ -87,6 +87,9 @@ def init_db():
         # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
         except: pass
+        # Add avatar_data column for profile photos
+        try: db.execute("ALTER TABLE users ADD COLUMN avatar_data TEXT")
+        except: pass
         # Migrate legacy data (no workspace_id)
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
@@ -288,6 +291,11 @@ def update_user(uid):
     d=request.json or {}
     with get_db() as db:
         if "role" in d: db.execute("UPDATE users SET role=? WHERE id=? AND workspace_id=?",(d["role"],uid,wid()))
+        if "name" in d:
+            av="".join(w[0] for w in d["name"].split())[:2].upper()
+            db.execute("UPDATE users SET name=?,avatar=? WHERE id=? AND workspace_id=?",(d["name"],av,uid,wid()))
+        if "email" in d: db.execute("UPDATE users SET email=? WHERE id=? AND workspace_id=?",(d["email"],uid,wid()))
+        if "avatar_data" in d: db.execute("UPDATE users SET avatar=? WHERE id=? AND workspace_id=?",(d["avatar_data"],uid,wid()))
         u=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
         return jsonify(dict(u) if u else {})
 
@@ -922,6 +930,9 @@ const ago=iso=>{const m=Math.floor((Date.now()-new Date(iso))/60000);if(m<1)retu
 const safe=a=>(Array.isArray(a)?a:[]);
 
 function Av({u,size=32}){
+  if(u&&u.avatar_data&&u.avatar_data.startsWith('data:image')){
+    return html`<img src=${u.avatar_data} class="av" style=${{width:size,height:size,objectFit:'cover',border:'2px solid var(--bd)'}}/>`;
+  }
   return html`<div class="av" style=${{width:size,height:size,background:(u&&u.color)||'#6366f1',color:'#fff',fontSize:Math.max(9,Math.floor(size*.33))}}>
     ${(u&&u.avatar)||'?'}
   </div>`;
@@ -1060,7 +1071,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
     messages:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
     dm:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,
     notifs:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
-    reminders:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     reminders:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>`,
     team:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     settings:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
@@ -1120,6 +1130,8 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
 /* ─── Header ──────────────────────────────────────────────────────────────── */
 function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminders,notifs,onNotifClick,onMarkAllRead,onClearAll}){
   const [showNP,setShowNP]=useState(false);
+  const [showProfile,setShowProfile]=useState(false);
+  const [setCuLocal]=useState(()=>()=>{}); // placeholder; profile updates reload on next load
   const now=new Date();
   const todayStr=now.toLocaleDateString('en-US',{day:'numeric',month:'short'});
   const upcoming=safe(upcomingReminders).slice(0,4);
@@ -1128,11 +1140,18 @@ function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminde
   const NI={task_assigned:'✅',status_change:'🔄',comment:'💬',deadline:'⏰',dm:'📨',project_added:'📁',reminder:'🔔'};
   const NC={task_assigned:'var(--ac)',status_change:'var(--cy)',comment:'var(--pu)',deadline:'var(--am)',dm:'var(--cy)',project_added:'var(--gn)',reminder:'var(--am)'};
   const npRef=useRef(null);
+  const prRef=useRef(null);
+  const prImgRef=useRef(null);
   useEffect(()=>{
     if(!showNP)return;
     const h=e=>{if(npRef.current&&!npRef.current.contains(e.target))setShowNP(false);};
     document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
   },[showNP]);
+  useEffect(()=>{
+    if(!showProfile)return;
+    const h=e=>{if(prRef.current&&!prRef.current.contains(e.target))setShowProfile(false);};
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
+  },[showProfile]);
   return html`
     <div style=${{flexShrink:0,background:'var(--sf)',borderBottom:'1px solid var(--bd)'}}>
       <div style=${{padding:'0 16px',borderBottom:'1px solid var(--bd)',height:42,display:'flex',alignItems:'center',gap:10}}>
@@ -1191,12 +1210,46 @@ function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminde
                 </div>
               </div>`:null}
           </div>
-          ${cu?html`<div style=${{display:'flex',alignItems:'center',gap:6,padding:'3px 9px 3px 3px',background:'var(--sf2)',borderRadius:20,border:'1px solid var(--bd)'}}>
-            <${Av} u=${cu} size=${24}/>
-            <div style=${{lineHeight:1.2}}>
-              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)'}}>${cu.name.split(' ')[0]}</div>
-              <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu.role}</div>
+          ${cu?html`<div style=${{position:'relative'}} ref=${prRef}>
+            <div style=${{display:'flex',alignItems:'center',gap:6,padding:'3px 9px 3px 3px',background:'var(--sf2)',borderRadius:20,border:'1px solid var(--bd)',cursor:'pointer',transition:'all .15s'}}
+              onClick=${()=>setShowProfile(v=>!v)}
+              onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.background='var(--sf)';}}
+              onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.background='var(--sf2)';}}>
+              <${Av} u=${cu} size=${24}/>
+              <div style=${{lineHeight:1.2}}>
+                <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)'}}>${cu.name.split(' ')[0]}</div>
+                <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu.role}</div>
+              </div>
             </div>
+            ${showProfile?html`
+              <div style=${{position:'absolute',top:38,right:0,width:280,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,boxShadow:'0 8px 30px rgba(0,0,0,.2)',zIndex:3000,overflow:'hidden'}}>
+                <div style=${{padding:'20px',background:'linear-gradient(135deg,rgba(99,102,241,.15),rgba(129,140,248,.05))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+                  <div style=${{position:'relative',cursor:'pointer'}} onClick=${()=>prImgRef.current&&prImgRef.current.click()} title="Click to upload photo">
+                    ${cu.avatar_data?
+                      html`<img src=${cu.avatar_data} style=${{width:64,height:64,borderRadius:'50%',objectFit:'cover',border:'3px solid var(--ac)'}}/>`:
+                      html`<${Av} u=${cu} size=${64}/>`}
+                    <div style=${{position:'absolute',bottom:0,right:0,width:20,height:20,borderRadius:'50%',background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,border:'2px solid var(--sf)',color:'#fff'}}>📷</div>
+                    <input ref=${prImgRef} type="file" accept="image/*" style=${{display:'none'}} onChange=${async e=>{
+                      const f=e.target.files[0];if(!f)return;
+                      const reader=new FileReader();
+                      reader.onload=async ev=>{
+                        const dataUrl=ev.target.result;
+                        await api.put('/api/users/'+cu.id,{avatar_data:dataUrl});
+                        setCuLocal(prev=>({...prev,avatar_data:dataUrl}));
+                      };
+                      reader.readAsDataURL(f);
+                    }}/>
+                  </div>
+                  <div style=${{textAlign:'center'}}>
+                    <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)'}}>${cu.name}</div>
+                    <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2,fontFamily:'monospace'}}>${cu.email}</div>
+                    <span class="badge" style=${{background:'var(--ac)22',color:'var(--ac2)',marginTop:6,display:'inline-block'}}>${cu.role}</span>
+                  </div>
+                </div>
+                <div style=${{padding:'12px'}}>
+                  <button class="btn bg" style=${{width:'100%',justifyContent:'center',fontSize:12,marginBottom:6}} onClick=${()=>{setShowProfile(false);}}>Close</button>
+                </div>
+              </div>`:null}
           </div>`:null}
         </div>
       </div>
@@ -1360,7 +1413,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
             ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
               <button class="btn bg" onClick=${onClose}>Cancel</button>
-              ${onSetReminder?html`<button class="btn bam" style=${{fontSize:12}} onClick=${()=>{save().then(()=>onSetReminder({id:task&&task.id,title:title,due}));}}>⏰ Set Reminder</button>`:null}
+              ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${()=>{save().then(()=>onSetReminder({id:task&&task.id,title:title,due}));}}>⏰ Set Reminder</button>`:null}
               <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
             </div>
           </div>`:null}
@@ -2483,128 +2536,6 @@ function ReminderModal({task,onClose,onSaved}){
     </div>`;
 }
 
-/* ─── RemindersView (full page) ───────────────────────────────────────────── */
-function RemindersView({cu,tasks,onSetReminder}){
-  const [reminders,setReminders]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const now=new Date();
-  const load=useCallback(async()=>{
-    setLoading(true);
-    const d=await api.get('/api/reminders');
-    setReminders(Array.isArray(d)?d:[]);
-    setLoading(false);
-  },[]);
-  useEffect(()=>{load();},[load]);
-  const del=async(id)=>{
-    await api.del('/api/reminders/'+id);
-    setReminders(prev=>prev.filter(r=>r.id!==id));
-  };
-  const fmtDt=dt=>{
-    const d=new Date(dt);
-    const diff=d-now;
-    if(diff<0) return {label:'Overdue',col:'var(--rd)',bg:'rgba(248,113,113,.1)'};
-    if(diff<3600000) return {label:'< 1 hour',col:'var(--am)',bg:'rgba(251,191,36,.1)'};
-    if(diff<86400000) return {label:'Today',col:'var(--cy)',bg:'rgba(34,211,238,.1)'};
-    if(diff<172800000) return {label:'Tomorrow',col:'var(--gn)',bg:'rgba(74,222,128,.1)'};
-    return {label:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),col:'var(--tx2)',bg:'var(--sf2)'};
-  };
-  const overdue=reminders.filter(r=>new Date(r.remind_at)<now);
-  const upcoming=reminders.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at));
-  const hours=[...Array(12)].map((_,i)=>{
-    const h=8+i;
-    const label=h<12?h+' AM':h===12?'12 PM':((h-12)+' PM');
-    const remAtHour=upcoming.filter(r=>{const d=new Date(r.remind_at);return d.getHours()===h && d.toDateString()===now.toDateString();});
-    return {h,label,remAtHour};
-  });
-  return html`
-    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 24px',background:'var(--bg)'}}>
-      <!-- Header stats row (like image 6 top metrics) -->
-      <div style=${{display:'flex',gap:14,marginBottom:22}}>
-        ${[
-          {label:'Total',val:reminders.length,col:'var(--ac)',bg:'rgba(99,102,241,.1)',icon:'⏰'},
-          {label:'Upcoming',val:upcoming.length,col:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
-          {label:'Overdue',val:overdue.length,col:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
-          {label:'Today',val:upcoming.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,col:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'📅'},
-        ].map(s=>html`
-          <div key=${s.label} style=${{flex:1,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'16px 18px',display:'flex',alignItems:'center',gap:14}}>
-            <div style=${{width:44,height:44,borderRadius:12,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>${s.icon}</div>
-            <div>
-              <div style=${{fontSize:26,fontWeight:900,color:s.col,lineHeight:1}}>${s.val}</div>
-              <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600,letterSpacing:.3}}>${s.label}</div>
-            </div>
-          </div>`)}
-      </div>
-      <!-- Timeline bar -->
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'16px 20px',marginBottom:20}}>
-        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <div style=${{fontWeight:800,fontSize:14,color:'var(--tx)'}}>📅 Today's Timeline</div>
-          <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
-        </div>
-        <div style=${{display:'flex',gap:0,overflowX:'auto',paddingBottom:6}}>
-          ${hours.map(h=>html`
-            <div key=${h.h} style=${{flex:'0 0 80px',textAlign:'center',position:'relative'}}>
-              <div style=${{fontSize:9,color:h.remAtHour.length?'var(--am)':'var(--tx3)',fontFamily:'monospace',fontWeight:h.remAtHour.length?700:400,marginBottom:6}}>${h.label}</div>
-              <div style=${{height:36,border:'1px dashed '+(h.remAtHour.length?'var(--am)':'var(--bd)'),borderRadius:6,background:h.remAtHour.length?'rgba(251,191,36,.07)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',gap:2,position:'relative'}}>
-                ${h.remAtHour.map(r=>html`
-                  <div key=${r.id} style=${{width:18,height:18,borderRadius:'50%',background:'var(--am)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:800,color:'#000',cursor:'pointer'}} title=${r.task_title}>
-                    ${r.task_title.charAt(0).toUpperCase()}
-                  </div>`)}
-              </div>
-            </div>`)}
-        </div>
-      </div>
-      <!-- Overdue & Upcoming columns (image 6 style) -->
-      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-        <!-- Upcoming column -->
-        <div>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-            <div style=${{fontWeight:800,fontSize:14,color:'var(--tx)'}}>⚡ Upcoming</div>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminders</span>
-          </div>
-          ${loading?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
-          ${!loading&&upcoming.length===0?html`<div style=${{textAlign:'center',padding:'36px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
-            <div style=${{fontSize:28,marginBottom:8}}>✅</div><p>All clear! No upcoming reminders.</p>
-          </div>`:null}
-          <div style=${{display:'flex',flexDirection:'column',gap:9}}>
-            ${upcoming.map(r=>{const ft=fmtDt(r.remind_at);return html`
-              <div key=${r.id} style=${{display:'flex',gap:12,padding:'13px 15px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)',transition:'all .15s',alignItems:'center'}}>
-                <div style=${{width:40,height:40,borderRadius:11,background:'rgba(251,191,36,.12)',border:'1px solid rgba(251,191,36,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⏰</div>
-                <div style=${{flex:1,minWidth:0}}>
-                  <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${r.task_title}</div>
-                  <div style=${{display:'flex',gap:8,alignItems:'center'}}>
-                    <span style=${{fontSize:10,padding:'2px 7px',borderRadius:5,background:ft.bg,color:ft.col,fontWeight:700}}>${ft.label}</span>
-                    <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
-                  </div>
-                </div>
-                <button class="btn brd" style=${{fontSize:11,padding:'5px 9px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-              </div>`;})}\
-          </div>
-        </div>
-        <!-- Overdue column -->
-        <div>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-            <div style=${{fontWeight:800,fontSize:14,color:'var(--rd)'}}>🚨 Overdue</div>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
-          </div>
-          ${!loading&&overdue.length===0?html`<div style=${{textAlign:'center',padding:'36px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
-            <div style=${{fontSize:28,marginBottom:8}}>🎉</div><p>Nothing overdue!</p>
-          </div>`:null}
-          <div style=${{display:'flex',flexDirection:'column',gap:9}}>
-            ${overdue.map(r=>html`
-              <div key=${r.id} style=${{display:'flex',gap:12,padding:'13px 15px',background:'rgba(248,113,113,.04)',borderRadius:12,border:'1px solid rgba(248,113,113,.2)',alignItems:'center'}}>
-                <div style=${{width:40,height:40,borderRadius:11,background:'rgba(248,113,113,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⚠️</div>
-                <div style=${{flex:1,minWidth:0}}>
-                  <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${r.task_title}</div>
-                  <span style=${{fontSize:10,color:'var(--rd)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
-                </div>
-                <button class="btn brd" style=${{fontSize:11,padding:'5px 9px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-              </div>`)}\
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
 /* ─── RemindersView ──────────────────────────────────────────────────────── */
 function RemindersView({cu,tasks,onSetReminder}){
   const [reminders,setReminders]=useState([]);const [busy,setBusy]=useState(true);
@@ -2833,7 +2764,6 @@ function App(){
     tasks:{title:'Task Board',sub:data.tasks.length+' total tasks'},
     messages:{title:'Channels',sub:'Project team channels'},
     dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'},
-    reminders:{title:'Reminders',sub:'Track your upcoming task reminders'},
     reminders:{title:'Reminders',sub:'Upcoming task reminders'},
     notifs:{title:'Notifications',sub:unread+' unread'},
     team:{title:'Team',sub:data.users.length+' members'},
@@ -2860,7 +2790,6 @@ function App(){
             ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
             ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
-            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
