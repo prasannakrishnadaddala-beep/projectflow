@@ -37,7 +37,7 @@ app.config.update(
     MAX_CONTENT_LENGTH=150*1024*1024)
 CORS(app, supports_credentials=True)
 
-CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#6366f1"]
+CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#c8f135"]
 
 def get_db():
     c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row
@@ -367,7 +367,7 @@ def create_project():
         db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                    (pid,wid(),d["name"],d.get("description",""),session["user_id"],
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
-                    d.get("color","#6366f1"),ts()))
+                    d.get("color","#c8f135"),ts()))
         p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
         # Notify all members except creator
         for uid in members:
@@ -843,7 +843,7 @@ TEAM MEMBERS:
 You can answer questions, analyze status, and PERFORM ACTIONS by including JSON in your reply like:
 <action>{{"type":"create_task","title":"Task name","project":"project_id","priority":"high","stage":"backlog","assignee":"user_id","due":"YYYY-MM-DD","description":"details"}}</action>
 <action>{{"type":"update_task","task_id":"T-001","stage":"testing","pct":75}}</action>
-<action>{{"type":"create_project","name":"Project Name","description":"desc","color":"#6366f1","members":["user_id"]}}</action>
+<action>{{"type":"create_project","name":"Project Name","description":"desc","color":"#c8f135","members":["user_id"]}}</action>
 <action>{{"type":"eod_report"}}</action>
 
 IMPORTANT: Always be helpful and concise. When performing actions, explain what you did. For EOD reports, summarize all task statuses by project."""
@@ -899,7 +899,7 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
                     db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                                (pid,wid(),act.get("name","New Project"),act.get("description",""),
                                 session["user_id"],json.dumps(mems),"",act.get("target_date",""),0,
-                                act.get("color","#6366f1"),ts()))
+                                act.get("color","#c8f135"),ts()))
                     action_results.append({"type":"create_project","id":pid,"name":act.get("name")})
                 elif atype=="eod_report":
                     rows=db.execute("SELECT t.*,p.name as pname FROM tasks t LEFT JOIN projects p ON t.project=p.id WHERE t.workspace_id=?",(wid(),)).fetchall()
@@ -955,63 +955,165 @@ HTML = r"""<!DOCTYPE html>
 })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
 <script src="/js/react.min.js"></script><script src="/js/react-dom.min.js"></script>
 <script src="/js/prop-types.min.js"></script><script src="/js/recharts.min.js"></script>
 <script src="/js/htm.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}html,body{height:100%;width:100%;overflow:hidden}
-body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx)}
-:root{--bg:#07090f;--sf:#0d0f18;--sf2:#131623;--bd:#1c1f2e;--tx:#e2e8f0;--tx2:#8892a4;--tx3:#4a5568;
-  --ac:#6366f1;--ac2:#818cf8;--cy:#22d3ee;--gn:#4ade80;--am:#fbbf24;--rd:#f87171;--pu:#a78bfa;}
-.lm{--bg:#f0f4fa;--sf:#fff;--sf2:#f5f7fc;--bd:#dde3ee;--tx:#0f172a;--tx2:#475569;--tx3:#94a3b8}
-::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}input[type=date]{color-scheme:dark;}body.lm input[type=date]{color-scheme:light;}input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.75;}input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1;}
-::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
-.card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:20px}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .17s;white-space:nowrap;line-height:1.2}
-.bp{background:var(--ac);color:#fff!important}.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 18px rgba(99,102,241,.4)}.bp:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.bg{background:transparent;color:var(--tx2)!important;border:1px solid var(--bd)}.bg:hover{background:var(--sf2);color:var(--tx)!important}
-.brd{background:rgba(248,113,113,.08);color:var(--rd)!important;border:1px solid rgba(248,113,113,.25)}.brd:hover{background:rgba(248,113,113,.18)}
-.bam{background:rgba(251,191,36,.08);color:var(--am)!important;border:1px solid rgba(251,191,36,.25)}.bam:hover{background:rgba(251,191,36,.18)}
-.inp{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;padding:9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;transition:border-color .17s;font-family:inherit}
-.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(99,102,241,.1)}.inp::placeholder{color:var(--tx3)}
+body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx)}
+
+/* ── Core palette – matches the reference images ────────────────────── */
+:root{
+  /* Main surfaces */
+  --bg:#eeecea;          /* warm off-white canvas */
+  --sf:#ffffff;          /* card white */
+  --sf2:#f5f4f1;         /* subtle secondary surface */
+  --bd:#e2e0db;          /* soft border / divider */
+  /* Text */
+  --tx:#111111;          /* near-black */
+  --tx2:#6b6860;         /* muted label */
+  --tx3:#a09e99;         /* placeholder / disabled */
+  /* Sidebar */
+  --sb:#0a0a0a;          /* sidebar black */
+  --sb2:#1a1a1a;         /* sidebar card bg */
+  --sb3:#252525;         /* sidebar hover */
+  --sbt:#d4d4d4;         /* sidebar icon color */
+  /* Accent palette */
+  --ac:#c8f135;          /* lime yellow-green (primary) */
+  --ac2:#b8e020;         /* lime darker hover */
+  --ac-tx:#1a2600;       /* text on lime bg */
+  --pu:#9b8ef4;          /* lavender purple */
+  --pu2:#b8aeff;         /* lavender light */
+  --rd:#f0645a;          /* coral red */
+  --rd2:#ff8a82;         /* coral light */
+  --cy:#5bc4bf;          /* teal cyan */
+  --cy2:#84dbd6;         /* teal light */
+  --am:#f5d442;          /* amber yellow */
+  --gn:#4ade80;          /* green (status) */
+  /* Shadows */
+  --sh: 0 2px 12px rgba(0,0,0,.07);
+  --sh2: 0 8px 32px rgba(0,0,0,.10);
+}
+
+/* ── Dark mode override ─────────────────────────────────────────────── */
+.lm{
+  --bg:#eeecea;--sf:#ffffff;--sf2:#f5f4f1;--bd:#e2e0db;
+  --tx:#111111;--tx2:#6b6860;--tx3:#a09e99;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bd);border-radius:4px}
+
+/* ── Date input ─────────────────────────────────────────────────────── */
+input[type=date]{color-scheme:light;}
+input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.6}
+
+/* ── Card ───────────────────────────────────────────────────────────── */
+.card{background:var(--sf);border-radius:18px;padding:20px;box-shadow:var(--sh);border:none}
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:100px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .17s;white-space:nowrap;line-height:1.2;font-family:inherit}
+/* primary – lime */
+.bp{background:var(--ac);color:var(--ac-tx)!important}
+.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 18px rgba(180,220,20,.35)}
+.bp:disabled{opacity:.5;cursor:not-allowed;transform:none}
+/* ghost */
+.bg{background:transparent;color:var(--tx2)!important;border:1.5px solid var(--bd)}
+.bg:hover{background:var(--sf2);color:var(--tx)!important;border-color:var(--tx3)}
+/* danger */
+.brd{background:rgba(240,100,90,.08);color:var(--rd)!important;border:1.5px solid rgba(240,100,90,.25)}
+.brd:hover{background:rgba(240,100,90,.16)}
+/* warning */
+.bam{background:rgba(245,212,66,.10);color:#9a7c00!important;border:1.5px solid rgba(245,212,66,.4)}
+.bam:hover{background:rgba(245,212,66,.2)}
+/* dark pill (primary alternative) */
+.bdk{background:var(--sb);color:#fff!important;border:none}
+.bdk:hover{background:var(--sb3);transform:translateY(-1px)}
+
+/* ── Inputs ─────────────────────────────────────────────────────────── */
+.inp{background:var(--sf2);border:1.5px solid var(--bd);border-radius:12px;padding:10px 14px;color:var(--tx);font-size:13px;width:100%;outline:none;transition:border-color .17s;font-family:inherit}
+.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(200,241,53,.2)}
+.inp::placeholder{color:var(--tx3)}
 textarea.inp{resize:vertical;min-height:68px}
-.sel{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;padding:9px 32px 9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%238892a4' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
-.sel:focus{border-color:var(--ac)}
-.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;font-family:monospace}
-.nb{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .15s;border:none;background:transparent;width:100%;text-align:left;position:relative}
-.nb:hover{background:var(--sf2);color:var(--tx)}.nb.act{background:rgba(99,102,241,.12);color:var(--ac)}.nb.act::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:3px;background:var(--ac);border-radius:0 3px 3px 0}
-.ov{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(6px)}
-.mo{background:var(--sf);border:1px solid var(--bd);border-radius:18px;padding:26px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto}
+.sel{background:var(--sf2);border:1.5px solid var(--bd);border-radius:12px;padding:10px 32px 10px 14px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b6860' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+.sel:focus{border-color:var(--ac);outline:none}
+
+/* ── Badges / chips ─────────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.2px;text-transform:uppercase}
+.nb{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;cursor:pointer;color:var(--sbt);font-size:13px;font-weight:500;transition:all .15s;border:none;background:transparent;width:100%;text-align:left;position:relative}
+.nb:hover{background:var(--sb3);color:#fff}
+.nb.act{background:var(--ac);color:var(--ac-tx)!important}
+.nb.act svg{stroke:var(--ac-tx)!important}
+
+/* ── Overlay / Modal ─────────────────────────────────────────────────── */
+.ov{position:fixed;inset:0;background:rgba(10,10,10,.4);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(8px)}
+.mo{background:var(--sf);border-radius:22px;padding:28px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto;box-shadow:var(--sh2);border:none}
 .mo-xl{max-width:920px}
-.tkc{background:var(--sf);border:1px solid var(--bd);border-radius:11px;padding:13px;cursor:pointer;transition:all .18s}
-.tkc:hover{border-color:var(--ac);transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.15)}
-.prog{height:5px;background:var(--bd);border-radius:3px;overflow:hidden}
-.progf{height:100%;border-radius:3px;transition:width .5s}
-.tb{padding:6px 13px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--tx2);transition:all .14s;font-family:inherit}
-.tb.act{background:var(--sf);color:var(--tx);box-shadow:0 1px 4px rgba(0,0,0,.2)}.tb:hover:not(.act){color:var(--tx)}
+
+/* ── Task card ──────────────────────────────────────────────────────── */
+.tkc{background:var(--sf);border-radius:16px;padding:14px;cursor:pointer;transition:all .18s;box-shadow:var(--sh);border:none}
+.tkc:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
+
+/* ── Progress bar ────────────────────────────────────────────────────── */
+.prog{height:5px;background:var(--bd);border-radius:100px;overflow:hidden}
+.progf{height:100%;border-radius:100px;transition:width .5s}
+
+/* ── Tab buttons ─────────────────────────────────────────────────────── */
+.tb{padding:7px 14px;border-radius:100px;cursor:pointer;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--tx2);transition:all .14s;font-family:inherit}
+.tb.act{background:var(--sb);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.tb:hover:not(.act){background:var(--sf2);color:var(--tx)}
+
+/* ── Avatar ──────────────────────────────────────────────────────────── */
 .av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;letter-spacing:-.5px}
-.lbl{color:var(--tx2);font-size:11px;font-family:monospace;margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.5px}
-.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;transition:all .14s}
-.chip:hover{border-color:var(--ac);color:var(--ac2)}.chip.on{background:rgba(99,102,241,.15);border-color:var(--ac);color:var(--ac2)}
-.drop-zone{border:2px dashed var(--bd);border-radius:11px;padding:22px;text-align:center;cursor:pointer;transition:all .2s;color:var(--tx3);font-size:13px}
-.drop-zone:hover,.drop-zone.over{border-color:var(--ac);color:var(--ac);background:rgba(99,102,241,.05)}
-@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.fi{animation:fi .2s ease}
-@keyframes sp{to{transform:rotate(360deg)}}.spin{display:inline-block;width:16px;height:16px;border:2.5px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}.pulse{animation:pulse 1.5s ease-in-out infinite}
-/* Huddle */
-/* huddle popup handled by HuddleCall component */
-/* AI panel */
-.ai-btn{position:fixed;bottom:22px;right:22px;z-index:1800;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a78bfa);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(99,102,241,.5);transition:all .2s}
-.ai-btn:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(99,102,241,.7)}
-.ai-panel{position:fixed;bottom:86px;right:22px;z-index:1800;width:400px;height:560px;background:var(--sf);border:1px solid var(--bd);border-radius:18px;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.4);overflow:hidden}
+
+/* ── Labels / chips ──────────────────────────────────────────────────── */
+.lbl{color:var(--tx2);font-size:11px;font-family:'DM Sans',sans-serif;margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:100px;font-size:11px;font-weight:600;background:var(--sf2);border:1.5px solid var(--bd);color:var(--tx2);cursor:pointer;transition:all .14s}
+.chip:hover{border-color:var(--ac);color:var(--ac-tx);background:rgba(200,241,53,.15)}
+.chip.on{background:rgba(200,241,53,.18);border-color:var(--ac);color:var(--ac-tx)}
+
+/* ── Drop zone ───────────────────────────────────────────────────────── */
+.drop-zone{border:2px dashed var(--bd);border-radius:14px;padding:22px;text-align:center;cursor:pointer;transition:all .2s;color:var(--tx3);font-size:13px}
+.drop-zone:hover,.drop-zone.over{border-color:var(--ac);color:var(--ac-tx);background:rgba(200,241,53,.07)}
+
+/* ── Animations ──────────────────────────────────────────────────────── */
+@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}.fi{animation:fi .22s ease}
+@keyframes sp{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:16px;height:16px;border:2.5px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}.pulse{animation:pulse 1.5s ease-in-out infinite}
+
+/* ── AI button & panel ───────────────────────────────────────────────── */
+.ai-btn{position:fixed;bottom:22px;right:22px;z-index:1800;width:50px;height:50px;border-radius:50%;background:var(--sb);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:21px;box-shadow:0 4px 20px rgba(0,0,0,.35);transition:all .2s}
+.ai-btn:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(0,0,0,.5)}
+.ai-panel{position:fixed;bottom:86px;right:22px;z-index:1800;width:400px;height:560px;background:#fff;border-radius:22px;display:flex;flex-direction:column;box-shadow:0 16px 60px rgba(0,0,0,.2);overflow:hidden;border:none}
 @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}.ai-panel{animation:slideUp .2s ease}
-.ai-msg-user{align-self:flex-end;background:var(--ac);color:#fff;border-radius:14px 14px 3px 14px;padding:9px 13px;font-size:13px;max-width:80%;line-height:1.5}
-.ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:14px 14px 14px 3px;padding:9px 13px;font-size:13px;max-width:90%;line-height:1.6;white-space:pre-wrap}
-.ai-action{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:9px;padding:8px 11px;font-size:11px;color:var(--gn);font-family:monospace;margin-top:5px}
+.ai-msg-user{align-self:flex-end;background:var(--sb);color:#fff;border-radius:18px 18px 4px 18px;padding:10px 14px;font-size:13px;max-width:80%;line-height:1.5}
+.ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border-radius:18px 18px 18px 4px;padding:10px 14px;font-size:13px;max-width:90%;line-height:1.6;white-space:pre-wrap}
+.ai-action{background:rgba(200,241,53,.1);border:1px solid rgba(200,241,53,.3);border-radius:10px;padding:8px 11px;font-size:11px;color:#5a7000;font-family:monospace;margin-top:5px}
+
+/* ── Sidebar-specific overrides ──────────────────────────────────────── */
+/* Sidebar nav icon buttons */
+.snb{width:42px;height:42px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--sbt);transition:all .15s;flex-shrink:0}
+.snb:hover{background:var(--sb3)}
+.snb.act{background:var(--ac)}
+.snb.act svg{stroke:var(--ac-tx)!important}
+
+/* ── Priority / status chips ─────────────────────────────────────────── */
+.pri-hi{background:rgba(240,100,90,.12);color:var(--rd);border:1.5px solid rgba(240,100,90,.3)}
+.pri-md{background:rgba(155,142,244,.12);color:var(--pu);border:1.5px solid rgba(155,142,244,.3)}
+.pri-lo{background:rgba(91,196,191,.12);color:var(--cy);border:1.5px solid rgba(91,196,191,.3)}
+.pri-gn{background:rgba(74,222,128,.12);color:#16803c;border:1.5px solid rgba(74,222,128,.3)}
+
+/* ── Stat number display ─────────────────────────────────────────────── */
+.stat-num{font-family:'Syne',sans-serif;font-weight:800;line-height:1;letter-spacing:-1px}
 </style></head><body>
+
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
-  <div style="width:88px;height:88px;background:linear-gradient(135deg,#6366f1,#a78bfa);border-radius:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(99,102,241,.55);animation:sp .9s linear infinite">
+  <div style="width:88px;height:88px;background:linear-gradient(135deg,#c8f135,#9b8ef4);border-radius:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(200,241,53,.45);animation:sp .9s linear infinite">
     <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
       <circle cx="32" cy="32" r="9" fill="white"/>
       <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
@@ -1022,7 +1124,7 @@ textarea.inp{resize:vertical;min-height:68px}
       <line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
     </svg>
   </div>
-  <p style="color:var(--tx2);font-size:13px;margin-top:22px;font-family:'Inter',sans-serif;letter-spacing:.3px">Loading ProjectFlow...</p>
+  <p style="color:var(--tx2);font-size:13px;margin-top:22px;font-family:'DM Sans',sans-serif;letter-spacing:.3px">Loading ProjectFlow...</p>
   <div id="LE" style="display:none;color:var(--rd);font-size:12px;margin-top:14px;max-width:360px;padding:12px 16px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:10px;text-align:center"></div>
 </div>
 <script>
@@ -1050,20 +1152,20 @@ const api={
 
 const STAGES={
   backlog:    {label:'Backlog',    color:'#94a3b8',bg:'rgba(148,163,184,.13)'},
-  planning:   {label:'Planning',  color:'#60a5fa',bg:'rgba(96,165,250,.13)'},
-  development:{label:'Dev',       color:'#a78bfa',bg:'rgba(167,139,250,.13)'},
+  planning:   {label:'Planning',  color:'var(--cy)',bg:'rgba(96,165,250,.13)'},
+  development:{label:'Dev',       color:'#9b8ef4',bg:'rgba(167,139,250,.13)'},
   code_review:{label:'Review',    color:'#22d3ee',bg:'rgba(34,211,238,.13)'},
-  testing:    {label:'Testing',   color:'#fbbf24',bg:'rgba(251,191,36,.13)'},
+  testing:    {label:'Testing',   color:'var(--pu)',bg:'rgba(251,191,36,.13)'},
   uat:        {label:'UAT',       color:'#f472b6',bg:'rgba(244,114,182,.13)'},
   release:    {label:'Release',   color:'#fb923c',bg:'rgba(251,146,60,.13)'},
   production: {label:'Production',color:'#34d399',bg:'rgba(52,211,153,.13)'},
   completed:  {label:'Completed', color:'#4ade80',bg:'rgba(74,222,128,.13)'},
-  blocked:    {label:'Blocked',   color:'#f87171',bg:'rgba(248,113,113,.13)'},
+  blocked:    {label:'Blocked',   color:'var(--rd2)',bg:'rgba(248,113,113,.13)'},
 };
 const KCOLS=['backlog','planning','development','code_review','testing','uat','release','production','completed','blocked'];
-const PRIS={critical:{label:'Critical',color:'#ff4444',sym:'🔴'},high:{label:'High',color:'#f87171',sym:'↑'},medium:{label:'Medium',color:'#fbbf24',sym:'→'},low:{label:'Low',color:'#60a5fa',sym:'↓'}};
+const PRIS={critical:{label:'Critical',color:'var(--rd)',sym:'🔴'},high:{label:'High',color:'var(--rd2)',sym:'↑'},medium:{label:'Medium',color:'var(--pu)',sym:'→'},low:{label:'Low',color:'var(--cy)',sym:'↓'}};
 const ROLES=['Admin','Developer','Tester','Viewer'];
-const PAL=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#6366f1'];
+const PAL=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#c8f135'];
 const fmtD=d=>{if(!d)return'—';try{return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return d;}};
 const ago=iso=>{const m=Math.floor((Date.now()-new Date(iso))/60000);if(m<1)return'just now';if(m<60)return m+'m ago';if(m<1440)return Math.floor(m/60)+'h ago';return Math.floor(m/1440)+'d ago';};
 const safe=a=>(Array.isArray(a)?a:[]);
@@ -1072,10 +1174,10 @@ function Av({u,size=32}){
   const imgSrc=(u&&u.avatar_data&&u.avatar_data.startsWith('data:image'))?u.avatar_data:
                (u&&u.avatar&&u.avatar.length>10&&u.avatar.startsWith('data:image'))?u.avatar:null;
   if(imgSrc){
-    return html`<img src=${imgSrc} class="av" style=${{width:size,height:size,objectFit:'cover',borderRadius:'50%',border:'2px solid var(--bd)'}}/>`;
+    return html`<img src=${imgSrc} class="av" style=${{width:size,height:size,objectFit:'cover',borderRadius:'50%',border:'2px solid rgba(0,0,0,.06)'}}/>`;
   }
   const initials=(u&&u.avatar&&u.avatar.length<=4)?u.avatar:(u&&u.name?u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase():'?');
-  return html`<div class="av" style=${{width:size,height:size,background:(u&&u.color)||'#6366f1',color:'#fff',fontSize:Math.max(9,Math.floor(size*.33))}}>
+  return html`<div class="av" style=${{width:size,height:size,background:(u&&u.color)||'#c8f135',color:'#fff',fontSize:Math.max(9,Math.floor(size*.33))}}>
     ${initials}
   </div>`;
 }
@@ -1136,8 +1238,8 @@ function AuthScreen({onLogin}){
     <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
       <div class="fi" style=${{width:'100%',maxWidth:460}}>
         <div style=${{textAlign:'center',marginBottom:24}}>
-          <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:60,height:60,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:16,marginBottom:12,boxShadow:'0 0 36px rgba(99,102,241,.5)'}}><svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-          <h1 style=${{fontSize:26,fontWeight:800,color:'var(--tx)',letterSpacing:-.5}}>ProjectFlow</h1>
+          <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:64,height:64,background:'var(--ac)',borderRadius:20,marginBottom:14,boxShadow:'0 4px 24px rgba(200,241,53,.35)'}}><svg width="34" height="34" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="#1a2600"/><circle cx="32" cy="11" r="6" fill="#1a2600" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#1a2600" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#1a2600" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1a2600" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1a2600" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1a2600" stroke-width="3.5" stroke-linecap="round"/></svg></div>
+          <h1 style=${{fontSize:28,fontWeight:800,color:'var(--tx)',letterSpacing:-1,fontFamily:"'Syne',sans-serif"}}>ProjectFlow</h1>
           <p style=${{color:'var(--tx2)',fontSize:13,marginTop:4}}>Team project management, your way</p>
         </div>
         <div class="card" style=${{padding:28}}>
@@ -1159,7 +1261,7 @@ function AuthScreen({onLogin}){
               <div style=${{marginBottom:12}}><label class="lbl">Workspace Name</label>
                 <input class="inp" placeholder="e.g. Acme Corp, My Startup" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
             ${regMode==='join'?html`
-              <div style=${{marginBottom:12,padding:'10px 13px',background:'rgba(99,102,241,.07)',borderRadius:9,border:'1px solid rgba(99,102,241,.2)'}}>
+              <div style=${{marginBottom:12,padding:'10px 13px',background:'rgba(99,102,241,.07)',borderRadius:9,border:'1px solid rgba(200,241,53,.18)'}}>
                 <label class="lbl">Invite Code</label>
                 <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode} 
                   onInput=${e=>setInviteCode(e.target.value.toUpperCase())}
@@ -1249,15 +1351,15 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const ICONS={
-    dashboard:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
-    projects:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
-    tasks:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-    messages:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-    dm:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>`,
-    notifs:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
-    reminders:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-    team:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="4" cy="17" r="2"/><circle cx="20" cy="17" r="2"/></svg>`,
-    settings:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
+    dashboard:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
+    projects:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+    tasks:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    messages:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+    dm:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>`,
+    notifs:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+    reminders:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+    team:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>`,
+    settings:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>`,
   };
   const items=[
     {id:'dashboard',icon:ICONS.dashboard,label:'Dashboard'},
@@ -1268,47 +1370,54 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
     ...(cu&&cu.role==='Admin'?[{id:'team',icon:ICONS.team,label:'Team'},{id:'settings',icon:ICONS.settings,label:'Settings'}]:[]),
   ];
-  const w=col?60:224;
   return html`
-    <aside style=${{width:w,minWidth:w,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,transition:'width .22s',overflow:'hidden',position:'relative'}}>
-      <div style=${{padding:col?'14px 13px':'14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,minHeight:60}}>
-        <div style=${{width:33,height:33,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 0 14px rgba(99,102,241,.35)'}}>
-          <svg width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="32" cy="32" r="7" fill="white"/>
-            <circle cx="32" cy="13" r="5" fill="white" opacity="0.9"/>
-            <circle cx="48" cy="43" r="5" fill="white" opacity="0.9"/>
-            <circle cx="16" cy="43" r="5" fill="white" opacity="0.9"/>
-            <line x1="32" y1="18" x2="32" y2="25" stroke="white" stroke-width="3" stroke-linecap="round"/>
-            <line x1="44" y1="40" x2="38" y2="36" stroke="white" stroke-width="3" stroke-linecap="round"/>
-            <line x1="20" y1="40" x2="26" y2="36" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <aside style=${{width:68,minWidth:68,background:'var(--sb)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:16}}>
+      <div style=${{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:'18px 0 14px',borderBottom:'1px solid rgba(255,255,255,.07)',marginBottom:8}}>
+        <div style=${{width:38,height:38,background:'var(--ac)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}
+          onClick=${()=>setView('dashboard')} title="ProjectFlow">
+          <svg width="22" height="22" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="7" fill="#1a2600"/>
+            <circle cx="32" cy="13" r="5" fill="#1a2600" opacity="0.9"/>
+            <circle cx="48" cy="43" r="5" fill="#1a2600" opacity="0.9"/>
+            <circle cx="16" cy="43" r="5" fill="#1a2600" opacity="0.9"/>
+            <line x1="32" y1="18" x2="32" y2="25" stroke="#1a2600" strokeWidth="3" strokeLinecap="round"/>
+            <line x1="44" y1="40" x2="38" y2="36" stroke="#1a2600" strokeWidth="3" strokeLinecap="round"/>
+            <line x1="20" y1="40" x2="26" y2="36" stroke="#1a2600" strokeWidth="3" strokeLinecap="round"/>
           </svg>
         </div>
-        ${!col?html`<div style=${{minWidth:0}}>
-          <div style=${{fontWeight:800,fontSize:14,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>ProjectFlow</div>
-          ${wsName?html`<div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:140}}>${wsName}</div>`:null}
-        </div>`:null}
       </div>
-      <nav style=${{flex:1,padding:'7px 6px',display:'flex',flexDirection:'column',gap:2,overflowY:'auto',overflowX:'hidden'}}>
+      <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:5,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 0'}}>
         ${items.map(it=>html`
-          <button key=${it.id} class=${'nb'+(view===it.id?' act':'')} title=${col?it.label:''}
-            onClick=${()=>setView(it.id)}
-            style=${{justifyContent:col?'center':'flex-start',padding:col?'10px 0':'8px 12px',position:'relative'}}>
-            <span style=${{fontSize:16,flexShrink:0,display:'flex',alignItems:'center',color:view===it.id?'var(--ac)':'var(--tx2)'}}>${it.icon}</span>
-            ${!col?html`<span style=${{flex:1}}>${it.label}</span>`:null}
-            ${!col&&it.badge>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${it.badge}</span>`:null}
-            ${col&&it.badge>0?html`<div style=${{position:'absolute',width:7,height:7,borderRadius:'50%',background:'var(--rd)',top:6,right:6,border:'1.5px solid var(--sf)'}}></div>`:null}
+          <button key=${it.id} title=${it.label} onClick=${()=>setView(it.id)}
+            style=${{width:42,height:42,borderRadius:'50%',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',flexShrink:0,transition:'all .15s',
+              background:view===it.id?'var(--ac)':'transparent',
+              color:view===it.id?'var(--ac-tx)':'rgba(255,255,255,.38)'
+            }}
+            onMouseEnter=${e=>{if(view!==it.id){e.currentTarget.style.background='var(--sb3)';e.currentTarget.style.color='rgba(255,255,255,.85)';}}}
+            onMouseLeave=${e=>{if(view!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.38)';}}}>
+            ${it.icon}
+            ${it.badge>0?html`<div style=${{position:'absolute',top:5,right:5,width:7,height:7,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid var(--sb)'}}></div>`:null}
           </button>`)}
-
       </nav>
-      <div style=${{padding:'7px 6px',borderTop:'1px solid var(--bd)'}}>
-        <button class="nb" onClick=${onLogout} title=${col?'Sign Out':''} style=${{color:'var(--rd)',justifyContent:col?'center':'flex-start',padding:col?'10px 0':'8px 12px'}}>
-          <span style=${{fontSize:15}}>⤴</span>
-          ${!col?html`<span>Sign Out</span>`:null}
+      <div style=${{display:'flex',flexDirection:'column',gap:6,alignItems:'center'}}>
+        ${inCall?html`
+          <button title="In Huddle" onClick=${()=>onCallAction&&onCallAction('show')}
+            style=${{width:42,height:42,borderRadius:'50%',border:'none',cursor:'pointer',background:'rgba(34,197,94,.12)',color:'#22c55e',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:1}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+            <span style=${{fontSize:8,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
+          </button>`:null}
+        <button title="Sign Out" onClick=${onLogout}
+          style=${{width:42,height:42,borderRadius:'50%',border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.28)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',marginBottom:8}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(240,100,90,.15)';e.currentTarget.style.color='var(--rd)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.28)';}}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
+        <div style=${{width:36,height:36,borderRadius:'50%',overflow:'hidden',border:'2px solid rgba(255,255,255,.12)',flexShrink:0,cursor:'pointer'}} onClick=${()=>setView('settings')} title=${cu&&cu.name}>
+          ${cu&&cu.avatar_url
+            ?html`<img src=${cu.avatar_url} style=${{width:'100%',height:'100%',objectFit:'cover'}}/>`
+            :html`<div style=${{width:'100%',height:'100%',background:cu&&cu.color||'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:800,color:'#1a2600'}}>${cu&&(cu.name||'?')[0].toUpperCase()}</div>`}
+        </div>
       </div>
-      <button onClick=${()=>setCol(!col)} style=${{position:'absolute',top:16,right:-13,width:26,height:26,borderRadius:'50%',background:'var(--sf)',border:'1px solid var(--bd)',cursor:'pointer',color:'var(--tx2)',fontSize:13,boxShadow:'0 2px 8px rgba(0,0,0,.3)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:10}}>
-        ${col?'›':'‹'}
-      </button>
     </aside>`;
 }
 
@@ -1338,24 +1447,24 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
     document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
   },[showProfile]);
   return html`
-    <div style=${{flexShrink:0,background:'var(--sf)',borderBottom:'1px solid var(--bd)'}}>
-      <div style=${{padding:'0 16px',borderBottom:'1px solid var(--bd)',height:42,display:'flex',alignItems:'center',gap:10}}>
-        <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'3px 9px',background:'var(--sf2)',borderRadius:7,border:'1px solid var(--bd)'}}>
-          <svg width="12" height="12" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#6366f1"/><circle cx="32" cy="13" r="4" fill="#6366f1" opacity="0.7"/><circle cx="48" cy="43" r="4" fill="#6366f1" opacity="0.7"/><circle cx="16" cy="43" r="4" fill="#6366f1" opacity="0.7"/><line x1="32" y1="17" x2="32" y2="25" stroke="#6366f1" stroke-width="2.5"/><line x1="44" y1="40" x2="38" y2="36" stroke="#6366f1" stroke-width="2.5"/><line x1="20" y1="40" x2="26" y2="36" stroke="#6366f1" stroke-width="2.5"/></svg>
-          <span style=${{fontSize:11,fontWeight:700,color:'var(--tx)',letterSpacing:'.2px'}}>Your Schedule</span>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd)'}}>
+      <div style=${{padding:'0 20px',height:52,display:'flex',alignItems:'center',gap:12}}>
+        <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'var(--sb)',borderRadius:100,cursor:'pointer'}} onClick=${onViewReminders}>
+          <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#c8f135"/><circle cx="32" cy="13" r="4" fill="#c8f135" opacity="0.85"/><circle cx="48" cy="43" r="4" fill="#c8f135" opacity="0.85"/><circle cx="16" cy="43" r="4" fill="#c8f135" opacity="0.85"/><line x1="32" y1="17" x2="32" y2="25" stroke="#c8f135" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#c8f135" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#c8f135" strokeWidth="2.5" strokeLinecap="round"/></svg>
+          <span style=${{fontSize:11,fontWeight:700,color:'#fff',letterSpacing:'.3px'}}>Your Schedule</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.4)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
-        <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none',padding:'0 6px'}}>
-          <div style=${{height:38,background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.92)',borderRadius:24,border:'1px solid '+(dark?'rgba(255,255,255,.1)':'rgba(0,0,0,.08)'),boxShadow:'0 2px 12px rgba(0,0,0,.1)',display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden'}}>
+        <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none',padding:'0 4px'}}>
+          <div style=${{height:38,background:'var(--sb)',borderRadius:100,display:'flex',alignItems:'center',padding:'0 16px',gap:0,position:'relative',minWidth:0,overflow:'hidden',boxShadow:'0 2px 10px rgba(0,0,0,.14)'}}>
             ${upcoming.length===0?html`
               <div style=${{display:'flex',alignItems:'center',gap:10,width:'100%',justifyContent:'center'}}>
-                <span style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>No reminders today</span>
-                <button onClick=${onViewReminders} style=${{fontSize:10,padding:'2px 10px',height:20,borderRadius:10,background:'var(--ac)',color:'#fff',border:'none',cursor:'pointer',fontWeight:600}}>+ Add</button>
+                <span style=${{fontSize:11,color:'rgba(255,255,255,.35)',fontStyle:'italic'}}>No reminders today</span>
+                <button onClick=${onViewReminders} style=${{fontSize:10,padding:'3px 12px',height:22,borderRadius:100,background:'var(--ac)',color:'var(--ac-tx)',border:'none',cursor:'pointer',fontWeight:700}}>+ Add</button>
               </div>
             `:html`
               <div style=${{display:'flex',alignItems:'center',gap:0,width:'100%',overflowX:'auto',scrollbarWidth:'none',position:'relative'}}>
-                <div style=${{position:'absolute',top:'50%',left:0,right:40,height:2,background:'linear-gradient(90deg,rgba(99,102,241,.25) 0%,rgba(99,102,241,.5) 60%,rgba(251,191,36,.3) 100%)',transform:'translateY(-50%)',borderRadius:2,zIndex:0}}></div>
+                <div style=${{position:'absolute',top:'50%',left:0,right:40,height:1.5,background:'linear-gradient(90deg,rgba(200,241,53,.15) 0%,rgba(200,241,53,.4) 60%,rgba(200,241,53,.1) 100%)',transform:'translateY(-50%)',borderRadius:2,zIndex:0}}></div>
                 ${upcoming.map((r,i)=>{
                   const isNow=Math.abs(new Date(r.remind_at)-new Date())<1800000;
                   const abbr=(r.task_title||'').split(' ').slice(0,2).join(' ');
@@ -1365,7 +1474,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                       <div style=${{position:'relative'}}>
                         ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
                           html`<img src=${cu.avatar_data} style=${{width:isNow?30:24,height:isNow?30:24,borderRadius:'50%',objectFit:'cover',border:isNow?'2.5px solid #22c55e':'2px solid '+(dark?'rgba(255,255,255,.3)':'rgba(0,0,0,.15)'),boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.25)':'0 1px 4px rgba(0,0,0,.15)',transition:'all .2s'}}/>`:
-                          html`<div style=${{width:isNow?30:24,height:isNow?30:24,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#6366f1,#818cf8)',border:isNow?'2.5px solid #22c55e':'2px solid '+(dark?'rgba(255,255,255,.3)':'rgba(0,0,0,.1)'),display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?11:9,fontWeight:800,color:'#fff',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.25)':'0 1px 4px rgba(99,102,241,.3)',transition:'all .2s'}}>
+                          html`<div style=${{width:isNow?30:24,height:isNow?30:24,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#c8f135,#b8e020)',border:isNow?'2.5px solid #22c55e':'2px solid '+(dark?'rgba(255,255,255,.3)':'rgba(0,0,0,.1)'),display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?11:9,fontWeight:800,color:'#fff',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.25)':'0 1px 4px rgba(200,241,53,.3)',transition:'all .2s'}}>
                             ${(r.task_title||'?').charAt(0).toUpperCase()}
                           </div>`}
                         ${isNow?html`<div style=${{position:'absolute',bottom:-2,right:-2,width:8,height:8,borderRadius:'50%',background:'#22c55e',border:'1.5px solid #fff',boxShadow:'0 0 4px #22c55e'}}></div>`:null}
@@ -1376,21 +1485,21 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                       </div>
                     </div>`;
                 })}
-                <button onClick=${onViewReminders} style=${{marginLeft:'auto',flexShrink:0,width:22,height:22,borderRadius:'50%',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',cursor:'pointer',color:'var(--ac)',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,lineHeight:1}} title="Manage reminders">+</button>
+                <button onClick=${onViewReminders} style=${{marginLeft:'auto',flexShrink:0,width:22,height:22,borderRadius:'50%',background:'rgba(200,241,53,.12)',border:'1px solid rgba(200,241,53,.25)',cursor:'pointer',color:'var(--ac)',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,lineHeight:1}} title="Manage reminders">+</button>
               </div>
             `}
           </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
-          <button class="btn bg" style=${{padding:'4px 8px',fontSize:13,height:26,borderRadius:6}} onClick=${()=>setDark(!dark)}>${dark?'☀️':'🌙'}</button>
+          <button class="btn bg" style=${{padding:'5px 12px',fontSize:12,height:30,borderRadius:100,border:'1.5px solid var(--bd)',fontWeight:600}} onClick=${()=>setDark(!dark)}>${dark?'☀️ Light':'🌙 Dark'}</button>
           <div style=${{position:'relative'}} ref=${npRef}>
-            <button style=${{width:30,height:30,borderRadius:8,border:'1px solid var(--bd)',background:showNP?'var(--sf2)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)'}}
+            <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
               ${unread>0?html`<div style=${{position:'absolute',top:-3,right:-3,width:15,height:15,borderRadius:'50%',background:'#ef4444',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:'#fff'}}>${unread>9?'9+':unread}</div>`:null}
             </button>
             ${showNP?html`
-              <div style=${{position:'absolute',top:36,right:0,width:320,maxHeight:400,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,.15)',zIndex:3000,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+              <div style=${{position:'absolute',top:36,right:0,width:320,maxHeight:400,background:'#fff',border:'none',borderRadius:16,boxShadow:'0 8px 40px rgba(0,0,0,.14)',zIndex:3000,overflow:'hidden',display:'flex',flexDirection:'column'}}>
                 <div style=${{padding:'10px 13px 8px',borderBottom:'1px solid var(--bd)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
                   <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Notifications ${unread>0?html`<span style=${{color:'var(--ac)',fontSize:11}}>(${unread})</span>`:null}</span>
                   <div style=${{display:'flex',gap:5}}>
@@ -1402,7 +1511,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                   ${safe(notifs).length===0?html`<div style=${{textAlign:'center',padding:'20px 0',color:'var(--tx3)',fontSize:12}}>🔔 All caught up!</div>`:null}
                   ${safe(notifs).slice(0,25).map(n=>html`
                     <div key=${n.id} onClick=${()=>{onNotifClick&&onNotifClick(n);setShowNP(false);}}
-                      style=${{display:'flex',gap:9,padding:'9px 13px',borderBottom:'1px solid var(--bd)',cursor:'pointer',background:n.read?'transparent':'rgba(99,102,241,.04)'}}>
+                      style=${{display:'flex',gap:9,padding:'9px 13px',borderBottom:'1px solid var(--bd)',cursor:'pointer',background:n.read?'transparent':'rgba(200,241,53,.04)'}}>
                       <div style=${{width:26,height:26,borderRadius:7,background:(NC[n.type]||'var(--ac)')+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>${NI[n.type]||'🔔'}</div>
                       <div style=${{flex:1,minWidth:0}}>
                         <p style=${{fontSize:12,color:'var(--tx)',fontWeight:n.read?400:600,lineHeight:1.35,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${n.content}</p>
@@ -1425,13 +1534,13 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
               </div>
             </div>
             ${showProfile?html`
-              <div style=${{position:'absolute',top:38,right:0,width:290,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,boxShadow:'0 8px 30px rgba(0,0,0,.25)',zIndex:3000,overflow:'hidden'}}>
-                <div style=${{padding:'20px 16px',background:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(129,140,248,.04))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
+              <div style=${{position:'absolute',top:38,right:0,width:290,background:'#fff',border:'none',borderRadius:18,boxShadow:'0 8px 40px rgba(0,0,0,.15)',zIndex:3000,overflow:'hidden'}}>
+                <div style=${{padding:'20px 16px',background:'linear-gradient(135deg,rgba(200,241,53,.12),rgba(184,224,32,.04))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
                   <div style=${{position:'relative',cursor:'pointer'}} title="Click to change photo"
                     onClick=${e=>{e.stopPropagation();prImgRef.current&&prImgRef.current.click();}}>
                     ${(cu.avatar_data&&cu.avatar_data.startsWith('data:image'))?
                       html`<img src=${cu.avatar_data} style=${{width:68,height:68,borderRadius:'50%',objectFit:'cover',border:'3px solid var(--ac)',display:'block'}}/>`:
-                      html`<div style=${{width:68,height:68,borderRadius:'50%',background:cu.color||'#6366f1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:800,color:'#fff',border:'3px solid var(--ac)'}}>${cu.avatar||'?'}</div>`}
+                      html`<div style=${{width:68,height:68,borderRadius:'50%',background:cu.color||'#c8f135',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:800,color:'#fff',border:'3px solid var(--ac)'}}>${cu.avatar||'?'}</div>`}
                     <div style=${{position:'absolute',bottom:2,right:2,width:22,height:22,borderRadius:'50%',background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,border:'2px solid var(--sf)',color:'#fff',pointerEvents:'none'}}>📷</div>
                   </div>
                   <input ref=${prImgRef} type="file" accept="image/*" style=${{display:'none'}} onChange=${async e=>{
@@ -1455,7 +1564,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                   <div style=${{textAlign:'center',width:'100%'}}>
                     <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)',marginBottom:2}}>${cu.name}</div>
                     <div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',marginBottom:4,wordBreak:'break-all'}}>${cu.email}</div>
-                    <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(99,102,241,.15)',color:'var(--ac2)',textTransform:'uppercase'}}>${cu.role}</span>
+                    <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(200,241,53,.15)',color:'var(--ac2)',textTransform:'uppercase'}}>${cu.role}</span>
                     ${uploadMsg?html`<div style=${{marginTop:8,fontSize:11,color:uploadMsg.startsWith('✓')?'var(--gn)':'var(--rd)',fontFamily:'monospace'}}>${uploadMsg}</div>`:null}
                   </div>
                 </div>
@@ -1467,10 +1576,10 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>`:null}
         </div>
       </div>
-      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 22px',height:50}}>
+      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 22px',height:54,borderTop:'1px solid var(--bd)'}}>
         <div>
-          <h1 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',letterSpacing:-.4}}>${title}</h1>
-          ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:1}}>${sub}</p>`:null}
+          <h1 style=${{fontSize:18,fontWeight:800,color:'var(--tx)',letterSpacing:-.5,fontFamily:"'Syne',sans-serif"}}>${title}</h1>
+          ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:2,fontWeight:500}}>${sub}</p>`:null}
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:7}}>${extra||null}</div>
       </div>
@@ -1653,7 +1762,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                   </div>
                 </div>
                 ${rmEnabled?html`
-                  <div style=${{background:'rgba(99,102,241,.06)',borderRadius:10,border:'1px solid rgba(99,102,241,.18)',padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}}>
+                  <div style=${{background:'rgba(200,241,53,.06)',borderRadius:10,border:'1px solid rgba(99,102,241,.18)',padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}}>
                     <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
                       <div>
                         <label class="lbl" style=${{fontSize:10,marginBottom:3}}>Reminder Date</label>
@@ -1722,7 +1831,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
 function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetReminder}){
   const [tab,setTab]=useState('tasks');const [edit,setEdit]=useState(false);
   const [name,setName]=useState(project.name||'');const [desc,setDesc]=useState(project.description||'');
-  const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#6366f1');
+  const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#c8f135');
   const [members,setMembers]=useState(safe(project.members));const [saving,setSaving]=useState(false);
   const [showNew,setShowNew]=useState(false);const [editTask,setEditTask]=useState(null);
 
@@ -1850,7 +1959,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
 function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
   const [name,setName]=useState('');const [desc,setDesc]=useState('');const [tDate,setTDate]=useState('');
-  const [color,setColor]=useState('#6366f1');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
+  const [color,setColor]=useState('#c8f135');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
   const [search,setSearch]=useState('');
 
   useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
@@ -1859,7 +1968,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
     const mems=members.includes(cu.id)?members:[cu.id,...members];
     await api.post('/api/projects',{name:name.trim(),description:desc,targetDate:tDate,color,members:mems,startDate:new Date().toISOString().split('T')[0]});
-    await reload();setShowNew(false);setName('');setDesc('');setTDate('');setColor('#6366f1');setMembers([]);
+    await reload();setShowNew(false);setName('');setDesc('');setTDate('');setColor('#c8f135');setMembers([]);
   };
 
   const filteredProjects=useMemo(()=>{
@@ -2209,9 +2318,9 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   const stageChart=Object.entries(STAGES).map(([k,v])=>({name:v.label,count:t.filter(x=>x.stage===k).length,color:v.color})).filter(d=>d.count>0);
   const activeProjectIds=new Set(p.map(proj=>proj.id));
   const activeTasks=t.filter(x=>activeProjectIds.has(x.project)&&x.stage!=='completed');
-  const priChart=[{name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'#ff4444'},{name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'#f87171'},{name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'#fbbf24'},{name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'#60a5fa'}];
+  const priChart=[{name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)'},{name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)'},{name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)'},{name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)'}];
   const stats=[
-    {label:'Total Projects',val:p.length,   color:'var(--ac)',bg:'rgba(99,102,241,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
+    {label:'Total Projects',val:p.length,   color:'var(--ac)',bg:'rgba(200,241,53,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
     {label:'Active Tasks',  val:active,     color:'var(--cy)',bg:'rgba(34,211,238,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
     {label:'Completed',     val:done,       color:'var(--gn)',bg:'rgba(74,222,128,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks'},
     {label:'Blocked',       val:blocked,    color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks'},
@@ -2220,47 +2329,47 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',display:'flex',flexDirection:'column',gap:16}}>
-      <div style=${{padding:'14px 18px',background:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(34,211,238,.06))',borderRadius:14,border:'1px solid rgba(99,102,241,.2)',display:'flex',alignItems:'center',gap:13}}>
+      <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:18,boxShadow:'var(--sh)',border:'none',display:'flex',alignItems:'center',gap:13}}>
         <${Av} u=${cu} size=${42}/>
         <div style=${{flex:1}}>
-          <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
+          <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',fontFamily:"'Syne',sans-serif"}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
           <p style=${{color:'var(--tx2)',fontSize:13,marginTop:2}}>You have <b style=${{color:'var(--ac2)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac2)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
-        <div style=${{display:'flex',alignItems:'center',gap:7,background:'rgba(99,102,241,.1)',border:'1px solid rgba(99,102,241,.2)',borderRadius:8,padding:'4px 11px',backdropFilter:'blur(4px)'}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style=${{color:'var(--ac)',opacity:.8}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style=${{fontSize:11,fontWeight:600,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:'.3px'}}>${new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span></div>
+        <div style=${{display:'flex',alignItems:'center',gap:7,background:'rgba(200,241,53,.1)',border:'1px solid rgba(200,241,53,.18)',borderRadius:8,padding:'4px 11px',backdropFilter:'blur(4px)'}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style=${{color:'var(--ac)',opacity:.8}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style=${{fontSize:11,fontWeight:600,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:'.3px'}}>${new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span></div>
       </div>
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:11}}>
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
         ${stats.map((s,i)=>html`
           <div key=${i} class="card" onClick=${()=>onNav(s.nav)}
             style=${{padding:'13px 15px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .18s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderColor=s.color;e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,.2)';}}
+            onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderColor=s.color;e.currentTarget.style.boxShadow='var(--sh2)';}}
             onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.borderColor='';e.currentTarget.style.boxShadow='';}}>
-            <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:s.color,borderRadius:'14px 14px 0 0'}}></div>
+            <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:s.color,borderRadius:'18px 18px 0 0',opacity:.7}}></div>
             <div style=${{width:34,height:34,borderRadius:9,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8,color:s.color}}>${s.icon}</div>
-            <div style=${{fontSize:24,fontWeight:800,color:'var(--tx)',lineHeight:1}}>${s.val}</div>
+            <div style=${{fontSize:30,fontWeight:800,color:'var(--tx)',lineHeight:1,fontFamily:"'Syne',sans-serif",letterSpacing:-1}}>${s.val}</div>
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:4}}>${s.label}</div>
             <div style=${{fontSize:9,color:s.color,marginTop:2,fontFamily:'monospace',opacity:.7}}>click →</div>
           </div>`)}
       </div>
-      <div style=${{display:'grid',gridTemplateColumns:'1fr 270px',gap:14}}>
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 260px',gap:14}}>
         <div class="card">
-          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:13}}>Tasks by Lifecycle Stage</h3>
+          <h3 style=${{fontSize:13,fontWeight:800,color:'var(--tx)',marginBottom:13,fontFamily:"'Syne',sans-serif"}}>Tasks by Lifecycle Stage</h3>
           <${RC.ResponsiveContainer} width="100%" height=${180}>
             <${RC.BarChart} data=${stageChart} barSize=${18} margin=${{top:0,right:0,bottom:0,left:-20}}>
               <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
               <${RC.XAxis} dataKey="name" tick=${{fill:'var(--tx2)',fontSize:10,fontFamily:'monospace'}} axisLine=${false} tickLine=${false}/>
               <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false} domain=${[0,'dataMax+1']}/>
-              <${RC.Tooltip} contentStyle=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,color:'var(--tx)',fontSize:12}}/>
+              <${RC.Tooltip} contentStyle=${{background:'#fff',border:'none',borderRadius:12,color:'#111',fontSize:12,boxShadow:'0 4px 20px rgba(0,0,0,.12)'}}/>
               <${RC.Bar} dataKey="count" radius=${[4,4,0,0]}>${stageChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
             <//>
           <//>
         </div>
         <div class="card">
-          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:11}}>Priority Split</h3>
+          <h3 style=${{fontSize:13,fontWeight:800,color:'var(--tx)',marginBottom:11,fontFamily:"'Syne',sans-serif"}}>Priority Split</h3>
           <${RC.ResponsiveContainer} width="100%" height=${120}>
             <${RC.PieChart}>
               <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4}>
                 ${priChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
-              <${RC.Tooltip} contentStyle=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,color:'var(--tx)',fontSize:12}}/>
+              <${RC.Tooltip} contentStyle=${{background:'#fff',border:'none',borderRadius:12,color:'#111',fontSize:12,boxShadow:'0 4px 20px rgba(0,0,0,.12)'}}/>
             <//>
           <//>
           ${priChart.map((item,i)=>html`<div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<2?'1px solid var(--bd)':'none'}}>
@@ -2615,7 +2724,7 @@ function WorkspaceSettings({cu,onReload}){
         <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🔗 Invite Code</h3>
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Share this code with teammates to join your workspace.</p>
         <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(167,139,250,.08))',borderRadius:12,border:'1px solid rgba(99,102,241,.2)'}}>
+          <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(200,241,53,.12),rgba(167,139,250,.08))',borderRadius:12,border:'1px solid rgba(200,241,53,.18)'}}>
             <div style=${{fontSize:28,fontWeight:800,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:4}}>${ws.invite_code}</div>
           </div>
           <div style=${{display:'flex',flexDirection:'column',gap:8}}>
@@ -2635,7 +2744,7 @@ function WorkspaceSettings({cu,onReload}){
             <button onClick=${()=>setShowKey(!showKey)} style=${{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)'}}>${showKey?'🙈':'👁'}</button>
           </div>
         </div>
-        <div style=${{marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',borderRadius:8,border:'1px solid rgba(99,102,241,.15)',fontSize:12,color:'var(--tx2)'}}>
+        <div style=${{marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',borderRadius:8,border:'1px solid rgba(200,241,53,.15)',fontSize:12,color:'var(--tx2)'}}>
           💡 Get your API key at <b style=${{color:'var(--ac2)'}}>console.anthropic.com</b>. The AI can answer questions, create tasks, update statuses, and generate EOD reports.
         </div>
       </div>
@@ -2697,7 +2806,7 @@ function AIAssistant({cu,projects,tasks,users}){
     ${open?html`
       <div class="ai-panel">
         <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
-          <div style=${{width:32,height:32,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🤖</div>
+          <div style=${{width:32,height:32,background:'linear-gradient(135deg,#c8f135,#9b8ef4)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🤖</div>
           <div style=${{flex:1}}>
             <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>AI Assistant</div>
             <div style=${{fontSize:10,color:'var(--tx3)'}}>Powered by Claude</div>
@@ -2934,7 +3043,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload}){
   };
 
   const statCards=[
-    {label:'Total',val:reminders.length,color:'var(--ac)',bg:'rgba(99,102,241,.1)',icon:'⏰'},
+    {label:'Total',val:reminders.length,color:'var(--ac)',bg:'rgba(200,241,53,.1)',icon:'⏰'},
     {label:'Upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
     {label:'Overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
     {label:'Today',val:reminders.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'📅'},
@@ -3002,7 +3111,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload}){
                     </button>`)}
                 </div>
               </div>
-              <div style=${{background:'rgba(99,102,241,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(99,102,241,.15)'}}>
+              <div style=${{background:'rgba(200,241,53,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(200,241,53,.15)'}}>
                 🔔 You'll get a browser notification + sound ${addMins} min before the reminder time.
               </div>
               <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4}}>
@@ -3490,7 +3599,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     }catch(ex){}
   };
 
-  const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'});
+  const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#c8f135'});
   const notInCall=safe(users).filter(u=>u.id!==cu.id&&!participants.includes(u.id));
 
   // ── INCOMING CALL TOAST
@@ -3520,7 +3629,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
           Join Huddle
         </button>
-        <button style=${{width:40,height:40,borderRadius:11,background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',color:'#f87171',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
+        <button style=${{width:40,height:40,borderRadius:11,background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',color:'var(--rd2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
           onClick=${()=>setIncomingCall(null)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -3541,7 +3650,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <div style=${{position:'relative'}}>
             ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
               html`<img src=${cu.avatar_data} style=${{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'3px solid rgba(255,255,255,.15)'}}/>`:
-              html`<div style=${{width:80,height:80,borderRadius:'50%',background:cu.color||'#6366f1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:800,color:'#fff',border:'3px solid rgba(255,255,255,.15)'}}>${(cu.avatar||cu.name||'?')[0]}</div>`}
+              html`<div style=${{width:80,height:80,borderRadius:'50%',background:cu.color||'#c8f135',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:800,color:'#fff',border:'3px solid rgba(255,255,255,.15)'}}>${(cu.avatar||cu.name||'?')[0]}</div>`}
             ${previewMicOk?html`<div style=${{position:'absolute',bottom:2,right:2,width:20,height:20,borderRadius:'50%',background:'#22c55e',border:'2.5px solid #2d2640',display:'flex',alignItems:'center',justifyContent:'center'}}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>
             </div>`:
@@ -3551,7 +3660,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           </div>
           <div style=${{display:'flex',gap:8}}>
             <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'}
-              style=${{width:40,height:40,borderRadius:11,background:muted?'rgba(239,68,68,.2)':'rgba(255,255,255,.1)',border:'1.5px solid '+(muted?'rgba(239,68,68,.4)':'rgba(255,255,255,.15)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:muted?'#f87171':'#fff',transition:'all .15s'}}>
+              style=${{width:40,height:40,borderRadius:11,background:muted?'rgba(239,68,68,.2)':'rgba(255,255,255,.1)',border:'1.5px solid '+(muted?'rgba(239,68,68,.4)':'rgba(255,255,255,.15)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:muted?'var(--rd2)':'#fff',transition:'all .15s'}}>
               ${muted?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:
               html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
             </button>
@@ -3564,7 +3673,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
       ${!previewMicOk?html`
         <div style=${{background:'rgba(251,191,36,.08)',borderTop:'1px solid rgba(251,191,36,.2)',padding:'8px 16px',display:'flex',alignItems:'center',gap:8}}>
           <span>⚠️</span>
-          <span style=${{fontSize:11,color:'#fbbf24'}}>Microphone blocked. Click the lock icon in your address bar to allow access.</span>
+          <span style=${{fontSize:11,color:'var(--pu)'}}>Microphone blocked. Click the lock icon in your address bar to allow access.</span>
         </div>`:null}
       <div style=${{padding:'14px 18px',background:'#1a1625',display:'flex',gap:10}}>
         <button style=${{flex:1,height:42,borderRadius:12,background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.1)',color:'rgba(255,255,255,.6)',cursor:'pointer',fontWeight:600,fontSize:13}}
@@ -3603,7 +3712,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             html`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="14" y2="10"/></svg>`}
           </button>
           <button onClick=${e=>{e.stopPropagation();cleanup();}} title="End call"
-            style=${{width:24,height:24,borderRadius:7,background:'rgba(239,68,68,.2)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#f87171',transition:'all .15s'}}>
+            style=${{width:24,height:24,borderRadius:7,background:'rgba(239,68,68,.2)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--rd2)',transition:'all .15s'}}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -3612,7 +3721,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         <!-- Main content -->
         <div style=${{flex:1,display:'flex',overflow:'hidden',position:'relative'}}>
           <!-- Gradient background -->
-          <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 10% 40%,rgba(99,102,241,.15) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(251,146,60,.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 85%,rgba(34,197,94,.08) 0%,transparent 50%)',pointerEvents:'none'}}></div>
+          <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 10% 40%,rgba(200,241,53,.15) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(251,146,60,.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 85%,rgba(34,197,94,.08) 0%,transparent 50%)',pointerEvents:'none'}}></div>
           <!-- Participant tiles -->
           <div style=${{flex:1,display:'flex',flexWrap:'wrap',gap:10,padding:'14px',alignContent:'center',justifyContent:'center',position:'relative',zIndex:1}}>
             ${partUsers.map(u=>{
@@ -3627,7 +3736,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1,pointerEvents:'none',background:'rgba(20,20,40,.3)'}}>
                   ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
                     html`<img src=${u.avatar_data} style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',objectFit:'cover',border:'2.5px solid rgba(255,255,255,.2)',opacity:(u.id===cu.id&&videoOn)||u.id!==cu.id?0:1,transition:'opacity .3s'}}/>`:
-                    html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#6366f1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:800,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
+                    html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#c8f135',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:800,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
                 </div>
                 <!-- Name + indicator -->
                 <div style=${{position:'absolute',bottom:7,left:7,right:7,zIndex:3,display:'flex',alignItems:'center',gap:5}}>
@@ -3639,9 +3748,9 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
               </div>`;})}
             <!-- Screen share tile -->
             ${screenSharing?html`
-              <div style=${{width:'100%',height:160,borderRadius:12,overflow:'hidden',border:'2px solid rgba(99,102,241,.5)',background:'#000',position:'relative',flexShrink:0}}>
+              <div style=${{width:'100%',height:160,borderRadius:12,overflow:'hidden',border:'2px solid rgba(200,241,53,.4)',background:'#000',position:'relative',flexShrink:0}}>
                 <video ref=${screenVideoRef} autoPlay playsInline muted style=${{width:'100%',height:'100%',objectFit:'contain'}}></video>
-                <div style=${{position:'absolute',top:7,left:7,background:'rgba(99,102,241,.8)',borderRadius:6,padding:'2px 9px',fontSize:10,color:'#fff',fontWeight:700}}>📺 You are sharing</div>
+                <div style=${{position:'absolute',top:7,left:7,background:'rgba(200,241,53,.7)',borderRadius:6,padding:'2px 9px',fontSize:10,color:'#fff',fontWeight:700}}>📺 You are sharing</div>
               </div>`:null}
           </div>
           <!-- Side panels -->
@@ -3649,9 +3758,9 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             <div style=${{width:200,background:'rgba(0,0,0,.55)',backdropFilter:'blur(12px)',borderLeft:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',overflow:'hidden',zIndex:2,flexShrink:0}}>
               <div style=${{display:'flex',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
                 <button onClick=${()=>{setShowParticipants(true);setShowInvite(false);}}
-                  style=${{flex:1,padding:'8px',background:showParticipants?'rgba(99,102,241,.2)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:showParticipants?'#818cf8':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,transition:'all .15s'}}>People</button>
+                  style=${{flex:1,padding:'8px',background:showParticipants?'rgba(200,241,53,.18)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:showParticipants?'#b8e020':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,transition:'all .15s'}}>People</button>
                 <button onClick=${()=>{setShowInvite(true);setShowParticipants(false);}}
-                  style=${{flex:1,padding:'8px',background:showInvite?'rgba(99,102,241,.2)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:showInvite?'#818cf8':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,transition:'all .15s',position:'relative'}}>
+                  style=${{flex:1,padding:'8px',background:showInvite?'rgba(200,241,53,.18)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:showInvite?'#b8e020':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,transition:'all .15s',position:'relative'}}>
                   Invite
                   ${notInCall.length>0?html`<span style=${{position:'absolute',top:4,right:6,width:14,height:14,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>${notInCall.length}</span>`:null}
                 </button>
@@ -3688,7 +3797,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           </button>
           <!-- Mic -->
           ${[
-            {icon:muted?'mic-off':'mic',label:muted?'Unmute':'Mute',active:muted,color:'#f87171',action:toggleMute,svgOn:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,svgOff:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`},
+            {icon:muted?'mic-off':'mic',label:muted?'Unmute':'Mute',active:muted,color:'var(--rd2)',action:toggleMute,svgOn:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,svgOff:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`},
           ].map(btn=>html`
             <div key=${btn.label} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
               <button onClick=${btn.action} style=${{width:44,height:44,borderRadius:13,background:btn.active?'rgba(239,68,68,.2)':'rgba(255,255,255,.09)',border:'1.5px solid '+(btn.active?'rgba(239,68,68,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:btn.active?btn.color:'#fff',transition:'all .15s'}}>
@@ -3698,7 +3807,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             </div>`)}
           <!-- Video -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(99,102,241,.2)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(99,102,241,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#818cf8':'#fff',transition:'all .15s'}}>
+            <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(200,241,53,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(200,241,53,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#b8e020':'#fff',transition:'all .15s'}}>
               ${videoOn?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
               html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
             </button>
@@ -3706,7 +3815,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           </div>
           <!-- Screen Share -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13,background:screenSharing?'rgba(99,102,241,.25)':'rgba(255,255,255,.09)',border:'1.5px solid '+(screenSharing?'rgba(99,102,241,.5)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:screenSharing?'#818cf8':'#fff',transition:'all .15s'}}>
+            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13,background:screenSharing?'rgba(200,241,53,.25)':'rgba(255,255,255,.09)',border:'1.5px solid '+(screenSharing?'rgba(200,241,53,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:screenSharing?'#b8e020':'#fff',transition:'all .15s'}}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             </button>
             <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>Share</span>
@@ -3726,7 +3835,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <!-- Invite / People -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
             <button onClick=${()=>{setShowInvite(p=>!p||showParticipants);setShowParticipants(false);}}
-              style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(99,102,241,.2)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(99,102,241,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#818cf8':'#fff',transition:'all .15s',position:'relative'}}>
+              style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(200,241,53,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(200,241,53,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#b8e020':'#fff',transition:'all .15s',position:'relative'}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <span style=${{position:'absolute',top:-2,right:-2,width:15,height:15,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',border:'1.5px solid #0d0d1a'}}>${participants.length}</span>
             </button>
@@ -3878,7 +3987,7 @@ function App(){
 
   if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
     <div style=${{position:'relative',width:100,height:100,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style=${{width:88,height:88,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(99,102,241,.55)',animation:'sp .9s linear infinite'}}>
+      <div style=${{width:88,height:88,background:'linear-gradient(135deg,#c8f135,#9b8ef4)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(200,241,53,.45)',animation:'sp .9s linear infinite'}}>
         <svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
       </div>
     </div>
@@ -3941,13 +4050,13 @@ function App(){
     <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
     <${HuddleCall} cu=${cu} users=${data.users} onStateChange=${s=>setCallState(prev=>({...prev,...s}))} cmdRef=${huddleCmdRef}/>
     ${showNotifBanner?html`
-      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9200,background:'#1e1b4b',border:'1px solid rgba(99,102,241,.5)',borderRadius:14,padding:'13px 18px',boxShadow:'0 12px 40px rgba(0,0,0,.5)',display:'flex',alignItems:'center',gap:12,maxWidth:420,animation:'slideUp .3s ease'}}>
-        <div style=${{width:36,height:36,borderRadius:10,background:'rgba(99,102,241,.2)',border:'1px solid rgba(99,102,241,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18}}>🔔</div>
+      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9200,background:'#1e1b4b',border:'1px solid rgba(200,241,53,.4)',borderRadius:14,padding:'13px 18px',boxShadow:'0 12px 40px rgba(0,0,0,.5)',display:'flex',alignItems:'center',gap:12,maxWidth:420,animation:'slideUp .3s ease'}}>
+        <div style=${{width:36,height:36,borderRadius:10,background:'rgba(200,241,53,.18)',border:'1px solid rgba(200,241,53,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18}}>🔔</div>
         <div style=${{flex:1}}>
           <div style=${{fontSize:13,fontWeight:700,color:'#fff',marginBottom:2}}>Enable notifications</div>
           <div style=${{fontSize:11,color:'rgba(255,255,255,.55)'}}>Get alerted for calls, messages & project updates</div>
         </div>
-        <button style=${{height:32,borderRadius:9,background:'linear-gradient(135deg,#6366f1,#4f46e5)',border:'none',color:'#fff',padding:'0 14px',cursor:'pointer',fontWeight:600,fontSize:12,flexShrink:0}}
+        <button style=${{height:32,borderRadius:9,background:'linear-gradient(135deg,#c8f135,#4f46e5)',border:'none',color:'#fff',padding:'0 14px',cursor:'pointer',fontWeight:600,fontSize:12,flexShrink:0}}
           onClick=${()=>{requestNotifPermission();setShowNotifBanner(false);}}>Allow</button>
         <button style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.07)',border:'none',cursor:'pointer',color:'rgba(255,255,255,.4)',fontSize:16,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}
           onClick=${()=>setShowNotifBanner(false)}>✕</button>
