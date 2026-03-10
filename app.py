@@ -34,7 +34,7 @@ app.secret_key = get_secret_key()
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SECURE=False,PERMANENT_SESSION_LIFETIME=86400*7,
-    MAX_CONTENT_LENGTH=20*1024*1024)
+    MAX_CONTENT_LENGTH=150*1024*1024)
 CORS(app, supports_credentials=True)
 
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#6366f1"]
@@ -42,7 +42,7 @@ CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#63
 def get_db():
     c=sqlite3.connect(DB); c.row_factory=sqlite3.Row; return c
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
-def ts(): return datetime.now().isoformat()
+def ts(): return datetime.utcnow().isoformat() + 'Z'
 
 # ── DB Init & Migration ───────────────────────────────────────────────────────
 def init_db():
@@ -292,8 +292,17 @@ def del_user(uid):
 @login_required
 def get_projects():
     with get_db() as db:
-        return jsonify([dict(r) for r in db.execute(
-            "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
+        # Admins see all projects; other roles only see projects they are members of
+        user = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        is_admin = user and user["role"] == "Admin"
+        if is_admin:
+            rows = db.execute(
+                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
+        else:
+            all_rows = db.execute(
+                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
+            rows = [r for r in all_rows if session["user_id"] in json.loads(r["members"] or "[]")]
+        return jsonify([dict(r) for r in rows])
 
 @app.route("/api/projects",methods=["POST"])
 @login_required
@@ -414,7 +423,7 @@ def upload_file():
     if not f: return jsonify({"error":"No file"}),400
     fid=f"f{int(datetime.now().timestamp()*1000)}"
     data=f.read()
-    if len(data)>20*1024*1024: return jsonify({"error":"File too large (max 20MB)"}),400
+    if len(data)>150*1024*1024: return jsonify({"error":"File too large (max 150MB)"}),400
     path=os.path.join(UPLOAD_DIR,fid)
     with open(path,"wb") as fp: fp.write(data)
     task_id=request.form.get("task_id","")
@@ -996,7 +1005,7 @@ function FileAttachments({taskId,projectId,readOnly}){
       onDragOver=${e=>{e.preventDefault();setDrag(true);}} onDragLeave=${()=>setDrag(false)}
       onDrop=${e=>{e.preventDefault();setDrag(false);upload(e.dataTransfer.files);}}>
       ${busy?html`<span class="spin"></span><span style=${{marginLeft:8}}>Uploading...</span>`:
-        html`<div style=${{fontSize:22,marginBottom:6}}>📎</div><div style=${{fontWeight:500}}>Click or drag to attach files</div><div style=${{fontSize:11,marginTop:3}}>Max 20 MB</div>`}
+        html`<div style=${{fontSize:22,marginBottom:6}}>📎</div><div style=${{fontWeight:500}}>Click or drag to attach files</div><div style=${{fontSize:11,marginTop:3}}>Max 150 MB</div>`}
       <input ref=${ref} type="file" multiple style=${{display:'none'}} onChange=${e=>upload(e.target.files)}/></div>`:null}
     ${files.map(f=>html`
       <div key=${f.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)'}}>
