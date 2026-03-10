@@ -295,7 +295,7 @@ def update_user(uid):
             av="".join(w[0] for w in d["name"].split())[:2].upper()
             db.execute("UPDATE users SET name=?,avatar=? WHERE id=? AND workspace_id=?",(d["name"],av,uid,wid()))
         if "email" in d: db.execute("UPDATE users SET email=? WHERE id=? AND workspace_id=?",(d["email"],uid,wid()))
-        if "avatar_data" in d: db.execute("UPDATE users SET avatar=? WHERE id=? AND workspace_id=?",(d["avatar_data"],uid,wid()))
+        if "avatar_data" in d: db.execute("UPDATE users SET avatar_data=? WHERE id=? AND workspace_id=?",(d["avatar_data"],uid,wid()))
         u=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
         return jsonify(dict(u) if u else {})
 
@@ -1322,7 +1322,7 @@ function FileAttachments({taskId,projectId,readOnly}){
 }
 
 /* ─── TaskModal ───────────────────────────────────────────────────────────── */
-function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
+function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSetReminder}){
   const [title,setTitle]=useState((task&&task.title)||'');
   const [desc,setDesc]=useState((task&&task.description)||'');
   const [pid,setPid]=useState((task&&task.project)||defaultPid||(projects[0]&&projects[0].id)||'');
@@ -2568,7 +2568,6 @@ function RemindersView({cu,tasks,onSetReminder}){
   const hours=[...Array(11)].map((_,i)=>8+i);
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',background:'var(--bg)'}}>
-      <!-- Stats -->
       <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
         ${[{l:'Total',v:reminders.length,col:'var(--ac)',bg:'rgba(99,102,241,.1)',e:'⏰'},
           {l:'Upcoming',v:upcoming.length,col:'var(--cy)',bg:'rgba(34,211,238,.1)',e:'⚡'},
@@ -2581,7 +2580,6 @@ function RemindersView({cu,tasks,onSetReminder}){
             <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600,letterSpacing:.3}}>${s.l}</div></div>
           </div>`)}
       </div>
-      <!-- Timeline -->
       <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 18px',marginBottom:16}}>
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
           <div style=${{fontWeight:800,fontSize:13,color:'var(--tx)'}}>📅 Today's Timeline</div>
@@ -2597,7 +2595,6 @@ function RemindersView({cu,tasks,onSetReminder}){
             </div>`;})}  
         </div>
       </div>
-      <!-- Lists -->
       <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
