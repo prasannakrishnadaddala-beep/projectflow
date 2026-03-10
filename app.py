@@ -1011,23 +1011,16 @@ textarea.inp{resize:vertical;min-height:68px}
 .ai-action{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:9px;padding:8px 11px;font-size:11px;color:var(--gn);font-family:monospace;margin-top:5px}
 </style></head><body>
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
-  <div style="position:relative;width:116px;height:116px">
-    <svg style="position:absolute;top:0;left:0;width:116px;height:116px;animation:sp .9s linear infinite" viewBox="0 0 116 116">
-      <defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs>
-      <circle cx="58" cy="58" r="54" fill="none" stroke="rgba(99,102,241,.12)" stroke-width="4.5"/>
-      <circle cx="58" cy="58" r="54" fill="none" stroke="url(#rg)" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="84 255"/>
+  <div style="width:88px;height:88px;background:linear-gradient(135deg,#6366f1,#a78bfa);border-radius:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(99,102,241,.55);animation:sp .9s linear infinite">
+    <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
+      <circle cx="32" cy="32" r="9" fill="white"/>
+      <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
+      <circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/>
+      <circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/>
+      <line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
     </svg>
-    <div style="position:absolute;top:14px;left:14px;width:88px;height:88px;background:linear-gradient(135deg,#6366f1,#a78bfa);border-radius:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 36px rgba(99,102,241,.5)">
-      <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
-        <circle cx="32" cy="32" r="9" fill="white"/>
-        <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
-        <circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/>
-        <circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/>
-        <line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-        <line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-        <line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      </svg>
-    </div>
   </div>
   <p style="color:var(--tx2);font-size:13px;margin-top:22px;font-family:'Inter',sans-serif;letter-spacing:.3px">Loading ProjectFlow...</p>
   <div id="LE" style="display:none;color:var(--rd);font-size:12px;margin-top:14px;max-width:360px;padding:12px 16px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:10px;text-align:center"></div>
@@ -3670,19 +3663,18 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                     </div>
                     <span style=${{fontSize:11,color:'rgba(255,255,255,.8)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${u.name}${u.id===cu.id?' (you)':''}</span>
                   </div>`):null}
-                ${showInvite?html`
-                  <div style=${{fontSize:10,color:'rgba(255,255,255,.35)',marginBottom:8,padding:'2px 4px'}}>
-                    ${notInCall.length===0?'Everyone is already in the call':'Click to invite'}
-                  </div>
-                  ${notInCall.map(u=>html`
-                    <button key=${u.id} onClick=${()=>inviteUser(u.id)}
-                      style=${{width:'100%',display:'flex',alignItems:'center',gap:7,padding:'6px 8px',borderRadius:9,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',cursor:'pointer',marginBottom:4,transition:'all .15s'}}
-                      onMouseEnter=${e=>{e.currentTarget.style.background='rgba(34,197,94,.1)';e.currentTarget.style.borderColor='rgba(34,197,94,.25)';}}
-                      onMouseLeave=${e=>{e.currentTarget.style.background='rgba(255,255,255,.04)';e.currentTarget.style.borderColor='rgba(255,255,255,.06)';}}>
-                      <${Av} u=${u} size=${26}/>
-                      <span style=${{fontSize:11,color:'rgba(255,255,255,.8)',flex:1,textAlign:'left',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</span>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    </button>`)}`}
+                 ${showInvite?[
+                   html`<div style=${{fontSize:10,color:'rgba(255,255,255,.35)',marginBottom:8,padding:'2px 4px'}}>${notInCall.length===0?'Everyone is already in the call':'Click to invite'}</div>`,
+                   ...notInCall.map(u=>html`
+                     <button key=${u.id} onClick=${()=>inviteUser(u.id)}
+                       style=${{width:'100%',display:'flex',alignItems:'center',gap:7,padding:'6px 8px',borderRadius:9,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',cursor:'pointer',marginBottom:4,transition:'all .15s'}}
+                       onMouseEnter=${e=>{e.currentTarget.style.background='rgba(34,197,94,.1)';e.currentTarget.style.borderColor='rgba(34,197,94,.25)';}}
+                       onMouseLeave=${e=>{e.currentTarget.style.background='rgba(255,255,255,.04)';e.currentTarget.style.borderColor='rgba(255,255,255,.06)';}}> 
+                       <${Av} u=${u} size=${26}/>
+                       <span style=${{fontSize:11,color:'rgba(255,255,255,.8)',flex:1,textAlign:'left',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</span>
+                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                     </button>`)
+                 ]:null}
               </div>
             </div>`:null}
         </div>
@@ -3883,13 +3875,8 @@ function App(){
   },[cu]);
 
   if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
-    <div style=${{position:'relative',width:116,height:116}}>
-      <svg style=${{position:'absolute',top:0,left:0,width:116,height:116,animation:'sp .9s linear infinite'}} viewBox="0 0 116 116">
-        <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#6366f1"/><stop offset="100%" stopColor="#a78bfa"/></linearGradient></defs>
-        <circle cx="58" cy="58" r="54" fill="none" stroke="rgba(99,102,241,.12)" strokeWidth="4.5"/>
-        <circle cx="58" cy="58" r="54" fill="none" stroke="url(#sg)" strokeWidth="4.5" strokeLinecap="round" strokeDasharray="84 255"/>
-      </svg>
-      <div style=${{position:'absolute',top:14,left:14,width:88,height:88,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 36px rgba(99,102,241,.5)'}}>
+    <div style=${{position:'relative',width:100,height:100,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style=${{width:88,height:88,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(99,102,241,.55)',animation:'sp .9s linear infinite'}}>
         <svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
       </div>
     </div>
