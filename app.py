@@ -1000,8 +1000,7 @@ textarea.inp{resize:vertical;min-height:68px}
 @keyframes sp{to{transform:rotate(360deg)}}.spin{display:inline-block;width:16px;height:16px;border:2.5px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}.pulse{animation:pulse 1.5s ease-in-out infinite}
 /* Huddle */
-.huddle-bar{position:fixed;bottom:0;left:0;right:0;height:68px;background:var(--sf);border-top:1px solid rgba(34,197,94,.35);display:flex;align-items:center;padding:0 20px;gap:12px;z-index:1700;box-shadow:0 -2px 20px rgba(34,197,94,.1);backdrop-filter:blur(16px)}
-.incoming-call{position:fixed;bottom:88px;right:20px;z-index:1701;background:var(--sf);border:1.5px solid rgba(34,197,94,.4);border-radius:18px;padding:16px 18px;box-shadow:0 12px 48px rgba(0,0,0,.5);min-width:280px;animation:slideUp .3s cubic-bezier(.2,.8,.4,1)}
+/* huddle popup handled by HuddleCall component */
 /* AI panel */
 .ai-btn{position:fixed;bottom:22px;right:22px;z-index:1800;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a78bfa);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(99,102,241,.5);transition:all .2s}
 .ai-btn:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(99,102,241,.7)}
@@ -1308,81 +1307,30 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           </button>`)}
 
         ${!col?html`
-          <div style=${{borderTop:'1px solid var(--bd)',marginTop:'auto',paddingTop:8,paddingBottom:4}}>
-            <div style=${{padding:'0 8px 6px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <span style=${{fontSize:9,fontWeight:800,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,display:'flex',alignItems:'center',gap:4}}>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                Huddle
-              </span>
-              ${!inCall?html`<button
-                style=${{fontSize:10,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.3)',borderRadius:7,padding:'3px 9px',cursor:'pointer',lineHeight:1.4,transition:'all .15s'}}
-                onClick=${()=>onCallAction&&onCallAction({action:'start'})}>+ Start</button>`:null}
+          <div style=${{borderTop:'1px solid var(--bd)',paddingTop:8,paddingBottom:4,padding:'8px 8px 6px'}}>
+            <div style=${{display:'flex',alignItems:'center',gap:7,padding:'4px 4px 6px'}}>
+              <span style=${{fontSize:9,fontWeight:800,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1}}>Huddle</span>
+              ${inCall?html`<span style=${{fontSize:9,fontFamily:'monospace',color:'#22c55e',background:'rgba(34,197,94,.1)',padding:'1px 6px',borderRadius:8,border:'1px solid rgba(34,197,94,.2)',marginLeft:'auto'}}>● ${fmtTime(callState.elapsed||0)}</span>`:null}
             </div>
-            ${inCall?html`
-              <div style=${{margin:'0 4px 6px',background:'linear-gradient(135deg,rgba(34,197,94,.08),rgba(34,197,94,.04))',border:'1.5px solid rgba(34,197,94,.25)',borderRadius:12,overflow:'hidden'}}>
-                <div style=${{padding:'10px 11px 0'}}>
-                  <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:8}}>
-                    <div style=${{position:'relative',width:32,height:32,borderRadius:10,background:'linear-gradient(135deg,#16a34a,#15803d)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                      <div style=${{position:'absolute',top:-2,right:-2,width:9,height:9,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)',animation:'pulse 1.5s infinite'}}></div>
-                    </div>
-                    <div style=${{flex:1,minWidth:0}}>
-                      <div style=${{fontSize:11,fontWeight:800,color:'#22c55e',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${callState.roomName||'Huddle'}</div>
-                      <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtTime(callState.elapsed||0)} · ${(callState.participants||[]).length} in call</div>
-                    </div>
-                  </div>
-                  <div style=${{display:'flex',gap:3,flexWrap:'wrap',marginBottom:10}}>
-                    ${(callState.participants||[]).map(id=>{
-                      const u=(callState.allUsers||[]).find(x=>x.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'};
-                      return html`<div key=${id} title=${u.name} style=${{position:'relative'}}>
-                        <${Av} u=${u} size=${26}/>
-                        <div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div>
-                      </div>`;
-                    })}
-                  </div>
-                </div>
-                <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,borderTop:'1px solid rgba(34,197,94,.15)'}}>
-                  <button
-                    style=${{height:34,border:'none',borderRight:'1px solid rgba(34,197,94,.15)',background:callState.muted?'rgba(248,113,113,.1)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5,color:callState.muted?'#f87171':'#22c55e',fontSize:10,fontWeight:700,transition:'all .15s'}}
-                    onClick=${()=>onCallAction&&onCallAction({action:'mute'})}>
-                    ${callState.muted
-                      ?html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`
-                      :html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
-                    ${callState.muted?'Unmuted':'Mute'}
-                  </button>
-                  <button
-                    style=${{height:34,border:'none',background:'rgba(239,68,68,.08)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5,color:'#ef4444',fontSize:10,fontWeight:700,transition:'all .15s'}}
-                    onClick=${()=>onCallAction&&onCallAction({action:'leave'})}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                    Leave
-                  </button>
-                </div>
-              </div>
-              ${(callState.allUsers||[]).filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).length>0?html`
-                <div style=${{margin:'0 4px 6px',padding:'8px 10px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:10}}>
-                  <div style=${{fontSize:9,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:6}}>Invite to Huddle</div>
-                  <div style=${{display:'flex',flexDirection:'column',gap:4,maxHeight:100,overflowY:'auto'}}>
-                    ${(callState.allUsers||[]).filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).map(u=>html`
-                      <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:7}}>
-                        <${Av} u=${u} size=${22}/>
-                        <span style=${{fontSize:11,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</span>
-                        <button style=${{fontSize:9,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:5,padding:'2px 7px',cursor:'pointer',whiteSpace:'nowrap'}}
-                          onClick=${()=>onCallAction&&onCallAction({action:'invite',userId:u.id,roomId:callState.roomId})}>
-                          Pull in
-                        </button>
-                      </div>`)}
-                  </div>
-                </div>`:null}
-              `:html`
-              <div style=${{margin:'0 4px 6px'}}>
-                <${SidebarCallsList} cu=${cu} currentRoomId=${callState.roomId} onJoin=${(rid,rname)=>onCallAction&&onCallAction({action:'join',roomId:rid,roomName:rname})}/>
-              </div>`}
+            <button
+              style=${{width:'100%',height:36,borderRadius:10,border:'1px solid '+(inCall?'rgba(34,197,94,.4)':'var(--bd)'),
+                background:inCall?'rgba(34,197,94,.1)':'var(--sf2)',cursor:'pointer',
+                display:'flex',alignItems:'center',justifyContent:'center',gap:8,
+                color:inCall?'#22c55e':'var(--tx2)',fontSize:12,fontWeight:600,transition:'all .2s'}}
+              onClick=${()=>onCallAction&&onCallAction({action:'open_huddle'})}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+              </svg>
+              ${inCall?html`<span>${callState.roomName||'In Huddle'}</span>`:'Start a Huddle'}
+            </button>
           </div>`:html`
           <div style=${{borderTop:'1px solid var(--bd)',marginTop:6,paddingTop:8,display:'flex',justifyContent:'center',paddingBottom:4}}>
             <button title=${inCall?('In Huddle · '+fmtTime(callState.elapsed||0)):'Start Huddle'}
               style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(inCall?'rgba(34,197,94,.45)':'var(--bd)'),background:inCall?'rgba(34,197,94,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',transition:'all .15s'}}
-              onClick=${()=>inCall?onCallAction&&onCallAction({action:'leave'}):onCallAction&&onCallAction({action:'start'})}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke=${inCall?'#22c55e':'currentColor'} strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              onClick=${()=>onCallAction&&onCallAction({action:'open_huddle'})}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke=${inCall?'#22c55e':'currentColor'} strokeWidth="2" strokeLinecap="round">
+                <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+              </svg>
               ${inCall?html`<div style=${{position:'absolute',top:3,right:3,width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',border:'1.5px solid var(--sf)'}}></div>`:null}
             </button>
           </div>`}
@@ -2477,7 +2425,7 @@ const playSound=(type='notif')=>{
     }
   }catch(e){}
 };
-function DirectMessages({cu,users,dmUnread,onDmRead}){
+function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle}){
   const others=safe(users).filter(u=>u.id!==cu.id);
   const [toId,setToId]=useState(others[0]&&others[0].id||'');const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const [search,setSearch]=useState('');const ref=useRef(null);
   const prevMsgCount=useRef(0);
@@ -2517,7 +2465,14 @@ function DirectMessages({cu,users,dmUnread,onDmRead}){
     </div>
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
-        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div style=${{fontSize:11,color:'var(--tx3)'}}>${toUser.role}</div></div>`:html`<span style=${{color:'var(--tx3)'}}>Select someone to chat</span>`}
+        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div style=${{fontSize:11,color:'var(--tx3)'}}>${toUser.role}</div></div>
+          <button title=${'Start huddle with '+toUser.name}
+            onClick=${()=>onStartHuddle&&onStartHuddle(toUser)}
+            style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid var(--bd)',background:'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s',flexShrink:0}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
+            </svg>
+          </button>`:html`<span style=${{color:'var(--tx3)'}}>Select someone to chat</span>`}
       </div>
       <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'16px',display:'flex',flexDirection:'column',gap:12}}>
         ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:60,color:'var(--tx3)',fontSize:13}}><div style=${{fontSize:36,marginBottom:10}}>👋</div><div style=${{fontWeight:600,marginBottom:4,color:'var(--tx2)'}}>${toUser?'Start a conversation with '+toUser.name:'Select someone'}</div></div>`:null}
@@ -3162,42 +3117,52 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-/* ─── HuddleCall (Teams Facilitator-style) ────────────────────────────────── */
+/* ─── HuddleCall — Slack-style Popup Huddle ──────────────────────────────── */
 function HuddleCall({cu,users,onStateChange,cmdRef}){
-  const [status,setStatus]=useState('idle');
+  // phase: 'idle' | 'preview' | 'in-call'
+  const [phase,setPhase]=useState('idle');
   const [roomId,setRoomId]=useState(null);
   const [roomName,setRoomName]=useState('');
   const [participants,setParticipants]=useState([]);
   const [muted,setMuted]=useState(false);
   const [videoOn,setVideoOn]=useState(false);
-  const [incomingCall,setIncomingCall]=useState(null);
   const [elapsed,setElapsed]=useState(0);
-  const [showPanel,setShowPanel]=useState(false);
-  const [notes,setNotes]=useState([]);
-  const [agenda,setAgenda]=useState([]);
-  const [agendaInput,setAgendaInput]=useState('');
-  const [agendaActive,setAgendaActive]=useState(null);
-  const [handRaised,setHandRaised]=useState(false);
+  const [incomingCall,setIncomingCall]=useState(null);
+  const [targetUser,setTargetUser]=useState(null); // for DM-initiated huddle
   const [speaking,setSpeaking]=useState({});
-  const [noteInput,setNoteInput]=useState('');
-  const [activeTab,setActiveTab]=useState('notes');
+  const [handRaised,setHandRaised]=useState(false);
+  const [screenSharing,setScreenSharing]=useState(false);
+  const [showParticipants,setShowParticipants]=useState(false);
+  const [previewMicOk,setPreviewMicOk]=useState(true);
+  const [previewCamOk,setPreviewCamOk]=useState(true);
+  const [popupPos,setPopupPos]=useState({x:null,y:null});
+  const [dragging,setDragging]=useState(false);
+  const dragOffset=useRef({x:0,y:0});
 
-  const localStream=useRef(null);const localVideo=useRef(null);
-  const pcs=useRef({});const audioEls=useRef({});const videoEls=useRef({});
+  const localStream=useRef(null);const localVideoEl=useRef(null);
+  const screenStream=useRef(null);const screenVideoEl=useRef(null);
+  const pcs=useRef({});const audioEls=useRef({});const remoteVideoEls=useRef({});
   const pollRef=useRef(null);const pingRef=useRef(null);const timerRef=useRef(null);
-  const roomIdRef=useRef(null);const statusRef=useRef('idle');
-  const analyserRef=useRef({});const speakTimers=useRef({});
+  const roomIdRef=useRef(null);const phaseRef=useRef('idle');
+  const analyserRef=useRef({});
 
   useEffect(()=>{roomIdRef.current=roomId;},[roomId]);
-  useEffect(()=>{statusRef.current=status;},[status]);
-  useEffect(()=>{
-    onStateChange&&onStateChange({status,roomId,roomName,participants,elapsed,muted,incomingCall,allUsers:users});
-  },[status,roomId,roomName,participants,elapsed,muted,incomingCall]);
+  useEffect(()=>{phaseRef.current=phase;},[phase]);
 
+  // Sync callState up
+  useEffect(()=>{
+    onStateChange&&onStateChange({
+      status:phase==='in-call'?'in-call':'idle',
+      roomId,roomName,participants,elapsed,muted,incomingCall,allUsers:users
+    });
+  },[phase,roomId,roomName,participants,elapsed,muted,incomingCall]);
+
+  // Expose imperative API
   if(cmdRef){
     cmdRef.current={
-      start:(name)=>startCall(name),
-      join:(rid,rname)=>joinCall(rid,rname),
+      openHuddle:(user)=>{setTargetUser(user||null);setPhase('preview');},
+      start:(name)=>doStart(name),
+      join:(rid,rname)=>{setTargetUser(null);doJoin(rid,rname);},
       leave:()=>cleanup(),
       mute:()=>toggleMute(),
       invite:(uid,rid)=>api.post('/api/calls/'+rid+'/invite/'+uid,{}),
@@ -3205,70 +3170,78 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   }
 
   const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+  const fmtTime=s=>{const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
 
   // Poll for incoming calls when idle
   useEffect(()=>{
-    if(status!=='idle')return;
+    if(phase!=='idle')return;
     const id=setInterval(async()=>{
       const calls=await api.get('/api/calls');
       if(Array.isArray(calls)&&calls.length>0){
         const c=calls[0];const parts=JSON.parse(c.participants||'[]');
         if(!parts.includes(cu.id)&&c.initiator!==cu.id){
           const init=safe(users).find(u=>u.id===c.initiator);
-          setIncomingCall({id:c.id,name:c.name,initiatorName:(init&&init.name)||'Someone'});
+          setIncomingCall({id:c.id,name:c.name,initiatorName:(init&&init.name)||'Someone',initiator:init});
         }
-      } else {setIncomingCall(null);}
-    },6000);
+      } else setIncomingCall(null);
+    },5000);
     return()=>clearInterval(id);
-  },[status,cu,users]);
+  },[phase,cu,users]);
+
+  // Preview: check device access
+  useEffect(()=>{
+    if(phase!=='preview')return;
+    navigator.mediaDevices.getUserMedia({audio:true}).then(()=>setPreviewMicOk(true)).catch(()=>setPreviewMicOk(false));
+    navigator.mediaDevices.getUserMedia({video:true}).then(s=>{s.getTracks().forEach(t=>t.stop());setPreviewCamOk(true);}).catch(()=>setPreviewCamOk(false));
+  },[phase]);
 
   const detectSpeaking=(uid,stream)=>{
     try{
-      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const ctx=new(window.AudioContext||window.webkitAudioContext)();
       const src=ctx.createMediaStreamSource(stream);
-      const analyser=ctx.createAnalyser();analyser.fftSize=512;
-      src.connect(analyser);analyserRef.current[uid]={ctx,analyser};
+      const an=ctx.createAnalyser();an.fftSize=512;src.connect(an);
+      analyserRef.current[uid]={ctx,an};
       const check=()=>{
         if(!analyserRef.current[uid])return;
-        const data=new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-        const avg=data.reduce((a,b)=>a+b,0)/data.length;
-        setSpeaking(s=>({...s,[uid]:avg>12}));
+        const d=new Uint8Array(an.frequencyBinCount);an.getByteFrequencyData(d);
+        const avg=d.reduce((a,b)=>a+b,0)/d.length;
+        setSpeaking(s=>({...s,[uid]:avg>10}));
         requestAnimationFrame(check);
       };
       check();
     }catch(e){}
   };
 
-  const createPC=(remoteUserId,rid)=>{
-    if(pcs.current[remoteUserId]){try{pcs.current[remoteUserId].close();}catch(e){}}
+  const createPC=(remoteUid,rid)=>{
+    if(pcs.current[remoteUid]){try{pcs.current[remoteUid].close();}catch(e){}}
     const pc=new RTCPeerConnection(STUN);
-    if(localStream.current) localStream.current.getTracks().forEach(t=>pc.addTrack(t,localStream.current));
+    if(localStream.current)localStream.current.getTracks().forEach(t=>pc.addTrack(t,localStream.current));
     pc.ontrack=e=>{
-      const stream=e.streams[0];
+      const s=e.streams[0];
       if(e.track.kind==='audio'){
-        let el=audioEls.current[remoteUserId];
-        if(!el){el=document.createElement('audio');el.autoplay=true;el.style.display='none';document.body.appendChild(el);audioEls.current[remoteUserId]=el;}
-        el.srcObject=stream;
-        detectSpeaking(remoteUserId,stream);
-      } else if(e.track.kind==='video'){let el=videoEls.current[remoteUserId];if(el)el.srcObject=stream;}
+        let el=audioEls.current[remoteUid];
+        if(!el){el=document.createElement('audio');el.autoplay=true;el.style.display='none';document.body.appendChild(el);audioEls.current[remoteUid]=el;}
+        el.srcObject=s;detectSpeaking(remoteUid,s);
+      } else if(e.track.kind==='video'){
+        const el=remoteVideoEls.current[remoteUid];if(el)el.srcObject=s;
+      }
     };
-    pc.onicecandidate=e=>{if(e.candidate&&roomIdRef.current)api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:remoteUserId,type:'ice',data:e.candidate.toJSON()});};
-    pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){try{pc.close();}catch(ex){}delete pcs.current[remoteUserId];}};
-    pcs.current[remoteUserId]=pc;return pc;
+    pc.onicecandidate=e=>{if(e.candidate&&roomIdRef.current)api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:remoteUid,type:'ice',data:e.candidate.toJSON()});};
+    pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){try{pc.close();}catch(ex){}delete pcs.current[remoteUid];}};
+    pcs.current[remoteUid]=pc;return pc;
   };
 
   const startSignalPoll=(rid)=>{
     if(pollRef.current)clearInterval(pollRef.current);
     pollRef.current=setInterval(async()=>{
-      if(statusRef.current!=='in-call')return;
+      if(phaseRef.current!=='in-call')return;
       const sigs=await api.get('/api/calls/'+rid+'/signals');
       if(!Array.isArray(sigs))return;
       for(const sig of sigs){
         const from=sig.from_user;let data;
         try{data=typeof sig.data==='string'?JSON.parse(sig.data):sig.data;}catch{continue;}
         if(sig.type==='offer'){
-          let pc=pcs.current[from]||createPC(from,rid);
+          const pc=pcs.current[from]||createPC(from,rid);
           try{await pc.setRemoteDescription(new RTCSessionDescription(data));const ans=await pc.createAnswer();await pc.setLocalDescription(ans);await api.post('/api/calls/'+rid+'/signal',{to_user:from,type:'answer',data:{type:ans.type,sdp:ans.sdp}});}catch(ex){}
         } else if(sig.type==='answer'){
           const pc=pcs.current[from];if(pc&&pc.signalingState==='have-local-offer'){try{await pc.setRemoteDescription(new RTCSessionDescription(data));}catch(ex){}}
@@ -3293,32 +3266,33 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);
   };
 
-  const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
-
-  const getMedia=async()=>{
-    try{const s=await navigator.mediaDevices.getUserMedia({audio:true,video:false});localStream.current=s;
-      detectSpeaking(cu.id,s);return s;}
-    catch(e){alert('Microphone access required for Huddle.');return null;}
+  const getAudio=async()=>{
+    try{const s=await navigator.mediaDevices.getUserMedia({audio:true,video:false});return s;}
+    catch(e){return null;}
   };
 
-  const startCall=async(name)=>{
-    const s=await getMedia();if(!s)return;
-    const r=await api.post('/api/calls',{name:name||(cu.name||'')+"'s Huddle"});
-    if(!r||r.error){alert('Could not start call.');return;}
-    setRoomId(r.room_id);setRoomName(r.name||'Huddle');setStatus('in-call');setParticipants([cu.id]);setIncomingCall(null);
-    setNotes([{id:Date.now(),text:'📞 Call started by '+cu.name,ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
-    setAgenda([]);setShowPanel(false);
+  const doStart=async(name)=>{
+    const s=await getAudio();
+    if(!s){alert('Microphone access required.');return;}
+    localStream.current=s;if(!muted){}else s.getAudioTracks().forEach(t=>{t.enabled=false;});
+    detectSpeaking(cu.id,s);
+    const roomLabel=name||(targetUser?cu.name+' ↔ '+targetUser.name:cu.name+"'s Huddle");
+    const r=await api.post('/api/calls',{name:roomLabel});
+    if(!r||r.error){alert('Could not start huddle.');return;}
+    setRoomId(r.room_id);setRoomName(r.name||roomLabel);
+    setParticipants([cu.id]);setPhase('in-call');setIncomingCall(null);
     playSound('notif');startSignalPoll(r.room_id);startPing(r.room_id);startTimer();
   };
 
-  const joinCall=async(rid,rname)=>{
-    const s=await getMedia();if(!s)return;
+  const doJoin=async(rid,rname)=>{
+    const s=await getAudio();
+    if(!s){alert('Microphone access required.');return;}
+    localStream.current=s;detectSpeaking(cu.id,s);
     const r=await api.post('/api/calls/'+rid+'/join',{});
-    if(!r||r.error){alert(r&&r.error||'Could not join call.');return;}
+    if(!r||r.error){alert(r&&r.error||'Could not join.');return;}
     const parts=r.participants||[];
-    setRoomId(rid);setRoomName(r.name||rname||'Huddle');setStatus('in-call');setParticipants(parts);setIncomingCall(null);
-    setNotes([{id:Date.now(),text:'✅ '+cu.name+' joined the huddle',ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
-    setAgenda([]);setShowPanel(false);
+    setRoomId(rid);setRoomName(r.name||rname||'Huddle');
+    setParticipants(parts);setPhase('in-call');setIncomingCall(null);
     playSound('notif');
     for(const uid of parts){
       if(uid===cu.id)continue;
@@ -3329,286 +3303,302 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   };
 
   const cleanup=async()=>{
-    if(pollRef.current)clearInterval(pollRef.current);if(pingRef.current)clearInterval(pingRef.current);if(timerRef.current)clearInterval(timerRef.current);
+    if(pollRef.current)clearInterval(pollRef.current);
+    if(pingRef.current)clearInterval(pingRef.current);
+    if(timerRef.current)clearInterval(timerRef.current);
     Object.values(pcs.current).forEach(pc=>{try{pc.close();}catch(e){}});pcs.current={};
     Object.values(analyserRef.current).forEach(({ctx})=>{try{ctx.close();}catch(e){}});analyserRef.current={};
     if(localStream.current){localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;}
+    if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
     Object.values(audioEls.current).forEach(el=>{try{el.srcObject=null;el.remove();}catch(e){}});audioEls.current={};
     if(roomIdRef.current)await api.post('/api/calls/'+roomIdRef.current+'/leave',{});
-    setRoomId(null);setRoomName('');setStatus('idle');setParticipants([]);setMuted(false);setVideoOn(false);setElapsed(0);
-    setNotes([]);setAgenda([]);setShowPanel(false);setHandRaised(false);setSpeaking({});
+    setRoomId(null);setRoomName('');setParticipants([]);
+    setPhase('idle');setMuted(false);setVideoOn(false);setElapsed(0);
+    setHandRaised(false);setScreenSharing(false);setSpeaking({});setTargetUser(null);
   };
 
   const toggleMute=()=>{
-    if(localStream.current){localStream.current.getAudioTracks().forEach(t=>{t.enabled=muted;});setMuted(m=>!m);}
+    if(localStream.current){
+      const enabled=!muted;
+      localStream.current.getAudioTracks().forEach(t=>{t.enabled=enabled;});
+      setMuted(m=>!m);
+    }
   };
 
   const toggleVideo=async()=>{
     if(!videoOn){
       try{
-        const vs=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240}});
+        const vs=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
         vs.getVideoTracks().forEach(t=>localStream.current.addTrack(t));
-        if(localVideo.current)localVideo.current.srcObject=localStream.current;
+        if(localVideoEl.current)localVideoEl.current.srcObject=localStream.current;
         Object.entries(pcs.current).forEach(async([uid,pc])=>{
           vs.getVideoTracks().forEach(t=>pc.addTrack(t,localStream.current));
           const offer=await pc.createOffer();await pc.setLocalDescription(offer);
           await api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
         });
         setVideoOn(true);
-      }catch(e){}
+      }catch(e){alert('Camera access denied or unavailable.');}
     } else {
       localStream.current&&localStream.current.getVideoTracks().forEach(t=>{t.stop();try{localStream.current.removeTrack(t);}catch(ex){}});
-      if(localVideo.current)localVideo.current.srcObject=null;setVideoOn(false);
+      if(localVideoEl.current)localVideoEl.current.srcObject=null;
+      setVideoOn(false);
     }
   };
 
-  const addNote=()=>{
-    if(!noteInput.trim())return;
-    const n={id:Date.now(),text:noteInput.trim(),ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),author:cu.name,auto:false};
-    setNotes(prev=>[...prev,n]);setNoteInput('');
+  const toggleScreenShare=async()=>{
+    if(!screenSharing){
+      try{
+        const ss=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+        screenStream.current=ss;
+        if(screenVideoEl.current)screenVideoEl.current.srcObject=ss;
+        ss.getVideoTracks()[0].onended=()=>setScreenSharing(false);
+        Object.entries(pcs.current).forEach(async([uid,pc])=>{
+          ss.getTracks().forEach(t=>pc.addTrack(t,ss));
+          const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+          await api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
+        });
+        setScreenSharing(true);
+      }catch(e){}
+    } else {
+      if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
+      if(screenVideoEl.current)screenVideoEl.current.srcObject=null;
+      setScreenSharing(false);
+    }
   };
 
-  const addAgendaItem=()=>{
-    if(!agendaInput.trim())return;
-    setAgenda(prev=>[...prev,{id:Date.now(),text:agendaInput.trim(),done:false,active:false}]);
-    setAgendaInput('');
+  // ── Drag logic for the popup
+  const onDragStart=(e)=>{
+    setDragging(true);
+    dragOffset.current={x:e.clientX-popupPos.x,y:e.clientY-popupPos.y};
+    e.preventDefault();
   };
+  useEffect(()=>{
+    if(!dragging)return;
+    const onMove=e=>setPopupPos({x:e.clientX-dragOffset.current.x,y:e.clientY-dragOffset.current.y});
+    const onUp=()=>setDragging(false);
+    window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
+    return()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
+  },[dragging]);
 
-  const setAgendaItemActive=(id)=>{
-    setAgenda(prev=>prev.map(a=>({...a,active:a.id===id})));
-    setAgendaActive(id);
-    const item=agenda.find(a=>a.id===id);
-    if(item)setNotes(prev=>[...prev,{id:Date.now(),text:'📌 Now discussing: '+item.text,ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
-  };
+  const centerPopup=()=>({x:Math.max(0,(window.innerWidth-760)/2),y:Math.max(0,(window.innerHeight-520)/2)});
 
-  const markAgendaDone=(id)=>{
-    setAgenda(prev=>prev.map(a=>a.id===id?{...a,done:true,active:false}:a));
-    if(agendaActive===id)setAgendaActive(null);
-    const item=agenda.find(a=>a.id===id);
-    if(item)setNotes(prev=>[...prev,{id:Date.now(),text:'✅ Completed: '+item.text,ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
-  };
-
-  const raiseHand=()=>{
-    setHandRaised(h=>!h);
-    const raised=!handRaised;
-    setNotes(prev=>[...prev,{id:Date.now(),text:(raised?'✋ ':'👋 ')+cu.name+(raised?' raised their hand':' lowered their hand'),ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
-  };
+  useEffect(()=>{
+    if(phase==='preview'&&popupPos.x===null)setPopupPos(centerPopup());
+    if(phase==='in-call'&&popupPos.x===null)setPopupPos(centerPopup());
+  },[phase]);
 
   const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'});
-  const activeAgenda=agenda.find(a=>a.active);
 
-  // ── Initiator user lookup for incoming call
-  const incomingInitiator=incomingCall?safe(users).find(u=>u.name===incomingCall.initiatorName)||{name:incomingCall.initiatorName,avatar:(incomingCall.initiatorName||'?')[0].toUpperCase(),color:'#22c55e'}:null;
-
-  const incomingToast=incomingCall&&status==='idle'?html`
-    <div class="incoming-call">
-      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+  // ── INCOMING CALL TOAST (bottom-right, non-blocking)
+  const incomingToast=incomingCall&&phase==='idle'?html`
+    <div style=${{position:'fixed',bottom:24,right:24,zIndex:9000,background:'#1e1e2e',border:'1px solid rgba(34,197,94,.35)',borderRadius:18,padding:'16px 18px',boxShadow:'0 16px 60px rgba(0,0,0,.7)',minWidth:300,animation:'slideUp .3s cubic-bezier(.2,.8,.4,1)'}}>
+      <div style=${{display:'flex',alignItems:'center',gap:11,marginBottom:14}}>
         <div style=${{position:'relative',flexShrink:0}}>
-          ${incomingInitiator?html`<${Av} u=${incomingInitiator} size=${40}/>`:null}
-          <div style=${{position:'absolute',bottom:-2,right:-2,width:14,height:14,borderRadius:'50%',background:'#22c55e',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <svg width="7" height="7" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          ${incomingCall.initiator?html`<${Av} u=${incomingCall.initiator} size=${44}/>`:
+            html`<div style=${{width:44,height:44,borderRadius:14,background:'linear-gradient(135deg,#22c55e,#16a34a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:800,color:'#fff'}}>${(incomingCall.initiatorName||'?')[0]}</div>`}
+          <div style=${{position:'absolute',bottom:-2,right:-2,width:15,height:15,borderRadius:'50%',background:'#22c55e',border:'2px solid #1e1e2e',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <svg width="7" height="7" viewBox="0 0 24 24" fill="white"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
           </div>
         </div>
-        <div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:11,fontWeight:800,color:'var(--tx)',marginBottom:1}}>${incomingCall.initiatorName}</div>
-          <div style=${{fontSize:12,color:'var(--tx)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${incomingCall.name}</div>
-          <div style=${{display:'flex',alignItems:'center',gap:4,marginTop:2}}>
+        <div style=${{flex:1}}>
+          <div style=${{fontSize:13,fontWeight:700,color:'#fff',marginBottom:2}}>${incomingCall.initiatorName}</div>
+          <div style=${{fontSize:11,color:'rgba(255,255,255,.55)'}}>${incomingCall.name}</div>
+          <div style=${{display:'flex',alignItems:'center',gap:4,marginTop:3}}>
             <div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 1s infinite'}}></div>
-            <span style=${{fontSize:10,color:'#22c55e',fontWeight:600}}>Huddle in progress</span>
+            <span style=${{fontSize:10,color:'#22c55e',fontWeight:600}}>Huddle started</span>
           </div>
         </div>
-        <button onClick=${()=>setIncomingCall(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,lineHeight:1,padding:4,flexShrink:0}}>✕</button>
+        <button onClick=${()=>setIncomingCall(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.4)',fontSize:18,lineHeight:1,padding:4}}>✕</button>
       </div>
       <div style=${{display:'flex',gap:8}}>
-        <button style=${{flex:1,height:36,borderRadius:10,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 14px rgba(34,197,94,.35)'}}
-          onClick=${()=>joinCall(incomingCall.id,incomingCall.name)}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <button style=${{flex:1,height:38,borderRadius:11,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:7,boxShadow:'0 4px 18px rgba(34,197,94,.4)'}}
+          onClick=${()=>{setIncomingCall(null);doJoin(incomingCall.id,incomingCall.name);}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
           Join Huddle
         </button>
-        <button style=${{width:36,height:36,borderRadius:10,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',color:'#ef4444',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:11}}
-          onClick=${()=>setIncomingCall(null)} title="Decline">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <button style=${{width:38,height:38,borderRadius:11,background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',color:'#f87171',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
+          onClick=${()=>setIncomingCall(null)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
     </div>`:null;
 
-  if(status==='idle') return html`<div>${incomingToast}</div>`;
-
-  // ── Facilitator side panel ────────────────────────────────────────────────
-  const facilitatorPanel=showPanel?html`
-    <div style=${{position:'fixed',bottom:74,right:16,width:320,height:460,background:'var(--sf)',border:'1.5px solid var(--bd)',borderRadius:16,boxShadow:'0 12px 48px rgba(0,0,0,.45)',zIndex:1698,display:'flex',flexDirection:'column',overflow:'hidden',animation:'slideUp .2s ease'}}>
-      <div style=${{padding:'12px 14px 0',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-        <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-          <div style=${{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#6366f1,#a78bfa)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+  // ── PREVIEW POPUP (Slack "Start Huddle" pre-flight)
+  const previewPopup=phase==='preview'&&popupPos.x!==null?html`
+    <div style=${{position:'fixed',left:popupPos.x,top:popupPos.y,width:460,zIndex:8500,borderRadius:20,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.75)',background:'#1a1625',border:'1px solid rgba(255,255,255,.08)',userSelect:dragging?'none':'auto'}}>
+      <!-- Drag handle / title bar -->
+      <div onMouseDown=${onDragStart} style=${{background:'#221e30',padding:'13px 18px',display:'flex',alignItems:'center',gap:10,cursor:'move',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1}}>${targetUser?'Start huddle with '+targetUser.name:'Start a Huddle'}</span>
+        <button onClick=${()=>{setPhase('idle');setTargetUser(null);}} style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.4)',fontSize:20,lineHeight:1,padding:0}}>✕</button>
+      </div>
+      <!-- Camera preview area -->
+      <div style=${{background:'#2d2640',minHeight:220,display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden'}}>
+        <!-- Gradient bg blobs -->
+        <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,.2) 0%,transparent 60%),radial-gradient(ellipse at 80% 30%,rgba(34,197,94,.15) 0%,transparent 60%)',pointerEvents:'none'}}></div>
+        <!-- User avatar card -->
+        <div style=${{position:'relative',zIndex:1,width:180,background:'rgba(255,255,255,.07)',borderRadius:18,overflow:'hidden',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'28px 20px'}}>
+          ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
+            html`<img src=${cu.avatar_data} style=${{width:72,height:72,borderRadius:'50%',objectFit:'cover',marginBottom:10}}/>`:
+            html`<div style=${{width:72,height:72,borderRadius:'50%',background:cu.color||'#6366f1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,fontWeight:800,color:'#fff',marginBottom:10}}>${(cu.avatar||cu.name||'?')[0]}</div>`}
+          <div style=${{display:'flex',gap:6,marginTop:4}}>
+            <div style=${{width:34,height:34,borderRadius:10,background:muted?'rgba(239,68,68,.25)':'rgba(255,255,255,.12)',border:'1px solid '+(muted?'rgba(239,68,68,.4)':'rgba(255,255,255,.15)'),display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}
+              onClick=${toggleMute}>
+              ${muted?html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" y1="19" x2="12" y2="23"/></svg>`:
+              html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>`}
+            </div>
+            <div style=${{position:'relative',width:34,height:34,borderRadius:10,background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.15)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}} onClick=${()=>{}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+              ${!previewCamOk?html`<div style=${{position:'absolute',top:-4,right:-4,width:14,height:14,borderRadius:'50%',background:'#f59e0b',border:'2px solid #1a1625',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:900,color:'#fff'}}>!</div>`:null}
+            </div>
           </div>
-          <span style=${{fontSize:13,fontWeight:800,color:'var(--tx)'}}>Meeting Facilitator</span>
-          <button onClick=${()=>setShowPanel(false)} style=${{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,lineHeight:1}}>✕</button>
-        </div>
-        <div style=${{display:'flex',gap:2,marginBottom:-1}}>
-          ${['notes','agenda','people'].map(tab=>html`
-            <button key=${tab} onClick=${()=>setActiveTab(tab)}
-              style=${{padding:'6px 12px',borderRadius:'8px 8px 0 0',border:'none',cursor:'pointer',fontSize:11,fontWeight:600,
-                background:activeTab===tab?'var(--bg)':'transparent',
-                color:activeTab===tab?'var(--ac)':'var(--tx3)',
-                borderBottom:activeTab===tab?'2px solid var(--ac)':'2px solid transparent',
-                textTransform:'capitalize'}}>
-              ${tab==='notes'?'📝':tab==='agenda'?'📋':'👥'} ${tab.charAt(0).toUpperCase()+tab.slice(1)}
-              ${tab==='notes'?html`<span style=${{marginLeft:4,background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${notes.length}</span>`:''}
-            </button>`)}
         </div>
       </div>
-
-      <div style=${{flex:1,overflowY:'auto',padding:'10px 14px'}}>
-        ${activeTab==='notes'?html`
-          <div style=${{display:'flex',flexDirection:'column',gap:6}}>
-            ${notes.length===0?html`<p style=${{color:'var(--tx3)',fontSize:11,textAlign:'center',padding:'20px 0'}}>No notes yet. Add one below!</p>`:null}
-            ${notes.map(n=>html`
-              <div key=${n.id} style=${{padding:'7px 10px',borderRadius:9,background:n.auto?'rgba(99,102,241,.07)':'var(--sf2)',border:'1px solid '+(n.auto?'rgba(99,102,241,.15)':'var(--bd)')}}>
-                <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:6}}>
-                  <p style=${{fontSize:12,color:'var(--tx)',lineHeight:1.5,margin:0,flex:1}}>${n.text}</p>
-                </div>
-                <div style=${{display:'flex',gap:6,marginTop:3}}>
-                  ${!n.auto?html`<span style=${{fontSize:9,color:'var(--ac)',fontWeight:600}}>${n.author}</span>`:null}
-                  <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${n.ts}</span>
-                </div>
-              </div>`)}
-          </div>`:null}
-
-        ${activeTab==='agenda'?html`
-          <div style=${{display:'flex',flexDirection:'column',gap:6}}>
-            ${activeAgenda?html`
-              <div style=${{padding:'8px 10px',borderRadius:9,background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.25)',marginBottom:4}}>
-                <div style=${{display:'flex',alignItems:'center',gap:6}}>
-                  <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite'}}></div>
-                  <span style=${{fontSize:10,fontWeight:700,color:'#22c55e'}}>NOW DISCUSSING</span>
-                </div>
-                <p style=${{fontSize:12,color:'var(--tx)',margin:'4px 0 0',fontWeight:600}}>${activeAgenda.text}</p>
-              </div>`:null}
-            ${agenda.length===0?html`<p style=${{color:'var(--tx3)',fontSize:11,textAlign:'center',padding:'20px 0'}}>No agenda items yet</p>`:null}
-            ${agenda.map((a,i)=>html`
-              <div key=${a.id} style=${{padding:'7px 10px',borderRadius:9,background:a.active?'rgba(99,102,241,.08)':a.done?'rgba(34,197,94,.05)':'var(--sf2)',border:'1px solid '+(a.active?'rgba(99,102,241,.3)':a.done?'rgba(34,197,94,.2)':'var(--bd)'),opacity:a.done?0.6:1}}>
-                <div style=${{display:'flex',alignItems:'center',gap:7}}>
-                  <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',minWidth:16}}>${i+1}.</span>
-                  <span style=${{fontSize:12,color:'var(--tx)',flex:1,textDecoration:a.done?'line-through':'none'}}>${a.text}</span>
-                  ${!a.done?html`
-                    <button onClick=${()=>setAgendaItemActive(a.id)} title="Start discussing"
-                      style=${{padding:'3px 7px',borderRadius:6,border:'1px solid rgba(99,102,241,.3)',background:'rgba(99,102,241,.1)',color:'var(--ac)',fontSize:9,cursor:'pointer',fontWeight:700}}>
-                      ${a.active?'Active':'▶ Start'}
-                    </button>
-                    <button onClick=${()=>markAgendaDone(a.id)} title="Mark done"
-                      style=${{padding:'3px 7px',borderRadius:6,border:'1px solid rgba(34,197,94,.3)',background:'rgba(34,197,94,.1)',color:'#22c55e',fontSize:9,cursor:'pointer',fontWeight:700}}>
-                      ✓
-                    </button>`:html`<span style=${{fontSize:9,color:'#22c55e',fontWeight:700}}>✓ Done</span>`}
-                </div>
-              </div>`)}
-          </div>`:null}
-
-        ${activeTab==='people'?html`
-          <div style=${{display:'flex',flexDirection:'column',gap:6}}>
-            ${partUsers.map(u=>html`
-              <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:9,padding:'7px 9px',borderRadius:10,background:'var(--sf2)',border:'1px solid var(--bd)'}}>
-                <div style=${{position:'relative'}}>
-                  <${Av} u=${u} size=${32}/>
-                  <div style=${{position:'absolute',bottom:-1,right:-1,width:10,height:10,borderRadius:'50%',background:speaking[u.id]?'#22c55e':'var(--tx3)',border:'1.5px solid var(--sf)',transition:'background .15s'}}></div>
-                </div>
-                <div style=${{flex:1}}>
-                  <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>${u.name}${u.id===cu.id?' (you)':''}</div>
-                  <div style=${{fontSize:10,color:speaking[u.id]?'#22c55e':'var(--tx3)',transition:'color .15s'}}>${speaking[u.id]?'🎙 Speaking':'Silent'}</div>
-                </div>
-                ${handRaised&&u.id===cu.id?html`<span style=${{fontSize:14}}>✋</span>`:null}
-              </div>`)}
-          </div>`:null}
-      </div>
-
-      <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',flexShrink:0}}>
-        ${activeTab==='notes'?html`
-          <div style=${{display:'flex',gap:6}}>
-            <input value=${noteInput} onInput=${e=>setNoteInput(e.target.value)}
-              onKeyDown=${e=>{if(e.key==='Enter')addNote();}}
-              placeholder="Add a note or decision…"
-              style=${{flex:1,height:32,borderRadius:8,border:'1px solid var(--bd)',background:'var(--bg)',color:'var(--tx)',padding:'0 10px',fontSize:12,outline:'none'}}/>
-            <button onClick=${addNote} style=${{height:32,borderRadius:8,background:'var(--ac)',color:'#fff',border:'none',padding:'0 12px',cursor:'pointer',fontSize:12,fontWeight:700}}>Add</button>
-          </div>`:null}
-        ${activeTab==='agenda'?html`
-          <div style=${{display:'flex',gap:6}}>
-            <input value=${agendaInput} onInput=${e=>setAgendaInput(e.target.value)}
-              onKeyDown=${e=>{if(e.key==='Enter')addAgendaItem();}}
-              placeholder="Add agenda item…"
-              style=${{flex:1,height:32,borderRadius:8,border:'1px solid var(--bd)',background:'var(--bg)',color:'var(--tx)',padding:'0 10px',fontSize:12,outline:'none'}}/>
-            <button onClick=${addAgendaItem} style=${{height:32,borderRadius:8,background:'var(--ac)',color:'#fff',border:'none',padding:'0 12px',cursor:'pointer',fontSize:12,fontWeight:700}}>Add</button>
-          </div>`:null}
-        ${activeTab==='people'?html`
-          <p style=${{fontSize:10,color:'var(--tx3)',textAlign:'center',margin:0}}>${partUsers.length} participant${partUsers.length!==1?'s':''} • ${elapsed>0?fmtTime(elapsed)+' elapsed':''}</p>`:null}
+      <!-- Device/permission warnings -->
+      ${!previewMicOk?html`
+        <div style=${{background:'rgba(251,191,36,.1)',borderTop:'1px solid rgba(251,191,36,.2)',padding:'8px 16px',display:'flex',alignItems:'center',gap:8}}>
+          <span style=${{fontSize:16}}>⚠️</span>
+          <span style=${{fontSize:11,color:'#fbbf24'}}>Microphone access needed. Please allow it in your browser settings.</span>
+        </div>`:null}
+      <!-- Bottom actions -->
+      <div style=${{padding:'14px 18px',background:'#1a1625',display:'flex',alignItems:'center',gap:10}}>
+        <button style=${{flex:1,height:42,borderRadius:12,background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.12)',color:'rgba(255,255,255,.65)',cursor:'pointer',fontWeight:600,fontSize:13,transition:'all .15s'}}
+          onClick=${()=>{setPhase('idle');setTargetUser(null);}}>Cancel</button>
+        <button style=${{flex:2,height:42,borderRadius:12,background:previewMicOk?'linear-gradient(135deg,#22c55e,#16a34a)':'rgba(255,255,255,.1)',border:'none',color:previewMicOk?'#fff':'rgba(255,255,255,.3)',cursor:previewMicOk?'pointer':'not-allowed',fontWeight:700,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:previewMicOk?'0 6px 20px rgba(34,197,94,.35)':'none',transition:'all .2s'}}
+          onClick=${previewMicOk?()=>{setPhase('idle');setPopupPos(null);setTimeout(()=>setPopupPos(centerPopup()),10);doStart();}:null}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+          Start Huddle
+        </button>
       </div>
     </div>`:null;
 
-  return html`
-    <div>
-      ${incomingToast}
-      ${facilitatorPanel}
-      ${videoOn?html`
-        <div style=${{position:'fixed',bottom:74,right:showPanel?356:16,width:220,borderRadius:12,overflow:'hidden',border:'2px solid #22c55e',boxShadow:'0 8px 28px rgba(0,0,0,.5)',zIndex:1699,background:'#000',transition:'right .2s'}}>
-          <video ref=${localVideo} autoplay muted style=${{width:'100%',height:120,objectFit:'cover',display:'block'}}></video>
-          <div style=${{display:'flex',gap:4,padding:'4px 6px',background:'rgba(0,0,0,.75)',flexWrap:'wrap'}}>
-            ${partUsers.filter(u=>u.id!==cu.id).map(u=>html`
-              <video key=${u.id} ref=${el=>{if(el)videoEls.current[u.id]=el;}} autoplay style=${{width:62,height:46,borderRadius:5,objectFit:'cover',background:'#1a1a2e'}}></video>`)}
-          </div>
-        </div>`:null}
-      <div class="huddle-bar">
-        <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
-          <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite'}}></div>
-          <div>
-            <span style=${{fontSize:12,fontWeight:800,color:'#22c55e',display:'block',lineHeight:1.3}}>${roomName||'Huddle'}</span>
-            <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtTime(elapsed)}</span>
-          </div>
+  // ── IN-CALL POPUP (full Slack-style huddle window)
+  const callPopup=phase==='in-call'&&popupPos.x!==null?html`
+    <div style=${{position:'fixed',left:popupPos.x,top:popupPos.y,width:760,height:520,zIndex:8500,borderRadius:20,overflow:'hidden',boxShadow:'0 32px 100px rgba(0,0,0,.85)',background:'#0d0d1a',border:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',userSelect:dragging?'none':'auto'}}>
+      <!-- Title bar (draggable) -->
+      <div onMouseDown=${onDragStart} style=${{background:'rgba(0,0,0,.4)',padding:'10px 16px',display:'flex',alignItems:'center',gap:10,cursor:'move',flexShrink:0,backdropFilter:'blur(10px)'}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+        <span style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.8)',flex:1}}>${roomName||'Huddle'}</span>
+        <div style=${{display:'flex',alignItems:'center',gap:5}}>
+          <div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite'}}></div>
+          <span style=${{fontSize:11,color:'#22c55e',fontFamily:'monospace',fontWeight:700}}>${fmtTime(elapsed)}</span>
         </div>
-        ${activeAgenda?html`
-          <div style=${{display:'flex',alignItems:'center',gap:5,background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'3px 9px',maxWidth:180,overflow:'hidden',flexShrink:0}}>
-            <span style=${{fontSize:9,color:'var(--ac)',fontWeight:700,whiteSpace:'nowrap'}}>📋</span>
-            <span style=${{fontSize:10,color:'var(--ac)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeAgenda.text}</span>
-          </div>`:null}
-        <div style=${{width:1,height:30,background:'var(--bd)',flexShrink:0}}></div>
-        <div style=${{display:'flex',gap:4,flex:1,overflowX:'auto',scrollbarWidth:'none',alignItems:'center'}}>
+        <button onClick=${()=>setShowParticipants(p=>!p)}
+          style=${{marginLeft:8,width:28,height:28,borderRadius:8,background:showParticipants?'rgba(99,102,241,.3)':'rgba(255,255,255,.08)',border:'none',cursor:'pointer',color:'rgba(255,255,255,.6)',display:'flex',alignItems:'center',justifyContent:'center',gap:4,fontSize:10}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          ${participants.length}
+        </button>
+      </div>
+      <!-- Main content area -->
+      <div style=${{flex:1,display:'flex',overflow:'hidden',position:'relative'}}>
+        <!-- Background gradient -->
+        <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 10% 40%,rgba(99,102,241,.18) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(251,146,60,.15) 0%,transparent 50%),radial-gradient(ellipse at 50% 80%,rgba(34,197,94,.1) 0%,transparent 50%)',pointerEvents:'none'}}></div>
+        <!-- Participant tiles -->
+        <div style=${{flex:1,display:'flex',flexWrap:'wrap',gap:12,padding:'16px',alignContent:'center',justifyContent:'center',position:'relative',zIndex:1}}>
           ${partUsers.map(u=>html`
-            <div key=${u.id} title=${u.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:2,flexShrink:0,padding:'2px 5px',borderRadius:8,background:u.id===cu.id?'rgba(34,197,94,.12)':'transparent'}}>
-              <div style=${{position:'relative'}}>
-                <${Av} u=${u} size=${28}/>
-                <div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:speaking[u.id]?'#22c55e':'#6b7280',border:'1.5px solid var(--sf)',transition:'background .15s'}}></div>
+            <div key=${u.id} style=${{position:'relative',width:partUsers.length===1?320:partUsers.length<=4?200:140,height:partUsers.length===1?240:partUsers.length<=4?160:120,borderRadius:16,overflow:'hidden',background:'rgba(255,255,255,.06)',border:'2px solid '+(speaking[u.id]?'#22c55e':'rgba(255,255,255,.08)'),transition:'border-color .15s',boxShadow:speaking[u.id]?'0 0 0 3px rgba(34,197,94,.2)':'none'}}>
+              ${u.id===cu.id&&videoOn?
+                html`<video ref=${localVideoEl} autoplay muted style=${{width:'100%',height:'100%',objectFit:'cover'}}></video>`:
+                html`<div style=${{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:6}}>
+                  ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
+                    html`<img src=${u.avatar_data} style=${{width:partUsers.length<=2?68:50,height:partUsers.length<=2?68:50,borderRadius:'50%',objectFit:'cover',border:'2px solid rgba(255,255,255,.2)'}}/>`:
+                    html`<div style=${{width:partUsers.length<=2?68:50,height:partUsers.length<=2?68:50,borderRadius:'50%',background:u.color||'#6366f1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?24:18,fontWeight:800,color:'#fff',border:'2px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
+                </div>`}
+              <!-- Remote video -->
+              ${u.id!==cu.id?html`<video ref=${el=>{if(el)remoteVideoEls.current[u.id]=el;}} autoplay style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',display:'block'}}></video>`:null}
+              <!-- Name + speaking badge -->
+              <div style=${{position:'absolute',bottom:8,left:8,right:8,display:'flex',alignItems:'center',gap:5}}>
+                <div style=${{background:'rgba(0,0,0,.65)',backdropFilter:'blur(6px)',borderRadius:8,padding:'3px 8px',display:'flex',alignItems:'center',gap:5,flex:1,minWidth:0}}>
+                  ${speaking[u.id]?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',flexShrink:0}}></div>`:null}
+                  <span style=${{fontSize:11,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}${u.id===cu.id?' (you)':''}</span>
+                </div>
               </div>
-              <span style=${{fontSize:8,color:'var(--tx3)',maxWidth:36,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1}}>${u.name.split(' ')[0]}</span>
             </div>`)}
+          <!-- Screen share tile -->
+          ${screenSharing?html`
+            <div style=${{position:'relative',width:'100%',height:180,borderRadius:16,overflow:'hidden',border:'2px solid rgba(99,102,241,.4)',background:'#000'}}>
+              <video ref=${screenVideoEl} autoplay muted style=${{width:'100%',height:'100%',objectFit:'contain'}}></video>
+              <div style=${{position:'absolute',top:8,left:8,background:'rgba(99,102,241,.8)',borderRadius:6,padding:'2px 8px',fontSize:10,color:'#fff',fontWeight:700}}>📺 You are sharing</div>
+            </div>`:null}
         </div>
-        <div style=${{display:'flex',gap:6,flexShrink:0,alignItems:'center'}}>
-          <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'}
-            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(muted?'rgba(248,113,113,.4)':'var(--bd)'),background:muted?'rgba(248,113,113,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}>
-            ${muted?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:
-            html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
+        <!-- Participants side panel -->
+        ${showParticipants?html`
+          <div style=${{width:200,background:'rgba(0,0,0,.5)',backdropFilter:'blur(10px)',borderLeft:'1px solid rgba(255,255,255,.06)',padding:'12px',display:'flex',flexDirection:'column',gap:6,overflowY:'auto',zIndex:2}}>
+            <div style=${{fontSize:10,fontWeight:700,color:'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:1,marginBottom:4}}>Participants</div>
+            ${partUsers.map(u=>html`
+              <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:10,background:'rgba(255,255,255,.05)'}}>
+                <div style=${{position:'relative',flexShrink:0}}>
+                  ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
+                    html`<img src=${u.avatar_data} style=${{width:28,height:28,borderRadius:'50%',objectFit:'cover'}}/>`:
+                    html`<div style=${{width:28,height:28,borderRadius:'50%',background:u.color||'#6366f1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>`}
+                  <div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:speaking[u.id]?'#22c55e':'#374151',border:'1.5px solid #0d0d1a',transition:'background .15s'}}></div>
+                </div>
+                <span style=${{fontSize:11,color:'rgba(255,255,255,.8)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${u.name}${u.id===cu.id?' (you)':''}</span>
+              </div>`)}
+          </div>`:null}
+      </div>
+      <!-- Toolbar -->
+      <div style=${{background:'rgba(0,0,0,.6)',backdropFilter:'blur(12px)',padding:'10px 18px',display:'flex',alignItems:'center',gap:6,borderTop:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+        <!-- Left: signal/participants -->
+        <div style=${{display:'flex',gap:4,marginRight:'auto'}}>
+          <button style=${{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.07)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.5)'}} title="Connection quality">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="16" width="4" height="6" rx="1" opacity=".4"/><rect x="7" y="11" width="4" height="11" rx="1" opacity=".6"/><rect x="13" y="6" width="4" height="16" rx="1" opacity=".8"/><rect x="19" y="1" width="4" height="21" rx="1"/></svg>
           </button>
-          <button onClick=${toggleVideo} title=${videoOn?'Video off':'Video on'}
-            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(videoOn?'rgba(99,102,241,.4)':'var(--bd)'),background:videoOn?'rgba(99,102,241,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}>
-            ${videoOn?html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
-            html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
+        </div>
+        <!-- Center: main controls -->
+        <!-- Mic -->
+        <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+          <button onClick=${toggleMute}
+            style=${{width:44,height:44,borderRadius:13,background:muted?'rgba(239,68,68,.2)':'rgba(255,255,255,.1)',border:'1.5px solid '+(muted?'rgba(239,68,68,.4)':'rgba(255,255,255,.15)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:muted?'#f87171':'#fff',transition:'all .15s'}}>
+            ${muted?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:
+            html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
           </button>
-          <button onClick=${raiseHand} title=${handRaised?'Lower hand':'Raise hand'}
-            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(handRaised?'rgba(251,191,36,.5)':'var(--bd)'),background:handRaised?'rgba(251,191,36,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,transition:'all .15s'}}>
+          <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>${muted?'Unmute':'Mute'}</span>
+        </div>
+        <!-- Video -->
+        <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+          <button onClick=${toggleVideo}
+            style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(99,102,241,.2)':'rgba(255,255,255,.1)',border:'1.5px solid '+(videoOn?'rgba(99,102,241,.4)':'rgba(255,255,255,.15)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#818cf8':'#fff',transition:'all .15s'}}>
+            ${videoOn?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
+            html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
+          </button>
+          <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>${videoOn?'Video on':'Video'}</span>
+        </div>
+        <!-- Screen Share -->
+        <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+          <button onClick=${toggleScreenShare}
+            style=${{width:44,height:44,borderRadius:13,background:screenSharing?'rgba(99,102,241,.25)':'rgba(255,255,255,.1)',border:'1.5px solid '+(screenSharing?'rgba(99,102,241,.5)':'rgba(255,255,255,.15)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:screenSharing?'#818cf8':'#fff',transition:'all .15s'}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          </button>
+          <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>Share</span>
+        </div>
+        <!-- Raise Hand -->
+        <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+          <button onClick=${()=>setHandRaised(h=>!h)}
+            style=${{width:44,height:44,borderRadius:13,background:handRaised?'rgba(251,191,36,.2)':'rgba(255,255,255,.1)',border:'1.5px solid '+(handRaised?'rgba(251,191,36,.4)':'rgba(255,255,255,.15)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19,transition:'all .15s'}}>
             ${handRaised?'✋':'🖐'}
           </button>
-          <button onClick=${()=>setShowPanel(p=>!p)} title="Meeting Facilitator"
-            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(showPanel?'rgba(99,102,241,.5)':'var(--bd)'),background:showPanel?'rgba(99,102,241,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',position:'relative'}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke=${showPanel?'var(--ac)':'currentColor'} strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-            ${notes.length>0?html`<div style=${{position:'absolute',top:-3,right:-3,width:14,height:14,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>${notes.length}</div>`:null}
-          </button>
-          <div style=${{width:1,height:24,background:'var(--bd)'}}></div>
+          <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>Hand</span>
+        </div>
+        <!-- Emoji reaction -->
+        <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+          <button style=${{width:44,height:44,borderRadius:13,background:'rgba(255,255,255,.1)',border:'1.5px solid rgba(255,255,255,.15)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:19}}>😊</button>
+          <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>React</span>
+        </div>
+        <!-- Right: Leave -->
+        <div style=${{display:'flex',gap:4,marginLeft:'auto'}}>
           <button onClick=${cleanup}
-            style=${{height:36,borderRadius:10,border:'none',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',padding:'0 14px',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:5}}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            style=${{height:42,borderRadius:12,background:'linear-gradient(135deg,#ef4444,#dc2626)',border:'none',color:'#fff',padding:'0 20px',cursor:'pointer',fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:7,boxShadow:'0 4px 16px rgba(239,68,68,.4)'}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             Leave
           </button>
         </div>
       </div>
-    </div>`;
+    </div>`:null;
+
+  return html`<div>${incomingToast}${previewPopup}${callPopup}</div>`;
 }
+
 
 /* ─── App ─────────────────────────────────────────────────────────────────── */
 function App(){
@@ -3769,7 +3759,8 @@ function App(){
         callState=${{...callState,allUsers:data.users}}
         onCallAction=${async cmd=>{
           const h=huddleCmdRef.current;
-          if(cmd.action==='start')h.start&&h.start();
+          if(cmd.action==='open_huddle')h.openHuddle&&h.openHuddle(cmd.targetUser||null);
+          else if(cmd.action==='start')h.start&&h.start(cmd.name);
           else if(cmd.action==='join')h.join&&h.join(cmd.roomId,cmd.roomName);
           else if(cmd.action==='leave')h.leave&&h.leave();
           else if(cmd.action==='mute')h.mute&&h.mute();
@@ -3789,7 +3780,7 @@ function App(){
             ${view==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
-            ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
+            ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
             ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
