@@ -1834,8 +1834,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
 
 /* ─── MessagesView ────────────────────────────────────────────────────────── */
 function renderMd(text){
-  // Simple bold + inline formatting for system messages
-  return text.replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
+  return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
 }
 function MessagesView({projects,users,cu}){
   const [pid,setPid]=useState((safe(projects)[0]&&safe(projects)[0].id)||'');
