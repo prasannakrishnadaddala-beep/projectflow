@@ -11,10 +11,14 @@ from flask import Flask, request, jsonify, session, Response, send_file
 from flask_cors import CORS
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-DB         = os.path.join(BASE_DIR, "projectflow.db")
+# On Railway, use /data (persistent volume). Fall back to BASE_DIR for local dev.
+DATA_DIR   = os.environ.get("DATA_DIR", os.path.join(BASE_DIR, "data") if os.path.isdir("/data") else BASE_DIR)
+if os.path.isdir("/data"):
+    DATA_DIR = "/data"
+DB         = os.path.join(DATA_DIR, "projectflow.db")
 JS_DIR     = os.path.join(BASE_DIR, "pf_static")
-UPLOAD_DIR = os.path.join(BASE_DIR, "pf_uploads")
-KEY_FILE   = os.path.join(BASE_DIR, ".pf_secret")
+UPLOAD_DIR = os.path.join(DATA_DIR, "pf_uploads")
+KEY_FILE   = os.path.join(DATA_DIR, ".pf_secret")
 
 def get_secret_key():
     if os.path.exists(KEY_FILE):
@@ -38,6 +42,12 @@ app.config.update(
 CORS(app, supports_credentials=True)
 
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#c8f135"]
+
+# ── Module-level init (runs on gunicorn import & direct run) ──────────────────
+def _ensure_dirs():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(JS_DIR, exist_ok=True)
 
 def get_db():
     c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row
@@ -929,13 +939,34 @@ def export_csv():
                     headers={"Content-Disposition":"attachment;filename=tasks.csv"})
 
 # ── Serve ─────────────────────────────────────────────────────────────────────
+@app.route("/health")
+def health():
+    """Railway / load-balancer healthcheck — always returns 200."""
+    try:
+        with get_db() as db:
+            db.execute("SELECT 1")
+        return jsonify({"status":"ok","db":"ok"}), 200
+    except Exception as e:
+        return jsonify({"status":"error","detail":str(e)}), 500
 @app.route("/js/<path:fn>")
 def serve_js(fn):
     path=os.path.join(JS_DIR,fn)
-    if not os.path.exists(path): return "Not Found",404
-    mime,_=mimetypes.guess_type(fn)
-    return Response(open(path,"rb").read(),mimetype=mime or "application/javascript",
-                    headers={"Cache-Control":"public,max-age=86400"})
+    if os.path.exists(path) and os.path.getsize(path)>1000:
+        mime,_=mimetypes.guess_type(fn)
+        return Response(open(path,"rb").read(),mimetype=mime or "application/javascript",
+                        headers={"Cache-Control":"public,max-age=86400"})
+    # Fallback: redirect to CDN when local files not present (e.g. Railway deployment)
+    CDN={
+        "react.min.js":     "https://unpkg.com/react@18/umd/react.production.min.js",
+        "react-dom.min.js": "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
+        "prop-types.min.js":"https://unpkg.com/prop-types@15/prop-types.min.js",
+        "recharts.min.js":  "https://unpkg.com/recharts@2/umd/Recharts.js",
+        "htm.min.js":       "https://unpkg.com/htm@3/dist/htm.js",
+    }
+    if fn in CDN:
+        from flask import redirect
+        return redirect(CDN[fn], code=302)
+    return "Not Found", 404
 
 @app.route("/",defaults={"p":""})
 @app.route("/<path:p>")
@@ -1005,15 +1036,10 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
   --sh2: 0 8px 32px rgba(0,0,0,.10);
 }
 
-/* ── Dark mode override ──────────────────────────────────────────────── */
+/* ── Dark mode ───────────────────────────────────────────────────────── */
 .dm{
-  --bg:#111113;          /* dark canvas */
-  --sf:#1c1c1f;          /* card dark */
-  --sf2:#242428;         /* subtle secondary surface */
-  --bd:#2e2e33;          /* border / divider */
-  --tx:#f0eff0;          /* near-white */
-  --tx2:#9b9aa0;         /* muted label */
-  --tx3:#5c5b62;         /* placeholder / disabled */
+  --bg:#111113;--sf:#1c1c1f;--sf2:#242428;--bd:#2e2e33;
+  --tx:#f0eff0;--tx2:#9b9aa0;--tx3:#5c5b62;
   --sh: 0 2px 12px rgba(0,0,0,.3);
   --sh2: 0 8px 32px rgba(0,0,0,.5);
 }
@@ -1025,7 +1051,6 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
 
 /* ── Date input ─────────────────────────────────────────────────────── */
 input[type=date]{color-scheme:light;}
-.dm input[type=date]{color-scheme:dark;}
 input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.6}
 
 /* ── Card ───────────────────────────────────────────────────────────── */
@@ -4088,6 +4113,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundar
 </html>"""
 
 # ── Utilities ──────────────────────────────────────────────────────────────────
+# Run DB init at module load so gunicorn workers are ready immediately
+try:
+    _ensure_dirs()
+    init_db()
+except Exception as _e:
+    print(f"  ⚠ Module-level init_db error: {_e}")
 def find_free_port(preferred=5000):
     for port in range(preferred, preferred+10):
         try:
