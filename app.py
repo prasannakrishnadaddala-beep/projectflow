@@ -292,16 +292,21 @@ def del_user(uid):
 @login_required
 def get_projects():
     with get_db() as db:
-        # Admins see all projects; other roles only see projects they are members of
+        # Admins and project creators see all their projects; others see only member projects
         user = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
         is_admin = user and user["role"] == "Admin"
+        uid = session["user_id"]
+        all_rows = db.execute(
+            "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
         if is_admin:
-            rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
+            rows = all_rows
         else:
-            all_rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
-            rows = [r for r in all_rows if session["user_id"] in json.loads(r["members"] or "[]")]
+            def can_see(r):
+                members = json.loads(r["members"] or "[]")
+                keys = r.keys()
+                creator = r["created_by"] if "created_by" in keys else None
+                return uid in members or creator == uid
+            rows = [r for r in all_rows if can_see(r)]
         return jsonify([dict(r) for r in rows])
 
 @app.route("/api/projects",methods=["POST"])
@@ -681,7 +686,7 @@ body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--
 :root{--bg:#07090f;--sf:#0d0f18;--sf2:#131623;--bd:#1c1f2e;--tx:#e2e8f0;--tx2:#8892a4;--tx3:#4a5568;
   --ac:#6366f1;--ac2:#818cf8;--cy:#22d3ee;--gn:#4ade80;--am:#fbbf24;--rd:#f87171;--pu:#a78bfa;}
 .lm{--bg:#f0f4fa;--sf:#fff;--sf2:#f5f7fc;--bd:#dde3ee;--tx:#0f172a;--tx2:#475569;--tx3:#94a3b8}
-::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:0.7;cursor:pointer;}input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1;}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:20px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .17s;white-space:nowrap;line-height:1.2}
@@ -1165,7 +1170,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload}){
 
   const saveEdit=async()=>{setSaving(true);await api.put('/api/projects/'+project.id,{name,description:desc,target_date:tDate,color,members});await onReload();setSaving(false);setEdit(false);};
   const delProject=async()=>{if(!window.confirm('Delete project and all its tasks? Cannot be undone.'))return;await api.del('/api/projects/'+project.id);await onReload();onClose();};
-  const saveTask=async p=>{if(p.id&&allTasks.find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',{...p,project:project.id});await onReload();};
+  const saveTask=async p=>{if(p.id&&allTasks.find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',{...p,project:project.id});onReload();};
   const delTask=async id=>{await api.del('/api/tasks/'+id);await onReload();};
 
   return html`
