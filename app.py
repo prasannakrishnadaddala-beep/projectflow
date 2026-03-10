@@ -1183,25 +1183,40 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
-        <div style=${{flex:1,overflowX:'auto',display:'flex',alignItems:'center',gap:0,position:'relative',height:36,scrollbarWidth:'none',msOverflowStyle:'none'}}>
-          ${upcoming.length===0?html`
-            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'0 12px',width:'100%',justifyContent:'center'}}>
-              <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap',fontStyle:'italic'}}>No upcoming reminders today</span>
-              <button class="btn bg" style=${{fontSize:10,padding:'2px 9px',height:20,borderRadius:4,whiteSpace:'nowrap'}} onClick=${onViewReminders}>+ Add</button>
-            </div>
-          `:html`
-            <div style=${{display:'flex',alignItems:'center',position:'relative',height:36,minWidth:'100%',paddingLeft:8,paddingRight:8}}>
-              <div style=${{position:'absolute',top:'50%',left:16,right:16,height:2,background:'linear-gradient(90deg,rgba(99,102,241,.5),rgba(251,191,36,.4))',borderRadius:2,transform:'translateY(-50%)',zIndex:0}}></div>
-              ${upcoming.map((r,i)=>html`
-                <div key=${r.id} style=${{display:'flex',flexDirection:'column',alignItems:'center',marginRight:28,position:'relative',zIndex:1,cursor:'pointer',flexShrink:0}} onClick=${onViewReminders} title=${r.task_title}>
-                  <div style=${{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#6366f1,#818cf8)',border:'2.5px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#fff',boxShadow:'0 2px 8px rgba(99,102,241,.45)',marginBottom:1}}>
-                    ${r.task_title?r.task_title.charAt(0).toUpperCase():'R'}
-                  </div>
-                  <span style=${{fontSize:9,color:'var(--am)',fontFamily:'monospace',fontWeight:700,whiteSpace:'nowrap',background:'var(--sf)',padding:'0 3px',borderRadius:3}}>${fmtT(r.remind_at)}</span>
-                </div>`)}
-              <button style=${{marginLeft:'auto',flexShrink:0,fontSize:10,padding:'2px 9px',height:20,borderRadius:4,background:'transparent',border:'1px solid var(--bd)',color:'var(--tx3)',cursor:'pointer',whiteSpace:'nowrap'}} onClick=${onViewReminders}>+ Add</button>
-            </div>
-          `}
+        <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none',padding:'0 6px'}}>
+          <div style=${{height:38,background:dark?'rgba(255,255,255,.06)':'rgba(255,255,255,.92)',borderRadius:24,border:'1px solid '+(dark?'rgba(255,255,255,.1)':'rgba(0,0,0,.08)'),boxShadow:'0 2px 12px rgba(0,0,0,.1)',display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden'}}>
+            ${upcoming.length===0?html`
+              <div style=${{display:'flex',alignItems:'center',gap:10,width:'100%',justifyContent:'center'}}>
+                <span style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>No reminders today</span>
+                <button onClick=${onViewReminders} style=${{fontSize:10,padding:'2px 10px',height:20,borderRadius:10,background:'var(--ac)',color:'#fff',border:'none',cursor:'pointer',fontWeight:600}}>+ Add</button>
+              </div>
+            `:html`
+              <div style=${{display:'flex',alignItems:'center',gap:0,width:'100%',overflowX:'auto',scrollbarWidth:'none',position:'relative'}}>
+                <div style=${{position:'absolute',top:'50%',left:0,right:40,height:2,background:'linear-gradient(90deg,rgba(99,102,241,.25) 0%,rgba(99,102,241,.5) 60%,rgba(251,191,36,.3) 100%)',transform:'translateY(-50%)',borderRadius:2,zIndex:0}}></div>
+                ${upcoming.map((r,i)=>{
+                  const isNow=Math.abs(new Date(r.remind_at)-new Date())<1800000;
+                  const abbr=(r.task_title||'').split(' ').slice(0,2).join(' ');
+                  const tStr=fmtT(r.remind_at);
+                  return html`
+                    <div key=${r.id} style=${{display:'flex',flexDirection:'column',alignItems:'center',marginRight:i<upcoming.length-1?32:0,flexShrink:0,position:'relative',zIndex:1,cursor:'pointer'}} onClick=${onViewReminders} title=${r.task_title}>
+                      <div style=${{position:'relative'}}>
+                        ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
+                          html`<img src=${cu.avatar_data} style=${{width:isNow?30:24,height:isNow?30:24,borderRadius:'50%',objectFit:'cover',border:isNow?'2.5px solid #22c55e':'2px solid '+(dark?'rgba(255,255,255,.3)':'rgba(0,0,0,.15)'),boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.25)':'0 1px 4px rgba(0,0,0,.15)',transition:'all .2s'}}/>`:
+                          html`<div style=${{width:isNow?30:24,height:isNow?30:24,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#6366f1,#818cf8)',border:isNow?'2.5px solid #22c55e':'2px solid '+(dark?'rgba(255,255,255,.3)':'rgba(0,0,0,.1)'),display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?11:9,fontWeight:800,color:'#fff',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.25)':'0 1px 4px rgba(99,102,241,.3)',transition:'all .2s'}}>
+                            ${(r.task_title||'?').charAt(0).toUpperCase()}
+                          </div>`}
+                        ${isNow?html`<div style=${{position:'absolute',bottom:-2,right:-2,width:8,height:8,borderRadius:'50%',background:'#22c55e',border:'1.5px solid #fff',boxShadow:'0 0 4px #22c55e'}}></div>`:null}
+                      </div>
+                      <div style=${{display:'flex',flexDirection:'column',alignItems:'center',marginTop:1}}>
+                        <span style=${{fontSize:9,fontWeight:700,color:isNow?'#16a34a':'var(--ac)',fontFamily:'monospace',lineHeight:1}}>${tStr}</span>
+                        <span style=${{fontSize:8,color:'var(--tx3)',maxWidth:52,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.2}}>${abbr}</span>
+                      </div>
+                    </div>`;
+                })}
+                <button onClick=${onViewReminders} style=${{marginLeft:'auto',flexShrink:0,width:22,height:22,borderRadius:'50%',background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',cursor:'pointer',color:'var(--ac)',fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,lineHeight:1}} title="Manage reminders">+</button>
+              </div>
+            `}
+          </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
           <button class="btn bg" style=${{padding:'4px 8px',fontSize:13,height:26,borderRadius:6}} onClick=${()=>setDark(!dark)}>${dark?'☀️':'🌙'}</button>
@@ -1362,11 +1377,14 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
   const isEdit=!!(task&&task.id);
-  const [showReminderInline,setShowReminderInline]=useState(false);
-  const [rmDate,setRmDate]=useState('');
-  const [rmTime,setRmTime]=useState('');
+  // Inline reminder - shown in form before creating task
+  const [rmEnabled,setRmEnabled]=useState(false);
+  const [rmDate,setRmDate]=useState(()=>{
+    const d=new Date();d.setDate(d.getDate()+(d.getHours()>=20?1:0));
+    return d.toISOString().split('T')[0];
+  });
+  const [rmTime,setRmTime]=useState('16:00');
   const [rmMins,setRmMins]=useState(10);
-  const [rmSaved,setRmSaved]=useState(false);
 
   const addCmt=async()=>{
     if(!nc.trim())return;
@@ -1387,30 +1405,15 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     const result=await onSave(payload);
     setSaving(false);
     if(result&&result.error){setErr(result.error);return null;}
-    if(opts.keepOpen)return result;
-    // For NEW tasks: show inline reminder option instead of closing immediately
-    if(!isEdit&&!opts.skipReminder){
-      // Pre-fill date/time from task due date or default to tomorrow 9am
-      const base=due?new Date(due):new Date(Date.now()+86400000);
-      base.setHours(9,0,0,0);
-      setRmDate(base.toISOString().split('T')[0]);
-      setRmTime('09:00');
-      setShowReminderInline(true);
-      return result;
+    // Save reminder atomically if user enabled it on new task
+    if(!isEdit&&rmEnabled&&rmDate&&rmTime){
+      const dt=new Date(rmDate+'T'+rmTime);
+      const taskId=(result&&result.id)||'';
+      await api.post('/api/reminders',{task_id:taskId,task_title:title.trim(),remind_at:dt.toISOString(),minutes_before:rmMins});
     }
+    if(opts.keepOpen)return result;
     onClose();
     return result;
-  };
-
-  const saveInlineReminder=async(savedTask)=>{
-    if(!rmDate||!rmTime)return;
-    const dt=new Date(rmDate+'T'+rmTime);
-    const taskId=(savedTask&&savedTask.id)||(task&&task.id)||'';
-    const taskTitle=title.trim();
-    await api.post('/api/reminders',{task_id:taskId,task_title:taskTitle,remind_at:dt.toISOString(),minutes_before:rmMins});
-    playSound&&playSound('reminder');
-    setRmSaved(true);
-    setTimeout(()=>onClose(),1200);
   };
 
   return html`
@@ -1475,34 +1478,47 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
               </div>
             </div>
             ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
-            <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
-              ${showReminderInline?html`
-                <div style=${{width:'100%',background:'rgba(99,102,241,.06)',borderRadius:10,border:'1px solid rgba(99,102,241,.2)',padding:'14px 16px'}}>
-                  ${rmSaved?html`
-                    <div style=${{textAlign:'center',padding:'8px 0',color:'var(--gn)',fontWeight:700,fontSize:13}}>✅ Reminder set! Closing...</div>
-                  `:html`
-                    <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:10}}>⏰ Set a reminder for this task?</div>
-                    <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-                      <div><label class="lbl" style=${{fontSize:10}}>Date</label><input class="inp" type="date" value=${rmDate} onChange=${e=>setRmDate(e.target.value)} min=${new Date().toISOString().split('T')[0]}/></div>
-                      <div><label class="lbl" style=${{fontSize:10}}>Time</label><input class="inp" type="time" value=${rmTime} onChange=${e=>setRmTime(e.target.value)}/></div>
+            ${!isEdit?html`
+              <div style=${{borderTop:'1px solid var(--bd)',paddingTop:12}}>
+                <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:rmEnabled?12:0}}>
+                  <div style=${{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}} onClick=${()=>setRmEnabled(v=>!v)}>
+                    <div style=${{width:36,height:20,borderRadius:10,background:rmEnabled?'var(--ac)':'var(--bd)',position:'relative',transition:'background .2s',flexShrink:0}}>
+                      <div style=${{position:'absolute',top:2,left:rmEnabled?18:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.2)'}}></div>
                     </div>
-                    <div style=${{marginBottom:10}}>
-                      <label class="lbl" style=${{fontSize:10}}>Notify me before</label>
-                      <div style=${{display:'flex',gap:6,flexWrap:'wrap',marginTop:4}}>
-                        ${[5,10,15,30,60].map(m=>html`<button key=${m} class=${'chip'+(rmMins===m?' on':'')} onClick=${()=>setRmMins(m)} style=${{fontSize:11,padding:'3px 10px'}}>${m<60?m+' min':'1 hr'}</button>`)}
+                    <span style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>⏰ Set a reminder</span>
+                    ${!rmEnabled?html`<span style=${{fontSize:11,color:'var(--tx3)'}}>— get notified before this task is due</span>`:null}
+                  </div>
+                </div>
+                ${rmEnabled?html`
+                  <div style=${{background:'rgba(99,102,241,.06)',borderRadius:10,border:'1px solid rgba(99,102,241,.18)',padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}}>
+                    <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                      <div>
+                        <label class="lbl" style=${{fontSize:10,marginBottom:3}}>Reminder Date</label>
+                        <input class="inp" type="date" value=${rmDate} onChange=${e=>setRmDate(e.target.value)} min=${new Date().toISOString().split('T')[0]} style=${{fontSize:12}}/>
+                      </div>
+                      <div>
+                        <label class="lbl" style=${{fontSize:10,marginBottom:3}}>Reminder Time</label>
+                        <input class="inp" type="time" value=${rmTime} onChange=${e=>setRmTime(e.target.value)} style=${{fontSize:12}}/>
                       </div>
                     </div>
-                    <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
-                      <button class="btn bg" style=${{fontSize:12}} onClick=${onClose}>Skip</button>
-                      <button class="btn bp" style=${{fontSize:12}} onClick=${()=>saveInlineReminder(null)} disabled=${!rmDate||!rmTime}>Set Reminder & Close</button>
+                    <div>
+                      <label class="lbl" style=${{fontSize:10,marginBottom:4}}>Notify me before</label>
+                      <div style=${{display:'flex',gap:6,flexWrap:'wrap'}}>
+                        ${[5,10,15,30,60].map(m=>html`<button key=${m} class=${'chip'+(rmMins===m?' on':'')} onClick=${()=>setRmMins(m)} style=${{fontSize:11,padding:'3px 11px'}}>${m<60?m+' min':'1 hr'}</button>`)}
+                      </div>
                     </div>
-                  `}
-                </div>
-              `:html`
-                <button class="btn bg" onClick=${()=>save({skipReminder:true})}>Cancel</button>
-                ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
-                <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
-              `}
+                    <div style=${{fontSize:11,color:'var(--tx3)',display:'flex',alignItems:'center',gap:5}}>
+                      <span>🔔</span>
+                      <span>You'll be notified${rmMins>0?' '+rmMins+' min before':' at'} ${rmTime||'the set time'} on ${rmDate||'the selected date'} with sound.</span>
+                    </div>
+                  </div>
+                `:null}
+              </div>
+            `:null}
+            <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:isEdit?'1px solid var(--bd)':'none'}}>
+              <button class="btn bg" onClick=${onClose}>Cancel</button>
+              ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
+              <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
             </div>
           </div>`:null}
 
