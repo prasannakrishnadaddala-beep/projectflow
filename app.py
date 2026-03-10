@@ -1183,22 +1183,25 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
-        <div style=${{flex:1,position:'relative',height:26,display:'flex',alignItems:'center'}}>
-          <div style=${{position:'absolute',left:0,right:0,height:2,background:'var(--bd)',borderRadius:2}}>
-            ${upcoming.length>0?html`<div style=${{position:'absolute',left:0,top:0,height:'100%',width:'55%',background:'linear-gradient(90deg,rgba(99,102,241,.45),rgba(129,140,248,.1))',borderRadius:2}}></div>`:null}
-          </div>
-          ${upcoming.map((r,i)=>html`
-            <div key=${r.id} style=${{position:'absolute',left:(8+i*22)+'%',top:'50%',transform:'translate(-50%,-50%)',zIndex:2,cursor:'pointer'}} onClick=${onViewReminders} title=${r.task_title}>
-              <div style=${{width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#fbbf24,#f59e0b)',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:800,color:'#000',boxShadow:'0 1px 6px rgba(251,191,36,.4)'}}>
-                ${r.task_title?r.task_title.charAt(0).toUpperCase():'R'}
-              </div>
-              <span style=${{position:'absolute',bottom:-13,left:'50%',transform:'translateX(-50%)',fontSize:9,color:'var(--tx3)',whiteSpace:'nowrap',fontFamily:'monospace'}}>${fmtT(r.remind_at)}</span>
-            </div>`)}
+        <div style=${{flex:1,overflowX:'auto',display:'flex',alignItems:'center',gap:0,position:'relative',height:36,scrollbarWidth:'none',msOverflowStyle:'none'}}>
           ${upcoming.length===0?html`
-            <div style=${{position:'absolute',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:6}}>
-              <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap'}}>No upcoming reminders today</span>
-              <button class="btn bg" style=${{fontSize:10,padding:'2px 8px',height:20,borderRadius:4}} onClick=${onViewReminders}>+ Add</button>
-            </div>`:null}
+            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'0 12px',width:'100%',justifyContent:'center'}}>
+              <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap',fontStyle:'italic'}}>No upcoming reminders today</span>
+              <button class="btn bg" style=${{fontSize:10,padding:'2px 9px',height:20,borderRadius:4,whiteSpace:'nowrap'}} onClick=${onViewReminders}>+ Add</button>
+            </div>
+          `:html`
+            <div style=${{display:'flex',alignItems:'center',position:'relative',height:36,minWidth:'100%',paddingLeft:8,paddingRight:8}}>
+              <div style=${{position:'absolute',top:'50%',left:16,right:16,height:2,background:'linear-gradient(90deg,rgba(99,102,241,.5),rgba(251,191,36,.4))',borderRadius:2,transform:'translateY(-50%)',zIndex:0}}></div>
+              ${upcoming.map((r,i)=>html`
+                <div key=${r.id} style=${{display:'flex',flexDirection:'column',alignItems:'center',marginRight:28,position:'relative',zIndex:1,cursor:'pointer',flexShrink:0}} onClick=${onViewReminders} title=${r.task_title}>
+                  <div style=${{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#6366f1,#818cf8)',border:'2.5px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#fff',boxShadow:'0 2px 8px rgba(99,102,241,.45)',marginBottom:1}}>
+                    ${r.task_title?r.task_title.charAt(0).toUpperCase():'R'}
+                  </div>
+                  <span style=${{fontSize:9,color:'var(--am)',fontFamily:'monospace',fontWeight:700,whiteSpace:'nowrap',background:'var(--sf)',padding:'0 3px',borderRadius:3}}>${fmtT(r.remind_at)}</span>
+                </div>`)}
+              <button style=${{marginLeft:'auto',flexShrink:0,fontSize:10,padding:'2px 9px',height:20,borderRadius:4,background:'transparent',border:'1px solid var(--bd)',color:'var(--tx3)',cursor:'pointer',whiteSpace:'nowrap'}} onClick=${onViewReminders}>+ Add</button>
+            </div>
+          `}
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
           <button class="btn bg" style=${{padding:'4px 8px',fontSize:13,height:26,borderRadius:6}} onClick=${()=>setDark(!dark)}>${dark?'☀️':'🌙'}</button>
@@ -1359,6 +1362,11 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
   const isEdit=!!(task&&task.id);
+  const [showReminderInline,setShowReminderInline]=useState(false);
+  const [rmDate,setRmDate]=useState('');
+  const [rmTime,setRmTime]=useState('');
+  const [rmMins,setRmMins]=useState(10);
+  const [rmSaved,setRmSaved]=useState(false);
 
   const addCmt=async()=>{
     if(!nc.trim())return;
@@ -1379,8 +1387,30 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     const result=await onSave(payload);
     setSaving(false);
     if(result&&result.error){setErr(result.error);return null;}
-    if(!opts.keepOpen)onClose();
+    if(opts.keepOpen)return result;
+    // For NEW tasks: show inline reminder option instead of closing immediately
+    if(!isEdit&&!opts.skipReminder){
+      // Pre-fill date/time from task due date or default to tomorrow 9am
+      const base=due?new Date(due):new Date(Date.now()+86400000);
+      base.setHours(9,0,0,0);
+      setRmDate(base.toISOString().split('T')[0]);
+      setRmTime('09:00');
+      setShowReminderInline(true);
+      return result;
+    }
+    onClose();
     return result;
+  };
+
+  const saveInlineReminder=async(savedTask)=>{
+    if(!rmDate||!rmTime)return;
+    const dt=new Date(rmDate+'T'+rmTime);
+    const taskId=(savedTask&&savedTask.id)||(task&&task.id)||'';
+    const taskTitle=title.trim();
+    await api.post('/api/reminders',{task_id:taskId,task_title:taskTitle,remind_at:dt.toISOString(),minutes_before:rmMins});
+    playSound&&playSound('reminder');
+    setRmSaved(true);
+    setTimeout(()=>onClose(),1200);
   };
 
   return html`
@@ -1446,9 +1476,33 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
             </div>
             ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
-              <button class="btn bg" onClick=${onClose}>Cancel</button>
-              ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
-              <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
+              ${showReminderInline?html`
+                <div style=${{width:'100%',background:'rgba(99,102,241,.06)',borderRadius:10,border:'1px solid rgba(99,102,241,.2)',padding:'14px 16px'}}>
+                  ${rmSaved?html`
+                    <div style=${{textAlign:'center',padding:'8px 0',color:'var(--gn)',fontWeight:700,fontSize:13}}>✅ Reminder set! Closing...</div>
+                  `:html`
+                    <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:10}}>⏰ Set a reminder for this task?</div>
+                    <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+                      <div><label class="lbl" style=${{fontSize:10}}>Date</label><input class="inp" type="date" value=${rmDate} onChange=${e=>setRmDate(e.target.value)} min=${new Date().toISOString().split('T')[0]}/></div>
+                      <div><label class="lbl" style=${{fontSize:10}}>Time</label><input class="inp" type="time" value=${rmTime} onChange=${e=>setRmTime(e.target.value)}/></div>
+                    </div>
+                    <div style=${{marginBottom:10}}>
+                      <label class="lbl" style=${{fontSize:10}}>Notify me before</label>
+                      <div style=${{display:'flex',gap:6,flexWrap:'wrap',marginTop:4}}>
+                        ${[5,10,15,30,60].map(m=>html`<button key=${m} class=${'chip'+(rmMins===m?' on':'')} onClick=${()=>setRmMins(m)} style=${{fontSize:11,padding:'3px 10px'}}>${m<60?m+' min':'1 hr'}</button>`)}
+                      </div>
+                    </div>
+                    <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                      <button class="btn bg" style=${{fontSize:12}} onClick=${onClose}>Skip</button>
+                      <button class="btn bp" style=${{fontSize:12}} onClick=${()=>saveInlineReminder(null)} disabled=${!rmDate||!rmTime}>Set Reminder & Close</button>
+                    </div>
+                  `}
+                </div>
+              `:html`
+                <button class="btn bg" onClick=${()=>save({skipReminder:true})}>Cancel</button>
+                ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
+                <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
+              `}
             </div>
           </div>`:null}
 
@@ -2571,7 +2625,7 @@ function ReminderModal({task,onClose,onSaved}){
 }
 
 /* ─── RemindersView ──────────────────────────────────────────────────────── */
-function RemindersView({cu,tasks,onSetReminder}){
+function RemindersView({cu,tasks,projects,onSetReminder}){
   const [reminders,setReminders]=useState([]);
   const [busy,setBusy]=useState(true);
   const [showAdd,setShowAdd]=useState(false);
@@ -2580,7 +2634,9 @@ function RemindersView({cu,tasks,onSetReminder}){
   const [addTime,setAddTime]=useState('');
   const [addMins,setAddMins]=useState(10);
   const [saving,setSaving]=useState(false);
+  const [addProjId,setAddProjId]=useState('');
   const now=new Date();
+  const filteredTasks=addProjId?safe(tasks).filter(t=>t.project===addProjId):safe(tasks);
 
   const load=useCallback(async()=>{
     setBusy(true);
@@ -2655,10 +2711,17 @@ function RemindersView({cu,tasks,onSetReminder}){
             </div>
             <div style=${{display:'flex',flexDirection:'column',gap:13}}>
               <div>
+                <label class="lbl">Project (optional filter)</label>
+                <select class="inp" value=${addProjId} onChange=${e=>{setAddProjId(e.target.value);setAddTaskId('');}}>
+                  <option value="">— All projects —</option>
+                  ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+                </select>
+              </div>
+              <div>
                 <label class="lbl">Task *</label>
                 <select class="inp" value=${addTaskId} onChange=${e=>setAddTaskId(e.target.value)}>
                   <option value="">— Select a task —</option>
-                  ${safe(tasks).map(t=>html`<option key=${t.id} value=${t.id}>${t.title}</option>`)}
+                  ${filteredTasks.map(t=>html`<option key=${t.id} value=${t.id}>${t.title}</option>`)}
                 </select>
               </div>
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
@@ -2908,7 +2971,7 @@ function App(){
             ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
             ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
-            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
+            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${view==='settings'&&cu.role==='Admin'?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
