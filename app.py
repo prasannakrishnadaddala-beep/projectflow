@@ -1736,11 +1736,39 @@ function MessagesView({projects,users,cu}){
 }
 
 /* ─── DirectMessages ──────────────────────────────────────────────────────── */
+function playNotifSound(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator();const g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.type='sine';o.frequency.setValueAtTime(880,ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(660,ctx.currentTime+0.12);
+    g.gain.setValueAtTime(0.25,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.35);
+    o.start(ctx.currentTime);o.stop(ctx.currentTime+0.35);
+  }catch(e){}
+}
 function DirectMessages({cu,users,dmUnread,onDmRead}){
   const others=safe(users).filter(u=>u.id!==cu.id);
   const [toId,setToId]=useState(others[0]&&others[0].id||'');const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const [search,setSearch]=useState('');const ref=useRef(null);
-  const loadMsgs=useCallback(async(id)=>{if(!id)return;const d=await api.get('/api/dm/'+id);setMsgs(Array.isArray(d)?d:[]);onDmRead(id);},[onDmRead]);
-  useEffect(()=>{loadMsgs(toId);},[toId]);
+  const prevMsgCount=useRef(0);
+  const loadMsgs=useCallback(async(id)=>{if(!id)return;const d=await api.get('/api/dm/'+id);if(Array.isArray(d)){setMsgs(d);onDmRead(id);};},[onDmRead]);
+  // Auto-poll every 3 seconds for new messages in active chat
+  useEffect(()=>{
+    if(!toId)return;
+    loadMsgs(toId);
+    const id=setInterval(async()=>{
+      const d=await api.get('/api/dm/'+toId);
+      if(Array.isArray(d)){
+        setMsgs(prev=>{
+          if(d.length>prev.length){playNotifSound();}
+          return d;
+        });
+        onDmRead(toId);
+      }
+    },3000);
+    return()=>clearInterval(id);
+  },[toId]);
   useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
   const send=async()=>{if(!txt.trim()||!toId)return;const c=txt.trim();setTxt('');const m=await api.post('/api/dm',{recipient:toId,content:c});setMsgs(prev=>[...prev,m]);};
   const filtered=others.filter(u=>u.name.toLowerCase().includes(search.toLowerCase()));
@@ -2030,7 +2058,38 @@ function App(){
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{document.body.className=dark?'':'lm';},[dark]);
-  useEffect(()=>{if(!cu)return;const id=setInterval(()=>{api.get('/api/dm/unread').then(d=>{if(Array.isArray(d))setDmUnread(d);});},12000);return()=>clearInterval(id);},[cu]);
+  // Poll DM unread count every 5s (was 12s) — play sound when new DMs arrive
+  useEffect(()=>{
+    if(!cu)return;
+    let prevTotal=0;
+    const id=setInterval(()=>{
+      api.get('/api/dm/unread').then(d=>{
+        if(Array.isArray(d)){
+          const total=d.reduce((a,x)=>a+(x.cnt||0),0);
+          if(total>prevTotal){playNotifSound();}
+          prevTotal=total;
+          setDmUnread(d);
+        }
+      });
+    },5000);
+    return()=>clearInterval(id);
+  },[cu]);
+  // Poll notifications every 8s — sound on new task assignments
+  useEffect(()=>{
+    if(!cu)return;
+    let prevUnread=0;
+    const id=setInterval(()=>{
+      api.get('/api/notifications').then(d=>{
+        if(Array.isArray(d)){
+          const unread=d.filter(n=>!n.read).length;
+          if(unread>prevUnread){playNotifSound();}
+          prevUnread=unread;
+          setData(prev=>({...prev,notifs:d}));
+        }
+      });
+    },8000);
+    return()=>clearInterval(id);
+  },[cu]);
 
   const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
   const logout=async()=>{await api.post('/api/auth/logout',{});setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);};
