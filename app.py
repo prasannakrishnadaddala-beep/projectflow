@@ -1664,7 +1664,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
   const blocked=t.filter(x=>x.stage==='blocked').length;
   const stageChart=Object.entries(STAGES).map(([k,v])=>({name:v.label,count:t.filter(x=>x.stage===k).length,color:v.color})).filter(d=>d.count>0);
-  const priChart=[{name:'High',value:t.filter(x=>x.priority==='high').length,color:'#f87171'},{name:'Medium',value:t.filter(x=>x.priority==='medium').length,color:'#fbbf24'},{name:'Low',value:t.filter(x=>x.priority==='low').length,color:'#60a5fa'}];
+  const priChart=[{name:'Critical',value:t.filter(x=>x.priority==='critical').length,color:'#ff4444'},{name:'High',value:t.filter(x=>x.priority==='high').length,color:'#f87171'},{name:'Medium',value:t.filter(x=>x.priority==='medium').length,color:'#fbbf24'},{name:'Low',value:t.filter(x=>x.priority==='low').length,color:'#60a5fa'}];
   const stats=[
     {label:'Total Projects',val:p.length,   color:'var(--ac)',bg:'rgba(99,102,241,.1)', icon:'📁',nav:'projects'},
     {label:'Active Tasks',  val:active,     color:'var(--cy)',bg:'rgba(34,211,238,.1)', icon:'⚡',nav:'tasks'},
