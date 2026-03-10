@@ -83,6 +83,14 @@ def init_db():
                 task_id TEXT, task_title TEXT, remind_at TEXT,
                 minutes_before INTEGER DEFAULT 10, fired INTEGER DEFAULT 0,
                 created TEXT);
+            CREATE TABLE IF NOT EXISTS call_rooms (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
+                initiator TEXT, participants TEXT DEFAULT '[]',
+                status TEXT DEFAULT 'active', created TEXT);
+            CREATE TABLE IF NOT EXISTS call_signals (
+                id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
+                from_user TEXT, to_user TEXT, type TEXT, data TEXT,
+                consumed INTEGER DEFAULT 0, created TEXT);
         """)
         # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
@@ -631,6 +639,105 @@ def delete_reminder(rid):
         db.execute("DELETE FROM reminders WHERE id=? AND user_id=?",(rid,session["user_id"]))
         return jsonify({"ok":True})
 
+# ── Calls (Huddle) ────────────────────────────────────────────────────────────
+@app.route("/api/calls", methods=["GET"])
+@login_required
+def get_active_calls():
+    with get_db() as db:
+        rooms=db.execute("SELECT * FROM call_rooms WHERE workspace_id=? AND status='active' ORDER BY created DESC",(wid(),)).fetchall()
+        result=[]
+        for r in rooms:
+            rd=dict(r)
+            # Auto-expire rooms older than 8 hours
+            try:
+                from datetime import timezone
+                created=datetime.fromisoformat(rd['created'].replace('Z',''))
+                if (datetime.utcnow()-created).total_seconds()>28800:
+                    db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(rd['id'],))
+                    continue
+            except: pass
+            result.append(rd)
+        return jsonify(result)
+
+@app.route("/api/calls", methods=["POST"])
+@login_required
+def create_call():
+    d=request.json or {}
+    room_id=f"call{int(datetime.now().timestamp()*1000)}"
+    with get_db() as db:
+        caller=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cname=caller["name"] if caller else "Someone"
+        room_name=d.get("name",f"{cname}'s Huddle")
+        db.execute("INSERT INTO call_rooms VALUES (?,?,?,?,?,?,?)",
+                   (room_id,wid(),room_name,session["user_id"],json.dumps([session["user_id"]]),"active",ts()))
+        # Notify all workspace members
+        users=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
+        for u in users:
+            nid=f"n{int(datetime.now().timestamp()*1000)}{u['id']}"
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"call",f"📞 {cname} started a Huddle — Join now! (Room: {room_name})",u["id"],0,ts()))
+        return jsonify({"room_id":room_id,"name":room_name})
+
+@app.route("/api/calls/<room_id>/join", methods=["POST"])
+@login_required
+def join_call(room_id):
+    with get_db() as db:
+        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
+        if not room: return jsonify({"error":"Room not found"}),404
+        if room["status"]!="active": return jsonify({"error":"Call has ended"}),410
+        parts=json.loads(room["participants"])
+        if session["user_id"] not in parts:
+            parts.append(session["user_id"])
+            db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
+        return jsonify({"participants":parts,"name":room["name"]})
+
+@app.route("/api/calls/<room_id>/leave", methods=["POST"])
+@login_required
+def leave_call(room_id):
+    with get_db() as db:
+        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
+        if not room: return jsonify({"ok":True})
+        parts=[p for p in json.loads(room["participants"]) if p!=session["user_id"]]
+        if not parts:
+            db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(room_id,))
+        else:
+            db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
+        return jsonify({"ok":True})
+
+@app.route("/api/calls/<room_id>/signal", methods=["POST"])
+@login_required
+def send_signal(room_id):
+    d=request.json or {}
+    sid=f"sig{int(datetime.now().timestamp()*1000)}{secrets.token_hex(3)}"
+    with get_db() as db:
+        db.execute("INSERT INTO call_signals VALUES (?,?,?,?,?,?,?,?,?)",
+                   (sid,wid(),room_id,session["user_id"],d.get("to_user",""),
+                    d.get("type",""),json.dumps(d.get("data",{})),0,ts()))
+        # Clean up old consumed signals (keep last 200 per room)
+        old=db.execute("SELECT id FROM call_signals WHERE room_id=? AND consumed=1 ORDER BY created DESC LIMIT -1 OFFSET 200",(room_id,)).fetchall()
+        if old: db.execute(f"DELETE FROM call_signals WHERE id IN ({','.join('?'*len(old))})",[r['id'] for r in old])
+        return jsonify({"ok":True,"id":sid})
+
+@app.route("/api/calls/<room_id>/signals", methods=["GET"])
+@login_required
+def get_signals(room_id):
+    with get_db() as db:
+        rows=db.execute("""SELECT * FROM call_signals
+            WHERE workspace_id=? AND room_id=? AND to_user=? AND consumed=0
+            ORDER BY created LIMIT 50""",(wid(),room_id,session["user_id"])).fetchall()
+        ids=[r["id"] for r in rows]
+        if ids: db.execute(f"UPDATE call_signals SET consumed=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/calls/<room_id>/ping", methods=["POST"])
+@login_required
+def ping_call(room_id):
+    with get_db() as db:
+        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
+        if not room: return jsonify({"error":"ended"}),404
+        if room["status"]!="active": return jsonify({"error":"ended"}),410
+        return jsonify({"participants":json.loads(room["participants"]),"status":room["status"],"name":room["name"]})
+
 @app.route("/api/reminders/due", methods=["GET"])
 @login_required
 def due_reminders():
@@ -893,6 +1000,12 @@ textarea.inp{resize:vertical;min-height:68px}
 .ai-msg-user{align-self:flex-end;background:var(--ac);color:#fff;border-radius:14px 14px 3px 14px;padding:9px 13px;font-size:13px;max-width:80%;line-height:1.5}
 .ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:14px 14px 14px 3px;padding:9px 13px;font-size:13px;max-width:90%;line-height:1.6;white-space:pre-wrap}
 .ai-action{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:9px;padding:8px 11px;font-size:11px;color:var(--gn);font-family:monospace;margin-top:5px}
+/* Huddle */
+.huddle-bar{position:fixed;bottom:0;left:0;right:0;height:62px;background:var(--sf);border-top:2px solid rgba(34,197,94,.45);display:flex;align-items:center;padding:0 18px;gap:14px;z-index:1700;box-shadow:0 -4px 24px rgba(34,197,94,.18);backdrop-filter:blur(10px)}
+.huddle-btn{position:fixed;bottom:82px;right:82px;z-index:1700;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(34,197,94,.45);transition:all .2s;color:#fff;font-size:20px}
+.huddle-btn:hover{transform:scale(1.1);box-shadow:0 6px 24px rgba(34,197,94,.6)}
+@keyframes ringPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}70%{box-shadow:0 0 0 12px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}.ring{animation:ringPulse 1.2s infinite}
+.incoming-call{position:fixed;bottom:96px;right:82px;z-index:1701;background:var(--sf);border:1.5px solid #22c55e;border-radius:16px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.45);min-width:240px;animation:slideUp .2s ease}
 </style></head><body>
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center">
   <div style="text-align:center">
@@ -1167,8 +1280,8 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
   const upcoming=safe(upcomingReminders).slice(0,4);
   const fmtT=dt=>{const d=new Date(dt);return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');};
   const unread=safe(notifs).filter(n=>!n.read).length;
-  const NI={task_assigned:'✅',status_change:'🔄',comment:'💬',deadline:'⏰',dm:'📨',project_added:'📁',reminder:'🔔'};
-  const NC={task_assigned:'var(--ac)',status_change:'var(--cy)',comment:'var(--pu)',deadline:'var(--am)',dm:'var(--cy)',project_added:'var(--gn)',reminder:'var(--am)'};
+  const NI={task_assigned:'✅',status_change:'🔄',comment:'💬',deadline:'⏰',dm:'📨',project_added:'📁',reminder:'🔔',call:'📞'};
+  const NC={task_assigned:'var(--ac)',status_change:'var(--cy)',comment:'var(--pu)',deadline:'var(--am)',dm:'var(--cy)',project_added:'var(--gn)',reminder:'var(--am)',call:'#22c55e'};
   const npRef=useRef(null);
   const prRef=useRef(null);
   const prImgRef=useRef(null);
@@ -2306,6 +2419,7 @@ function NotifsView({notifs,reload,onNavigate}){
     dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'},
     project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'},
     reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'},
+    call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Huddle'},
   };
   const unread=safe(notifs).filter(n=>!n.read).length;
   const handleClick=async(n)=>{
@@ -2554,18 +2668,62 @@ function AIAssistant({cu,projects,tasks,users}){
       </div>`:null}`;
 }
 
-/* ─── Browser Notifications ──────────────────────────────────────────────── */
+/* ─── Browser Notifications & Badge ──────────────────────────────────────── */
+const NOTIF_ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236366f1'/%3E%3Ccircle cx='32' cy='32' r='9' fill='white'/%3E%3Ccircle cx='32' cy='11' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='51' cy='43' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='13' cy='43' r='6' fill='white' opacity='.95'/%3E%3Cline x1='32' y1='17' x2='32' y2='23' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='46' y1='40' x2='40' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='18' y1='40' x2='24' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
+
+function updateBadge(count){
+  // 1. Browser App Badge API (works in Chrome/Edge/Safari PWA + desktop)
+  try{
+    if(navigator.setAppBadge){
+      if(count>0)navigator.setAppBadge(count);
+      else navigator.clearAppBadge();
+    }
+  }catch(e){}
+  // 2. Favicon badge via canvas
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=32;canvas.height=32;
+    const ctx=canvas.getContext('2d');
+    // Draw base icon
+    const img=new Image();
+    img.onload=()=>{
+      ctx.drawImage(img,0,0,32,32);
+      if(count>0){
+        ctx.fillStyle='#ef4444';
+        ctx.beginPath();ctx.arc(24,8,9,0,2*Math.PI);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font='bold 10px Inter,sans-serif';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(count>9?'9+':String(count),24,8);
+      }
+      const links=document.querySelectorAll("link[rel*='icon']");
+      links.forEach(l=>{l.href=canvas.toDataURL();});
+      // Also update document title
+      document.title=count>0?'('+count+') ProjectFlow':'ProjectFlow';
+    };
+    img.src=NOTIF_ICON;
+  }catch(e){}
+}
+
 function requestNotifPermission(){
   if('Notification' in window && Notification.permission==='default'){
     Notification.requestPermission();
   }
 }
-function showBrowserNotif(title, body, onClick){
-  if('Notification' in window && Notification.permission==='granted'){
-    const n=new Notification(title,{body,icon:'/favicon.ico',badge:'/favicon.ico'});
+
+function showBrowserNotif(title, body, onClick, opts={}){
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  try{
+    const n=new Notification(title,{
+      body,
+      icon:NOTIF_ICON,
+      badge:NOTIF_ICON,
+      tag:opts.tag||'pf-'+Date.now(),
+      requireInteraction:opts.requireInteraction||false,
+      silent:false,
+    });
     if(onClick) n.onclick=()=>{window.focus();onClick();n.close();};
-    setTimeout(()=>n.close(),8000);
-  }
+    if(!opts.requireInteraction) setTimeout(()=>n.close(),7000);
+  }catch(e){}
 }
 
 /* ─── ReminderModal ───────────────────────────────────────────────────────── */
@@ -2875,6 +3033,301 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
+/* ─── HuddleCall ──────────────────────────────────────────────────────────── */
+function HuddleCall({cu,users}){
+  const [status,setStatus]=useState('idle'); // idle | in-call
+  const [roomId,setRoomId]=useState(null);
+  const [roomName,setRoomName]=useState('');
+  const [participants,setParticipants]=useState([]);
+  const [muted,setMuted]=useState(false);
+  const [videoOn,setVideoOn]=useState(false);
+  const [incomingCall,setIncomingCall]=useState(null); // {id,name,initiatorName}
+  const [elapsed,setElapsed]=useState(0);
+  const [showParticipants,setShowParticipants]=useState(false);
+
+  const localStream=useRef(null);
+  const localVideo=useRef(null);
+  const pcs=useRef({});       // {userId: RTCPeerConnection}
+  const audioEls=useRef({});  // {userId: HTMLAudioElement}
+  const videoEls=useRef({});  // {userId: HTMLVideoElement}
+  const pollRef=useRef(null);
+  const pingRef=useRef(null);
+  const timerRef=useRef(null);
+  const roomIdRef=useRef(null);
+  const statusRef=useRef('idle');
+
+  useEffect(()=>{roomIdRef.current=roomId;},[roomId]);
+  useEffect(()=>{statusRef.current=status;},[status]);
+
+  const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+
+  // Poll for active calls every 6s (when idle) to detect incoming calls
+  useEffect(()=>{
+    if(status!=='idle')return;
+    const id=setInterval(async()=>{
+      const calls=await api.get('/api/calls');
+      if(Array.isArray(calls)&&calls.length>0){
+        const c=calls[0];
+        const parts=JSON.parse(c.participants||'[]');
+        if(!parts.includes(cu.id)&&c.initiator!==cu.id){
+          const init=safe(users).find(u=>u.id===c.initiator);
+          setIncomingCall({id:c.id,name:c.name,initiatorName:(init&&init.name)||'Someone'});
+        }
+      } else {
+        setIncomingCall(null);
+      }
+    },6000);
+    return()=>clearInterval(id);
+  },[status,cu,users]);
+
+  const createPC=(remoteUserId,rid)=>{
+    if(pcs.current[remoteUserId]){try{pcs.current[remoteUserId].close();}catch(e){}}
+    const pc=new RTCPeerConnection(STUN);
+    if(localStream.current) localStream.current.getTracks().forEach(t=>pc.addTrack(t,localStream.current));
+    pc.ontrack=e=>{
+      const stream=e.streams[0];
+      if(e.track.kind==='audio'){
+        let el=audioEls.current[remoteUserId];
+        if(!el){el=document.createElement('audio');el.autoplay=true;el.style.display='none';document.body.appendChild(el);audioEls.current[remoteUserId]=el;}
+        el.srcObject=stream;
+      } else if(e.track.kind==='video'){
+        let el=videoEls.current[remoteUserId];
+        if(el)el.srcObject=stream;
+      }
+    };
+    pc.onicecandidate=e=>{
+      if(e.candidate&&roomIdRef.current){
+        api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:remoteUserId,type:'ice',data:e.candidate.toJSON()});
+      }
+    };
+    pc.onconnectionstatechange=()=>{
+      if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){
+        try{pc.close();}catch(ex){}
+        delete pcs.current[remoteUserId];
+      }
+    };
+    pcs.current[remoteUserId]=pc;
+    return pc;
+  };
+
+  const startSignalPoll=(rid)=>{
+    if(pollRef.current)clearInterval(pollRef.current);
+    pollRef.current=setInterval(async()=>{
+      if(statusRef.current!=='in-call')return;
+      const sigs=await api.get('/api/calls/'+rid+'/signals');
+      if(!Array.isArray(sigs))return;
+      for(const sig of sigs){
+        const from=sig.from_user;
+        let data;
+        try{data=typeof sig.data==='string'?JSON.parse(sig.data):sig.data;}catch{continue;}
+        if(sig.type==='offer'){
+          let pc=pcs.current[from]||createPC(from,rid);
+          try{
+            await pc.setRemoteDescription(new RTCSessionDescription(data));
+            const ans=await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            await api.post('/api/calls/'+rid+'/signal',{to_user:from,type:'answer',data:{type:ans.type,sdp:ans.sdp}});
+          }catch(ex){console.warn('offer handle err',ex);}
+        } else if(sig.type==='answer'){
+          const pc=pcs.current[from];
+          if(pc&&pc.signalingState==='have-local-offer'){
+            try{await pc.setRemoteDescription(new RTCSessionDescription(data));}catch(ex){console.warn('answer err',ex);}
+          }
+        } else if(sig.type==='ice'){
+          const pc=pcs.current[from];
+          if(pc&&pc.remoteDescription){
+            try{await pc.addIceCandidate(new RTCIceCandidate(data));}catch(ex){}
+          }
+        }
+      }
+    },1500);
+  };
+
+  const startPing=(rid)=>{
+    if(pingRef.current)clearInterval(pingRef.current);
+    pingRef.current=setInterval(async()=>{
+      const r=await api.post('/api/calls/'+rid+'/ping',{});
+      if(!r||r.error){cleanup();return;}
+      setParticipants(r.participants||[]);
+    },4000);
+  };
+
+  const startTimer=()=>{
+    setElapsed(0);
+    if(timerRef.current)clearInterval(timerRef.current);
+    timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);
+  };
+
+  const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
+
+  const getMedia=async(vid)=>{
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:vid?{width:320,height:240}:false});
+      localStream.current=stream;
+      if(localVideo.current&&vid)localVideo.current.srcObject=stream;
+      return stream;
+    }catch(e){
+      // Try audio-only fallback
+      if(vid){try{const s=await navigator.mediaDevices.getUserMedia({audio:true});localStream.current=s;return s;}catch(e2){}}
+      alert('Microphone access required for Huddle. Please allow microphone permission and try again.');
+      return null;
+    }
+  };
+
+  const startCall=async()=>{
+    const stream=await getMedia(false);
+    if(!stream)return;
+    const r=await api.post('/api/calls',{name:(cu.name||'')+"'s Huddle"});
+    if(!r||r.error){alert('Could not start call.');return;}
+    const rid=r.room_id;
+    setRoomId(rid);setRoomName(r.name||'Huddle');
+    setStatus('in-call');setParticipants([cu.id]);setIncomingCall(null);
+    playSound('notif');
+    startSignalPoll(rid);startPing(rid);startTimer();
+  };
+
+  const joinCall=async(rid,rname)=>{
+    const stream=await getMedia(false);
+    if(!stream)return;
+    const r=await api.post('/api/calls/'+rid+'/join',{});
+    if(!r||r.error){alert(r&&r.error||'Could not join call.');return;}
+    const parts=r.participants||[];
+    setRoomId(rid);setRoomName(r.name||rname||'Huddle');
+    setStatus('in-call');setParticipants(parts);setIncomingCall(null);
+    playSound('notif');
+    // Send offer to each existing participant
+    for(const uid of parts){
+      if(uid===cu.id)continue;
+      const pc=createPC(uid,rid);
+      try{
+        const offer=await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await api.post('/api/calls/'+rid+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
+      }catch(ex){console.warn('offer create err',ex);}
+    }
+    startSignalPoll(rid);startPing(rid);startTimer();
+  };
+
+  const cleanup=async()=>{
+    if(pollRef.current)clearInterval(pollRef.current);
+    if(pingRef.current)clearInterval(pingRef.current);
+    if(timerRef.current)clearInterval(timerRef.current);
+    Object.values(pcs.current).forEach(pc=>{try{pc.close();}catch(e){}});
+    pcs.current={};
+    if(localStream.current){localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;}
+    Object.values(audioEls.current).forEach(el=>{try{el.srcObject=null;el.remove();}catch(e){}});
+    audioEls.current={};
+    if(roomIdRef.current)await api.post('/api/calls/'+roomIdRef.current+'/leave',{});
+    setRoomId(null);setRoomName('');setStatus('idle');setParticipants([]);setMuted(false);setVideoOn(false);setElapsed(0);
+  };
+
+  const toggleMute=()=>{
+    if(localStream.current){
+      localStream.current.getAudioTracks().forEach(t=>{t.enabled=muted;});
+      setMuted(m=>!m);
+    }
+  };
+
+  const toggleVideo=async()=>{
+    if(!videoOn){
+      try{
+        const vs=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240}});
+        vs.getVideoTracks().forEach(t=>{localStream.current.addTrack(t);});
+        if(localVideo.current)localVideo.current.srcObject=localStream.current;
+        // Re-negotiate with peers
+        Object.entries(pcs.current).forEach(async([uid,pc])=>{
+          vs.getVideoTracks().forEach(t=>pc.addTrack(t,localStream.current));
+          const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+          await api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
+        });
+        setVideoOn(true);
+      }catch(e){}
+    } else {
+      localStream.current&&localStream.current.getVideoTracks().forEach(t=>{t.stop();try{localStream.current.removeTrack(t);}catch(ex){}});
+      if(localVideo.current)localVideo.current.srcObject=null;
+      setVideoOn(false);
+    }
+  };
+
+  const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'User',avatar:'U',color:'#6366f1'});
+
+  // Incoming call toast (when idle)
+  const incomingToast=incomingCall&&status==='idle'?html`
+    <div class="incoming-call">
+      <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+        <div style=${{width:9,height:9,borderRadius:'50%',background:'#22c55e',animation:'pulse 1s infinite'}}></div>
+        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>📞 Huddle: ${incomingCall.name}</span>
+      </div>
+      <p style=${{fontSize:11,color:'var(--tx2)',marginBottom:11}}>${incomingCall.initiatorName} started a call</p>
+      <div style=${{display:'flex',gap:8}}>
+        <button style=${{flex:1,height:32,borderRadius:9,background:'#22c55e',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:12}} onClick=${()=>joinCall(incomingCall.id,incomingCall.name)}>🎙 Join</button>
+        <button class="btn bg" style=${{flex:1,height:32,justifyContent:'center',fontSize:12}} onClick=${()=>setIncomingCall(null)}>Dismiss</button>
+      </div>
+    </div>`:null;
+
+  if(status==='idle') return html`
+    <div>
+      ${incomingToast}
+      <button class="huddle-btn ring" onClick=${startCall} title="Start Huddle">🎙</button>
+    </div>`;
+
+  // ── In-call bar ──────────────────────────────────────────────────────────────
+  return html`
+    <div>
+      ${incomingToast}
+      ${videoOn?html`
+        <div style=${{position:'fixed',bottom:72,right:16,width:220,borderRadius:12,overflow:'hidden',border:'2px solid #22c55e',boxShadow:'0 8px 24px rgba(0,0,0,.5)',zIndex:1699,background:'#000'}}>
+          <video ref=${localVideo} autoplay muted style=${{width:'100%',height:124,objectFit:'cover',display:'block'}}></video>
+          <div style=${{display:'flex',gap:5,padding:'4px 6px',background:'rgba(0,0,0,.7)',flexWrap:'wrap'}}>
+            ${partUsers.filter(u=>u.id!==cu.id).map(u=>html`
+              <video key=${u.id} ref=${el=>{if(el)videoEls.current[u.id]=el;}} autoplay style=${{width:64,height:48,borderRadius:6,objectFit:'cover',background:'#1a1a2e'}}></video>
+            `)}
+          </div>
+        </div>`:null}
+      <div class="huddle-bar">
+        <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
+          <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite'}}></div>
+          <div>
+            <span style=${{fontSize:12,fontWeight:800,color:'#22c55e',display:'block',lineHeight:1.2}}>${roomName||'Huddle'}</span>
+            <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtTime(elapsed)}</span>
+          </div>
+        </div>
+        <div style=${{width:1,height:30,background:'var(--bd)',flexShrink:0}}></div>
+        <div style=${{display:'flex',gap:4,flex:1,overflowX:'auto',scrollbarWidth:'none',alignItems:'center'}}>
+          ${partUsers.map(u=>html`
+            <div key=${u.id} title=${u.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:2,flexShrink:0,padding:'2px 4px',borderRadius:8,background:u.id===cu.id?'rgba(34,197,94,.1)':'transparent'}}>
+              <div style=${{position:'relative'}}>
+                <${Av} u=${u} size=${28}/>
+                <div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div>
+              </div>
+              <span style=${{fontSize:8,color:'var(--tx3)',maxWidth:36,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1}}>${u.name.split(' ')[0]}</span>
+            </div>
+          `)}
+        </div>
+        <div style=${{display:'flex',gap:7,flexShrink:0,alignItems:'center'}}>
+          <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'}
+            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(muted?'rgba(248,113,113,.4)':'var(--bd)'),background:muted?'rgba(248,113,113,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,transition:'all .15s'}}>
+            ${muted?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:
+            html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
+          </button>
+          <button onClick=${toggleVideo} title=${videoOn?'Turn off video':'Turn on video'}
+            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(videoOn?'rgba(99,102,241,.4)':'var(--bd)'),background:videoOn?'rgba(99,102,241,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,transition:'all .15s'}}>
+            ${videoOn?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
+            html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
+          </button>
+          <div style=${{width:1,height:24,background:'var(--bd)'}}></div>
+          <button onClick=${cleanup}
+            style=${{height:36,borderRadius:10,border:'none',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',padding:'0 16px',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6,transition:'all .15s'}}
+            onMouseEnter=${e=>e.currentTarget.style.transform='scale(1.04)'}
+            onMouseLeave=${e=>e.currentTarget.style.transform=''}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            Leave
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
 /* ─── App ─────────────────────────────────────────────────────────────────── */
 function App(){
   const [dark,setDark]=useState(false);const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
@@ -2901,38 +3354,63 @@ function App(){
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{document.body.className=dark?'':'lm';},[dark]);
-  // Poll DM unread count every 5s (was 12s) — play sound when new DMs arrive
+  // Poll DM unread count every 5s — play sound + OS notification when new DMs arrive
   useEffect(()=>{
     if(!cu)return;
-    let prevTotal=0;
+    let prevDms=[];
     const id=setInterval(()=>{
       api.get('/api/dm/unread').then(d=>{
         if(Array.isArray(d)){
           const total=d.reduce((a,x)=>a+(x.cnt||0),0);
-          if(total>prevTotal){playSound('notif');}
-          prevTotal=total;
+          const prevTotal=prevDms.reduce((a,x)=>a+(x.cnt||0),0);
+          if(total>prevTotal){
+            playSound('notif');
+            // Find new senders to show their name
+            d.forEach(x=>{
+              const prev=prevDms.find(p=>p.sender===x.sender);
+              if(!prev||(x.cnt||0)>(prev.cnt||0)){
+                const sender=safe(data.users).find(u=>u.id===x.sender);
+                const sname=sender?sender.name:'Someone';
+                showBrowserNotif('💬 New Message',sname+' sent you a message',()=>setView('dm'),{tag:'dm-'+x.sender,requireInteraction:false});
+              }
+            });
+          }
+          prevDms=d;
           setDmUnread(d);
         }
       });
     },5000);
     return()=>clearInterval(id);
-  },[cu]);
-  // Poll notifications every 8s — sound on new task assignments
+  },[cu,data.users]);
+  // Poll notifications every 8s — OS notification + sound on new items
   useEffect(()=>{
     if(!cu)return;
     let prevUnread=0;
+    let prevIds=new Set();
+    const NTITLES={task_assigned:'✅ Task Assigned',status_change:'🔄 Status Update',comment:'💬 New Comment',deadline:'⏰ Deadline',dm:'📨 Direct Message',project_added:'📁 Project Update',reminder:'⏰ Reminder',call:'📞 Huddle Call'};
     const id=setInterval(()=>{
       api.get('/api/notifications').then(d=>{
         if(Array.isArray(d)){
           const unread=d.filter(n=>!n.read).length;
-          if(unread>prevUnread){playSound('notif');}
+          if(unread>prevUnread){
+            playSound('notif');
+            // Show OS notification for each new item
+            d.filter(n=>!n.read&&!prevIds.has(n.id)).forEach(n=>{
+              const title=NTITLES[n.type]||'ProjectFlow';
+              showBrowserNotif(title,n.content,()=>setView('notifs'),{tag:'notif-'+n.id,requireInteraction:n.type==='call'});
+            });
+          }
           prevUnread=unread;
+          prevIds=new Set(d.map(n=>n.id));
           setData(prev=>({...prev,notifs:d}));
+          // Update badge
+          const dmTotal=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+          updateBadge(unread+dmTotal);
         }
       });
     },8000);
     return()=>clearInterval(id);
-  },[cu]);
+  },[cu,dmUnread]);
 
   const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
   const logout=async()=>{await api.post('/api/auth/logout',{});setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);};
@@ -2940,16 +3418,22 @@ function App(){
   // Request browser notification permission on login
   useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
 
-  // Poll for due reminders every 30s — fire browser popup + in-app notification
+  // Update badge on unread changes
+  useEffect(()=>{
+    const unread=safe(data.notifs).filter(n=>!n.read).length;
+    const dmTotal=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+    updateBadge(unread+dmTotal);
+  },[data.notifs,dmUnread]);
+
+  // Poll for due reminders every 30s — fire OS notification + in-app notification + keep topbar in sync
   useEffect(()=>{
     if(!cu)return;
     const id=setInterval(async()=>{
       const due=await api.get('/api/reminders/due');
       if(Array.isArray(due)&&due.length>0){
         due.forEach(r=>{
-          playSound('notif');
-          showBrowserNotif('⏰ Reminder',r.task_title,()=>setView('tasks'));
-          // Also add to in-app notifications
+          playSound('reminder');
+          showBrowserNotif('⏰ Reminder Due!',r.task_title,()=>setView('tasks'),{tag:'rem-'+r.id,requireInteraction:true});
           const nid='rn'+Date.now();
           setData(prev=>({...prev,notifs:[
             {id:nid,type:'reminder',content:'⏰ Reminder: '+r.task_title,read:0,ts:new Date().toISOString()},
@@ -2957,7 +3441,7 @@ function App(){
           ]}));
         });
       }
-      // Keep topbar reminders in sync
+      // Keep topbar in sync
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
     },30000);
@@ -2990,7 +3474,7 @@ function App(){
         <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
           cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
           notifs=${data.notifs}
-          onNotifClick=${async n=>{if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders'};setView(nav[n.type]||'notifs');load();}}
+          onNotifClick=${async n=>{if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard'};setView(nav[n.type]||'notifs');load();}}
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
           onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
         />
@@ -3010,6 +3494,7 @@ function App(){
       </div>
     </div>
     <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
+    <${HuddleCall} cu=${cu} users=${data.users}/>
     ${reminderTask!==null?html`<${ReminderModal} task=${reminderTask} onClose=${()=>setReminderTask(null)} onSaved=${()=>{setReminderTask(null);load();}}/>`:null}
     ${showReminders?html`<${RemindersPanel} onClose=${()=>{setShowReminders(false);load();}} onReload=${load}/>`:null}`;
 }
