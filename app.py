@@ -1128,10 +1128,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
-function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminders,notifs,onNotifClick,onMarkAllRead,onClearAll}){
+function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewReminders,notifs,onNotifClick,onMarkAllRead,onClearAll}){
   const [showNP,setShowNP]=useState(false);
   const [showProfile,setShowProfile]=useState(false);
-  const [setCuLocal]=useState(()=>()=>{}); // placeholder; profile updates reload on next load
+  const [uploadMsg,setUploadMsg]=useState('');
   const now=new Date();
   const todayStr=now.toLocaleDateString('en-US',{day:'numeric',month:'short'});
   const upcoming=safe(upcomingReminders).slice(0,4);
@@ -1222,32 +1222,43 @@ function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminde
               </div>
             </div>
             ${showProfile?html`
-              <div style=${{position:'absolute',top:38,right:0,width:280,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,boxShadow:'0 8px 30px rgba(0,0,0,.2)',zIndex:3000,overflow:'hidden'}}>
-                <div style=${{padding:'20px',background:'linear-gradient(135deg,rgba(99,102,241,.15),rgba(129,140,248,.05))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-                  <div style=${{position:'relative',cursor:'pointer'}} onClick=${()=>prImgRef.current&&prImgRef.current.click()} title="Click to upload photo">
-                    ${cu.avatar_data?
-                      html`<img src=${cu.avatar_data} style=${{width:64,height:64,borderRadius:'50%',objectFit:'cover',border:'3px solid var(--ac)'}}/>`:
-                      html`<${Av} u=${cu} size=${64}/>`}
-                    <div style=${{position:'absolute',bottom:0,right:0,width:20,height:20,borderRadius:'50%',background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,border:'2px solid var(--sf)',color:'#fff'}}>📷</div>
-                    <input ref=${prImgRef} type="file" accept="image/*" style=${{display:'none'}} onChange=${async e=>{
-                      const f=e.target.files[0];if(!f)return;
-                      const reader=new FileReader();
-                      reader.onload=async ev=>{
-                        const dataUrl=ev.target.result;
-                        await api.put('/api/users/'+cu.id,{avatar_data:dataUrl});
-                        setCuLocal(prev=>({...prev,avatar_data:dataUrl}));
-                      };
-                      reader.readAsDataURL(f);
-                    }}/>
+              <div style=${{position:'absolute',top:38,right:0,width:290,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,boxShadow:'0 8px 30px rgba(0,0,0,.25)',zIndex:3000,overflow:'hidden'}}>
+                <div style=${{padding:'20px 16px',background:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(129,140,248,.04))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
+                  <div style=${{position:'relative',cursor:'pointer'}} title="Click to change photo"
+                    onClick=${e=>{e.stopPropagation();prImgRef.current&&prImgRef.current.click();}}>
+                    ${(cu.avatar_data&&cu.avatar_data.startsWith('data:image'))?
+                      html`<img src=${cu.avatar_data} style=${{width:68,height:68,borderRadius:'50%',objectFit:'cover',border:'3px solid var(--ac)',display:'block'}}/>`:
+                      html`<div style=${{width:68,height:68,borderRadius:'50%',background:cu.color||'#6366f1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:800,color:'#fff',border:'3px solid var(--ac)'}}>${cu.avatar||'?'}</div>`}
+                    <div style=${{position:'absolute',bottom:2,right:2,width:22,height:22,borderRadius:'50%',background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,border:'2px solid var(--sf)',color:'#fff',pointerEvents:'none'}}>📷</div>
                   </div>
-                  <div style=${{textAlign:'center'}}>
-                    <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)'}}>${cu.name}</div>
-                    <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2,fontFamily:'monospace'}}>${cu.email}</div>
-                    <span class="badge" style=${{background:'var(--ac)22',color:'var(--ac2)',marginTop:6,display:'inline-block'}}>${cu.role}</span>
+                  <input ref=${prImgRef} type="file" accept="image/*" style=${{display:'none'}} onChange=${async e=>{
+                    const f=e.target.files[0];if(!f)return;
+                    if(f.size>2*1024*1024){setUploadMsg('Image too large (max 2MB)');return;}
+                    setUploadMsg('Uploading...');
+                    const reader=new FileReader();
+                    reader.onload=async ev=>{
+                      const dataUrl=ev.target.result;
+                      const res=await api.put('/api/users/'+cu.id,{avatar_data:dataUrl});
+                      if(res&&res.id){
+                        setCu&&setCu(prev=>({...prev,avatar_data:dataUrl}));
+                        setUploadMsg('✓ Photo updated!');
+                        setTimeout(()=>setUploadMsg(''),2500);
+                      } else {
+                        setUploadMsg('Upload failed. Try a smaller image.');
+                      }
+                    };
+                    reader.readAsDataURL(f);
+                  }}/>
+                  <div style=${{textAlign:'center',width:'100%'}}>
+                    <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)',marginBottom:2}}>${cu.name}</div>
+                    <div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',marginBottom:4,wordBreak:'break-all'}}>${cu.email}</div>
+                    <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(99,102,241,.15)',color:'var(--ac2)',textTransform:'uppercase'}}>${cu.role}</span>
+                    ${uploadMsg?html`<div style=${{marginTop:8,fontSize:11,color:uploadMsg.startsWith('✓')?'var(--gn)':'var(--rd)',fontFamily:'monospace'}}>${uploadMsg}</div>`:null}
                   </div>
                 </div>
-                <div style=${{padding:'12px'}}>
-                  <button class="btn bg" style=${{width:'100%',justifyContent:'center',fontSize:12,marginBottom:6}} onClick=${()=>{setShowProfile(false);}}>Close</button>
+                <div style=${{padding:'10px 12px'}}>
+                  <p style=${{fontSize:10,color:'var(--tx3)',textAlign:'center',marginBottom:8,fontFamily:'monospace'}}>Click avatar to change profile photo</p>
+                  <button class="btn bg" style=${{width:'100%',justifyContent:'center',fontSize:12}} onClick=${()=>setShowProfile(false)}>Close</button>
                 </div>
               </div>`:null}
           </div>`:null}
@@ -1338,15 +1349,16 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
       await api.put('/api/tasks/'+task.id,payload);
     }
   };
-  const save=async()=>{
-    if(!title.trim()){setErr('Title required.');return;}
+  const save=async(opts={})=>{
+    if(!title.trim()){setErr('Title required.');return null;}
     setSaving(true);setErr('');
     const payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts};
     if(task&&task.id)payload.id=task.id;
     const result=await onSave(payload);
     setSaving(false);
-    if(result&&result.error){setErr(result.error);return;}
-    onClose();
+    if(result&&result.error){setErr(result.error);return null;}
+    if(!opts.keepOpen)onClose();
+    return result;
   };
 
   return html`
@@ -1413,7 +1425,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
             ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
               <button class="btn bg" onClick=${onClose}>Cancel</button>
-              ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${()=>{save().then(()=>onSetReminder({id:task&&task.id,title:title,due}));}}>⏰ Set Reminder</button>`:null}
+              ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
               <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
             </div>
           </div>`:null}
@@ -1441,7 +1453,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
             </div>
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
               <button class="btn bg" onClick=${onClose}>Close</button>
-              ${onSetReminder?html`<button class="btn bg" style=${{color:'var(--am)'}} onClick=${()=>onSetReminder({id:task&&task.id,title:title,due})}>⏰ Remind</button>`:null}
+              ${onSetReminder&&isEdit?html`<button class="btn bg" style=${{color:'var(--am)'}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id),title:title,due});}}}>⏰ Remind</button>`:null}
               <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:'Save'}</button>
             </div>
           </div>`:null}
@@ -1732,7 +1744,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder}){
     });
   },[filtered,sortCol,sortDir,users]);
 
-  const saveT=async p=>{if(p.id&&safe(tasks).find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',p);reload();};
+  const saveT=async p=>{let r;if(p.id&&safe(tasks).find(t=>t.id===p.id))r=await api.put('/api/tasks/'+p.id,p);else r=await api.post('/api/tasks',p);reload();return r;};
   const delT=async id=>{await api.del('/api/tasks/'+id);reload();};
   const quickStage=async(tid,stage)=>{
     const autoPct=STAGE_PCT[stage];
@@ -2582,7 +2594,7 @@ function RemindersView({cu,tasks,onSetReminder}){
               <div style=${{height:32,border:'1px dashed '+(hr.length?'rgba(251,191,36,.4)':'var(--bd)'),borderRadius:5,background:hr.length?'rgba(251,191,36,.06)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',gap:2}}>
                 ${hr.map(r=>html`<div key=${r.id} style=${{width:16,height:16,borderRadius:'50%',background:'var(--am)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:'#000'}} title=${r.task_title}>${r.task_title.charAt(0).toUpperCase()}</div>`)}
               </div>
-            </div>`;})}\
+            </div>`;})}  
         </div>
       </div>
       <!-- Lists -->
@@ -2606,7 +2618,7 @@ function RemindersView({cu,tasks,onSetReminder}){
                   </div>
                 </div>
                 <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-              </div>`;})}\
+              </div>`;})}  
         </div>
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
@@ -2777,7 +2789,7 @@ function App(){
       <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}/>
       <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
         <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
-          cu=${cu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
+          cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
           notifs=${data.notifs}
           onNotifClick=${async n=>{if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders'};setView(nav[n.type]||'notifs');load();}}
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
