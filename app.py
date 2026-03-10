@@ -90,6 +90,18 @@ def init_db():
         # Add avatar_data column for profile photos
         try: db.execute("ALTER TABLE users ADD COLUMN avatar_data TEXT")
         except: pass
+        # Fix corrupted avatar column: if avatar contains base64 image data, move it to avatar_data and reset avatar to initials
+        try:
+            corrupted = db.execute("SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%' OR (length(avatar) > 10 AND avatar NOT GLOB '[A-Z][A-Z]*')").fetchall()
+            for row in corrupted:
+                uid, name, av = row['id'], row['name'] or '', row['avatar'] or ''
+                initials = ''.join(w[0] for w in name.split() if w)[:2].upper() or '?'
+                if av.startswith('data:image'):
+                    db.execute("UPDATE users SET avatar=?, avatar_data=? WHERE id=?", (initials, av, uid))
+                else:
+                    db.execute("UPDATE users SET avatar=? WHERE id=?", (initials, uid))
+        except Exception as e:
+            print(f"Avatar cleanup migration error: {e}")
         # Migrate legacy data (no workspace_id)
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
@@ -262,8 +274,15 @@ def new_invite():
 @login_required
 def get_users():
     with get_db() as db:
-        return jsonify([dict(r) for r in db.execute(
-            "SELECT * FROM users WHERE workspace_id=? ORDER BY name",(wid(),)).fetchall()])
+        rows = db.execute("SELECT * FROM users WHERE workspace_id=? ORDER BY name",(wid(),)).fetchall()
+        # Strip avatar_data from list response - it's served separately via /api/auth/me and PUT response
+        users = []
+        for r in rows:
+            u = dict(r)
+            u.pop('avatar_data', None)
+            u.pop('password', None)
+            users.append(u)
+        return jsonify(users)
 
 @app.route("/api/users",methods=["POST"])
 @login_required
@@ -930,11 +949,14 @@ const ago=iso=>{const m=Math.floor((Date.now()-new Date(iso))/60000);if(m<1)retu
 const safe=a=>(Array.isArray(a)?a:[]);
 
 function Av({u,size=32}){
-  if(u&&u.avatar_data&&u.avatar_data.startsWith('data:image')){
-    return html`<img src=${u.avatar_data} class="av" style=${{width:size,height:size,objectFit:'cover',border:'2px solid var(--bd)'}}/>`;
+  const imgSrc=(u&&u.avatar_data&&u.avatar_data.startsWith('data:image'))?u.avatar_data:
+               (u&&u.avatar&&u.avatar.length>10&&u.avatar.startsWith('data:image'))?u.avatar:null;
+  if(imgSrc){
+    return html`<img src=${imgSrc} class="av" style=${{width:size,height:size,objectFit:'cover',borderRadius:'50%',border:'2px solid var(--bd)'}}/>`;
   }
+  const initials=(u&&u.avatar&&u.avatar.length<=4)?u.avatar:(u&&u.name?u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase():'?');
   return html`<div class="av" style=${{width:size,height:size,background:(u&&u.color)||'#6366f1',color:'#fff',fontSize:Math.max(9,Math.floor(size*.33))}}>
-    ${(u&&u.avatar)||'?'}
+    ${initials}
   </div>`;
 }
 function SP({s}){
@@ -2550,79 +2572,167 @@ function ReminderModal({task,onClose,onSaved}){
 
 /* ─── RemindersView ──────────────────────────────────────────────────────── */
 function RemindersView({cu,tasks,onSetReminder}){
-  const [reminders,setReminders]=useState([]);const [busy,setBusy]=useState(true);
+  const [reminders,setReminders]=useState([]);
+  const [busy,setBusy]=useState(true);
+  const [showAdd,setShowAdd]=useState(false);
+  const [addTaskId,setAddTaskId]=useState('');
+  const [addDate,setAddDate]=useState('');
+  const [addTime,setAddTime]=useState('');
+  const [addMins,setAddMins]=useState(10);
+  const [saving,setSaving]=useState(false);
   const now=new Date();
-  const load=useCallback(async()=>{setBusy(true);const d=await api.get('/api/reminders');setReminders(Array.isArray(d)?d:[]);setBusy(false);},[]);
+
+  const load=useCallback(async()=>{
+    setBusy(true);
+    const d=await api.get('/api/reminders');
+    setReminders(Array.isArray(d)?d:[]);
+    setBusy(false);
+  },[]);
+
   useEffect(()=>{load();},[load]);
+
   const del=async id=>{await api.del('/api/reminders/'+id);load();};
-  const upcoming=reminders.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at));
-  const overdue=reminders.filter(r=>new Date(r.remind_at)<now);
-  const todayRems=upcoming.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();});
-  const fmtDt=dt=>{const d=new Date(dt),diff=d-now;
-    if(diff<0)return{label:'Overdue',col:'var(--rd)',bg:'rgba(248,113,113,.1)'};
-    if(diff<3600000)return{label:'< 1 hr',col:'var(--am)',bg:'rgba(251,191,36,.1)'};
-    if(diff<86400000)return{label:'Today',col:'var(--cy)',bg:'rgba(34,211,238,.1)'};
-    if(diff<172800000)return{label:'Tomorrow',col:'var(--gn)',bg:'rgba(74,222,128,.1)'};
-    return{label:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),col:'var(--tx2)',bg:'var(--sf2)'};
+
+  const saveReminder=async()=>{
+    if(!addTaskId||!addDate||!addTime){return;}
+    setSaving(true);
+    const dt=new Date(addDate+'T'+addTime);
+    const task=safe(tasks).find(t=>t.id===addTaskId);
+    await api.post('/api/reminders',{task_id:addTaskId,task_title:(task&&task.title)||'Reminder',remind_at:dt.toISOString(),minutes_before:addMins});
+    setSaving(false);
+    setShowAdd(false);
+    setAddTaskId('');setAddDate('');setAddTime('');setAddMins(10);
+    load();
   };
-  const hours=[...Array(11)].map((_,i)=>8+i);
+
+  const upcoming=reminders.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at));
+  const overdue=reminders.filter(r=>new Date(r.remind_at)<now).sort((a,b)=>new Date(b.remind_at)-new Date(a.remind_at));
+
+  const fmtRem=dt=>{
+    const d=new Date(dt);
+    const diff=d-now;
+    if(diff<0)return{label:'Overdue',cls:'var(--rd)',bg:'rgba(248,113,113,.12)'};
+    if(diff<3600000)return{label:'< 1 hr',cls:'var(--am)',bg:'rgba(251,191,36,.12)'};
+    if(diff<86400000)return{label:'Today',cls:'var(--cy)',bg:'rgba(34,211,238,.12)'};
+    if(diff<172800000)return{label:'Tomorrow',cls:'var(--gn)',bg:'rgba(74,222,128,.12)'};
+    return{label:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),cls:'var(--tx2)',bg:'var(--sf2)'};
+  };
+
+  const statCards=[
+    {label:'Total',val:reminders.length,color:'var(--ac)',bg:'rgba(99,102,241,.1)',icon:'⏰'},
+    {label:'Upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
+    {label:'Overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
+    {label:'Today',val:reminders.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'📅'},
+  ];
+
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',background:'var(--bg)'}}>
+
+      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style=${{fontSize:13,color:'var(--tx3)'}}>Set reminders for your tasks — get notified with sound before they're due.</div>
+        <button class="btn bp" style=${{fontSize:12}} onClick=${()=>setShowAdd(true)}>+ Add Reminder</button>
+      </div>
+
       <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
-        ${[{l:'Total',v:reminders.length,col:'var(--ac)',bg:'rgba(99,102,241,.1)',e:'⏰'},
-          {l:'Upcoming',v:upcoming.length,col:'var(--cy)',bg:'rgba(34,211,238,.1)',e:'⚡'},
-          {l:'Overdue',v:overdue.length,col:'var(--rd)',bg:'rgba(248,113,113,.1)',e:'🚨'},
-          {l:'Today',v:todayRems.length,col:'var(--gn)',bg:'rgba(74,222,128,.1)',e:'📅'}
-        ].map(s=>html`
-          <div key=${s.l} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12}}>
-            <div style=${{width:40,height:40,borderRadius:10,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${s.e}</div>
-            <div><div style=${{fontSize:24,fontWeight:900,color:s.col,lineHeight:1}}>${s.v}</div>
-            <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600,letterSpacing:.3}}>${s.l}</div></div>
-          </div>`)}
-      </div>
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 18px',marginBottom:16}}>
-        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-          <div style=${{fontWeight:800,fontSize:13,color:'var(--tx)'}}>📅 Today's Timeline</div>
-          <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
-        </div>
-        <div style=${{display:'flex',gap:0,overflowX:'auto',paddingBottom:4}}>
-          ${hours.map(h=>{const h12=h<12?h+' AM':h===12?'12 PM':((h-12)+' PM');const hr=todayRems.filter(r=>{const d=new Date(r.remind_at);return d.getHours()===h;});return html`
-            <div key=${h} style=${{flex:'0 0 75px',textAlign:'center'}}>
-              <div style=${{fontSize:9,color:hr.length?'var(--am)':'var(--tx3)',fontFamily:'monospace',fontWeight:hr.length?700:400,marginBottom:5}}>${h12}</div>
-              <div style=${{height:32,border:'1px dashed '+(hr.length?'rgba(251,191,36,.4)':'var(--bd)'),borderRadius:5,background:hr.length?'rgba(251,191,36,.06)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',gap:2}}>
-                ${hr.map(r=>html`<div key=${r.id} style=${{width:16,height:16,borderRadius:'50%',background:'var(--am)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:'#000'}} title=${r.task_title}>${r.task_title.charAt(0).toUpperCase()}</div>`)}
+        ${statCards.map(s=>{
+          return html`
+            <div key=${s.label} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12}}>
+              <div style=${{width:40,height:40,borderRadius:10,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${s.icon}</div>
+              <div>
+                <div style=${{fontSize:24,fontWeight:900,color:s.color,lineHeight:1}}>${s.val}</div>
+                <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600}}>${s.label}</div>
               </div>
-            </div>`;})}  
-        </div>
+            </div>`;
+        })}
       </div>
-      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+
+      ${showAdd?html`
+        <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowAdd(false)}>
+          <div class="mo fi" style=${{maxWidth:460}}>
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+              <h2 style=${{fontSize:16,fontWeight:800,color:'var(--tx)'}}>⏰ Add Reminder</h2>
+              <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowAdd(false)}>✕</button>
+            </div>
+            <div style=${{display:'flex',flexDirection:'column',gap:13}}>
+              <div>
+                <label class="lbl">Task *</label>
+                <select class="inp" value=${addTaskId} onChange=${e=>setAddTaskId(e.target.value)}>
+                  <option value="">— Select a task —</option>
+                  ${safe(tasks).map(t=>html`<option key=${t.id} value=${t.id}>${t.title}</option>`)}
+                </select>
+              </div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+                <div>
+                  <label class="lbl">Date *</label>
+                  <input class="inp" type="date" value=${addDate} onChange=${e=>setAddDate(e.target.value)} min=${new Date().toISOString().split('T')[0]}/>
+                </div>
+                <div>
+                  <label class="lbl">Time *</label>
+                  <input class="inp" type="time" value=${addTime} onChange=${e=>setAddTime(e.target.value)}/>
+                </div>
+              </div>
+              <div>
+                <label class="lbl">Notify me before</label>
+                <div style=${{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
+                  ${[5,10,15,30,60].map(m=>html`
+                    <button key=${m} class=${'chip'+(addMins===m?' on':'')} onClick=${()=>setAddMins(m)} style=${{fontSize:12,padding:'5px 12px'}}>
+                      ${m<60?m+' min':'1 hr'}
+                    </button>`)}
+                </div>
+              </div>
+              <div style=${{background:'rgba(99,102,241,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(99,102,241,.15)'}}>
+                🔔 You'll get a browser notification + sound ${addMins} min before the reminder time.
+              </div>
+              <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4}}>
+                <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
+                <button class="btn bp" onClick=${saveReminder} disabled=${saving||!addTaskId||!addDate||!addTime}>
+                  ${saving?'Saving...':'Set Reminder'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>`:null}
+
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
             <span style=${{fontWeight:800,fontSize:13,color:'var(--tx)'}}>⚡ Upcoming</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminders</span>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminder${upcoming.length!==1?'s':''}</span>
           </div>
           ${busy?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
-          ${!busy&&upcoming.length===0?html`<div style=${{textAlign:'center',padding:'28px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>✅<br/><span style=${{marginTop:6,display:'block'}}>All clear!</span></div>`:null}
+          ${!busy&&upcoming.length===0?html`
+            <div style=${{textAlign:'center',padding:'28px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
+              <div style=${{fontSize:28,marginBottom:8}}>✅</div>
+              <div>No upcoming reminders</div>
+            </div>`:null}
           <div style=${{display:'flex',flexDirection:'column',gap:8}}>
-            ${upcoming.map(r=>{const ft=fmtDt(r.remind_at);return html`
-              <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)',alignItems:'center'}}>
-                <div style=${{width:36,height:36,borderRadius:9,background:'rgba(251,191,36,.1)',border:'1px solid rgba(251,191,36,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⏰</div>
-                <div style=${{flex:1,minWidth:0}}>
-                  <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
-                  <div style=${{display:'flex',gap:6,alignItems:'center'}}>
-                    <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.col,fontWeight:700}}>${ft.label}</span>
-                    <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+            ${upcoming.map(r=>{
+              const ft=fmtRem(r.remind_at);
+              return html`
+                <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)',alignItems:'center'}}>
+                  <div style=${{width:36,height:36,borderRadius:9,background:'rgba(251,191,36,.1)',border:'1px solid rgba(251,191,36,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⏰</div>
+                  <div style=${{flex:1,minWidth:0}}>
+                    <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
+                    <div style=${{display:'flex',gap:6,alignItems:'center'}}>
+                      <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.cls,fontWeight:700}}>${ft.label}</span>
+                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                    </div>
                   </div>
-                </div>
-                <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-              </div>`;})}  
+                  <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+                </div>`;
+            })}
+          </div>
         </div>
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
             <span style=${{fontWeight:800,fontSize:13,color:'var(--rd)'}}>🚨 Overdue</span>
             <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
           </div>
-          ${!busy&&overdue.length===0?html`<div style=${{textAlign:'center',padding:'28px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>🎉<br/><span style=${{marginTop:6,display:'block'}}>Nothing overdue!</span></div>`:null}
+          ${!busy&&overdue.length===0?html`
+            <div style=${{textAlign:'center',padding:'28px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
+              <div style=${{fontSize:28,marginBottom:8}}>🎉</div>
+              <div>Nothing overdue!</div>
+            </div>`:null}
           <div style=${{display:'flex',flexDirection:'column',gap:8}}>
             ${overdue.map(r=>html`
               <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'rgba(248,113,113,.03)',borderRadius:10,border:'1px solid rgba(248,113,113,.15)',alignItems:'center'}}>
@@ -2638,7 +2748,6 @@ function RemindersView({cu,tasks,onSetReminder}){
       </div>
     </div>`;
 }
-
 /* ─── RemindersPanel ──────────────────────────────────────────────────────── */
 function RemindersPanel({onClose}){
   const [reminders,setReminders]=useState([]);
