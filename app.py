@@ -91,14 +91,6 @@ def init_db():
                 id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
                 from_user TEXT, to_user TEXT, type TEXT, data TEXT,
                 consumed INTEGER DEFAULT 0, created TEXT);
-            CREATE TABLE IF NOT EXISTS call_rooms (
-                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
-                initiator TEXT, participants TEXT DEFAULT '[]',
-                status TEXT DEFAULT 'active', created TEXT);
-            CREATE TABLE IF NOT EXISTS call_signals (
-                id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
-                from_user TEXT, to_user TEXT, type TEXT, data TEXT,
-                consumed INTEGER DEFAULT 0, created TEXT);
         """)
         # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
@@ -729,101 +721,6 @@ def send_signal(room_id):
         db.execute("INSERT INTO call_signals VALUES (?,?,?,?,?,?,?,?,?)",
                    (sid,wid(),room_id,session["user_id"],d.get("to_user",""),
                     d.get("type",""),json.dumps(d.get("data",{})),0,ts()))
-        return jsonify({"ok":True,"id":sid})
-
-@app.route("/api/calls/<room_id>/signals", methods=["GET"])
-@login_required
-def get_signals(room_id):
-    with get_db() as db:
-        rows=db.execute("""SELECT * FROM call_signals WHERE workspace_id=? AND room_id=? AND to_user=? AND consumed=0
-            ORDER BY created LIMIT 50""",(wid(),room_id,session["user_id"])).fetchall()
-        ids=[r["id"] for r in rows]
-        if ids: db.execute(f"UPDATE call_signals SET consumed=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/calls/<room_id>/ping", methods=["POST"])
-@login_required
-def ping_call(room_id):
-    with get_db() as db:
-        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
-        if not room: return jsonify({"error":"ended"}),404
-        if room["status"]!="active": return jsonify({"error":"ended"}),410
-        return jsonify({"participants":json.loads(room["participants"]),"status":room["status"],"name":room["name"]})
-
-# ── Calls (Huddle) ────────────────────────────────────────────────────────────
-@app.route("/api/calls", methods=["GET"])
-@login_required
-def get_active_calls():
-    with get_db() as db:
-        rooms=db.execute("SELECT * FROM call_rooms WHERE workspace_id=? AND status='active' ORDER BY created DESC",(wid(),)).fetchall()
-        result=[]
-        for r in rooms:
-            rd=dict(r)
-            # Auto-expire rooms older than 8 hours
-            try:
-                from datetime import timezone
-                created=datetime.fromisoformat(rd['created'].replace('Z',''))
-                if (datetime.utcnow()-created).total_seconds()>28800:
-                    db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(rd['id'],))
-                    continue
-            except: pass
-            result.append(rd)
-        return jsonify(result)
-
-@app.route("/api/calls", methods=["POST"])
-@login_required
-def create_call():
-    d=request.json or {}
-    room_id=f"call{int(datetime.now().timestamp()*1000)}"
-    with get_db() as db:
-        caller=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        cname=caller["name"] if caller else "Someone"
-        room_name=d.get("name",f"{cname}'s Huddle")
-        db.execute("INSERT INTO call_rooms VALUES (?,?,?,?,?,?,?)",
-                   (room_id,wid(),room_name,session["user_id"],json.dumps([session["user_id"]]),"active",ts()))
-        # Notify all workspace members
-        users=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
-        for u in users:
-            nid=f"n{int(datetime.now().timestamp()*1000)}{u['id']}"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"call",f"📞 {cname} started a Huddle — Join now! (Room: {room_name})",u["id"],0,ts()))
-        return jsonify({"room_id":room_id,"name":room_name})
-
-@app.route("/api/calls/<room_id>/join", methods=["POST"])
-@login_required
-def join_call(room_id):
-    with get_db() as db:
-        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
-        if not room: return jsonify({"error":"Room not found"}),404
-        if room["status"]!="active": return jsonify({"error":"Call has ended"}),410
-        parts=json.loads(room["participants"])
-        if session["user_id"] not in parts:
-            parts.append(session["user_id"])
-            db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
-        return jsonify({"participants":parts,"name":room["name"]})
-
-@app.route("/api/calls/<room_id>/leave", methods=["POST"])
-@login_required
-def leave_call(room_id):
-    with get_db() as db:
-        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
-        if not room: return jsonify({"ok":True})
-        parts=[p for p in json.loads(room["participants"]) if p!=session["user_id"]]
-        if not parts:
-            db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(room_id,))
-        else:
-            db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
-        return jsonify({"ok":True})
-
-@app.route("/api/calls/<room_id>/signal", methods=["POST"])
-@login_required
-def send_signal(room_id):
-    d=request.json or {}
-    sid=f"sig{int(datetime.now().timestamp()*1000)}{secrets.token_hex(3)}"
-    with get_db() as db:
-        db.execute("INSERT INTO call_signals VALUES (?,?,?,?,?,?,?,?,?)",
-                   (sid,wid(),room_id,session["user_id"],d.get("to_user",""),
-                    d.get("type",""),json.dumps(d.get("data",{})),0,ts()))
         # Clean up old consumed signals (keep last 200 per room)
         old=db.execute("SELECT id FROM call_signals WHERE room_id=? AND consumed=1 ORDER BY created DESC LIMIT -1 OFFSET 200",(room_id,)).fetchall()
         if old: db.execute(f"DELETE FROM call_signals WHERE id IN ({','.join('?'*len(old))})",[r['id'] for r in old])
@@ -833,8 +730,7 @@ def send_signal(room_id):
 @login_required
 def get_signals(room_id):
     with get_db() as db:
-        rows=db.execute("""SELECT * FROM call_signals
-            WHERE workspace_id=? AND room_id=? AND to_user=? AND consumed=0
+        rows=db.execute("""SELECT * FROM call_signals WHERE workspace_id=? AND room_id=? AND to_user=? AND consumed=0
             ORDER BY created LIMIT 50""",(wid(),room_id,session["user_id"])).fetchall()
         ids=[r["id"] for r in rows]
         if ids: db.execute(f"UPDATE call_signals SET consumed=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
