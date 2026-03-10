@@ -1012,14 +1012,14 @@ textarea.inp{resize:vertical;min-height:68px}
 .ai-action{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:9px;padding:8px 11px;font-size:11px;color:var(--gn);font-family:monospace;margin-top:5px}
 </style></head><body>
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
-  <div style="position:relative;width:100px;height:100px">
-    <svg style="position:absolute;top:0;left:0;width:100px;height:100px;animation:sp .9s linear infinite" viewBox="0 0 100 100">
+  <div style="position:relative;width:116px;height:116px">
+    <svg style="position:absolute;top:0;left:0;width:116px;height:116px;animation:sp .9s linear infinite" viewBox="0 0 116 116">
       <defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs>
-      <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(99,102,241,.12)" stroke-width="4.5"/>
-      <circle cx="50" cy="50" r="46" fill="none" stroke="url(#rg)" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="72 217"/>
+      <circle cx="58" cy="58" r="54" fill="none" stroke="rgba(99,102,241,.12)" stroke-width="4.5"/>
+      <circle cx="58" cy="58" r="54" fill="none" stroke="url(#rg)" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="84 255"/>
     </svg>
-    <div style="position:absolute;top:11px;left:11px;width:78px;height:78px;background:linear-gradient(135deg,#6366f1,#a78bfa);border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 36px rgba(99,102,241,.5)">
-      <svg width="42" height="42" viewBox="0 0 64 64" fill="none">
+    <div style="position:absolute;top:14px;left:14px;width:88px;height:88px;background:linear-gradient(135deg,#6366f1,#a78bfa);border-radius:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 36px rgba(99,102,241,.5)">
+      <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
         <circle cx="32" cy="32" r="9" fill="white"/>
         <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
         <circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/>
@@ -3130,7 +3130,7 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-/* ─── HuddleCall ──────────────────────────────────────────────────────────── */
+/* ─── HuddleCall (Teams Facilitator-style) ────────────────────────────────── */
 function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [status,setStatus]=useState('idle');
   const [roomId,setRoomId]=useState(null);
@@ -3140,11 +3140,21 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [videoOn,setVideoOn]=useState(false);
   const [incomingCall,setIncomingCall]=useState(null);
   const [elapsed,setElapsed]=useState(0);
+  const [showPanel,setShowPanel]=useState(false);
+  const [notes,setNotes]=useState([]);
+  const [agenda,setAgenda]=useState([]);
+  const [agendaInput,setAgendaInput]=useState('');
+  const [agendaActive,setAgendaActive]=useState(null);
+  const [handRaised,setHandRaised]=useState(false);
+  const [speaking,setSpeaking]=useState({});
+  const [noteInput,setNoteInput]=useState('');
+  const [activeTab,setActiveTab]=useState('notes');
 
   const localStream=useRef(null);const localVideo=useRef(null);
   const pcs=useRef({});const audioEls=useRef({});const videoEls=useRef({});
   const pollRef=useRef(null);const pingRef=useRef(null);const timerRef=useRef(null);
   const roomIdRef=useRef(null);const statusRef=useRef('idle');
+  const analyserRef=useRef({});const speakTimers=useRef({});
 
   useEffect(()=>{roomIdRef.current=roomId;},[roomId]);
   useEffect(()=>{statusRef.current=status;},[status]);
@@ -3152,7 +3162,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     onStateChange&&onStateChange({status,roomId,roomName,participants,elapsed,muted,incomingCall,allUsers:users});
   },[status,roomId,roomName,participants,elapsed,muted,incomingCall]);
 
-  // Expose imperative actions via ref
   if(cmdRef){
     cmdRef.current={
       start:(name)=>startCall(name),
@@ -3165,6 +3174,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
 
   const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
+  // Poll for incoming calls when idle
   useEffect(()=>{
     if(status!=='idle')return;
     const id=setInterval(async()=>{
@@ -3180,6 +3190,24 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     return()=>clearInterval(id);
   },[status,cu,users]);
 
+  const detectSpeaking=(uid,stream)=>{
+    try{
+      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const src=ctx.createMediaStreamSource(stream);
+      const analyser=ctx.createAnalyser();analyser.fftSize=512;
+      src.connect(analyser);analyserRef.current[uid]={ctx,analyser};
+      const check=()=>{
+        if(!analyserRef.current[uid])return;
+        const data=new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        const avg=data.reduce((a,b)=>a+b,0)/data.length;
+        setSpeaking(s=>({...s,[uid]:avg>12}));
+        requestAnimationFrame(check);
+      };
+      check();
+    }catch(e){}
+  };
+
   const createPC=(remoteUserId,rid)=>{
     if(pcs.current[remoteUserId]){try{pcs.current[remoteUserId].close();}catch(e){}}
     const pc=new RTCPeerConnection(STUN);
@@ -3190,6 +3218,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         let el=audioEls.current[remoteUserId];
         if(!el){el=document.createElement('audio');el.autoplay=true;el.style.display='none';document.body.appendChild(el);audioEls.current[remoteUserId]=el;}
         el.srcObject=stream;
+        detectSpeaking(remoteUserId,stream);
       } else if(e.track.kind==='video'){let el=videoEls.current[remoteUserId];if(el)el.srcObject=stream;}
     };
     pc.onicecandidate=e=>{if(e.candidate&&roomIdRef.current)api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:remoteUserId,type:'ice',data:e.candidate.toJSON()});};
@@ -3235,15 +3264,18 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
 
   const getMedia=async()=>{
-    try{const s=await navigator.mediaDevices.getUserMedia({audio:true,video:false});localStream.current=s;return s;}
+    try{const s=await navigator.mediaDevices.getUserMedia({audio:true,video:false});localStream.current=s;
+      detectSpeaking(cu.id,s);return s;}
     catch(e){alert('Microphone access required for Huddle.');return null;}
   };
 
   const startCall=async(name)=>{
     const s=await getMedia();if(!s)return;
-    const r=await api.post('/api/calls',{name:name||(cu.name||'')+"\'s Huddle"});
+    const r=await api.post('/api/calls',{name:name||(cu.name||'')+"'s Huddle"});
     if(!r||r.error){alert('Could not start call.');return;}
     setRoomId(r.room_id);setRoomName(r.name||'Huddle');setStatus('in-call');setParticipants([cu.id]);setIncomingCall(null);
+    setNotes([{id:Date.now(),text:'📞 Call started by '+cu.name,ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
+    setAgenda([]);setShowPanel(false);
     playSound('notif');startSignalPoll(r.room_id);startPing(r.room_id);startTimer();
   };
 
@@ -3253,6 +3285,8 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(!r||r.error){alert(r&&r.error||'Could not join call.');return;}
     const parts=r.participants||[];
     setRoomId(rid);setRoomName(r.name||rname||'Huddle');setStatus('in-call');setParticipants(parts);setIncomingCall(null);
+    setNotes([{id:Date.now(),text:'✅ '+cu.name+' joined the huddle',ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
+    setAgenda([]);setShowPanel(false);
     playSound('notif');
     for(const uid of parts){
       if(uid===cu.id)continue;
@@ -3265,10 +3299,12 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const cleanup=async()=>{
     if(pollRef.current)clearInterval(pollRef.current);if(pingRef.current)clearInterval(pingRef.current);if(timerRef.current)clearInterval(timerRef.current);
     Object.values(pcs.current).forEach(pc=>{try{pc.close();}catch(e){}});pcs.current={};
+    Object.values(analyserRef.current).forEach(({ctx})=>{try{ctx.close();}catch(e){}});analyserRef.current={};
     if(localStream.current){localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;}
     Object.values(audioEls.current).forEach(el=>{try{el.srcObject=null;el.remove();}catch(e){}});audioEls.current={};
     if(roomIdRef.current)await api.post('/api/calls/'+roomIdRef.current+'/leave',{});
     setRoomId(null);setRoomName('');setStatus('idle');setParticipants([]);setMuted(false);setVideoOn(false);setElapsed(0);
+    setNotes([]);setAgenda([]);setShowPanel(false);setHandRaised(false);setSpeaking({});
   };
 
   const toggleMute=()=>{
@@ -3294,7 +3330,40 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     }
   };
 
+  const addNote=()=>{
+    if(!noteInput.trim())return;
+    const n={id:Date.now(),text:noteInput.trim(),ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),author:cu.name,auto:false};
+    setNotes(prev=>[...prev,n]);setNoteInput('');
+  };
+
+  const addAgendaItem=()=>{
+    if(!agendaInput.trim())return;
+    setAgenda(prev=>[...prev,{id:Date.now(),text:agendaInput.trim(),done:false,active:false}]);
+    setAgendaInput('');
+  };
+
+  const setAgendaItemActive=(id)=>{
+    setAgenda(prev=>prev.map(a=>({...a,active:a.id===id})));
+    setAgendaActive(id);
+    const item=agenda.find(a=>a.id===id);
+    if(item)setNotes(prev=>[...prev,{id:Date.now(),text:'📌 Now discussing: '+item.text,ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
+  };
+
+  const markAgendaDone=(id)=>{
+    setAgenda(prev=>prev.map(a=>a.id===id?{...a,done:true,active:false}:a));
+    if(agendaActive===id)setAgendaActive(null);
+    const item=agenda.find(a=>a.id===id);
+    if(item)setNotes(prev=>[...prev,{id:Date.now(),text:'✅ Completed: '+item.text,ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
+  };
+
+  const raiseHand=()=>{
+    setHandRaised(h=>!h);
+    const raised=!handRaised;
+    setNotes(prev=>[...prev,{id:Date.now(),text:(raised?'✋ ':'👋 ')+cu.name+(raised?' raised their hand':' lowered their hand'),ts:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),auto:true}]);
+  };
+
   const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'});
+  const activeAgenda=agenda.find(a=>a.active);
 
   const incomingToast=incomingCall&&status==='idle'?html`
     <div class="incoming-call">
@@ -3311,11 +3380,121 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
 
   if(status==='idle') return html`<div>${incomingToast}</div>`;
 
+  // ── Facilitator side panel ────────────────────────────────────────────────
+  const facilitatorPanel=showPanel?html`
+    <div style=${{position:'fixed',bottom:74,right:16,width:320,height:460,background:'var(--sf)',border:'1.5px solid var(--bd)',borderRadius:16,boxShadow:'0 12px 48px rgba(0,0,0,.45)',zIndex:1698,display:'flex',flexDirection:'column',overflow:'hidden',animation:'slideUp .2s ease'}}>
+      <div style=${{padding:'12px 14px 0',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+          <div style=${{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#6366f1,#a78bfa)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <span style=${{fontSize:13,fontWeight:800,color:'var(--tx)'}}>Meeting Facilitator</span>
+          <button onClick=${()=>setShowPanel(false)} style=${{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,lineHeight:1}}>✕</button>
+        </div>
+        <div style=${{display:'flex',gap:2,marginBottom:-1}}>
+          ${['notes','agenda','people'].map(tab=>html`
+            <button key=${tab} onClick=${()=>setActiveTab(tab)}
+              style=${{padding:'6px 12px',borderRadius:'8px 8px 0 0',border:'none',cursor:'pointer',fontSize:11,fontWeight:600,
+                background:activeTab===tab?'var(--bg)':'transparent',
+                color:activeTab===tab?'var(--ac)':'var(--tx3)',
+                borderBottom:activeTab===tab?'2px solid var(--ac)':'2px solid transparent',
+                textTransform:'capitalize'}}>
+              ${tab==='notes'?'📝':tab==='agenda'?'📋':'👥'} ${tab.charAt(0).toUpperCase()+tab.slice(1)}
+              ${tab==='notes'?html`<span style=${{marginLeft:4,background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${notes.length}</span>`:''}
+            </button>`)}
+        </div>
+      </div>
+
+      <div style=${{flex:1,overflowY:'auto',padding:'10px 14px'}}>
+        ${activeTab==='notes'?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+            ${notes.length===0?html`<p style=${{color:'var(--tx3)',fontSize:11,textAlign:'center',padding:'20px 0'}}>No notes yet. Add one below!</p>`:null}
+            ${notes.map(n=>html`
+              <div key=${n.id} style=${{padding:'7px 10px',borderRadius:9,background:n.auto?'rgba(99,102,241,.07)':'var(--sf2)',border:'1px solid '+(n.auto?'rgba(99,102,241,.15)':'var(--bd)')}}>
+                <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:6}}>
+                  <p style=${{fontSize:12,color:'var(--tx)',lineHeight:1.5,margin:0,flex:1}}>${n.text}</p>
+                </div>
+                <div style=${{display:'flex',gap:6,marginTop:3}}>
+                  ${!n.auto?html`<span style=${{fontSize:9,color:'var(--ac)',fontWeight:600}}>${n.author}</span>`:null}
+                  <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${n.ts}</span>
+                </div>
+              </div>`)}
+          </div>`:null}
+
+        ${activeTab==='agenda'?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+            ${activeAgenda?html`
+              <div style=${{padding:'8px 10px',borderRadius:9,background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.25)',marginBottom:4}}>
+                <div style=${{display:'flex',alignItems:'center',gap:6}}>
+                  <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite'}}></div>
+                  <span style=${{fontSize:10,fontWeight:700,color:'#22c55e'}}>NOW DISCUSSING</span>
+                </div>
+                <p style=${{fontSize:12,color:'var(--tx)',margin:'4px 0 0',fontWeight:600}}>${activeAgenda.text}</p>
+              </div>`:null}
+            ${agenda.length===0?html`<p style=${{color:'var(--tx3)',fontSize:11,textAlign:'center',padding:'20px 0'}}>No agenda items yet</p>`:null}
+            ${agenda.map((a,i)=>html`
+              <div key=${a.id} style=${{padding:'7px 10px',borderRadius:9,background:a.active?'rgba(99,102,241,.08)':a.done?'rgba(34,197,94,.05)':'var(--sf2)',border:'1px solid '+(a.active?'rgba(99,102,241,.3)':a.done?'rgba(34,197,94,.2)':'var(--bd)'),opacity:a.done?0.6:1}}>
+                <div style=${{display:'flex',alignItems:'center',gap:7}}>
+                  <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',minWidth:16}}>${i+1}.</span>
+                  <span style=${{fontSize:12,color:'var(--tx)',flex:1,textDecoration:a.done?'line-through':'none'}}>${a.text}</span>
+                  ${!a.done?html`
+                    <button onClick=${()=>setAgendaItemActive(a.id)} title="Start discussing"
+                      style=${{padding:'3px 7px',borderRadius:6,border:'1px solid rgba(99,102,241,.3)',background:'rgba(99,102,241,.1)',color:'var(--ac)',fontSize:9,cursor:'pointer',fontWeight:700}}>
+                      ${a.active?'Active':'▶ Start'}
+                    </button>
+                    <button onClick=${()=>markAgendaDone(a.id)} title="Mark done"
+                      style=${{padding:'3px 7px',borderRadius:6,border:'1px solid rgba(34,197,94,.3)',background:'rgba(34,197,94,.1)',color:'#22c55e',fontSize:9,cursor:'pointer',fontWeight:700}}>
+                      ✓
+                    </button>`:html`<span style=${{fontSize:9,color:'#22c55e',fontWeight:700}}>✓ Done</span>`}
+                </div>
+              </div>`)}
+          </div>`:null}
+
+        ${activeTab==='people'?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+            ${partUsers.map(u=>html`
+              <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:9,padding:'7px 9px',borderRadius:10,background:'var(--sf2)',border:'1px solid var(--bd)'}}>
+                <div style=${{position:'relative'}}>
+                  <${Av} u=${u} size=${32}/>
+                  <div style=${{position:'absolute',bottom:-1,right:-1,width:10,height:10,borderRadius:'50%',background:speaking[u.id]?'#22c55e':'var(--tx3)',border:'1.5px solid var(--sf)',transition:'background .15s'}}></div>
+                </div>
+                <div style=${{flex:1}}>
+                  <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>${u.name}${u.id===cu.id?' (you)':''}</div>
+                  <div style=${{fontSize:10,color:speaking[u.id]?'#22c55e':'var(--tx3)',transition:'color .15s'}}>${speaking[u.id]?'🎙 Speaking':'Silent'}</div>
+                </div>
+                ${handRaised&&u.id===cu.id?html`<span style=${{fontSize:14}}>✋</span>`:null}
+              </div>`)}
+          </div>`:null}
+      </div>
+
+      <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',flexShrink:0}}>
+        ${activeTab==='notes'?html`
+          <div style=${{display:'flex',gap:6}}>
+            <input value=${noteInput} onInput=${e=>setNoteInput(e.target.value)}
+              onKeyDown=${e=>{if(e.key==='Enter')addNote();}}
+              placeholder="Add a note or decision…"
+              style=${{flex:1,height:32,borderRadius:8,border:'1px solid var(--bd)',background:'var(--bg)',color:'var(--tx)',padding:'0 10px',fontSize:12,outline:'none'}}/>
+            <button onClick=${addNote} style=${{height:32,borderRadius:8,background:'var(--ac)',color:'#fff',border:'none',padding:'0 12px',cursor:'pointer',fontSize:12,fontWeight:700}}>Add</button>
+          </div>`:null}
+        ${activeTab==='agenda'?html`
+          <div style=${{display:'flex',gap:6}}>
+            <input value=${agendaInput} onInput=${e=>setAgendaInput(e.target.value)}
+              onKeyDown=${e=>{if(e.key==='Enter')addAgendaItem();}}
+              placeholder="Add agenda item…"
+              style=${{flex:1,height:32,borderRadius:8,border:'1px solid var(--bd)',background:'var(--bg)',color:'var(--tx)',padding:'0 10px',fontSize:12,outline:'none'}}/>
+            <button onClick=${addAgendaItem} style=${{height:32,borderRadius:8,background:'var(--ac)',color:'#fff',border:'none',padding:'0 12px',cursor:'pointer',fontSize:12,fontWeight:700}}>Add</button>
+          </div>`:null}
+        ${activeTab==='people'?html`
+          <p style=${{fontSize:10,color:'var(--tx3)',textAlign:'center',margin:0}}>${partUsers.length} participant${partUsers.length!==1?'s':''} • ${elapsed>0?fmtTime(elapsed)+' elapsed':''}</p>`:null}
+      </div>
+    </div>`:null;
+
   return html`
     <div>
       ${incomingToast}
+      ${facilitatorPanel}
       ${videoOn?html`
-        <div style=${{position:'fixed',bottom:74,right:16,width:220,borderRadius:12,overflow:'hidden',border:'2px solid #22c55e',boxShadow:'0 8px 28px rgba(0,0,0,.5)',zIndex:1699,background:'#000'}}>
+        <div style=${{position:'fixed',bottom:74,right:showPanel?356:16,width:220,borderRadius:12,overflow:'hidden',border:'2px solid #22c55e',boxShadow:'0 8px 28px rgba(0,0,0,.5)',zIndex:1699,background:'#000',transition:'right .2s'}}>
           <video ref=${localVideo} autoplay muted style=${{width:'100%',height:120,objectFit:'cover',display:'block'}}></video>
           <div style=${{display:'flex',gap:4,padding:'4px 6px',background:'rgba(0,0,0,.75)',flexWrap:'wrap'}}>
             ${partUsers.filter(u=>u.id!==cu.id).map(u=>html`
@@ -3330,11 +3509,19 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtTime(elapsed)}</span>
           </div>
         </div>
+        ${activeAgenda?html`
+          <div style=${{display:'flex',alignItems:'center',gap:5,background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',borderRadius:8,padding:'3px 9px',maxWidth:180,overflow:'hidden',flexShrink:0}}>
+            <span style=${{fontSize:9,color:'var(--ac)',fontWeight:700,whiteSpace:'nowrap'}}>📋</span>
+            <span style=${{fontSize:10,color:'var(--ac)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeAgenda.text}</span>
+          </div>`:null}
         <div style=${{width:1,height:30,background:'var(--bd)',flexShrink:0}}></div>
         <div style=${{display:'flex',gap:4,flex:1,overflowX:'auto',scrollbarWidth:'none',alignItems:'center'}}>
           ${partUsers.map(u=>html`
             <div key=${u.id} title=${u.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:2,flexShrink:0,padding:'2px 5px',borderRadius:8,background:u.id===cu.id?'rgba(34,197,94,.12)':'transparent'}}>
-              <div style=${{position:'relative'}}><${Av} u=${u} size=${28}/><div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div></div>
+              <div style=${{position:'relative'}}>
+                <${Av} u=${u} size=${28}/>
+                <div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:speaking[u.id]?'#22c55e':'#6b7280',border:'1.5px solid var(--sf)',transition:'background .15s'}}></div>
+              </div>
               <span style=${{fontSize:8,color:'var(--tx3)',maxWidth:36,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1}}>${u.name.split(' ')[0]}</span>
             </div>`)}
         </div>
@@ -3348,6 +3535,15 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(videoOn?'rgba(99,102,241,.4)':'var(--bd)'),background:videoOn?'rgba(99,102,241,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}>
             ${videoOn?html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
             html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
+          </button>
+          <button onClick=${raiseHand} title=${handRaised?'Lower hand':'Raise hand'}
+            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(handRaised?'rgba(251,191,36,.5)':'var(--bd)'),background:handRaised?'rgba(251,191,36,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,transition:'all .15s'}}>
+            ${handRaised?'✋':'🖐'}
+          </button>
+          <button onClick=${()=>setShowPanel(p=>!p)} title="Meeting Facilitator"
+            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(showPanel?'rgba(99,102,241,.5)':'var(--bd)'),background:showPanel?'rgba(99,102,241,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s',position:'relative'}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke=${showPanel?'var(--ac)':'currentColor'} strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            ${notes.length>0?html`<div style=${{position:'absolute',top:-3,right:-3,width:14,height:14,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>${notes.length}</div>`:null}
           </button>
           <div style=${{width:1,height:24,background:'var(--bd)'}}></div>
           <button onClick=${cleanup}
@@ -3483,14 +3679,14 @@ function App(){
   },[cu]);
 
   if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
-    <div style=${{position:'relative',width:100,height:100}}>
-      <svg style=${{position:'absolute',top:0,left:0,width:100,height:100,animation:'sp .9s linear infinite'}} viewBox="0 0 100 100">
+    <div style=${{position:'relative',width:116,height:116}}>
+      <svg style=${{position:'absolute',top:0,left:0,width:116,height:116,animation:'sp .9s linear infinite'}} viewBox="0 0 116 116">
         <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#6366f1"/><stop offset="100%" stopColor="#a78bfa"/></linearGradient></defs>
-        <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(99,102,241,.12)" strokeWidth="4.5"/>
-        <circle cx="50" cy="50" r="46" fill="none" stroke="url(#sg)" strokeWidth="4.5" strokeLinecap="round" strokeDasharray="72 217"/>
+        <circle cx="58" cy="58" r="54" fill="none" stroke="rgba(99,102,241,.12)" strokeWidth="4.5"/>
+        <circle cx="58" cy="58" r="54" fill="none" stroke="url(#sg)" strokeWidth="4.5" strokeLinecap="round" strokeDasharray="84 255"/>
       </svg>
-      <div style=${{position:'absolute',top:11,left:11,width:78,height:78,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:22,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 36px rgba(99,102,241,.5)'}}>
-        <svg width="42" height="42" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
+      <div style=${{position:'absolute',top:14,left:14,width:88,height:88,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 36px rgba(99,102,241,.5)'}}>
+        <svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
       </div>
     </div>
     <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlow...</p>
