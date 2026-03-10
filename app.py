@@ -626,6 +626,20 @@ def get_notifs():
             ORDER BY ts DESC LIMIT 50""",(wid(),session["user_id"])).fetchall()
         return jsonify([dict(r) for r in rows])
 
+@app.route("/api/notifications/read-all",methods=["PUT"])
+@login_required
+def notifs_read_all():
+    with get_db() as db:
+        db.execute("UPDATE notifications SET read=1 WHERE workspace_id=?",(wid(),))
+        return jsonify({"ok":True})
+
+@app.route("/api/notifications/all",methods=["DELETE"])
+@login_required
+def notifs_clear_all():
+    with get_db() as db:
+        db.execute("DELETE FROM notifications WHERE workspace_id=?",(wid(),))
+        return jsonify({"ok":True})
+
 @app.route("/api/notifications/<nid>/read",methods=["PUT"])
 @login_required
 def read_notif(nid):
@@ -1046,6 +1060,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
     messages:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
     dm:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,
     notifs:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+    reminders:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     reminders:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>`,
     team:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     settings:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
@@ -1057,7 +1072,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
     {id:'messages', icon:ICONS.messages, label:'Channels'},
     {id:'dm',       icon:ICONS.dm,       label:'Direct Messages',badge:totalDm},
     {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
-    {id:'notifs',   icon:ICONS.notifs,   label:'Notifications',badge:unread},
     ...(cu&&cu.role==='Admin'?[{id:'team',icon:ICONS.team,label:'Team'},{id:'settings',icon:ICONS.settings,label:'Settings'}]:[]),
   ];
   const w=col?60:224;
@@ -1092,14 +1106,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
           </button>`)}
       </nav>
       <div style=${{padding:'7px 6px',borderTop:'1px solid var(--bd)'}}>
-        ${!col?html`
-          <div style=${{display:'flex',alignItems:'center',gap:9,padding:'8px 10px',marginBottom:4,borderRadius:9,background:'var(--sf2)'}}>
-            <${Av} u=${cu}/>
-            <div style=${{flex:1,minWidth:0}}>
-              <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${cu&&cu.name}</div>
-              <div style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${cu&&cu.role}</div>
-            </div>
-          </div>`:null}
         <button class="nb" onClick=${onLogout} title=${col?'Sign Out':''} style=${{color:'var(--rd)',justifyContent:col?'center':'flex-start',padding:col?'10px 0':'8px 12px'}}>
           <span style=${{fontSize:15}}>⤴</span>
           ${!col?html`<span>Sign Out</span>`:null}
@@ -1112,54 +1118,91 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
-function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminders}){
+function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminders,notifs,onNotifClick,onMarkAllRead,onClearAll}){
+  const [showNP,setShowNP]=useState(false);
   const now=new Date();
   const todayStr=now.toLocaleDateString('en-US',{day:'numeric',month:'short'});
   const upcoming=safe(upcomingReminders).slice(0,4);
-  const fmtTime=dt=>{const d=new Date(dt);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});};
+  const fmtT=dt=>{const d=new Date(dt);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});};
+  const unread=safe(notifs).filter(n=>!n.read).length;
+  const NI={task_assigned:'✅',status_change:'🔄',comment:'💬',deadline:'⏰',dm:'📨',project_added:'📁',reminder:'🔔'};
+  const NC={task_assigned:'var(--ac)',status_change:'var(--cy)',comment:'var(--pu)',deadline:'var(--am)',dm:'var(--cy)',project_added:'var(--gn)',reminder:'var(--am)'};
+  const npRef=useRef(null);
+  useEffect(()=>{
+    if(!showNP)return;
+    const h=e=>{if(npRef.current&&!npRef.current.contains(e.target))setShowNP(false);};
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
+  },[showNP]);
   return html`
     <div style=${{flexShrink:0,background:'var(--sf)',borderBottom:'1px solid var(--bd)'}}>
-      <div style=${{padding:'0 18px',borderBottom:'1px solid var(--bd)',height:46,display:'flex',alignItems:'center',gap:12,background:'linear-gradient(90deg,rgba(99,102,241,.04),transparent)'}}>
-        <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'3px 10px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)'}}>
-          <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#6366f1"/><circle cx="32" cy="13" r="4" fill="#6366f1" opacity="0.7"/><circle cx="48" cy="43" r="4" fill="#6366f1" opacity="0.7"/><circle cx="16" cy="43" r="4" fill="#6366f1" opacity="0.7"/><line x1="32" y1="17" x2="32" y2="25" stroke="#6366f1" stroke-width="2.5"/><line x1="44" y1="40" x2="38" y2="36" stroke="#6366f1" stroke-width="2.5"/><line x1="20" y1="40" x2="26" y2="36" stroke="#6366f1" stroke-width="2.5"/></svg>
-          <span style=${{fontSize:11,fontWeight:700,color:'var(--tx)',letterSpacing:'.3px'}}>Your Schedule</span>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <div style=${{padding:'0 16px',borderBottom:'1px solid var(--bd)',height:42,display:'flex',alignItems:'center',gap:10}}>
+        <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'3px 9px',background:'var(--sf2)',borderRadius:7,border:'1px solid var(--bd)'}}>
+          <svg width="12" height="12" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#6366f1"/><circle cx="32" cy="13" r="4" fill="#6366f1" opacity="0.7"/><circle cx="48" cy="43" r="4" fill="#6366f1" opacity="0.7"/><circle cx="16" cy="43" r="4" fill="#6366f1" opacity="0.7"/><line x1="32" y1="17" x2="32" y2="25" stroke="#6366f1" stroke-width="2.5"/><line x1="44" y1="40" x2="38" y2="36" stroke="#6366f1" stroke-width="2.5"/><line x1="20" y1="40" x2="26" y2="36" stroke="#6366f1" stroke-width="2.5"/></svg>
+          <span style=${{fontSize:11,fontWeight:700,color:'var(--tx)',letterSpacing:'.2px'}}>Your Schedule</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
-        <div style=${{flex:1,position:'relative',height:28,display:'flex',alignItems:'center'}}>
-          <div style=${{position:'absolute',left:0,right:0,height:3,background:'var(--bd)',borderRadius:2}}>
-            ${upcoming.length>0?html`<div style=${{position:'absolute',left:0,top:0,height:'100%',width:'55%',background:'linear-gradient(90deg,rgba(99,102,241,.6),rgba(129,140,248,.3))',borderRadius:2}}></div>`:null}
+        <div style=${{flex:1,position:'relative',height:26,display:'flex',alignItems:'center'}}>
+          <div style=${{position:'absolute',left:0,right:0,height:2,background:'var(--bd)',borderRadius:2}}>
+            ${upcoming.length>0?html`<div style=${{position:'absolute',left:0,top:0,height:'100%',width:'55%',background:'linear-gradient(90deg,rgba(99,102,241,.45),rgba(129,140,248,.1))',borderRadius:2}}></div>`:null}
           </div>
           ${upcoming.map((r,i)=>html`
             <div key=${r.id} style=${{position:'absolute',left:(8+i*22)+'%',top:'50%',transform:'translate(-50%,-50%)',zIndex:2,cursor:'pointer'}} onClick=${onViewReminders} title=${r.task_title}>
-              <div style=${{width:26,height:26,borderRadius:'50%',background:'linear-gradient(135deg,#fbbf24,#f59e0b)',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#000',boxShadow:'0 2px 10px rgba(251,191,36,.5)'}}>
+              <div style=${{width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#fbbf24,#f59e0b)',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:800,color:'#000',boxShadow:'0 1px 6px rgba(251,191,36,.4)'}}>
                 ${r.task_title?r.task_title.charAt(0).toUpperCase():'R'}
               </div>
-              <div style=${{position:'absolute',bottom:-14,left:'50%',transform:'translateX(-50%)',fontSize:9,color:'var(--tx3)',whiteSpace:'nowrap',fontFamily:'monospace',fontWeight:600}}>
-                ${fmtTime(r.remind_at)}
-              </div>
+              <span style=${{position:'absolute',bottom:-13,left:'50%',transform:'translateX(-50%)',fontSize:9,color:'var(--tx3)',whiteSpace:'nowrap',fontFamily:'monospace'}}>${fmtT(r.remind_at)}</span>
             </div>`)}
           ${upcoming.length===0?html`
-            <div style=${{position:'absolute',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:5}}>
-              <span style=${{fontSize:10,color:'var(--tx3)',whiteSpace:'nowrap'}}>No upcoming reminders today</span>
+            <div style=${{position:'absolute',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:6}}>
+              <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap'}}>No upcoming reminders today</span>
               <button class="btn bg" style=${{fontSize:10,padding:'2px 8px',height:20,borderRadius:4}} onClick=${onViewReminders}>+ Add</button>
             </div>`:null}
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
-          <button class="btn bg" style=${{padding:'5px 9px',fontSize:13,height:28,borderRadius:7}} onClick=${()=>setDark(!dark)}>${dark?'☀':'🌙'}</button>
-          ${cu?html`
-            <div style=${{display:'flex',alignItems:'center',gap:7,padding:'3px 10px 3px 4px',background:'var(--sf2)',borderRadius:20,border:'1px solid var(--bd)',cursor:'pointer',transition:'all .15s'}} onClick=${onViewReminders}>
-              <${Av} u=${cu} size=${26}/>
-              <div>
-                <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',lineHeight:1.2}}>${cu.name.split(' ')[0]}</div>
-                <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu.role}</div>
-              </div>
-            </div>`:null}
+          <button class="btn bg" style=${{padding:'4px 8px',fontSize:13,height:26,borderRadius:6}} onClick=${()=>setDark(!dark)}>${dark?'☀️':'🌙'}</button>
+          <div style=${{position:'relative'}} ref=${npRef}>
+            <button style=${{width:30,height:30,borderRadius:8,border:'1px solid var(--bd)',background:showNP?'var(--sf2)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)'}}
+              onClick=${()=>setShowNP(v=>!v)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              ${unread>0?html`<div style=${{position:'absolute',top:-3,right:-3,width:15,height:15,borderRadius:'50%',background:'#ef4444',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:'#fff'}}>${unread>9?'9+':unread}</div>`:null}
+            </button>
+            ${showNP?html`
+              <div style=${{position:'absolute',top:36,right:0,width:320,maxHeight:400,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,.15)',zIndex:3000,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+                <div style=${{padding:'10px 13px 8px',borderBottom:'1px solid var(--bd)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
+                  <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Notifications ${unread>0?html`<span style=${{color:'var(--ac)',fontSize:11}}>(${unread})</span>`:null}</span>
+                  <div style=${{display:'flex',gap:5}}>
+                    ${unread>0?html`<button class="btn bg" style=${{fontSize:10,padding:'2px 7px',height:20}} onClick=${onMarkAllRead}>✓ Mark all read</button>`:null}
+                    <button class="btn brd" style=${{fontSize:10,padding:'2px 7px',height:20}} onClick=${()=>{onClearAll&&onClearAll();setShowNP(false);}}>Clear all</button>
+                  </div>
+                </div>
+                <div style=${{overflowY:'auto',flex:1}}>
+                  ${safe(notifs).length===0?html`<div style=${{textAlign:'center',padding:'20px 0',color:'var(--tx3)',fontSize:12}}>🔔 All caught up!</div>`:null}
+                  ${safe(notifs).slice(0,25).map(n=>html`
+                    <div key=${n.id} onClick=${()=>{onNotifClick&&onNotifClick(n);setShowNP(false);}}
+                      style=${{display:'flex',gap:9,padding:'9px 13px',borderBottom:'1px solid var(--bd)',cursor:'pointer',background:n.read?'transparent':'rgba(99,102,241,.04)'}}>
+                      <div style=${{width:26,height:26,borderRadius:7,background:(NC[n.type]||'var(--ac)')+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>${NI[n.type]||'🔔'}</div>
+                      <div style=${{flex:1,minWidth:0}}>
+                        <p style=${{fontSize:12,color:'var(--tx)',fontWeight:n.read?400:600,lineHeight:1.35,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${n.content}</p>
+                        <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span>
+                      </div>
+                      ${!n.read?html`<div style=${{width:5,height:5,borderRadius:'50%',background:'var(--ac)',flexShrink:0,marginTop:5}}></div>`:null}
+                    </div>`)}
+                </div>
+              </div>`:null}
+          </div>
+          ${cu?html`<div style=${{display:'flex',alignItems:'center',gap:6,padding:'3px 9px 3px 3px',background:'var(--sf2)',borderRadius:20,border:'1px solid var(--bd)'}}>
+            <${Av} u=${cu} size=${24}/>
+            <div style=${{lineHeight:1.2}}>
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)'}}>${cu.name.split(' ')[0]}</div>
+              <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu.role}</div>
+            </div>
+          </div>`:null}
         </div>
       </div>
       <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 22px',height:50}}>
         <div>
-          <h1 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',letterSpacing:-.4,lineHeight:1.2}}>${title}</h1>
+          <h1 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',letterSpacing:-.4}}>${title}</h1>
           ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:1}}>${sub}</p>`:null}
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:7}}>${extra||null}</div>
@@ -1224,17 +1267,23 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
   const [stage,setStage]=useState((task&&task.stage)||'backlog');
   const [due,setDue]=useState((task&&task.due)||'');
   const [pct,setPct]=useState((task&&task.pct)||0);
-  const [cmts,setCmts]=useState(safe(task&&task.comments));
+  const [cmts,setCmts]=useState(()=>{const r=task&&task.comments;if(!r)return[];if(Array.isArray(r))return r;try{return JSON.parse(r)||[];}catch{return [];}});
   const [nc,setNc]=useState('');
   const [tab,setTab]=useState('details');
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
   const isEdit=!!(task&&task.id);
 
-  const addCmt=()=>{
+  const addCmt=async()=>{
     if(!nc.trim())return;
-    setCmts(prev=>[...prev,{id:Date.now()+'',uid:cu.id,text:nc.trim(),ts:new Date().toISOString()}]);
-    setNc('');
+    const newCmt={id:Date.now()+'',uid:cu&&cu.id,name:cu&&cu.name,text:nc.trim(),ts:new Date().toISOString()};
+    const updated=[...cmts,newCmt];
+    setCmts(updated);setNc('');
+    if(task&&task.id){
+      const payload={title:title.trim()||task.title,description:desc,project:pid,
+        assignee:ass,priority:pri,stage,due,pct,comments:updated,id:task.id};
+      await api.put('/api/tasks/'+task.id,payload);
+    }
   };
   const save=async()=>{
     if(!title.trim()){setErr('Title required.');return;}
@@ -1311,6 +1360,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
             ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
               <button class="btn bg" onClick=${onClose}>Cancel</button>
+              ${onSetReminder?html`<button class="btn bam" style=${{fontSize:12}} onClick=${()=>{save().then(()=>onSetReminder({id:task&&task.id,title:title,due}));}}>⏰ Set Reminder</button>`:null}
               <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
             </div>
           </div>`:null}
@@ -1923,7 +1973,7 @@ function MessagesView({projects,users,cu}){
       api.get('/api/messages?project='+pid).then(d=>{
         if(Array.isArray(d)){
           setMsgs(prev=>{
-            if(d.length>prev.length) playNotifSound();
+            if(d.length>prev.length) playSound('notif');
             return d;
           });
         }
@@ -1994,23 +2044,30 @@ function MessagesView({projects,users,cu}){
 }
 
 /* ─── DirectMessages ──────────────────────────────────────────────────────── */
-function playNotifSound(){
+const playSound=(type='notif')=>{
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    // Pleasant two-note chime: C5 then E5
-    [[523,0],[659,0.18]].forEach(([freq,delay])=>{
-      const o=ctx.createOscillator();const g=ctx.createGain();
-      o.connect(g);g.connect(ctx.destination);
-      o.type='sine';
-      o.frequency.setValueAtTime(freq,ctx.currentTime+delay);
-      g.gain.setValueAtTime(0,ctx.currentTime+delay);
-      g.gain.linearRampToValueAtTime(0.18,ctx.currentTime+delay+0.03);
-      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.45);
-      o.start(ctx.currentTime+delay);
-      o.stop(ctx.currentTime+delay+0.5);
-    });
+    if(type==='reminder'){
+      [[660,0],[880,0.15],[1100,0.3]].forEach(([freq,delay])=>{
+        const o=ctx.createOscillator();const g=ctx.createGain();
+        o.connect(g);g.connect(ctx.destination);o.type='sine';
+        o.frequency.setValueAtTime(freq,ctx.currentTime+delay);
+        g.gain.setValueAtTime(0.08,ctx.currentTime+delay);
+        g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.4);
+        o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+0.5);
+      });
+    } else {
+      [[523,0],[659,0.15]].forEach(([freq,delay])=>{
+        const o=ctx.createOscillator();const g=ctx.createGain();
+        o.connect(g);g.connect(ctx.destination);o.type='sine';
+        o.frequency.setValueAtTime(freq,ctx.currentTime+delay);
+        g.gain.setValueAtTime(0.06,ctx.currentTime+delay);
+        g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.35);
+        o.start(ctx.currentTime+delay);o.stop(ctx.currentTime+delay+0.5);
+      });
+    }
   }catch(e){}
-}
+};
 function DirectMessages({cu,users,dmUnread,onDmRead}){
   const others=safe(users).filter(u=>u.id!==cu.id);
   const [toId,setToId]=useState(others[0]&&others[0].id||'');const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const [search,setSearch]=useState('');const ref=useRef(null);
@@ -2024,7 +2081,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead}){
       const d=await api.get('/api/dm/'+toId);
       if(Array.isArray(d)){
         setMsgs(prev=>{
-          if(d.length>prev.length){playNotifSound();}
+          if(d.length>prev.length){playSound('notif');}
           return d;
         });
         onDmRead(toId);
@@ -2383,7 +2440,7 @@ function ReminderModal({task,onClose,onSaved}){
     });
     setSaving(false);
     if(r.error){setErr(r.error);return;}
-    onSaved&&onSaved(r);
+    playSound('reminder');onSaved&&onSaved(r);
     onClose();
   };
 
@@ -2548,6 +2605,100 @@ function RemindersView({cu,tasks,onSetReminder}){
     </div>`;
 }
 
+/* ─── RemindersView ──────────────────────────────────────────────────────── */
+function RemindersView({cu,tasks,onSetReminder}){
+  const [reminders,setReminders]=useState([]);const [busy,setBusy]=useState(true);
+  const now=new Date();
+  const load=useCallback(async()=>{setBusy(true);const d=await api.get('/api/reminders');setReminders(Array.isArray(d)?d:[]);setBusy(false);},[]);
+  useEffect(()=>{load();},[load]);
+  const del=async id=>{await api.del('/api/reminders/'+id);load();};
+  const upcoming=reminders.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at));
+  const overdue=reminders.filter(r=>new Date(r.remind_at)<now);
+  const todayRems=upcoming.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();});
+  const fmtDt=dt=>{const d=new Date(dt),diff=d-now;
+    if(diff<0)return{label:'Overdue',col:'var(--rd)',bg:'rgba(248,113,113,.1)'};
+    if(diff<3600000)return{label:'< 1 hr',col:'var(--am)',bg:'rgba(251,191,36,.1)'};
+    if(diff<86400000)return{label:'Today',col:'var(--cy)',bg:'rgba(34,211,238,.1)'};
+    if(diff<172800000)return{label:'Tomorrow',col:'var(--gn)',bg:'rgba(74,222,128,.1)'};
+    return{label:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),col:'var(--tx2)',bg:'var(--sf2)'};
+  };
+  const hours=[...Array(11)].map((_,i)=>8+i);
+  return html`
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',background:'var(--bg)'}}>
+      <!-- Stats -->
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
+        ${[{l:'Total',v:reminders.length,col:'var(--ac)',bg:'rgba(99,102,241,.1)',e:'⏰'},
+          {l:'Upcoming',v:upcoming.length,col:'var(--cy)',bg:'rgba(34,211,238,.1)',e:'⚡'},
+          {l:'Overdue',v:overdue.length,col:'var(--rd)',bg:'rgba(248,113,113,.1)',e:'🚨'},
+          {l:'Today',v:todayRems.length,col:'var(--gn)',bg:'rgba(74,222,128,.1)',e:'📅'}
+        ].map(s=>html`
+          <div key=${s.l} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12}}>
+            <div style=${{width:40,height:40,borderRadius:10,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${s.e}</div>
+            <div><div style=${{fontSize:24,fontWeight:900,color:s.col,lineHeight:1}}>${s.v}</div>
+            <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600,letterSpacing:.3}}>${s.l}</div></div>
+          </div>`)}
+      </div>
+      <!-- Timeline -->
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 18px',marginBottom:16}}>
+        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div style=${{fontWeight:800,fontSize:13,color:'var(--tx)'}}>📅 Today's Timeline</div>
+          <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
+        </div>
+        <div style=${{display:'flex',gap:0,overflowX:'auto',paddingBottom:4}}>
+          ${hours.map(h=>{const h12=h<12?h+' AM':h===12?'12 PM':((h-12)+' PM');const hr=todayRems.filter(r=>{const d=new Date(r.remind_at);return d.getHours()===h;});return html`
+            <div key=${h} style=${{flex:'0 0 75px',textAlign:'center'}}>
+              <div style=${{fontSize:9,color:hr.length?'var(--am)':'var(--tx3)',fontFamily:'monospace',fontWeight:hr.length?700:400,marginBottom:5}}>${h12}</div>
+              <div style=${{height:32,border:'1px dashed '+(hr.length?'rgba(251,191,36,.4)':'var(--bd)'),borderRadius:5,background:hr.length?'rgba(251,191,36,.06)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',gap:2}}>
+                ${hr.map(r=>html`<div key=${r.id} style=${{width:16,height:16,borderRadius:'50%',background:'var(--am)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:'#000'}} title=${r.task_title}>${r.task_title.charAt(0).toUpperCase()}</div>`)}
+              </div>
+            </div>`;})}\
+        </div>
+      </div>
+      <!-- Lists -->
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+        <div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <span style=${{fontWeight:800,fontSize:13,color:'var(--tx)'}}>⚡ Upcoming</span>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminders</span>
+          </div>
+          ${busy?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
+          ${!busy&&upcoming.length===0?html`<div style=${{textAlign:'center',padding:'28px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>✅<br/><span style=${{marginTop:6,display:'block'}}>All clear!</span></div>`:null}
+          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
+            ${upcoming.map(r=>{const ft=fmtDt(r.remind_at);return html`
+              <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)',alignItems:'center'}}>
+                <div style=${{width:36,height:36,borderRadius:9,background:'rgba(251,191,36,.1)',border:'1px solid rgba(251,191,36,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⏰</div>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
+                  <div style=${{display:'flex',gap:6,alignItems:'center'}}>
+                    <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.col,fontWeight:700}}>${ft.label}</span>
+                    <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                  </div>
+                </div>
+                <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+              </div>`;})}\
+        </div>
+        <div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <span style=${{fontWeight:800,fontSize:13,color:'var(--rd)'}}>🚨 Overdue</span>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
+          </div>
+          ${!busy&&overdue.length===0?html`<div style=${{textAlign:'center',padding:'28px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>🎉<br/><span style=${{marginTop:6,display:'block'}}>Nothing overdue!</span></div>`:null}
+          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
+            ${overdue.map(r=>html`
+              <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'rgba(248,113,113,.03)',borderRadius:10,border:'1px solid rgba(248,113,113,.15)',alignItems:'center'}}>
+                <div style=${{width:36,height:36,borderRadius:9,background:'rgba(248,113,113,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⚠️</div>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
+                  <span style=${{fontSize:10,color:'var(--rd)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                </div>
+                <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+              </div>`)}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 /* ─── RemindersPanel ──────────────────────────────────────────────────────── */
 function RemindersPanel({onClose}){
   const [reminders,setReminders]=useState([]);
@@ -2587,11 +2738,11 @@ function RemindersPanel({onClose}){
 
 /* ─── App ─────────────────────────────────────────────────────────────────── */
 function App(){
-  const [dark,setDark]=useState(true);const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
+  const [dark,setDark]=useState(false);const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(false);
   const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[]});
   const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
-  const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);
+  const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
 
   const load=useCallback(async()=>{
     if(!cu)return;
@@ -2603,6 +2754,8 @@ function App(){
       setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[]});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
       if(ws&&ws.name)setWsName(ws.name);
+      const rems=await api.get('/api/reminders');
+      if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
     }catch(e){console.error(e);}
   },[cu]);
 
@@ -2617,7 +2770,7 @@ function App(){
       api.get('/api/dm/unread').then(d=>{
         if(Array.isArray(d)){
           const total=d.reduce((a,x)=>a+(x.cnt||0),0);
-          if(total>prevTotal){playNotifSound();}
+          if(total>prevTotal){playSound('notif');}
           prevTotal=total;
           setDmUnread(d);
         }
@@ -2633,7 +2786,7 @@ function App(){
       api.get('/api/notifications').then(d=>{
         if(Array.isArray(d)){
           const unread=d.filter(n=>!n.read).length;
-          if(unread>prevUnread){playNotifSound();}
+          if(unread>prevUnread){playSound('notif');}
           prevUnread=unread;
           setData(prev=>({...prev,notifs:d}));
         }
@@ -2655,7 +2808,7 @@ function App(){
       const due=await api.get('/api/reminders/due');
       if(Array.isArray(due)&&due.length>0){
         due.forEach(r=>{
-          playNotifSound();
+          playSound('notif');
           showBrowserNotif('⏰ Reminder',r.task_title,()=>setView('tasks'));
           // Also add to in-app notifications
           const nid='rn'+Date.now();
@@ -2681,6 +2834,7 @@ function App(){
     messages:{title:'Channels',sub:'Project team channels'},
     dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'},
     reminders:{title:'Reminders',sub:'Track your upcoming task reminders'},
+    reminders:{title:'Reminders',sub:'Upcoming task reminders'},
     notifs:{title:'Notifications',sub:unread+' unread'},
     team:{title:'Team',sub:data.users.length+' members'},
     settings:{title:'Settings',sub:wsName||'Workspace configuration'},
@@ -2692,7 +2846,13 @@ function App(){
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}/>
       <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
-        <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra} cu=${cu} upcomingReminders=${[]} onViewReminders=${()=>setView('reminders')}/>
+        <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
+          cu=${cu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
+          notifs=${data.notifs}
+          onNotifClick=${async n=>{if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders'};setView(nav[n.type]||'notifs');load();}}
+          onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
+          onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
+        />
         <div style=${{flex:1,overflow:'hidden'}}>
           <${ErrorBoundary}>
             ${view==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
@@ -2700,6 +2860,7 @@ function App(){
             ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
             ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
+            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
