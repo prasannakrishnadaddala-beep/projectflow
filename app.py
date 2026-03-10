@@ -1004,10 +1004,10 @@ HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>ProjectFlow</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='url(%23g)'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='12' r='4' fill='white'/%3E%3Ccircle cx='8' cy='22' r='3' fill='white' opacity='.85'/%3E%3Ccircle cx='24' cy='22' r='3' fill='white' opacity='.85'/%3E%3Cline x1='16' y1='16' x2='10' y2='20' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3Cline x1='16' y1='16' x2='22' y2='20' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
 <script>
 (function(){
-  var svg="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='url(%23g)'/%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='12' r='4' fill='white'/%3E%3Ccircle cx='8' cy='22' r='3' fill='white' opacity='.85'/%3E%3Ccircle cx='24' cy='22' r='3' fill='white' opacity='.85'/%3E%3Cline x1='16' y1='16' x2='10' y2='20' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3Cline x1='16' y1='16' x2='22' y2='20' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E";
+  var svg="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
   Array.from(document.querySelectorAll("link[rel*=icon]")).forEach(function(el){el.parentNode.removeChild(el);});
   var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href=svg;
   document.head.appendChild(l);
@@ -1458,7 +1458,7 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction}){
+function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
@@ -1521,6 +1521,14 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
             <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
           </button>`:null}
+        <button title=${dark?'Switch to Light':'Switch to Dark'} onClick=${()=>setDark&&setDark(!dark)}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.4)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(170,255,0,.1)';e.currentTarget.style.color='var(--ac)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.4)';}}>
+          ${dark
+            ?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+            :html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`}
+        </button>
         <button title="Sign Out" onClick=${onLogout}
           style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.22)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s',marginBottom:6}}
           onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,87,87,.1)';e.currentTarget.style.color='var(--rd)';}}
@@ -1608,7 +1616,6 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          <button style=${{padding:'5px 12px',fontSize:12,height:30,borderRadius:100,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontWeight:600,fontFamily:'inherit',transition:'all .14s'}} onClick=${()=>setDark(!dark)}>${dark?'☀ Light':'◐ Dark'}</button>
           <div style=${{position:'relative'}} ref=${npRef}>
             <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
@@ -3847,7 +3854,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
 
   // ── IN-CALL POPUP
   const callPopup=phase==='in-call'&&popupPos&&popupPos.x!==null?html`
-    <div style=${{position:'fixed',left:(popupPos&&popupPos.x||100)+'px',top:(popupPos&&popupPos.y||60)+'px',width:minimized?'240px':'780px',height:minimized?'auto':'540px',zIndex:8600,borderRadius:minimized?14:20,overflow:'hidden',boxShadow:'0 32px 100px rgba(0,0,0,.85)',background:'#0d0d1a',border:'1px solid rgba(255,255,255,.07)',display:'flex',flexDirection:'column',transition:dragging?'none':'width .2s, height .2s, border-radius .2s',userSelect:dragging?'none':'auto'}}>
+    <div style=${{position:'fixed',left:minimized?(popupPos&&popupPos.x||100)+'px':'0',top:minimized?(popupPos&&popupPos.y||60)+'px':'0',width:minimized?'240px':'100vw',height:minimized?'auto':'100vh',zIndex:8600,borderRadius:minimized?14:0,overflow:'hidden',boxShadow:'0 32px 100px rgba(0,0,0,.85)',background:'#0d0d1a',border:minimized?'1px solid rgba(255,255,255,.07)':'none',display:'flex',flexDirection:'column',transition:dragging?'none':'all .2s',userSelect:dragging?'none':'auto'}}>
       <!-- Title bar (always visible, draggable) -->
       <div onMouseDown=${onDragStart} style=${{background:'rgba(0,0,0,.5)',padding:'9px 14px',display:'flex',alignItems:'center',gap:8,cursor:'move',flexShrink:0,backdropFilter:'blur(10px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.05)'}}>
         <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
@@ -4240,6 +4247,7 @@ function App(){
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}
+        dark=${dark} setDark=${setDark}
         callState=${{...callState,allUsers:data.users}}
         onCallAction=${async cmd=>{
           const h=huddleCmdRef.current;
