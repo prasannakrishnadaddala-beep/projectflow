@@ -91,6 +91,14 @@ def init_db():
                 id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
                 from_user TEXT, to_user TEXT, type TEXT, data TEXT,
                 consumed INTEGER DEFAULT 0, created TEXT);
+            CREATE TABLE IF NOT EXISTS call_rooms (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
+                initiator TEXT, participants TEXT DEFAULT '[]',
+                status TEXT DEFAULT 'active', created TEXT);
+            CREATE TABLE IF NOT EXISTS call_signals (
+                id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
+                from_user TEXT, to_user TEXT, type TEXT, data TEXT,
+                consumed INTEGER DEFAULT 0, created TEXT);
         """)
         # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
@@ -648,6 +656,109 @@ def get_active_calls():
         result=[]
         for r in rooms:
             rd=dict(r)
+            try:
+                created=datetime.fromisoformat(rd['created'].replace('Z',''))
+                if (datetime.utcnow()-created).total_seconds()>28800:
+                    db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(rd['id'],))
+                    continue
+            except: pass
+            result.append(rd)
+        return jsonify(result)
+
+@app.route("/api/calls", methods=["POST"])
+@login_required
+def create_call():
+    d=request.json or {}
+    room_id=f"call{int(datetime.now().timestamp()*1000)}"
+    with get_db() as db:
+        caller=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cname=caller["name"] if caller else "Someone"
+        room_name=d.get("name",f"{cname}'s Huddle")
+        db.execute("INSERT INTO call_rooms VALUES (?,?,?,?,?,?,?)",
+                   (room_id,wid(),room_name,session["user_id"],json.dumps([session["user_id"]]),"active",ts()))
+        users=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
+        for u in users:
+            nid=f"n{int(datetime.now().timestamp()*1000)}{u['id']}"
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"call",f"📞 {cname} started a Huddle — Join now! ({room_name})",u["id"],0,ts()))
+        return jsonify({"room_id":room_id,"name":room_name})
+
+@app.route("/api/calls/<room_id>/join", methods=["POST"])
+@login_required
+def join_call(room_id):
+    with get_db() as db:
+        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
+        if not room: return jsonify({"error":"Room not found"}),404
+        if room["status"]!="active": return jsonify({"error":"Call has ended"}),410
+        parts=json.loads(room["participants"])
+        if session["user_id"] not in parts:
+            parts.append(session["user_id"])
+            db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
+        return jsonify({"participants":parts,"name":room["name"]})
+
+@app.route("/api/calls/<room_id>/leave", methods=["POST"])
+@login_required
+def leave_call(room_id):
+    with get_db() as db:
+        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
+        if not room: return jsonify({"ok":True})
+        parts=[p for p in json.loads(room["participants"]) if p!=session["user_id"]]
+        if not parts: db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(room_id,))
+        else: db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
+        return jsonify({"ok":True})
+
+@app.route("/api/calls/<room_id>/invite/<target_id>", methods=["POST"])
+@login_required
+def invite_to_call(room_id, target_id):
+    with get_db() as db:
+        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
+        if not room: return jsonify({"error":"Room not found"}),404
+        caller=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cname=caller["name"] if caller else "Someone"
+        nid=f"n{int(datetime.now().timestamp()*1000)}"
+        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                   (nid,wid(),"call",f"📞 {cname} is pulling you into: {room['name']} — Join now!",target_id,0,ts()))
+        return jsonify({"ok":True})
+
+@app.route("/api/calls/<room_id>/signal", methods=["POST"])
+@login_required
+def send_signal(room_id):
+    d=request.json or {}
+    sid=f"sig{int(datetime.now().timestamp()*1000)}{secrets.token_hex(3)}"
+    with get_db() as db:
+        db.execute("INSERT INTO call_signals VALUES (?,?,?,?,?,?,?,?,?)",
+                   (sid,wid(),room_id,session["user_id"],d.get("to_user",""),
+                    d.get("type",""),json.dumps(d.get("data",{})),0,ts()))
+        return jsonify({"ok":True,"id":sid})
+
+@app.route("/api/calls/<room_id>/signals", methods=["GET"])
+@login_required
+def get_signals(room_id):
+    with get_db() as db:
+        rows=db.execute("""SELECT * FROM call_signals WHERE workspace_id=? AND room_id=? AND to_user=? AND consumed=0
+            ORDER BY created LIMIT 50""",(wid(),room_id,session["user_id"])).fetchall()
+        ids=[r["id"] for r in rows]
+        if ids: db.execute(f"UPDATE call_signals SET consumed=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/calls/<room_id>/ping", methods=["POST"])
+@login_required
+def ping_call(room_id):
+    with get_db() as db:
+        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
+        if not room: return jsonify({"error":"ended"}),404
+        if room["status"]!="active": return jsonify({"error":"ended"}),410
+        return jsonify({"participants":json.loads(room["participants"]),"status":room["status"],"name":room["name"]})
+
+# ── Calls (Huddle) ────────────────────────────────────────────────────────────
+@app.route("/api/calls", methods=["GET"])
+@login_required
+def get_active_calls():
+    with get_db() as db:
+        rooms=db.execute("SELECT * FROM call_rooms WHERE workspace_id=? AND status='active' ORDER BY created DESC",(wid(),)).fetchall()
+        result=[]
+        for r in rooms:
+            rd=dict(r)
             # Auto-expire rooms older than 8 hours
             try:
                 from datetime import timezone
@@ -992,6 +1103,9 @@ textarea.inp{resize:vertical;min-height:68px}
 @keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.fi{animation:fi .2s ease}
 @keyframes sp{to{transform:rotate(360deg)}}.spin{display:inline-block;width:16px;height:16px;border:2.5px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}.pulse{animation:pulse 1.5s ease-in-out infinite}
+/* Huddle */
+.huddle-bar{position:fixed;bottom:0;left:0;right:0;height:64px;background:var(--sf);border-top:2px solid rgba(34,197,94,.4);display:flex;align-items:center;padding:0 18px;gap:14px;z-index:1700;box-shadow:0 -4px 24px rgba(34,197,94,.15);backdrop-filter:blur(12px)}
+.incoming-call{position:fixed;bottom:80px;right:16px;z-index:1701;background:var(--sf);border:1.5px solid #22c55e;border-radius:16px;padding:15px 16px;box-shadow:0 8px 36px rgba(0,0,0,.45);min-width:260px;animation:slideUp .25s ease}
 /* AI panel */
 .ai-btn{position:fixed;bottom:22px;right:22px;z-index:1800;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a78bfa);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(99,102,241,.5);transition:all .2s}
 .ai-btn:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(99,102,241,.7)}
@@ -1000,31 +1114,28 @@ textarea.inp{resize:vertical;min-height:68px}
 .ai-msg-user{align-self:flex-end;background:var(--ac);color:#fff;border-radius:14px 14px 3px 14px;padding:9px 13px;font-size:13px;max-width:80%;line-height:1.5}
 .ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border:1px solid var(--bd);border-radius:14px 14px 14px 3px;padding:9px 13px;font-size:13px;max-width:90%;line-height:1.6;white-space:pre-wrap}
 .ai-action{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:9px;padding:8px 11px;font-size:11px;color:var(--gn);font-family:monospace;margin-top:5px}
-/* Huddle */
-.huddle-bar{position:fixed;bottom:0;left:0;right:0;height:62px;background:var(--sf);border-top:2px solid rgba(34,197,94,.45);display:flex;align-items:center;padding:0 18px;gap:14px;z-index:1700;box-shadow:0 -4px 24px rgba(34,197,94,.18);backdrop-filter:blur(10px)}
-.huddle-btn{position:fixed;bottom:82px;right:82px;z-index:1700;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(34,197,94,.45);transition:all .2s;color:#fff;font-size:20px}
-.huddle-btn:hover{transform:scale(1.1);box-shadow:0 6px 24px rgba(34,197,94,.6)}
-@keyframes ringPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}70%{box-shadow:0 0 0 12px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}.ring{animation:ringPulse 1.2s infinite}
-.incoming-call{position:fixed;bottom:96px;right:82px;z-index:1701;background:var(--sf);border:1.5px solid #22c55e;border-radius:16px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.45);min-width:240px;animation:slideUp .2s ease}
 </style></head><body>
-<div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center">
-  <div style="text-align:center">
-    <div style="width:72px;height:72px;margin:0 auto 18px;filter:drop-shadow(0 0 22px #6366f1)">
-      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="64" height="64" rx="16" fill="#6366f1"/>
-        <circle cx="32" cy="32" r="7" fill="white"/>
-        <circle cx="32" cy="13" r="5" fill="white" opacity="0.9"/>
-        <circle cx="48" cy="43" r="5" fill="white" opacity="0.9"/>
-        <circle cx="16" cy="43" r="5" fill="white" opacity="0.9"/>
-        <line x1="32" y1="18" x2="32" y2="25" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-        <line x1="44" y1="40" x2="38" y2="36" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-        <line x1="20" y1="40" x2="26" y2="36" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+<div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
+  <div style="position:relative;width:100px;height:100px">
+    <svg style="position:absolute;top:0;left:0;width:100px;height:100px;animation:sp .9s linear infinite" viewBox="0 0 100 100">
+      <defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs>
+      <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(99,102,241,.12)" stroke-width="4.5"/>
+      <circle cx="50" cy="50" r="46" fill="none" stroke="url(#rg)" stroke-width="4.5" stroke-linecap="round" stroke-dasharray="72 217"/>
+    </svg>
+    <div style="position:absolute;top:11px;left:11px;width:78px;height:78px;background:linear-gradient(135deg,#6366f1,#a78bfa);border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 36px rgba(99,102,241,.5)">
+      <svg width="42" height="42" viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="32" r="9" fill="white"/>
+        <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
+        <circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/>
+        <circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/>
+        <line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
       </svg>
     </div>
-    <div class="spin" style="width:22px;height:22px;border-width:3px;margin:0 auto"></div>
-    <p style="color:var(--tx2);font-size:13px;margin-top:14px;font-family:'Inter',sans-serif">Loading ProjectFlow...</p>
-    <div id="LE" style="display:none;color:var(--rd);font-size:12px;margin-top:12px;max-width:360px;padding:12px 16px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:10px"></div>
   </div>
+  <p style="color:var(--tx2);font-size:13px;margin-top:22px;font-family:'Inter',sans-serif;letter-spacing:.3px">Loading ProjectFlow...</p>
+  <div id="LE" style="display:none;color:var(--rd);font-size:12px;margin-top:14px;max-width:360px;padding:12px 16px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:10px;text-align:center"></div>
 </div>
 <script>
 window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
@@ -1204,9 +1315,38 @@ function AuthScreen({onLogin}){
     </div>`;
 }
 
+/* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
+function SidebarCallsList({cu,onJoin}){
+  const [calls,setCalls]=useState([]);
+  useEffect(()=>{
+    api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);});
+    const id=setInterval(()=>api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);}),6000);
+    return()=>clearInterval(id);
+  },[]);
+  if(!calls.length)return html`<p style=${{fontSize:10,color:'var(--tx3)',padding:'4px 2px',textAlign:'center'}}>No active huddles</p>`;
+  return html`<div style=${{display:'flex',flexDirection:'column',gap:4}}>
+    ${calls.map(c=>{
+      const parts=JSON.parse(c.participants||'[]');
+      const alreadyIn=parts.includes(cu.id);
+      return html`<div key=${c.id} style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:9,padding:'7px 9px',display:'flex',alignItems:'center',gap:7}}>
+        <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+        <div style=${{flex:1,minWidth:0}}>
+          <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${c.name}</div>
+          <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${parts.length} in call</div>
+        </div>
+        ${!alreadyIn?html`<button style=${{fontSize:10,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.15)',border:'1px solid rgba(34,197,94,.3)',borderRadius:6,padding:'3px 8px',cursor:'pointer',whiteSpace:'nowrap'}}
+          onClick=${()=>onJoin(c.id,c.name)}>Join</button>`:
+          html`<span style=${{fontSize:9,color:'#22c55e',fontFamily:'monospace'}}>You're in</span>`}
+      </div>`;
+    })}
+  </div>`;
+}
+
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
+function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+  const inCall=callState&&callState.status==='in-call';
+  const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const ICONS={
     dashboard:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
     projects:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
@@ -1257,6 +1397,67 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
             ${!col&&it.badge>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${it.badge}</span>`:null}
             ${col&&it.badge>0?html`<div style=${{position:'absolute',width:7,height:7,borderRadius:'50%',background:'var(--rd)',top:6,right:6,border:'1.5px solid var(--sf)'}}></div>`:null}
           </button>`)}
+
+        ${!col?html`
+          <div style=${{borderTop:'1px solid var(--bd)',marginTop:6,paddingTop:8,paddingBottom:2}}>
+            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 4px 7px'}}>
+              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,display:'flex',alignItems:'center',gap:5}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                Huddle
+              </span>
+              ${inCall
+                ?html`<span style=${{fontSize:9,fontFamily:'monospace',color:'#22c55e',background:'rgba(34,197,94,.12)',padding:'2px 7px',borderRadius:10,fontWeight:700,border:'1px solid rgba(34,197,94,.25)'}}>● ${fmtTime(callState.elapsed||0)}</span>`
+                :html`<button style=${{fontSize:10,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.3)',borderRadius:7,padding:'3px 9px',cursor:'pointer',lineHeight:1.4}}
+                    onClick=${()=>onCallAction&&onCallAction({action:'start'})}>+ Start</button>`}
+            </div>
+            ${inCall?html`
+              <div style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.22)',borderRadius:11,padding:'9px 10px',marginBottom:7}}>
+                <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:7}}>
+                  <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+                  <span style=${{fontSize:11,fontWeight:700,color:'#22c55e',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${callState.roomName||'Huddle'}</span>
+                </div>
+                <div style=${{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
+                  ${(callState.participants||[]).map(id=>{const u=(callState.allUsers||[]).find(x=>x.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'};return html`
+                    <div key=${id} title=${u.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1.5}}>
+                      <div style=${{position:'relative'}}><${Av} u=${u} size=${26}/><div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div></div>
+                      <span style=${{fontSize:7,color:'var(--tx3)',maxWidth:28,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.2}}>${u.name.split(' ')[0]}</span>
+                    </div>`;}) }
+                </div>
+                <div style=${{display:'flex',gap:5,marginBottom:callState.allUsers&&callState.allUsers.filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).length>0?8:0}}>
+                  <button title=${callState.muted?'Unmute':'Mute'}
+                    style=${{flex:1,height:28,borderRadius:7,border:'1px solid '+(callState.muted?'rgba(248,113,113,.4)':'var(--bd)'),background:callState.muted?'rgba(248,113,113,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:4,color:callState.muted?'var(--rd)':'var(--tx2)',fontSize:10,fontWeight:600}}
+                    onClick=${()=>onCallAction&&onCallAction({action:'mute'})}>
+                    ${callState.muted?html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
+                    ${callState.muted?'Unmute':'Mute'}
+                  </button>
+                  <button style=${{flex:1,height:28,borderRadius:7,border:'none',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',gap:4}}
+                    onClick=${()=>onCallAction&&onCallAction({action:'leave'})}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    Leave
+                  </button>
+                </div>
+                ${(callState.allUsers||[]).filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).length>0?html`
+                  <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:600,marginBottom:5}}>Invite teammates</div>
+                  <div style=${{display:'flex',flexDirection:'column',gap:3,maxHeight:110,overflowY:'auto'}}>
+                    ${(callState.allUsers||[]).filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).map(u=>html`
+                      <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:7,padding:'5px 7px',borderRadius:8,background:'var(--sf2)',border:'1px solid var(--bd)'}}>
+                        <${Av} u=${u} size=${22}/>
+                        <span style=${{fontSize:11,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</span>
+                        <button style=${{fontSize:9,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:5,padding:'2px 7px',cursor:'pointer',whiteSpace:'nowrap'}}
+                          onClick=${()=>onCallAction&&onCallAction({action:'invite',userId:u.id,roomId:callState.roomId})}>Pull in</button>
+                      </div>`)}
+                  </div>`:null}
+              </div>`:html`
+              <${SidebarCallsList} cu=${cu} onJoin=${(rid,rname)=>onCallAction&&onCallAction({action:'join',roomId:rid,roomName:rname})}/>`}
+          </div>`:html`
+          <div style=${{borderTop:'1px solid var(--bd)',marginTop:6,paddingTop:8,display:'flex',justifyContent:'center',paddingBottom:4}}>
+            <button title=${inCall?('In Huddle · '+fmtTime(callState.elapsed||0)):'Start Huddle'}
+              style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(inCall?'rgba(34,197,94,.45)':'var(--bd)'),background:inCall?'rgba(34,197,94,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',transition:'all .15s'}}
+              onClick=${()=>inCall?onCallAction&&onCallAction({action:'leave'}):onCallAction&&onCallAction({action:'start'})}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke=${inCall?'#22c55e':'currentColor'} strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              ${inCall?html`<div style=${{position:'absolute',top:3,right:3,width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',border:'1.5px solid var(--sf)'}}></div>`:null}
+            </button>
+          </div>`}
       </nav>
       <div style=${{padding:'7px 6px',borderTop:'1px solid var(--bd)'}}>
         <button class="nb" onClick=${onLogout} title=${col?'Sign Out':''} style=${{color:'var(--rd)',justifyContent:col?'center':'flex-start',padding:col?'10px 0':'8px 12px'}}>
@@ -3034,48 +3235,51 @@ function RemindersPanel({onClose,onReload}){
 }
 
 /* ─── HuddleCall ──────────────────────────────────────────────────────────── */
-function HuddleCall({cu,users}){
-  const [status,setStatus]=useState('idle'); // idle | in-call
+function HuddleCall({cu,users,onStateChange,cmdRef}){
+  const [status,setStatus]=useState('idle');
   const [roomId,setRoomId]=useState(null);
   const [roomName,setRoomName]=useState('');
   const [participants,setParticipants]=useState([]);
   const [muted,setMuted]=useState(false);
   const [videoOn,setVideoOn]=useState(false);
-  const [incomingCall,setIncomingCall]=useState(null); // {id,name,initiatorName}
+  const [incomingCall,setIncomingCall]=useState(null);
   const [elapsed,setElapsed]=useState(0);
-  const [showParticipants,setShowParticipants]=useState(false);
 
-  const localStream=useRef(null);
-  const localVideo=useRef(null);
-  const pcs=useRef({});       // {userId: RTCPeerConnection}
-  const audioEls=useRef({});  // {userId: HTMLAudioElement}
-  const videoEls=useRef({});  // {userId: HTMLVideoElement}
-  const pollRef=useRef(null);
-  const pingRef=useRef(null);
-  const timerRef=useRef(null);
-  const roomIdRef=useRef(null);
-  const statusRef=useRef('idle');
+  const localStream=useRef(null);const localVideo=useRef(null);
+  const pcs=useRef({});const audioEls=useRef({});const videoEls=useRef({});
+  const pollRef=useRef(null);const pingRef=useRef(null);const timerRef=useRef(null);
+  const roomIdRef=useRef(null);const statusRef=useRef('idle');
 
   useEffect(()=>{roomIdRef.current=roomId;},[roomId]);
   useEffect(()=>{statusRef.current=status;},[status]);
+  useEffect(()=>{
+    onStateChange&&onStateChange({status,roomId,roomName,participants,elapsed,muted,incomingCall,allUsers:users});
+  },[status,roomId,roomName,participants,elapsed,muted,incomingCall]);
+
+  // Expose imperative actions via ref
+  if(cmdRef){
+    cmdRef.current={
+      start:(name)=>startCall(name),
+      join:(rid,rname)=>joinCall(rid,rname),
+      leave:()=>cleanup(),
+      mute:()=>toggleMute(),
+      invite:(uid,rid)=>api.post('/api/calls/'+rid+'/invite/'+uid,{}),
+    };
+  }
 
   const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
 
-  // Poll for active calls every 6s (when idle) to detect incoming calls
   useEffect(()=>{
     if(status!=='idle')return;
     const id=setInterval(async()=>{
       const calls=await api.get('/api/calls');
       if(Array.isArray(calls)&&calls.length>0){
-        const c=calls[0];
-        const parts=JSON.parse(c.participants||'[]');
+        const c=calls[0];const parts=JSON.parse(c.participants||'[]');
         if(!parts.includes(cu.id)&&c.initiator!==cu.id){
           const init=safe(users).find(u=>u.id===c.initiator);
           setIncomingCall({id:c.id,name:c.name,initiatorName:(init&&init.name)||'Someone'});
         }
-      } else {
-        setIncomingCall(null);
-      }
+      } else {setIncomingCall(null);}
     },6000);
     return()=>clearInterval(id);
   },[status,cu,users]);
@@ -3090,24 +3294,11 @@ function HuddleCall({cu,users}){
         let el=audioEls.current[remoteUserId];
         if(!el){el=document.createElement('audio');el.autoplay=true;el.style.display='none';document.body.appendChild(el);audioEls.current[remoteUserId]=el;}
         el.srcObject=stream;
-      } else if(e.track.kind==='video'){
-        let el=videoEls.current[remoteUserId];
-        if(el)el.srcObject=stream;
-      }
+      } else if(e.track.kind==='video'){let el=videoEls.current[remoteUserId];if(el)el.srcObject=stream;}
     };
-    pc.onicecandidate=e=>{
-      if(e.candidate&&roomIdRef.current){
-        api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:remoteUserId,type:'ice',data:e.candidate.toJSON()});
-      }
-    };
-    pc.onconnectionstatechange=()=>{
-      if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){
-        try{pc.close();}catch(ex){}
-        delete pcs.current[remoteUserId];
-      }
-    };
-    pcs.current[remoteUserId]=pc;
-    return pc;
+    pc.onicecandidate=e=>{if(e.candidate&&roomIdRef.current)api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:remoteUserId,type:'ice',data:e.candidate.toJSON()});};
+    pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){try{pc.close();}catch(ex){}delete pcs.current[remoteUserId];}};
+    pcs.current[remoteUserId]=pc;return pc;
   };
 
   const startSignalPoll=(rid)=>{
@@ -3117,27 +3308,15 @@ function HuddleCall({cu,users}){
       const sigs=await api.get('/api/calls/'+rid+'/signals');
       if(!Array.isArray(sigs))return;
       for(const sig of sigs){
-        const from=sig.from_user;
-        let data;
+        const from=sig.from_user;let data;
         try{data=typeof sig.data==='string'?JSON.parse(sig.data):sig.data;}catch{continue;}
         if(sig.type==='offer'){
           let pc=pcs.current[from]||createPC(from,rid);
-          try{
-            await pc.setRemoteDescription(new RTCSessionDescription(data));
-            const ans=await pc.createAnswer();
-            await pc.setLocalDescription(ans);
-            await api.post('/api/calls/'+rid+'/signal',{to_user:from,type:'answer',data:{type:ans.type,sdp:ans.sdp}});
-          }catch(ex){console.warn('offer handle err',ex);}
+          try{await pc.setRemoteDescription(new RTCSessionDescription(data));const ans=await pc.createAnswer();await pc.setLocalDescription(ans);await api.post('/api/calls/'+rid+'/signal',{to_user:from,type:'answer',data:{type:ans.type,sdp:ans.sdp}});}catch(ex){}
         } else if(sig.type==='answer'){
-          const pc=pcs.current[from];
-          if(pc&&pc.signalingState==='have-local-offer'){
-            try{await pc.setRemoteDescription(new RTCSessionDescription(data));}catch(ex){console.warn('answer err',ex);}
-          }
+          const pc=pcs.current[from];if(pc&&pc.signalingState==='have-local-offer'){try{await pc.setRemoteDescription(new RTCSessionDescription(data));}catch(ex){}}
         } else if(sig.type==='ice'){
-          const pc=pcs.current[from];
-          if(pc&&pc.remoteDescription){
-            try{await pc.addIceCandidate(new RTCIceCandidate(data));}catch(ex){}
-          }
+          const pc=pcs.current[from];if(pc&&pc.remoteDescription){try{await pc.addIceCandidate(new RTCIceCandidate(data));}catch(ex){}}
         }
       }
     },1500);
@@ -3153,88 +3332,59 @@ function HuddleCall({cu,users}){
   };
 
   const startTimer=()=>{
-    setElapsed(0);
-    if(timerRef.current)clearInterval(timerRef.current);
+    setElapsed(0);if(timerRef.current)clearInterval(timerRef.current);
     timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);
   };
 
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
 
-  const getMedia=async(vid)=>{
-    try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:vid?{width:320,height:240}:false});
-      localStream.current=stream;
-      if(localVideo.current&&vid)localVideo.current.srcObject=stream;
-      return stream;
-    }catch(e){
-      // Try audio-only fallback
-      if(vid){try{const s=await navigator.mediaDevices.getUserMedia({audio:true});localStream.current=s;return s;}catch(e2){}}
-      alert('Microphone access required for Huddle. Please allow microphone permission and try again.');
-      return null;
-    }
+  const getMedia=async()=>{
+    try{const s=await navigator.mediaDevices.getUserMedia({audio:true,video:false});localStream.current=s;return s;}
+    catch(e){alert('Microphone access required for Huddle.');return null;}
   };
 
-  const startCall=async()=>{
-    const stream=await getMedia(false);
-    if(!stream)return;
-    const r=await api.post('/api/calls',{name:(cu.name||'')+"'s Huddle"});
+  const startCall=async(name)=>{
+    const s=await getMedia();if(!s)return;
+    const r=await api.post('/api/calls',{name:name||(cu.name||'')+"\'s Huddle"});
     if(!r||r.error){alert('Could not start call.');return;}
-    const rid=r.room_id;
-    setRoomId(rid);setRoomName(r.name||'Huddle');
-    setStatus('in-call');setParticipants([cu.id]);setIncomingCall(null);
-    playSound('notif');
-    startSignalPoll(rid);startPing(rid);startTimer();
+    setRoomId(r.room_id);setRoomName(r.name||'Huddle');setStatus('in-call');setParticipants([cu.id]);setIncomingCall(null);
+    playSound('notif');startSignalPoll(r.room_id);startPing(r.room_id);startTimer();
   };
 
   const joinCall=async(rid,rname)=>{
-    const stream=await getMedia(false);
-    if(!stream)return;
+    const s=await getMedia();if(!s)return;
     const r=await api.post('/api/calls/'+rid+'/join',{});
     if(!r||r.error){alert(r&&r.error||'Could not join call.');return;}
     const parts=r.participants||[];
-    setRoomId(rid);setRoomName(r.name||rname||'Huddle');
-    setStatus('in-call');setParticipants(parts);setIncomingCall(null);
+    setRoomId(rid);setRoomName(r.name||rname||'Huddle');setStatus('in-call');setParticipants(parts);setIncomingCall(null);
     playSound('notif');
-    // Send offer to each existing participant
     for(const uid of parts){
       if(uid===cu.id)continue;
       const pc=createPC(uid,rid);
-      try{
-        const offer=await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await api.post('/api/calls/'+rid+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
-      }catch(ex){console.warn('offer create err',ex);}
+      try{const offer=await pc.createOffer();await pc.setLocalDescription(offer);await api.post('/api/calls/'+rid+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});}catch(ex){}
     }
     startSignalPoll(rid);startPing(rid);startTimer();
   };
 
   const cleanup=async()=>{
-    if(pollRef.current)clearInterval(pollRef.current);
-    if(pingRef.current)clearInterval(pingRef.current);
-    if(timerRef.current)clearInterval(timerRef.current);
-    Object.values(pcs.current).forEach(pc=>{try{pc.close();}catch(e){}});
-    pcs.current={};
+    if(pollRef.current)clearInterval(pollRef.current);if(pingRef.current)clearInterval(pingRef.current);if(timerRef.current)clearInterval(timerRef.current);
+    Object.values(pcs.current).forEach(pc=>{try{pc.close();}catch(e){}});pcs.current={};
     if(localStream.current){localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;}
-    Object.values(audioEls.current).forEach(el=>{try{el.srcObject=null;el.remove();}catch(e){}});
-    audioEls.current={};
+    Object.values(audioEls.current).forEach(el=>{try{el.srcObject=null;el.remove();}catch(e){}});audioEls.current={};
     if(roomIdRef.current)await api.post('/api/calls/'+roomIdRef.current+'/leave',{});
     setRoomId(null);setRoomName('');setStatus('idle');setParticipants([]);setMuted(false);setVideoOn(false);setElapsed(0);
   };
 
   const toggleMute=()=>{
-    if(localStream.current){
-      localStream.current.getAudioTracks().forEach(t=>{t.enabled=muted;});
-      setMuted(m=>!m);
-    }
+    if(localStream.current){localStream.current.getAudioTracks().forEach(t=>{t.enabled=muted;});setMuted(m=>!m);}
   };
 
   const toggleVideo=async()=>{
     if(!videoOn){
       try{
         const vs=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240}});
-        vs.getVideoTracks().forEach(t=>{localStream.current.addTrack(t);});
+        vs.getVideoTracks().forEach(t=>localStream.current.addTrack(t));
         if(localVideo.current)localVideo.current.srcObject=localStream.current;
-        // Re-negotiate with peers
         Object.entries(pcs.current).forEach(async([uid,pc])=>{
           vs.getVideoTracks().forEach(t=>pc.addTrack(t,localStream.current));
           const offer=await pc.createOffer();await pc.setLocalDescription(offer);
@@ -3244,83 +3394,69 @@ function HuddleCall({cu,users}){
       }catch(e){}
     } else {
       localStream.current&&localStream.current.getVideoTracks().forEach(t=>{t.stop();try{localStream.current.removeTrack(t);}catch(ex){}});
-      if(localVideo.current)localVideo.current.srcObject=null;
-      setVideoOn(false);
+      if(localVideo.current)localVideo.current.srcObject=null;setVideoOn(false);
     }
   };
 
-  const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'User',avatar:'U',color:'#6366f1'});
+  const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'});
 
-  // Incoming call toast (when idle)
   const incomingToast=incomingCall&&status==='idle'?html`
     <div class="incoming-call">
-      <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+      <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
         <div style=${{width:9,height:9,borderRadius:'50%',background:'#22c55e',animation:'pulse 1s infinite'}}></div>
-        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>📞 Huddle: ${incomingCall.name}</span>
+        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>${incomingCall.name}</span>
       </div>
-      <p style=${{fontSize:11,color:'var(--tx2)',marginBottom:11}}>${incomingCall.initiatorName} started a call</p>
-      <div style=${{display:'flex',gap:8}}>
-        <button style=${{flex:1,height:32,borderRadius:9,background:'#22c55e',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:12}} onClick=${()=>joinCall(incomingCall.id,incomingCall.name)}>🎙 Join</button>
+      <p style=${{fontSize:11,color:'var(--tx2)',marginBottom:11}}>${incomingCall.initiatorName} started a huddle</p>
+      <div style=${{display:'flex',gap:7}}>
+        <button style=${{flex:1,height:32,borderRadius:9,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:12}} onClick=${()=>joinCall(incomingCall.id,incomingCall.name)}>🎙 Join</button>
         <button class="btn bg" style=${{flex:1,height:32,justifyContent:'center',fontSize:12}} onClick=${()=>setIncomingCall(null)}>Dismiss</button>
       </div>
     </div>`:null;
 
-  if(status==='idle') return html`
-    <div>
-      ${incomingToast}
-      <button class="huddle-btn ring" onClick=${startCall} title="Start Huddle">🎙</button>
-    </div>`;
+  if(status==='idle') return html`<div>${incomingToast}</div>`;
 
-  // ── In-call bar ──────────────────────────────────────────────────────────────
   return html`
     <div>
       ${incomingToast}
       ${videoOn?html`
-        <div style=${{position:'fixed',bottom:72,right:16,width:220,borderRadius:12,overflow:'hidden',border:'2px solid #22c55e',boxShadow:'0 8px 24px rgba(0,0,0,.5)',zIndex:1699,background:'#000'}}>
-          <video ref=${localVideo} autoplay muted style=${{width:'100%',height:124,objectFit:'cover',display:'block'}}></video>
-          <div style=${{display:'flex',gap:5,padding:'4px 6px',background:'rgba(0,0,0,.7)',flexWrap:'wrap'}}>
+        <div style=${{position:'fixed',bottom:74,right:16,width:220,borderRadius:12,overflow:'hidden',border:'2px solid #22c55e',boxShadow:'0 8px 28px rgba(0,0,0,.5)',zIndex:1699,background:'#000'}}>
+          <video ref=${localVideo} autoplay muted style=${{width:'100%',height:120,objectFit:'cover',display:'block'}}></video>
+          <div style=${{display:'flex',gap:4,padding:'4px 6px',background:'rgba(0,0,0,.75)',flexWrap:'wrap'}}>
             ${partUsers.filter(u=>u.id!==cu.id).map(u=>html`
-              <video key=${u.id} ref=${el=>{if(el)videoEls.current[u.id]=el;}} autoplay style=${{width:64,height:48,borderRadius:6,objectFit:'cover',background:'#1a1a2e'}}></video>
-            `)}
+              <video key=${u.id} ref=${el=>{if(el)videoEls.current[u.id]=el;}} autoplay style=${{width:62,height:46,borderRadius:5,objectFit:'cover',background:'#1a1a2e'}}></video>`)}
           </div>
         </div>`:null}
       <div class="huddle-bar">
         <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
           <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite'}}></div>
           <div>
-            <span style=${{fontSize:12,fontWeight:800,color:'#22c55e',display:'block',lineHeight:1.2}}>${roomName||'Huddle'}</span>
+            <span style=${{fontSize:12,fontWeight:800,color:'#22c55e',display:'block',lineHeight:1.3}}>${roomName||'Huddle'}</span>
             <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtTime(elapsed)}</span>
           </div>
         </div>
         <div style=${{width:1,height:30,background:'var(--bd)',flexShrink:0}}></div>
         <div style=${{display:'flex',gap:4,flex:1,overflowX:'auto',scrollbarWidth:'none',alignItems:'center'}}>
           ${partUsers.map(u=>html`
-            <div key=${u.id} title=${u.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:2,flexShrink:0,padding:'2px 4px',borderRadius:8,background:u.id===cu.id?'rgba(34,197,94,.1)':'transparent'}}>
-              <div style=${{position:'relative'}}>
-                <${Av} u=${u} size=${28}/>
-                <div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div>
-              </div>
+            <div key=${u.id} title=${u.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:2,flexShrink:0,padding:'2px 5px',borderRadius:8,background:u.id===cu.id?'rgba(34,197,94,.12)':'transparent'}}>
+              <div style=${{position:'relative'}}><${Av} u=${u} size=${28}/><div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div></div>
               <span style=${{fontSize:8,color:'var(--tx3)',maxWidth:36,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1}}>${u.name.split(' ')[0]}</span>
-            </div>
-          `)}
+            </div>`)}
         </div>
-        <div style=${{display:'flex',gap:7,flexShrink:0,alignItems:'center'}}>
+        <div style=${{display:'flex',gap:6,flexShrink:0,alignItems:'center'}}>
           <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'}
-            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(muted?'rgba(248,113,113,.4)':'var(--bd)'),background:muted?'rgba(248,113,113,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,transition:'all .15s'}}>
-            ${muted?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:
-            html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
+            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(muted?'rgba(248,113,113,.4)':'var(--bd)'),background:muted?'rgba(248,113,113,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}>
+            ${muted?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:
+            html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
           </button>
-          <button onClick=${toggleVideo} title=${videoOn?'Turn off video':'Turn on video'}
-            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(videoOn?'rgba(99,102,241,.4)':'var(--bd)'),background:videoOn?'rgba(99,102,241,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,transition:'all .15s'}}>
-            ${videoOn?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
-            html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
+          <button onClick=${toggleVideo} title=${videoOn?'Video off':'Video on'}
+            style=${{width:36,height:36,borderRadius:10,border:'1px solid '+(videoOn?'rgba(99,102,241,.4)':'var(--bd)'),background:videoOn?'rgba(99,102,241,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}>
+            ${videoOn?html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
+            html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
           </button>
           <div style=${{width:1,height:24,background:'var(--bd)'}}></div>
           <button onClick=${cleanup}
-            style=${{height:36,borderRadius:10,border:'none',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',padding:'0 16px',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:6,transition:'all .15s'}}
-            onMouseEnter=${e=>e.currentTarget.style.transform='scale(1.04)'}
-            onMouseLeave=${e=>e.currentTarget.style.transform=''}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            style=${{height:36,borderRadius:10,border:'none',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',padding:'0 14px',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',gap:5}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
             Leave
           </button>
         </div>
@@ -3335,6 +3471,8 @@ function App(){
   const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[]});
   const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
+  const [callState,setCallState]=useState({status:'idle',roomId:null,roomName:'',participants:[],elapsed:0,muted:false,incomingCall:null,allUsers:[]});
+  const huddleCmdRef=useRef({});
 
   const load=useCallback(async()=>{
     if(!cu)return;
@@ -3448,7 +3586,19 @@ function App(){
     return()=>clearInterval(id);
   },[cu]);
 
-  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column',gap:14}}><div style=${{width:60,height:60,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:16,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(99,102,241,.5)',marginBottom:4}}><svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div><div class="spin" style=${{width:22,height:22,borderWidth:3}}></div><p style=${{color:'var(--tx2)',fontSize:13,marginTop:2}}>Loading ProjectFlow...</p></div>`;
+  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
+    <div style=${{position:'relative',width:100,height:100}}>
+      <svg style=${{position:'absolute',top:0,left:0,width:100,height:100,animation:'sp .9s linear infinite'}} viewBox="0 0 100 100">
+        <defs><linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#6366f1"/><stop offset="100%" stopColor="#a78bfa"/></linearGradient></defs>
+        <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(99,102,241,.12)" strokeWidth="4.5"/>
+        <circle cx="50" cy="50" r="46" fill="none" stroke="url(#sg)" strokeWidth="4.5" strokeLinecap="round" strokeDasharray="72 217"/>
+      </svg>
+      <div style=${{position:'absolute',top:11,left:11,width:78,height:78,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:22,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 36px rgba(99,102,241,.5)'}}>
+        <svg width="42" height="42" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
+      </div>
+    </div>
+    <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlow...</p>
+  </div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
   const unread=safe(data.notifs).filter(n=>!n.read).length;
@@ -3469,7 +3619,16 @@ function App(){
 
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
-      <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}/>
+      <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}
+        callState=${{...callState,allUsers:data.users}}
+        onCallAction=${async cmd=>{
+          const h=huddleCmdRef.current;
+          if(cmd.action==='start')h.start&&h.start();
+          else if(cmd.action==='join')h.join&&h.join(cmd.roomId,cmd.roomName);
+          else if(cmd.action==='leave')h.leave&&h.leave();
+          else if(cmd.action==='mute')h.mute&&h.mute();
+          else if(cmd.action==='invite'&&cmd.userId&&cmd.roomId){await api.post('/api/calls/'+cmd.roomId+'/invite/'+cmd.userId,{});showBrowserNotif('📞 Invite sent','User invited to your Huddle',null,{});}
+        }}/>
       <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
         <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
           cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
@@ -3494,7 +3653,7 @@ function App(){
       </div>
     </div>
     <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
-    <${HuddleCall} cu=${cu} users=${data.users}/>
+    <${HuddleCall} cu=${cu} users=${data.users} onStateChange=${s=>setCallState(prev=>({...prev,...s}))} cmdRef=${huddleCmdRef}/>
     ${reminderTask!==null?html`<${ReminderModal} task=${reminderTask} onClose=${()=>setReminderTask(null)} onSaved=${()=>{setReminderTask(null);load();}}/>`:null}
     ${showReminders?html`<${RemindersPanel} onClose=${()=>{setShowReminders(false);load();}} onReload=${load}/>`:null}`;
 }
