@@ -323,6 +323,12 @@ def create_project():
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
                     d.get("color","#6366f1"),ts()))
         p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
+        # Notify all members except creator
+        for uid in members:
+            if uid != session["user_id"]:
+                nid=f"n{int(datetime.now().timestamp()*1000)}"
+                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                           (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts()))
         return jsonify(dict(p))
 
 @app.route("/api/projects/<pid>",methods=["PUT"])
@@ -500,6 +506,13 @@ def send_dm():
     with get_db() as db:
         db.execute("INSERT INTO direct_messages VALUES (?,?,?,?,?,?,?)",
                    (mid,wid(),session["user_id"],d["recipient"],d["content"],0,ts()))
+        # Also push a notification to the recipient
+        sender=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        sender_name=sender["name"] if sender else "Someone"
+        nid=f"n{int(datetime.now().timestamp()*1000)}"
+        preview=d["content"][:60]+"..." if len(d["content"])>60 else d["content"]
+        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                   (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM direct_messages WHERE id=?",(mid,)).fetchone()))
 
 @app.route("/api/dm/unread")
@@ -686,7 +699,7 @@ body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--
 :root{--bg:#07090f;--sf:#0d0f18;--sf2:#131623;--bd:#1c1f2e;--tx:#e2e8f0;--tx2:#8892a4;--tx3:#4a5568;
   --ac:#6366f1;--ac2:#818cf8;--cy:#22d3ee;--gn:#4ade80;--am:#fbbf24;--rd:#f87171;--pu:#a78bfa;}
 .lm{--bg:#f0f4fa;--sf:#fff;--sf2:#f5f7fc;--bd:#dde3ee;--tx:#0f172a;--tx2:#475569;--tx3:#94a3b8}
-::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:0.7;cursor:pointer;}input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1;}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}input[type=date]{color-scheme:dark;}body.lm input[type=date]{color-scheme:light;}input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:0.75;}input[type=date]::-webkit-calendar-picker-indicator:hover{opacity:1;}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:20px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .17s;white-space:nowrap;line-height:1.2}
@@ -912,14 +925,24 @@ function AuthScreen({onLogin}){
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+  const ICONS={
+    dashboard:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
+    projects:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`,
+    tasks:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    messages:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+    dm:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,
+    notifs:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+    team:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    settings:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  };
   const items=[
-    {id:'dashboard',icon:'⊞',label:'Dashboard'},
-    {id:'projects', icon:'📁',label:'Projects'},
-    {id:'tasks',    icon:'☑', label:'Tasks'},
-    {id:'messages', icon:'💬',label:'Channels'},
-    {id:'dm',       icon:'✉', label:'Direct Messages',badge:totalDm},
-    {id:'notifs',   icon:'🔔',label:'Notifications',badge:unread},
-    ...(cu&&cu.role==='Admin'?[{id:'team',icon:'👥',label:'Team'},{id:'settings',icon:'⚙',label:'Settings'}]:[]),
+    {id:'dashboard',icon:ICONS.dashboard,label:'Dashboard'},
+    {id:'projects', icon:ICONS.projects, label:'Projects'},
+    {id:'tasks',    icon:ICONS.tasks,    label:'Tasks'},
+    {id:'messages', icon:ICONS.messages, label:'Channels'},
+    {id:'dm',       icon:ICONS.dm,       label:'Direct Messages',badge:totalDm},
+    {id:'notifs',   icon:ICONS.notifs,   label:'Notifications',badge:unread},
+    ...(cu&&cu.role==='Admin'?[{id:'team',icon:ICONS.team,label:'Team'},{id:'settings',icon:ICONS.settings,label:'Settings'}]:[]),
   ];
   const w=col?60:224;
   return html`
@@ -936,7 +959,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
           <button key=${it.id} class=${'nb'+(view===it.id?' act':'')} title=${col?it.label:''}
             onClick=${()=>setView(it.id)}
             style=${{justifyContent:col?'center':'flex-start',padding:col?'10px 0':'8px 12px',position:'relative'}}>
-            <span style=${{fontSize:16,flexShrink:0}}>${it.icon}</span>
+            <span style=${{fontSize:16,flexShrink:0,display:'flex',alignItems:'center',color:view===it.id?'var(--ac)':'var(--tx2)'}}>${it.icon}</span>
             ${!col?html`<span style=${{flex:1}}>${it.label}</span>`:null}
             ${!col&&it.badge>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${it.badge}</span>`:null}
             ${col&&it.badge>0?html`<div style=${{position:'absolute',width:7,height:7,borderRadius:'50%',background:'var(--rd)',top:6,right:6,border:'1.5px solid var(--sf)'}}></div>`:null}
@@ -1170,7 +1193,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload}){
 
   const saveEdit=async()=>{setSaving(true);await api.put('/api/projects/'+project.id,{name,description:desc,target_date:tDate,color,members});await onReload();setSaving(false);setEdit(false);};
   const delProject=async()=>{if(!window.confirm('Delete project and all its tasks? Cannot be undone.'))return;await api.del('/api/projects/'+project.id);await onReload();onClose();};
-  const saveTask=async p=>{if(p.id&&allTasks.find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',{...p,project:project.id});onReload();};
+  const saveTask=async p=>{if(p.id&&allTasks.find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',{...p,project:project.id});await onReload();};
   const delTask=async id=>{await api.del('/api/tasks/'+id);await onReload();};
 
   return html`
@@ -1744,13 +1767,18 @@ function MessagesView({projects,users,cu}){
 function playNotifSound(){
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator();const g=ctx.createGain();
-    o.connect(g);g.connect(ctx.destination);
-    o.type='sine';o.frequency.setValueAtTime(880,ctx.currentTime);
-    o.frequency.exponentialRampToValueAtTime(660,ctx.currentTime+0.12);
-    g.gain.setValueAtTime(0.25,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.35);
-    o.start(ctx.currentTime);o.stop(ctx.currentTime+0.35);
+    // Pleasant two-note chime: C5 then E5
+    [[523,0],[659,0.18]].forEach(([freq,delay])=>{
+      const o=ctx.createOscillator();const g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.type='sine';
+      o.frequency.setValueAtTime(freq,ctx.currentTime+delay);
+      g.gain.setValueAtTime(0,ctx.currentTime+delay);
+      g.gain.linearRampToValueAtTime(0.18,ctx.currentTime+delay+0.03);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.45);
+      o.start(ctx.currentTime+delay);
+      o.stop(ctx.currentTime+delay+0.5);
+    });
   }catch(e){}
 }
 function DirectMessages({cu,users,dmUnread,onDmRead}){
@@ -1816,7 +1844,14 @@ function DirectMessages({cu,users,dmUnread,onDmRead}){
 
 /* ─── NotifsView ──────────────────────────────────────────────────────────── */
 function NotifsView({notifs,reload}){
-  const NT={task_assigned:{icon:'☑',c:'var(--ac)'},status_change:{icon:'⚡',c:'var(--cy)'},comment:{icon:'💬',c:'var(--pu)'},deadline:{icon:'⚠',c:'var(--am)'}};
+  const NT={
+    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)'},
+    status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)'},
+    comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)'},
+    deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)'},
+    dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4'},
+    project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981'},
+  };
   const unread=safe(notifs).filter(n=>!n.read).length;
   return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
     <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
