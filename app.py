@@ -78,7 +78,15 @@ def init_db():
             CREATE TABLE IF NOT EXISTS notifications (
                 id TEXT PRIMARY KEY, workspace_id TEXT, type TEXT, content TEXT,
                 user_id TEXT, read INTEGER DEFAULT 0, ts TEXT);
+            CREATE TABLE IF NOT EXISTS reminders (
+                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+                task_id TEXT, task_title TEXT, remind_at TEXT,
+                minutes_before INTEGER DEFAULT 10, fired INTEGER DEFAULT 0,
+                created TEXT);
         """)
+        # Add is_system column to messages if not exists (migration)
+        try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
+        except: pass
         # Migrate legacy data (no workspace_id)
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
@@ -390,6 +398,18 @@ def create_task():
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                        (nid,wid(),"task_assigned",f"You were assigned to '{d['title']}'",d["assignee"],0,ts()))
         t=db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()
+        # Auto-post system message to project channel
+        if d.get("project"):
+            assignee_name=""
+            if d.get("assignee"):
+                au=db.execute("SELECT name FROM users WHERE id=?",(d["assignee"],)).fetchone()
+                if au: assignee_name=f" → assigned to {au['name']}"
+            creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+            cname=(creator["name"] if creator else "Someone")
+            sysmid=f"m{int(datetime.now().timestamp()*1000)+1}"
+            msg=f"📋 **{cname}** created task **{d['title']}**{assignee_name} [{d.get('priority','medium').title()}]"
+            db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
+                       (sysmid,wid(),"system",d["project"],msg,ts(),1))
         return jsonify(dict(t))
 
 @app.route("/api/tasks/<tid>",methods=["PUT"])
@@ -412,6 +432,31 @@ def update_task(tid):
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                        (nid,wid(),"status_change",f"Task '{t['title']}' moved to {d['stage']}",
                         t["assignee"],0,ts()))
+            # Post stage change to channel
+            if t["project"]:
+                actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+                aname=actor["name"] if actor else "Someone"
+                sysmid=f"m{int(datetime.now().timestamp()*1000)+2}"
+                db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
+                           (sysmid,wid(),"system",t["project"],
+                            f"⚡ **{aname}** moved **{t['title']}** → {d['stage'].title()}",ts(),1))
+        # Post new comments to channel
+        new_comments=d.get("comments",[])
+        old_comments=json.loads(t["comments"] or "[]")
+        if len(new_comments)>len(old_comments) and t["project"]:
+            latest=new_comments[-1]
+            commenter=db.execute("SELECT name FROM users WHERE id=?",(latest.get("uid",""),)).fetchone()
+            cname=commenter["name"] if commenter else "Someone"
+            sysmid=f"m{int(datetime.now().timestamp()*1000)+3}"
+            db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
+                       (sysmid,wid(),"system",t["project"],
+                        f"💬 **{cname}** commented on **{t['title']}**: {latest.get('text','')}",ts(),1))
+            # Notify assignee about comment
+            if t["assignee"] and t["assignee"]!=session["user_id"]:
+                nid2=f"n{int(datetime.now().timestamp()*1000)+4}"
+                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                           (nid2,wid(),"comment",f"{cname} commented on '{t['title']}': {latest.get('text','')}",
+                            t["assignee"],0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()))
 
 @app.route("/api/tasks/<tid>",methods=["DELETE"])
@@ -487,8 +532,8 @@ def send_message():
     d=request.json or {}
     mid=f"m{int(datetime.now().timestamp()*1000)}"
     with get_db() as db:
-        db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?)",
-                   (mid,wid(),session["user_id"],d.get("project",""),d.get("content",""),ts()))
+        db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
+                   (mid,wid(),session["user_id"],d.get("project",""),d.get("content",""),ts(),0))
         return jsonify(dict(db.execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()))
 
 # ── Direct Messages ───────────────────────────────────────────────────────────
@@ -529,6 +574,47 @@ def dm_unread():
         rows=db.execute("""SELECT sender,COUNT(*) as cnt FROM direct_messages
             WHERE workspace_id=? AND recipient=? AND read=0 GROUP BY sender""",
             (wid(),session["user_id"])).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+# ── Reminders ─────────────────────────────────────────────────────────────────
+@app.route("/api/reminders", methods=["GET"])
+@login_required
+def get_reminders():
+    with get_db() as db:
+        rows=db.execute("SELECT * FROM reminders WHERE workspace_id=? AND user_id=? AND fired=0 ORDER BY remind_at",
+                        (wid(),session["user_id"])).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/reminders", methods=["POST"])
+@login_required
+def create_reminder():
+    d=request.json or {}
+    if not d.get("remind_at"): return jsonify({"error":"remind_at required"}),400
+    rid=f"r{int(datetime.now().timestamp()*1000)}"
+    with get_db() as db:
+        db.execute("INSERT INTO reminders VALUES (?,?,?,?,?,?,?,?,?)",
+                   (rid,wid(),session["user_id"],d.get("task_id",""),d.get("task_title","Reminder"),
+                    d["remind_at"],d.get("minutes_before",10),0,ts()))
+        return jsonify(dict(db.execute("SELECT * FROM reminders WHERE id=?",(rid,)).fetchone()))
+
+@app.route("/api/reminders/<rid>", methods=["DELETE"])
+@login_required
+def delete_reminder(rid):
+    with get_db() as db:
+        db.execute("DELETE FROM reminders WHERE id=? AND user_id=?",(rid,session["user_id"]))
+        return jsonify({"ok":True})
+
+@app.route("/api/reminders/due", methods=["GET"])
+@login_required
+def due_reminders():
+    """Return reminders that should fire now (within last 2 min, not yet fired)"""
+    now=datetime.utcnow().isoformat()+"Z"
+    with get_db() as db:
+        rows=db.execute("""SELECT * FROM reminders WHERE workspace_id=? AND user_id=?
+            AND fired=0 AND remind_at <= ?""",(wid(),session["user_id"],now)).fetchall()
+        ids=[r["id"] for r in rows]
+        if ids:
+            db.execute(f"UPDATE reminders SET fired=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
         return jsonify([dict(r) for r in rows])
 
 # ── Notifications ─────────────────────────────────────────────────────────────
@@ -1185,6 +1271,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
             </div>
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:'1px solid var(--bd)'}}>
               <button class="btn bg" onClick=${onClose}>Close</button>
+              ${onSetReminder?html`<button class="btn bg" style=${{color:'var(--am)'}} onClick=${()=>onSetReminder({id:task&&task.id,title:title,due})}>⏰ Remind</button>`:null}
               <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:'Save'}</button>
             </div>
           </div>`:null}
@@ -1195,7 +1282,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
 }
 
 /* ─── ProjectDetail ───────────────────────────────────────────────────────── */
-function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload}){
+function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetReminder}){
   const [tab,setTab]=useState('tasks');const [edit,setEdit]=useState(false);
   const [name,setName]=useState(project.name||'');const [desc,setDesc]=useState(project.description||'');
   const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#6366f1');
@@ -1317,13 +1404,13 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload}){
         </div>
       </div>
 
-      ${showNew?html`<${TaskModal} task=${null} onClose=${()=>setShowNew(false)} onSave=${saveTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id}/>`:null}
-      ${editTask?html`<${TaskModal} task=${editTask} onClose=${()=>setEditTask(null)} onSave=${saveTask} onDel=${delTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id}/>`:null}
+      ${showNew?html`<${TaskModal} task=${null} onClose=${()=>setShowNew(false)} onSave=${saveTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id} onSetReminder=${onSetReminder}/>`:null}
+      ${editTask?html`<${TaskModal} task=${editTask} onClose=${()=>setEditTask(null)} onSave=${saveTask} onDel=${delTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id} onSetReminder=${onSetReminder}/>`:null}
     </div>`;
 }
 
 /* ─── ProjectsView ────────────────────────────────────────────────────────── */
-function ProjectsView({projects,tasks,users,cu,reload}){
+function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
   const [name,setName]=useState('');const [desc,setDesc]=useState('');const [tDate,setTDate]=useState('');
   const [color,setColor]=useState('#6366f1');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
@@ -1410,7 +1497,7 @@ function ProjectsView({projects,tasks,users,cu,reload}){
             </div>
           </div>
         </div>`:null}
-      ${detail?html`<${ProjectDetail} project=${detail} allTasks=${tasks} allUsers=${users} cu=${cu} onClose=${()=>setDetail(null)} onReload=${reload}/>`:null}
+      ${detail?html`<${ProjectDetail} project=${detail} allTasks=${tasks} allUsers=${users} cu=${cu} onClose=${()=>setDetail(null)} onReload=${reload} onSetReminder=${onSetReminder}/>`:null}
     </div>`;
 }
 
@@ -1651,8 +1738,8 @@ function TasksView({tasks,projects,users,cu,reload}){
           </div>
         </div>`:null}
 
-      ${editT?html`<${TaskModal} task=${editT} onClose=${()=>setEditT(null)} onSave=${saveT} onDel=${delT} projects=${projects} users=${users} cu=${cu}/>`:null}
-      ${newT?html`<${TaskModal} task=${null} onClose=${()=>setNewT(false)} onSave=${saveT} projects=${projects} users=${users} cu=${cu}/>`:null}
+      ${editT?html`<${TaskModal} task=${editT} onClose=${()=>setEditT(null)} onSave=${saveT} onDel=${delT} projects=${projects} users=${users} cu=${cu} onSetReminder=${onSetReminder}/>`:null}
+      ${newT?html`<${TaskModal} task=${null} onClose=${()=>setNewT(false)} onSave=${saveT} projects=${projects} users=${users} cu=${cu} onSetReminder=${onSetReminder}/>`:null}
     </div>`;
 }
 
@@ -1746,36 +1833,89 @@ function Dashboard({cu,tasks,projects,users,onNav}){
 }
 
 /* ─── MessagesView ────────────────────────────────────────────────────────── */
+function renderMd(text){
+  return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
+}
 function MessagesView({projects,users,cu}){
   const [pid,setPid]=useState((safe(projects)[0]&&safe(projects)[0].id)||'');
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
-  useEffect(()=>{if(!pid)return;api.get('/api/messages?project='+pid).then(d=>setMsgs(Array.isArray(d)?d:[]));},[ pid]);
+
+  const loadMsgs=useCallback(async(id)=>{
+    if(!id)return;
+    const d=await api.get('/api/messages?project='+id);
+    if(Array.isArray(d)) setMsgs(d);
+  },[]);
+
+  // Load on channel change
+  useEffect(()=>{loadMsgs(pid);},[pid]);
+
+  // Auto-poll every 4s for new channel messages
+  useEffect(()=>{
+    if(!pid)return;
+    const id=setInterval(()=>{
+      api.get('/api/messages?project='+pid).then(d=>{
+        if(Array.isArray(d)){
+          setMsgs(prev=>{
+            if(d.length>prev.length) playNotifSound();
+            return d;
+          });
+        }
+      });
+    },4000);
+    return()=>clearInterval(id);
+  },[pid]);
+
   useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
   const sp=safe(projects).find(p=>p.id===pid);
-  const send=async()=>{if(!txt.trim())return;const c=txt.trim();setTxt('');const m=await api.post('/api/messages',{project:pid,content:c});setMsgs(prev=>[...prev,m]);};
+  const send=async()=>{
+    if(!txt.trim())return;const c=txt.trim();setTxt('');
+    const m=await api.post('/api/messages',{project:pid,content:c});
+    setMsgs(prev=>[...prev,m]);
+  };
+
   return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
     <div style=${{width:210,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
       <div style=${{padding:'11px 12px',borderBottom:'1px solid var(--bd)'}}><span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7}}>Channels</span></div>
       <div style=${{flex:1,overflowY:'auto',padding:6}}>
-        ${safe(projects).map(p=>html`<button key=${p.id} class=${'nb'+(pid===p.id?' act':'')} style=${{marginBottom:2,fontSize:12}} onClick=${()=>setPid(p.id)}><div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div><span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}># ${p.name}</span></button>`)}
+        ${safe(projects).map(p=>html`<button key=${p.id} class=${'nb'+(pid===p.id?' act':'')} style=${{marginBottom:2,fontSize:12}} onClick=${()=>setPid(p.id)}>
+          <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
+          <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}># ${p.name}</span>
+        </button>`)}
       </div>
     </div>
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 15px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
         ${sp?html`<div style=${{width:8,height:8,borderRadius:2,background:sp.color}}></div>`:null}
         <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${sp?'# '+sp.name:'Select a channel'}</span>
+        ${sp?html`<span style=${{fontSize:11,color:'var(--tx3)',marginLeft:'auto'}}>Tasks & comments auto-post here</span>`:null}
       </div>
-      <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:11}}>
-        ${msgs.map(m=>{const s=safe(users).find(u=>u.id===m.sender);const isMe=m.sender===cu.id;return html`
-          <div key=${m.id} style=${{display:'flex',gap:8,alignItems:'flex-end',flexDirection:isMe?'row-reverse':'row'}}>
-            ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
-            <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
-              ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
-              <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5,background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'#fff':'var(--tx)',border:isMe?'none':'1px solid var(--bd)',borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
-              <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(m.ts)}</span>
-            </div>
-          </div>`;})}
-        ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:48,color:'var(--tx3)',fontSize:13}}>No messages yet. Say hi! 👋</div>`:null}
+      <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:8}}>
+        ${msgs.map(m=>{
+          const isSystem=m.is_system===1||m.sender==='system';
+          if(isSystem) return html`
+            <div key=${m.id} style=${{display:'flex',justifyContent:'center',padding:'4px 0'}}>
+              <div style=${{fontSize:11,color:'var(--tx3)',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:20,padding:'4px 14px',maxWidth:'80%',textAlign:'center'}}
+                dangerouslySetInnerHTML=${{__html:renderMd(m.content)}}></div>
+            </div>`;
+          const s=safe(users).find(u=>u.id===m.sender);const isMe=m.sender===cu.id;
+          return html`
+            <div key=${m.id} style=${{display:'flex',gap:8,alignItems:'flex-end',flexDirection:isMe?'row-reverse':'row'}}>
+              ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
+              <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
+                ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
+                <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5,
+                  background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'#fff':'var(--tx)',
+                  border:isMe?'none':'1px solid var(--bd)',
+                  borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
+                <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(m.ts)}</span>
+              </div>
+            </div>`;
+        })}
+        ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:48,color:'var(--tx3)',fontSize:13}}>
+          <div style=${{fontSize:28,marginBottom:8}}>💬</div>
+          <p>No messages yet.</p>
+          <p style=${{fontSize:11,marginTop:6}}>Task activity will appear here automatically.</p>
+        </div>`:null}
       </div>
       <div style=${{padding:'10px 15px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
         <input class="inp" style=${{flex:1}} placeholder=${'Message in #'+((sp&&sp.name)||'...')} value=${txt}
@@ -1874,6 +2014,7 @@ function NotifsView({notifs,reload,onNavigate}){
     deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'},
     dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'},
     project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'},
+    reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'},
   };
   const unread=safe(notifs).filter(n=>!n.read).length;
   const handleClick=async(n)=>{
@@ -1910,7 +2051,9 @@ function NotifsView({notifs,reload,onNavigate}){
             </div>
           </div>
           ${!n.read?html`<div style=${{width:8,height:8,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
-        </div>`;})}
+        </div>
+        `;})}
+
     </div>
   </div>`;
 }
@@ -2120,12 +2263,146 @@ function AIAssistant({cu,projects,tasks,users}){
       </div>`:null}`;
 }
 
+/* ─── Browser Notifications ──────────────────────────────────────────────── */
+function requestNotifPermission(){
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission();
+  }
+}
+function showBrowserNotif(title, body, onClick){
+  if('Notification' in window && Notification.permission==='granted'){
+    const n=new Notification(title,{body,icon:'/favicon.ico',badge:'/favicon.ico'});
+    if(onClick) n.onclick=()=>{window.focus();onClick();n.close();};
+    setTimeout(()=>n.close(),8000);
+  }
+}
+
+/* ─── ReminderModal ───────────────────────────────────────────────────────── */
+function ReminderModal({task,onClose,onSaved}){
+  const [remindAt,setRemindAt]=useState('');
+  const [minBefore,setMinBefore]=useState('10');
+  const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState('');
+
+  // Pre-fill with task due date/time if exists
+  useEffect(()=>{
+    if(task&&task.due){
+      // Convert due date to datetime-local format
+      try{
+        const d=new Date(task.due);
+        if(!isNaN(d)){
+          // Set to 9am on due date by default
+          d.setHours(9,0,0,0);
+          setRemindAt(d.toISOString().slice(0,16));
+        }
+      }catch(e){}
+    } else {
+      // Default to 1 hour from now
+      const d=new Date();d.setHours(d.getHours()+1,0,0,0);
+      setRemindAt(d.toISOString().slice(0,16));
+    }
+  },[task]);
+
+  const save=async()=>{
+    if(!remindAt){setErr('Please set a reminder date and time.');return;}
+    const remindUtc=new Date(remindAt);
+    const alertAt=new Date(remindUtc.getTime()-parseInt(minBefore)*60000);
+    setSaving(true);
+    const r=await api.post('/api/reminders',{
+      task_id:task?task.id:'',
+      task_title:task?task.title:'Reminder',
+      remind_at:alertAt.toISOString(),
+      minutes_before:parseInt(minBefore),
+    });
+    setSaving(false);
+    if(r.error){setErr(r.error);return;}
+    onSaved&&onSaved(r);
+    onClose();
+  };
+
+  return html`
+    <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
+      <div class="mo" style=${{maxWidth:420}}>
+        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+          <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>⏰ Set Reminder</h2>
+          <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
+        </div>
+        ${task?html`<div style=${{padding:'10px 13px',background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)',marginBottom:16,fontSize:13,color:'var(--tx2)'}}>
+          Task: <b style=${{color:'var(--tx)'}}>${task.title}</b>
+        </div>`:null}
+        <div style=${{display:'grid',gap:14}}>
+          <div>
+            <label class="lbl">Remind me at (date & time)</label>
+            <input class="inp" type="datetime-local" value=${remindAt}
+              onChange=${e=>setRemindAt(e.target.value)}/>
+          </div>
+          <div>
+            <label class="lbl">Notify me how early?</label>
+            <select class="inp" value=${minBefore} onChange=${e=>setMinBefore(e.target.value)}>
+              <option value="5">5 minutes before</option>
+              <option value="10">10 minutes before</option>
+              <option value="15">15 minutes before</option>
+              <option value="30">30 minutes before</option>
+              <option value="60">1 hour before</option>
+              <option value="0">At exact time</option>
+            </select>
+          </div>
+        </div>
+        ${err?html`<p style=${{color:'var(--rd)',fontSize:12,marginTop:10}}>${err}</p>`:null}
+        <div style=${{display:'flex',gap:9,justifyContent:'flex-end',marginTop:18}}>
+          <button class="btn bg" onClick=${onClose}>Cancel</button>
+          <button class="btn bp" onClick=${save} disabled=${saving}>
+            ${saving?html`<span class="spin"></span>`:'⏰ Set Reminder'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ─── RemindersPanel ──────────────────────────────────────────────────────── */
+function RemindersPanel({onClose}){
+  const [reminders,setReminders]=useState([]);
+  useEffect(()=>{
+    api.get('/api/reminders').then(d=>{if(Array.isArray(d))setReminders(d);});
+  },[]);
+  const del=async(id)=>{
+    await api.del('/api/reminders/'+id);
+    setReminders(prev=>prev.filter(r=>r.id!==id));
+  };
+  return html`
+    <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
+      <div class="mo" style=${{maxWidth:500}}>
+        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+          <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>⏰ My Reminders</h2>
+          <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
+        </div>
+        ${reminders.length===0?html`<p style=${{color:'var(--tx3)',fontSize:13,textAlign:'center',padding:'24px 0'}}>No active reminders.</p>`:null}
+        <div style=${{display:'flex',flexDirection:'column',gap:9}}>
+          ${reminders.map(r=>html`
+            <div key=${r.id} style=${{display:'flex',alignItems:'center',gap:12,padding:'11px 14px',background:'var(--sf2)',borderRadius:11,border:'1px solid var(--bd)'}}>
+              <div style=${{fontSize:24}}>⏰</div>
+              <div style=${{flex:1}}>
+                <p style=${{fontSize:13,fontWeight:600,color:'var(--tx)',marginBottom:3}}>${r.task_title}</p>
+                <p style=${{fontSize:11,color:'var(--tx3)'}}>
+                  ${r.minutes_before>0?r.minutes_before+' min before · ':''} 
+                  ${new Date(r.remind_at).toLocaleString()}
+                </p>
+              </div>
+              <button class="btn brd" style=${{fontSize:11,padding:'5px 9px',color:'var(--rd)'}}
+                onClick=${()=>del(r.id)}>✕</button>
+            </div>`)}
+        </div>
+      </div>
+    </div>`;
+}
+
 /* ─── App ─────────────────────────────────────────────────────────────────── */
 function App(){
   const [dark,setDark]=useState(true);const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(false);
   const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[]});
   const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
+  const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);
 
   const load=useCallback(async()=>{
     if(!cu)return;
@@ -2179,6 +2456,30 @@ function App(){
   const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
   const logout=async()=>{await api.post('/api/auth/logout',{});setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);};
 
+  // Request browser notification permission on login
+  useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
+
+  // Poll for due reminders every 30s — fire browser popup + in-app notification
+  useEffect(()=>{
+    if(!cu)return;
+    const id=setInterval(async()=>{
+      const due=await api.get('/api/reminders/due');
+      if(Array.isArray(due)&&due.length>0){
+        due.forEach(r=>{
+          playNotifSound();
+          showBrowserNotif('⏰ Reminder',r.task_title,()=>setView('tasks'));
+          // Also add to in-app notifications
+          const nid='rn'+Date.now();
+          setData(prev=>({...prev,notifs:[
+            {id:nid,type:'reminder',content:'⏰ Reminder: '+r.task_title,read:0,ts:new Date().toISOString()},
+            ...prev.notifs
+          ]}));
+        });
+      }
+    },30000);
+    return()=>clearInterval(id);
+  },[cu]);
+
   if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column',gap:14}}><div style=${{fontSize:42,filter:'drop-shadow(0 0 20px #6366f1)'}}>⚡</div><div class="spin" style=${{width:22,height:22,borderWidth:3}}></div><p style=${{color:'var(--tx2)',fontSize:13}}>Loading...</p></div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
@@ -2195,7 +2496,7 @@ function App(){
     settings:{title:'Settings',sub:wsName||'Workspace configuration'},
   };
   const info=TITLES[view]||{title:view,sub:''};
-  const extra=html`<button class="btn bg" style=${{fontSize:12,padding:'6px 11px'}} onClick=${load}>↻ Refresh</button>${view==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null}`;
+  const extra=html`<button class="btn bg" style=${{fontSize:12,padding:'6px 11px'}} onClick=${()=>setShowReminders(true)} title="My Reminders">⏰ Reminders</button><button class="btn bg" style=${{fontSize:12,padding:'6px 11px'}} onClick=${load}>↻ Refresh</button>${view==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null}`;
 
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
@@ -2205,8 +2506,8 @@ function App(){
         <div style=${{flex:1,overflow:'hidden'}}>
           <${ErrorBoundary}>
             ${view==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
-            ${view==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load}/>`:null}
-            ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${view==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
+            ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
             ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
             ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
@@ -2216,7 +2517,9 @@ function App(){
         </div>
       </div>
     </div>
-    <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>`;
+    <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
+    ${reminderTask!==null?html`<${ReminderModal} task=${reminderTask} onClose=${()=>setReminderTask(null)} onSaved=${()=>setReminderTask(null)}/>`:null}
+    ${showReminders?html`<${RemindersPanel} onClose=${()=>setShowReminders(false)}/>`:null}`;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary}><${App}<//>`);
