@@ -790,12 +790,15 @@ HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>ProjectFlow</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236366f1'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='white'/%3E%3Ccircle cx='16' cy='7' r='2.5' fill='white'/%3E%3Ccircle cx='24' cy='21' r='2.5' fill='white'/%3E%3Ccircle cx='8' cy='21' r='2.5' fill='white'/%3E%3Cline x1='16' y1='9.5' x2='16' y2='12.5' stroke='white' stroke-width='1.5'/%3E%3Cline x1='22' y1='19.5' x2='18.5' y2='17.5' stroke='white' stroke-width='1.5'/%3E%3Cline x1='10' y1='19.5' x2='13.5' y2='17.5' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <script src="/js/react.min.js"></script><script src="/js/react-dom.min.js"></script>
 <script src="/js/prop-types.min.js"></script><script src="/js/recharts.min.js"></script>
 <script src="/js/htm.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}html,body{height:100%;width:100%;overflow:hidden}
-body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx)}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx)}
 :root{--bg:#07090f;--sf:#0d0f18;--sf2:#131623;--bd:#1c1f2e;--tx:#e2e8f0;--tx2:#8892a4;--tx3:#4a5568;
   --ac:#6366f1;--ac2:#818cf8;--cy:#22d3ee;--gn:#4ade80;--am:#fbbf24;--rd:#f87171;--pu:#a78bfa;}
 .lm{--bg:#f0f4fa;--sf:#fff;--sf2:#f5f7fc;--bd:#dde3ee;--tx:#0f172a;--tx2:#475569;--tx3:#94a3b8}
@@ -844,9 +847,20 @@ textarea.inp{resize:vertical;min-height:68px}
 </style></head><body>
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center">
   <div style="text-align:center">
-    <div style="font-size:44px;margin-bottom:14px;filter:drop-shadow(0 0 22px #6366f1)">⚡</div>
-    <div class="spin" style="width:22px;height:22px;border-width:3px"></div>
-    <p style="color:var(--tx2);font-size:13px;margin-top:14px">Loading ProjectFlow...</p>
+    <div style="width:72px;height:72px;margin:0 auto 18px;filter:drop-shadow(0 0 22px #6366f1)">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="16" fill="#6366f1"/>
+        <circle cx="32" cy="32" r="7" fill="white"/>
+        <circle cx="32" cy="13" r="5" fill="white" opacity="0.9"/>
+        <circle cx="48" cy="43" r="5" fill="white" opacity="0.9"/>
+        <circle cx="16" cy="43" r="5" fill="white" opacity="0.9"/>
+        <line x1="32" y1="18" x2="32" y2="25" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="44" y1="40" x2="38" y2="36" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="20" y1="40" x2="26" y2="36" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="spin" style="width:22px;height:22px;border-width:3px;margin:0 auto"></div>
+    <p style="color:var(--tx2);font-size:13px;margin-top:14px;font-family:'Inter',sans-serif">Loading ProjectFlow...</p>
     <div id="LE" style="display:none;color:var(--rd);font-size:12px;margin-top:12px;max-width:360px;padding:12px 16px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:10px"></div>
   </div>
 </div>
@@ -1032,6 +1046,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
     messages:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
     dm:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,
     notifs:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+    reminders:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>`,
     team:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     settings:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   };
@@ -1041,6 +1056,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
     {id:'tasks',    icon:ICONS.tasks,    label:'Tasks'},
     {id:'messages', icon:ICONS.messages, label:'Channels'},
     {id:'dm',       icon:ICONS.dm,       label:'Direct Messages',badge:totalDm},
+    {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
     {id:'notifs',   icon:ICONS.notifs,   label:'Notifications',badge:unread},
     ...(cu&&cu.role==='Admin'?[{id:'team',icon:ICONS.team,label:'Team'},{id:'settings',icon:ICONS.settings,label:'Settings'}]:[]),
   ];
@@ -1048,7 +1064,17 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
   return html`
     <aside style=${{width:w,minWidth:w,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,transition:'width .22s',overflow:'hidden',position:'relative'}}>
       <div style=${{padding:col?'14px 13px':'14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,minHeight:60}}>
-        <div style=${{width:33,height:33,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:17,boxShadow:'0 0 14px rgba(99,102,241,.35)'}}>⚡</div>
+        <div style=${{width:33,height:33,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 0 14px rgba(99,102,241,.35)'}}>
+          <svg width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="32" cy="32" r="7" fill="white"/>
+            <circle cx="32" cy="13" r="5" fill="white" opacity="0.9"/>
+            <circle cx="48" cy="43" r="5" fill="white" opacity="0.9"/>
+            <circle cx="16" cy="43" r="5" fill="white" opacity="0.9"/>
+            <line x1="32" y1="18" x2="32" y2="25" stroke="white" stroke-width="3" stroke-linecap="round"/>
+            <line x1="44" y1="40" x2="38" y2="36" stroke="white" stroke-width="3" stroke-linecap="round"/>
+            <line x1="20" y1="40" x2="26" y2="36" stroke="white" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
         ${!col?html`<div style=${{minWidth:0}}>
           <div style=${{fontWeight:800,fontSize:14,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>ProjectFlow</div>
           ${wsName?html`<div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:140}}>${wsName}</div>`:null}
@@ -1086,16 +1112,57 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
-function Header({title,sub,dark,setDark,extra}){
+function Header({title,sub,dark,setDark,extra,cu,upcomingReminders,onViewReminders}){
+  const now=new Date();
+  const todayStr=now.toLocaleDateString('en-US',{day:'numeric',month:'short'});
+  const upcoming=safe(upcomingReminders).slice(0,4);
+  const fmtTime=dt=>{const d=new Date(dt);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});};
   return html`
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 22px',borderBottom:'1px solid var(--bd)',background:'var(--sf)',height:60,flexShrink:0}}>
-      <div>
-        <h1 style=${{fontSize:18,fontWeight:800,color:'var(--tx)',letterSpacing:-.3}}>${title}</h1>
-        ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:1}}>${sub}</p>`:null}
+    <div style=${{flexShrink:0,background:'var(--sf)',borderBottom:'1px solid var(--bd)'}}>
+      <div style=${{padding:'0 18px',borderBottom:'1px solid var(--bd)',height:46,display:'flex',alignItems:'center',gap:12,background:'linear-gradient(90deg,rgba(99,102,241,.04),transparent)'}}>
+        <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'3px 10px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)'}}>
+          <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#6366f1"/><circle cx="32" cy="13" r="4" fill="#6366f1" opacity="0.7"/><circle cx="48" cy="43" r="4" fill="#6366f1" opacity="0.7"/><circle cx="16" cy="43" r="4" fill="#6366f1" opacity="0.7"/><line x1="32" y1="17" x2="32" y2="25" stroke="#6366f1" stroke-width="2.5"/><line x1="44" y1="40" x2="38" y2="36" stroke="#6366f1" stroke-width="2.5"/><line x1="20" y1="40" x2="26" y2="36" stroke="#6366f1" stroke-width="2.5"/></svg>
+          <span style=${{fontSize:11,fontWeight:700,color:'var(--tx)',letterSpacing:'.3px'}}>Your Schedule</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
+        </div>
+        <div style=${{flex:1,position:'relative',height:28,display:'flex',alignItems:'center'}}>
+          <div style=${{position:'absolute',left:0,right:0,height:3,background:'var(--bd)',borderRadius:2}}>
+            ${upcoming.length>0?html`<div style=${{position:'absolute',left:0,top:0,height:'100%',width:'55%',background:'linear-gradient(90deg,rgba(99,102,241,.6),rgba(129,140,248,.3))',borderRadius:2}}></div>`:null}
+          </div>
+          ${upcoming.map((r,i)=>html`
+            <div key=${r.id} style=${{position:'absolute',left:(8+i*22)+'%',top:'50%',transform:'translate(-50%,-50%)',zIndex:2,cursor:'pointer'}} onClick=${onViewReminders} title=${r.task_title}>
+              <div style=${{width:26,height:26,borderRadius:'50%',background:'linear-gradient(135deg,#fbbf24,#f59e0b)',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#000',boxShadow:'0 2px 10px rgba(251,191,36,.5)'}}>
+                ${r.task_title?r.task_title.charAt(0).toUpperCase():'R'}
+              </div>
+              <div style=${{position:'absolute',bottom:-14,left:'50%',transform:'translateX(-50%)',fontSize:9,color:'var(--tx3)',whiteSpace:'nowrap',fontFamily:'monospace',fontWeight:600}}>
+                ${fmtTime(r.remind_at)}
+              </div>
+            </div>`)}
+          ${upcoming.length===0?html`
+            <div style=${{position:'absolute',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:5}}>
+              <span style=${{fontSize:10,color:'var(--tx3)',whiteSpace:'nowrap'}}>No upcoming reminders today</span>
+              <button class="btn bg" style=${{fontSize:10,padding:'2px 8px',height:20,borderRadius:4}} onClick=${onViewReminders}>+ Add</button>
+            </div>`:null}
+        </div>
+        <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
+          <button class="btn bg" style=${{padding:'5px 9px',fontSize:13,height:28,borderRadius:7}} onClick=${()=>setDark(!dark)}>${dark?'☀':'🌙'}</button>
+          ${cu?html`
+            <div style=${{display:'flex',alignItems:'center',gap:7,padding:'3px 10px 3px 4px',background:'var(--sf2)',borderRadius:20,border:'1px solid var(--bd)',cursor:'pointer',transition:'all .15s'}} onClick=${onViewReminders}>
+              <${Av} u=${cu} size=${26}/>
+              <div>
+                <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',lineHeight:1.2}}>${cu.name.split(' ')[0]}</div>
+                <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu.role}</div>
+              </div>
+            </div>`:null}
+        </div>
       </div>
-      <div style=${{display:'flex',alignItems:'center',gap:7}}>
-        ${extra||null}
-        <button class="btn bg" style=${{padding:'7px 10px',fontSize:15}} onClick=${()=>setDark(!dark)}>${dark?'☀':'🌙'}</button>
+      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 22px',height:50}}>
+        <div>
+          <h1 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',letterSpacing:-.4,lineHeight:1.2}}>${title}</h1>
+          ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:1}}>${sub}</p>`:null}
+        </div>
+        <div style=${{display:'flex',alignItems:'center',gap:7}}>${extra||null}</div>
       </div>
     </div>`;
 }
@@ -1507,7 +1574,7 @@ const STAGE_DAYS={backlog:0,planning:7,development:21,code_review:28,testing:35,
 const STAGE_PCT={backlog:0,planning:10,development:35,code_review:55,testing:70,uat:80,release:90,production:95,completed:100,blocked:null};
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
 
-function TasksView({tasks,projects,users,cu,reload}){
+function TasksView({tasks,projects,users,cu,reload,onSetReminder}){
   const [mode,setMode]=useState('kanban');
   const [pid,setPid]=useState('all');
   const [priF,setPriF]=useState('all');
@@ -2359,6 +2426,128 @@ function ReminderModal({task,onClose,onSaved}){
     </div>`;
 }
 
+/* ─── RemindersView (full page) ───────────────────────────────────────────── */
+function RemindersView({cu,tasks,onSetReminder}){
+  const [reminders,setReminders]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const now=new Date();
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const d=await api.get('/api/reminders');
+    setReminders(Array.isArray(d)?d:[]);
+    setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const del=async(id)=>{
+    await api.del('/api/reminders/'+id);
+    setReminders(prev=>prev.filter(r=>r.id!==id));
+  };
+  const fmtDt=dt=>{
+    const d=new Date(dt);
+    const diff=d-now;
+    if(diff<0) return {label:'Overdue',col:'var(--rd)',bg:'rgba(248,113,113,.1)'};
+    if(diff<3600000) return {label:'< 1 hour',col:'var(--am)',bg:'rgba(251,191,36,.1)'};
+    if(diff<86400000) return {label:'Today',col:'var(--cy)',bg:'rgba(34,211,238,.1)'};
+    if(diff<172800000) return {label:'Tomorrow',col:'var(--gn)',bg:'rgba(74,222,128,.1)'};
+    return {label:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),col:'var(--tx2)',bg:'var(--sf2)'};
+  };
+  const overdue=reminders.filter(r=>new Date(r.remind_at)<now);
+  const upcoming=reminders.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at));
+  const hours=[...Array(12)].map((_,i)=>{
+    const h=8+i;
+    const label=h<12?h+' AM':h===12?'12 PM':((h-12)+' PM');
+    const remAtHour=upcoming.filter(r=>{const d=new Date(r.remind_at);return d.getHours()===h && d.toDateString()===now.toDateString();});
+    return {h,label,remAtHour};
+  });
+  return html`
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 24px',background:'var(--bg)'}}>
+      <!-- Header stats row (like image 6 top metrics) -->
+      <div style=${{display:'flex',gap:14,marginBottom:22}}>
+        ${[
+          {label:'Total',val:reminders.length,col:'var(--ac)',bg:'rgba(99,102,241,.1)',icon:'⏰'},
+          {label:'Upcoming',val:upcoming.length,col:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
+          {label:'Overdue',val:overdue.length,col:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
+          {label:'Today',val:upcoming.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,col:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'📅'},
+        ].map(s=>html`
+          <div key=${s.label} style=${{flex:1,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'16px 18px',display:'flex',alignItems:'center',gap:14}}>
+            <div style=${{width:44,height:44,borderRadius:12,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>${s.icon}</div>
+            <div>
+              <div style=${{fontSize:26,fontWeight:900,color:s.col,lineHeight:1}}>${s.val}</div>
+              <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600,letterSpacing:.3}}>${s.label}</div>
+            </div>
+          </div>`)}
+      </div>
+      <!-- Timeline bar -->
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'16px 20px',marginBottom:20}}>
+        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style=${{fontWeight:800,fontSize:14,color:'var(--tx)'}}>📅 Today's Timeline</div>
+          <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
+        </div>
+        <div style=${{display:'flex',gap:0,overflowX:'auto',paddingBottom:6}}>
+          ${hours.map(h=>html`
+            <div key=${h.h} style=${{flex:'0 0 80px',textAlign:'center',position:'relative'}}>
+              <div style=${{fontSize:9,color:h.remAtHour.length?'var(--am)':'var(--tx3)',fontFamily:'monospace',fontWeight:h.remAtHour.length?700:400,marginBottom:6}}>${h.label}</div>
+              <div style=${{height:36,border:'1px dashed '+(h.remAtHour.length?'var(--am)':'var(--bd)'),borderRadius:6,background:h.remAtHour.length?'rgba(251,191,36,.07)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',gap:2,position:'relative'}}>
+                ${h.remAtHour.map(r=>html`
+                  <div key=${r.id} style=${{width:18,height:18,borderRadius:'50%',background:'var(--am)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:800,color:'#000',cursor:'pointer'}} title=${r.task_title}>
+                    ${r.task_title.charAt(0).toUpperCase()}
+                  </div>`)}
+              </div>
+            </div>`)}
+        </div>
+      </div>
+      <!-- Overdue & Upcoming columns (image 6 style) -->
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
+        <!-- Upcoming column -->
+        <div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style=${{fontWeight:800,fontSize:14,color:'var(--tx)'}}>⚡ Upcoming</div>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminders</span>
+          </div>
+          ${loading?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
+          ${!loading&&upcoming.length===0?html`<div style=${{textAlign:'center',padding:'36px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
+            <div style=${{fontSize:28,marginBottom:8}}>✅</div><p>All clear! No upcoming reminders.</p>
+          </div>`:null}
+          <div style=${{display:'flex',flexDirection:'column',gap:9}}>
+            ${upcoming.map(r=>{const ft=fmtDt(r.remind_at);return html`
+              <div key=${r.id} style=${{display:'flex',gap:12,padding:'13px 15px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)',transition:'all .15s',alignItems:'center'}}>
+                <div style=${{width:40,height:40,borderRadius:11,background:'rgba(251,191,36,.12)',border:'1px solid rgba(251,191,36,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⏰</div>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${r.task_title}</div>
+                  <div style=${{display:'flex',gap:8,alignItems:'center'}}>
+                    <span style=${{fontSize:10,padding:'2px 7px',borderRadius:5,background:ft.bg,color:ft.col,fontWeight:700}}>${ft.label}</span>
+                    <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                  </div>
+                </div>
+                <button class="btn brd" style=${{fontSize:11,padding:'5px 9px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+              </div>`;})}\
+          </div>
+        </div>
+        <!-- Overdue column -->
+        <div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style=${{fontWeight:800,fontSize:14,color:'var(--rd)'}}>🚨 Overdue</div>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
+          </div>
+          ${!loading&&overdue.length===0?html`<div style=${{textAlign:'center',padding:'36px 0',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
+            <div style=${{fontSize:28,marginBottom:8}}>🎉</div><p>Nothing overdue!</p>
+          </div>`:null}
+          <div style=${{display:'flex',flexDirection:'column',gap:9}}>
+            ${overdue.map(r=>html`
+              <div key=${r.id} style=${{display:'flex',gap:12,padding:'13px 15px',background:'rgba(248,113,113,.04)',borderRadius:12,border:'1px solid rgba(248,113,113,.2)',alignItems:'center'}}>
+                <div style=${{width:40,height:40,borderRadius:11,background:'rgba(248,113,113,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>⚠️</div>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${r.task_title}</div>
+                  <span style=${{fontSize:10,color:'var(--rd)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                </div>
+                <button class="btn brd" style=${{fontSize:11,padding:'5px 9px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+              </div>`)}\
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 /* ─── RemindersPanel ──────────────────────────────────────────────────────── */
 function RemindersPanel({onClose}){
   const [reminders,setReminders]=useState([]);
@@ -2491,18 +2680,19 @@ function App(){
     tasks:{title:'Task Board',sub:data.tasks.length+' total tasks'},
     messages:{title:'Channels',sub:'Project team channels'},
     dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'},
+    reminders:{title:'Reminders',sub:'Track your upcoming task reminders'},
     notifs:{title:'Notifications',sub:unread+' unread'},
     team:{title:'Team',sub:data.users.length+' members'},
     settings:{title:'Settings',sub:wsName||'Workspace configuration'},
   };
   const info=TITLES[view]||{title:view,sub:''};
-  const extra=html`<button class="btn bg" style=${{fontSize:12,padding:'6px 11px'}} onClick=${()=>setShowReminders(true)} title="My Reminders">⏰ Reminders</button><button class="btn bg" style=${{fontSize:12,padding:'6px 11px'}} onClick=${load}>↻ Refresh</button>${view==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null}`;
+  const extra=html`<button class="btn bg" style=${{fontSize:12,padding:'6px 11px'}} onClick=${load}>↻ Refresh</button>${view==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null}`;
 
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}/>
       <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
-        <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}/>
+        <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra} cu=${cu} upcomingReminders=${[]} onViewReminders=${()=>setView('reminders')}/>
         <div style=${{flex:1,overflow:'hidden'}}>
           <${ErrorBoundary}>
             ${view==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
@@ -2510,6 +2700,7 @@ function App(){
             ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
             ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
+            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${view==='settings'&&cu.role==='Admin'?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
