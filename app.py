@@ -865,8 +865,8 @@ textarea.inp{resize:vertical;min-height:68px}
 .sel{background:var(--sf2);border:1px solid var(--bd);border-radius:9px;padding:9px 32px 9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%238892a4' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
 .sel:focus{border-color:var(--ac)}
 .badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;font-family:monospace}
-.nb{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .14s;border:none;background:transparent;width:100%;text-align:left}
-.nb:hover{background:var(--sf2);color:var(--tx)}.nb.act{background:rgba(99,102,241,.14);color:var(--ac2)}
+.nb{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .15s;border:none;background:transparent;width:100%;text-align:left;position:relative}
+.nb:hover{background:var(--sf2);color:var(--tx)}.nb.act{background:rgba(99,102,241,.12);color:var(--ac)}.nb.act::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:3px;background:var(--ac);border-radius:0 3px 3px 0}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(6px)}
 .mo{background:var(--sf);border:1px solid var(--bd);border-radius:18px;padding:26px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto}
 .mo-xl{max-width:920px}
@@ -1024,7 +1024,7 @@ function AuthScreen({onLogin}){
     <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
       <div class="fi" style=${{width:'100%',maxWidth:460}}>
         <div style=${{textAlign:'center',marginBottom:24}}>
-          <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:56,height:56,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:15,marginBottom:12,fontSize:26,boxShadow:'0 0 36px rgba(99,102,241,.5)'}}>⚡</div>
+          <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:60,height:60,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:16,marginBottom:12,boxShadow:'0 0 36px rgba(99,102,241,.5)'}}><svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
           <h1 style=${{fontSize:26,fontWeight:800,color:'var(--tx)',letterSpacing:-.5}}>ProjectFlow</h1>
           <p style=${{color:'var(--tx2)',fontSize:13,marginTop:4}}>Team project management, your way</p>
         </div>
@@ -1165,7 +1165,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
   const now=new Date();
   const todayStr=now.toLocaleDateString('en-US',{day:'numeric',month:'short'});
   const upcoming=safe(upcomingReminders).slice(0,4);
-  const fmtT=dt=>{const d=new Date(dt);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});};
+  const fmtT=dt=>{const d=new Date(dt);return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');};
   const unread=safe(notifs).filter(n=>!n.read).length;
   const NI={task_assigned:'✅',status_change:'🔄',comment:'💬',deadline:'⏰',dm:'📨',project_added:'📁',reminder:'🔔'};
   const NC={task_assigned:'var(--ac)',status_change:'var(--cy)',comment:'var(--pu)',deadline:'var(--am)',dm:'var(--cy)',project_added:'var(--gn)',reminder:'var(--am)'};
@@ -2037,12 +2037,12 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   const activeTasks=t.filter(x=>activeProjectIds.has(x.project)&&x.stage!=='completed');
   const priChart=[{name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'#ff4444'},{name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'#f87171'},{name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'#fbbf24'},{name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'#60a5fa'}];
   const stats=[
-    {label:'Total Projects',val:p.length,   color:'var(--ac)',bg:'rgba(99,102,241,.1)', icon:'📁',nav:'projects'},
-    {label:'Active Tasks',  val:active,     color:'var(--cy)',bg:'rgba(34,211,238,.1)', icon:'⚡',nav:'tasks'},
-    {label:'Completed',     val:done,       color:'var(--gn)',bg:'rgba(74,222,128,.1)', icon:'✅',nav:'tasks'},
-    {label:'Blocked',       val:blocked,    color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚫',nav:'tasks'},
-    {label:'My Tasks',      val:myT.length, color:'var(--am)',bg:'rgba(251,191,36,.1)', icon:'⭐',nav:'tasks'},
-    {label:'Team Members',  val:u.length,   color:'var(--pu)',bg:'rgba(167,139,250,.1)',icon:'👥',nav:'team'},
+    {label:'Total Projects',val:p.length,   color:'var(--ac)',bg:'rgba(99,102,241,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
+    {label:'Active Tasks',  val:active,     color:'var(--cy)',bg:'rgba(34,211,238,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
+    {label:'Completed',     val:done,       color:'var(--gn)',bg:'rgba(74,222,128,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks'},
+    {label:'Blocked',       val:blocked,    color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks'},
+    {label:'My Tasks',      val:myT.length, color:'var(--am)',bg:'rgba(251,191,36,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks'},
+    {label:'Team Members',  val:u.length,   color:'var(--pu)',bg:'rgba(167,139,250,.1)',icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:'team'},
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',display:'flex',flexDirection:'column',gap:16}}>
@@ -2061,7 +2061,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
             onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderColor=s.color;e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,.2)';}}
             onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.borderColor='';e.currentTarget.style.boxShadow='';}}>
             <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:s.color,borderRadius:'14px 14px 0 0'}}></div>
-            <div style=${{width:32,height:32,borderRadius:8,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8,fontSize:16}}>${s.icon}</div>
+            <div style=${{width:34,height:34,borderRadius:9,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8,color:s.color}}>${s.icon}</div>
             <div style=${{fontSize:24,fontWeight:800,color:'var(--tx)',lineHeight:1}}>${s.val}</div>
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:4}}>${s.label}</div>
             <div style=${{fontSize:9,color:s.color,marginTop:2,fontFamily:'monospace',opacity:.7}}>click →</div>
@@ -2960,7 +2960,7 @@ function App(){
     return()=>clearInterval(id);
   },[cu]);
 
-  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column',gap:14}}><div style=${{fontSize:42,filter:'drop-shadow(0 0 20px #6366f1)'}}>⚡</div><div class="spin" style=${{width:22,height:22,borderWidth:3}}></div><p style=${{color:'var(--tx2)',fontSize:13}}>Loading...</p></div>`;
+  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column',gap:14}}><div style=${{width:60,height:60,background:'linear-gradient(135deg,#6366f1,#a78bfa)',borderRadius:16,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(99,102,241,.5)',marginBottom:4}}><svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div><div class="spin" style=${{width:22,height:22,borderWidth:3}}></div><p style=${{color:'var(--tx2)',fontSize:13,marginTop:2}}>Loading ProjectFlow...</p></div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
   const unread=safe(data.notifs).filter(n=>!n.read).length;
