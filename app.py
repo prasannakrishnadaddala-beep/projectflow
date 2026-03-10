@@ -997,10 +997,25 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
   --sh2: 0 8px 32px rgba(0,0,0,.10);
 }
 
-/* ── Dark mode override ─────────────────────────────────────────────── */
+/* ── Light mode (explicit) ───────────────────────────────────────────── */
 .lm{
   --bg:#eeecea;--sf:#ffffff;--sf2:#f5f4f1;--bd:#e2e0db;
   --tx:#111111;--tx2:#6b6860;--tx3:#a09e99;
+  --sh: 0 2px 12px rgba(0,0,0,.07);
+  --sh2: 0 8px 32px rgba(0,0,0,.10);
+}
+
+/* ── Dark mode override ──────────────────────────────────────────────── */
+.dm{
+  --bg:#111113;          /* dark canvas */
+  --sf:#1c1c1f;          /* card dark */
+  --sf2:#242428;         /* subtle secondary surface */
+  --bd:#2e2e33;          /* border / divider */
+  --tx:#f0eff0;          /* near-white */
+  --tx2:#9b9aa0;         /* muted label */
+  --tx3:#5c5b62;         /* placeholder / disabled */
+  --sh: 0 2px 12px rgba(0,0,0,.3);
+  --sh2: 0 8px 32px rgba(0,0,0,.5);
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────── */
@@ -1010,6 +1025,7 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
 
 /* ── Date input ─────────────────────────────────────────────────────── */
 input[type=date]{color-scheme:light;}
+.dm input[type=date]{color-scheme:dark;}
 input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.6}
 
 /* ── Card ───────────────────────────────────────────────────────────── */
@@ -1110,7 +1126,7 @@ textarea.inp{resize:vertical;min-height:68px}
 
 /* ── Stat number display ─────────────────────────────────────────────── */
 .stat-num{font-family:'Syne',sans-serif;font-weight:800;line-height:1;letter-spacing:-1px}
-</style></head><body>
+</style></head><body class="lm">
 
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
   <div style="width:88px;height:88px;background:linear-gradient(135deg,#c8f135,#9b8ef4);border-radius:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(200,241,53,.45);animation:sp .9s linear infinite">
@@ -2345,7 +2361,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
             onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.borderColor='';e.currentTarget.style.boxShadow='';}}>
             <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:s.color,borderRadius:'18px 18px 0 0',opacity:.7}}></div>
             <div style=${{width:34,height:34,borderRadius:9,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8,color:s.color}}>${s.icon}</div>
-            <div style=${{fontSize:30,fontWeight:800,color:'var(--tx)',lineHeight:1,fontFamily:"'Syne',sans-serif",letterSpacing:-1}}>${s.val}</div>
+            <div style=${{fontSize:26,fontWeight:800,color:'var(--tx)',lineHeight:1,fontFamily:"'Syne',sans-serif",letterSpacing:-1}}>${s.val}</div>
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:4}}>${s.label}</div>
             <div style=${{fontSize:9,color:s.color,marginTop:2,fontFamily:'monospace',opacity:.7}}>click →</div>
           </div>`)}
@@ -2470,8 +2486,8 @@ function MessagesView({projects,users,cu}){
               ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
               <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
                 ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
-                <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5,
-                  background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'#fff':'var(--tx)',
+                <div style=${{padding:'9px 13px',borderRadius:12,fontSize:14,lineHeight:1.5,
+                  background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)',
                   border:isMe?'none':'1px solid var(--bd)',
                   borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
                 <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(m.ts)}</span>
@@ -2573,7 +2589,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle}){
           <div key=${m.id} style=${{display:'flex',gap:8,alignItems:'flex-end',flexDirection:isMe?'row-reverse':'row'}}>
             <div style=${{width:28,flexShrink:0}}>${!isMe&&(i===0||msgs[i-1].sender!==m.sender)?html`<${Av} u=${toUser} size=${28}/>`:null}</div>
             <div style=${{display:'flex',flexDirection:'column',gap:2,alignItems:isMe?'flex-end':'flex-start',maxWidth:'68%'}}>
-              <div style=${{padding:'9px 13px',borderRadius:14,fontSize:13,lineHeight:1.55,wordBreak:'break-word',background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'#fff':'var(--tx)',border:isMe?'none':'1px solid var(--bd)',borderBottomRightRadius:isMe?3:14,borderBottomLeftRadius:isMe?14:3}}>${m.content}</div>
+              <div style=${{padding:'9px 13px',borderRadius:14,fontSize:14,lineHeight:1.55,wordBreak:'break-word',background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)',border:isMe?'none':'1px solid var(--bd)',borderBottomRightRadius:isMe?3:14,borderBottomLeftRadius:isMe?14:3}}>${m.content}</div>
               ${showT?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',margin:'0 2px'}}>${ago(m.ts)}</span>`:null}
             </div>
           </div>`;})}
@@ -3890,7 +3906,7 @@ function App(){
 
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
-  useEffect(()=>{document.body.className=dark?'':'lm';},[dark]);
+  useEffect(()=>{document.body.className=dark?'dm':'lm';},[dark]);
   // Poll DM unread count every 5s — play sound + OS notification when new DMs arrive
   useEffect(()=>{
     if(!cu)return;
