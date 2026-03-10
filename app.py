@@ -40,7 +40,10 @@ CORS(app, supports_credentials=True)
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#6366f1"]
 
 def get_db():
-    c=sqlite3.connect(DB); c.row_factory=sqlite3.Row; return c
+    c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA synchronous=NORMAL")
+    return c
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 def ts(): return datetime.utcnow().isoformat() + 'Z'
 
@@ -303,9 +306,9 @@ def get_projects():
         else:
             def can_see(r):
                 members = json.loads(r["members"] or "[]")
-                keys = r.keys()
-                creator = r["created_by"] if "created_by" in keys else None
-                return uid in members or creator == uid
+                # Column is "owner" in schema (not created_by)
+                owner = r["owner"] if "owner" in r.keys() else None
+                return uid in members or owner == uid
             rows = [r for r in all_rows if can_see(r)]
         return jsonify([dict(r) for r in rows])
 
@@ -363,8 +366,12 @@ def get_tasks():
             "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
 
 def next_task_id(db, ws):
+    # Use timestamp-based ID to prevent collisions between gunicorn workers
+    import time
+    base = int(time.time() * 1000)
+    # Also embed a sequential number for readability
     count=db.execute("SELECT COUNT(*) FROM tasks WHERE workspace_id=?",(ws,)).fetchone()[0]
-    return f"T-{count+1:03d}"
+    return f"T-{count+1:03d}-{base % 10000}"
 
 @app.route("/api/tasks",methods=["POST"])
 @login_required
@@ -545,6 +552,13 @@ def read_notif(nid):
 def read_all_notifs():
     with get_db() as db:
         db.execute("UPDATE notifications SET read=1 WHERE workspace_id=? AND user_id=?",(wid(),session["user_id"]))
+        return jsonify({"ok":True})
+
+@app.route("/api/notifications/all",methods=["DELETE"])
+@login_required
+def clear_all_notifs():
+    with get_db() as db:
+        db.execute("DELETE FROM notifications WHERE workspace_id=? AND user_id=?",(wid(),session["user_id"]))
         return jsonify({"ok":True})
 
 # ── AI Assistant ──────────────────────────────────────────────────────────────
@@ -1074,7 +1088,10 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid}){
     setSaving(true);setErr('');
     const payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts};
     if(task&&task.id)payload.id=task.id;
-    await onSave(payload);setSaving(false);onClose();
+    const result=await onSave(payload);
+    setSaving(false);
+    if(result&&result.error){setErr(result.error);return;}
+    onClose();
   };
 
   return html`
@@ -1193,7 +1210,13 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload}){
 
   const saveEdit=async()=>{setSaving(true);await api.put('/api/projects/'+project.id,{name,description:desc,target_date:tDate,color,members});await onReload();setSaving(false);setEdit(false);};
   const delProject=async()=>{if(!window.confirm('Delete project and all its tasks? Cannot be undone.'))return;await api.del('/api/projects/'+project.id);await onReload();onClose();};
-  const saveTask=async p=>{if(p.id&&allTasks.find(t=>t.id===p.id))await api.put('/api/tasks/'+p.id,p);else await api.post('/api/tasks',{...p,project:project.id});await onReload();};
+  const saveTask=async p=>{
+    let r;
+    if(p.id&&allTasks.find(t=>t.id===p.id))r=await api.put('/api/tasks/'+p.id,p);
+    else r=await api.post('/api/tasks',{...p,project:project.id});
+    await onReload();
+    return r;
+  };
   const delTask=async id=>{await api.del('/api/tasks/'+id);await onReload();};
 
   return html`
@@ -1843,28 +1866,50 @@ function DirectMessages({cu,users,dmUnread,onDmRead}){
 }
 
 /* ─── NotifsView ──────────────────────────────────────────────────────────── */
-function NotifsView({notifs,reload}){
+function NotifsView({notifs,reload,onNavigate}){
   const NT={
-    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)'},
-    status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)'},
-    comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)'},
-    deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)'},
-    dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4'},
-    project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981'},
+    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'},
+    status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'},
+    comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'},
+    deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'},
+    dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'},
+    project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'},
   };
   const unread=safe(notifs).filter(n=>!n.read).length;
+  const handleClick=async(n)=>{
+    if(!n.read) await api.put('/api/notifications/'+n.id+'/read',{});
+    const T=NT[n.type]||NT.comment;
+    if(T.nav&&onNavigate){onNavigate(T.nav);}
+    reload();
+  };
+  const clearAll=async()=>{
+    await api.put('/api/notifications/read-all',{});
+    reload();
+  };
   return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
     <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
       <span style=${{fontSize:13,color:'var(--tx2)'}}>${unread>0?html`<b style=${{color:'var(--ac)'}}>${unread}</b> unread`:'All caught up!'}</span>
-      ${unread>0?html`<button class="btn bg" onClick=${()=>api.put('/api/notifications/read-all',{}).then(reload)}>✓ Mark all read</button>`:null}
+      <div style=${{display:'flex',gap:8}}>
+        ${unread>0?html`<button class="btn bg" style=${{fontSize:12}} onClick=${clearAll}>✓ Mark all read</button>`:null}
+        ${notifs.length>0?html`<button class="btn brd" style=${{fontSize:12,color:'var(--rd)'}}
+          onClick=${()=>{if(window.confirm('Clear all notifications?'))api.del('/api/notifications/all').then(reload);}}>🗑 Clear all</button>`:null}
+      </div>
     </div>
+    ${notifs.length===0?html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)',fontSize:13}}>
+      <div style=${{fontSize:32,marginBottom:10}}>🔔</div><p>No notifications yet.</p></div>`:null}
     <div style=${{display:'flex',flexDirection:'column',gap:8,maxWidth:780}}>
       ${safe(notifs).map(n=>{const T=NT[n.type]||NT.comment;return html`
-        <div key=${n.id} onClick=${()=>!n.read&&api.put('/api/notifications/'+n.id+'/read',{}).then(reload)}
-          style=${{display:'flex',gap:12,padding:'12px 15px',background:n.read?'var(--sf)':'rgba(99,102,241,.07)',border:'1px solid '+(n.read?'var(--bd)':'rgba(99,102,241,.22)'),borderRadius:12,cursor:n.read?'default':'pointer',alignItems:'center'}}>
-          <div style=${{width:34,height:34,borderRadius:9,background:T.c+'18',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:17}}>${T.icon}</div>
-          <div style=${{flex:1}}><p style=${{fontSize:13,color:'var(--tx)',fontWeight:n.read?400:600,marginBottom:2}}>${n.content}</p><span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span></div>
-          ${!n.read?html`<div style=${{width:7,height:7,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
+        <div key=${n.id} onClick=${()=>handleClick(n)}
+          style=${{display:'flex',gap:12,padding:'12px 15px',background:n.read?'var(--sf)':'rgba(99,102,241,.07)',border:'1px solid '+(n.read?'var(--bd)':'rgba(99,102,241,.22)'),borderRadius:12,cursor:'pointer',alignItems:'center',transition:'all .15s'}}>
+          <div style=${{width:36,height:36,borderRadius:10,background:T.c+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>${T.icon}</div>
+          <div style=${{flex:1}}>
+            <p style=${{fontSize:13,color:'var(--tx)',fontWeight:n.read?400:600,marginBottom:3}}>${n.content}</p>
+            <div style=${{display:'flex',gap:10,alignItems:'center'}}>
+              <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span>
+              ${T.nav?html`<span style=${{fontSize:10,color:T.c,fontWeight:600}}>→ ${T.label}</span>`:null}
+            </div>
+          </div>
+          ${!n.read?html`<div style=${{width:8,height:8,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
         </div>`;})}
     </div>
   </div>`;
@@ -2164,7 +2209,7 @@ function App(){
             ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
             ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
-            ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load}/>`:null}
+            ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${view==='settings'&&cu.role==='Admin'?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
           <//>
