@@ -1000,8 +1000,8 @@ textarea.inp{resize:vertical;min-height:68px}
 @keyframes sp{to{transform:rotate(360deg)}}.spin{display:inline-block;width:16px;height:16px;border:2.5px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}.pulse{animation:pulse 1.5s ease-in-out infinite}
 /* Huddle */
-.huddle-bar{position:fixed;bottom:0;left:0;right:0;height:64px;background:var(--sf);border-top:2px solid rgba(34,197,94,.4);display:flex;align-items:center;padding:0 18px;gap:14px;z-index:1700;box-shadow:0 -4px 24px rgba(34,197,94,.15);backdrop-filter:blur(12px)}
-.incoming-call{position:fixed;bottom:80px;right:16px;z-index:1701;background:var(--sf);border:1.5px solid #22c55e;border-radius:16px;padding:15px 16px;box-shadow:0 8px 36px rgba(0,0,0,.45);min-width:260px;animation:slideUp .25s ease}
+.huddle-bar{position:fixed;bottom:0;left:0;right:0;height:68px;background:var(--sf);border-top:1px solid rgba(34,197,94,.35);display:flex;align-items:center;padding:0 20px;gap:12px;z-index:1700;box-shadow:0 -2px 20px rgba(34,197,94,.1);backdrop-filter:blur(16px)}
+.incoming-call{position:fixed;bottom:88px;right:20px;z-index:1701;background:var(--sf);border:1.5px solid rgba(34,197,94,.4);border-radius:18px;padding:16px 18px;box-shadow:0 12px 48px rgba(0,0,0,.5);min-width:280px;animation:slideUp .3s cubic-bezier(.2,.8,.4,1)}
 /* AI panel */
 .ai-btn{position:fixed;bottom:22px;right:22px;z-index:1800;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a78bfa);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(99,102,241,.5);transition:all .2s}
 .ai-btn:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(99,102,241,.7)}
@@ -1212,27 +1212,40 @@ function AuthScreen({onLogin}){
 }
 
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
-function SidebarCallsList({cu,onJoin}){
+function SidebarCallsList({cu,onJoin,currentRoomId}){
   const [calls,setCalls]=useState([]);
   useEffect(()=>{
-    api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);});
-    const id=setInterval(()=>api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);}),6000);
+    const load=()=>api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);});
+    load();
+    const id=setInterval(load,5000);
     return()=>clearInterval(id);
   },[]);
-  if(!calls.length)return html`<p style=${{fontSize:10,color:'var(--tx3)',padding:'4px 2px',textAlign:'center'}}>No active huddles</p>`;
-  return html`<div style=${{display:'flex',flexDirection:'column',gap:4}}>
-    ${calls.map(c=>{
+  // Filter out: rooms user is already in, and rooms that match current active room
+  const joinable=calls.filter(c=>{
+    const parts=JSON.parse(c.participants||'[]');
+    return !parts.includes(cu.id) && c.id!==currentRoomId;
+  });
+  if(!joinable.length)return html`
+    <div style=${{textAlign:'center',padding:'14px 8px'}}>
+      <div style=${{fontSize:22,marginBottom:5}}>📞</div>
+      <p style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>No active huddles.<br/>Start one to connect with your team.</p>
+    </div>`;
+  return html`<div style=${{display:'flex',flexDirection:'column',gap:5}}>
+    ${joinable.map(c=>{
       const parts=JSON.parse(c.participants||'[]');
-      const alreadyIn=parts.includes(cu.id);
-      return html`<div key=${c.id} style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:9,padding:'7px 9px',display:'flex',alignItems:'center',gap:7}}>
-        <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
-        <div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${c.name}</div>
-          <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${parts.length} in call</div>
+      return html`<div key=${c.id} style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:10,padding:'9px 10px'}}>
+        <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
+          <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+          <div style=${{flex:1,minWidth:0}}>
+            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${c.name}</div>
+            <div style=${{fontSize:9,color:'var(--tx3)'}}>${parts.length} participant${parts.length!==1?'s':''}</div>
+          </div>
         </div>
-        ${!alreadyIn?html`<button style=${{fontSize:10,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.15)',border:'1px solid rgba(34,197,94,.3)',borderRadius:6,padding:'3px 8px',cursor:'pointer',whiteSpace:'nowrap'}}
-          onClick=${()=>onJoin(c.id,c.name)}>Join</button>`:
-          html`<span style=${{fontSize:9,color:'#22c55e',fontFamily:'monospace'}}>You're in</span>`}
+        <button style=${{width:'100%',height:28,borderRadius:7,border:'none',background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}
+          onClick=${()=>onJoin(c.id,c.name)}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Join Huddle
+        </button>
       </div>`;
     })}
   </div>`;
@@ -1295,56 +1308,75 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           </button>`)}
 
         ${!col?html`
-          <div style=${{borderTop:'1px solid var(--bd)',marginTop:6,paddingTop:8,paddingBottom:2}}>
-            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 4px 7px'}}>
-              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,display:'flex',alignItems:'center',gap:5}}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <div style=${{borderTop:'1px solid var(--bd)',marginTop:'auto',paddingTop:8,paddingBottom:4}}>
+            <div style=${{padding:'0 8px 6px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style=${{fontSize:9,fontWeight:800,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1,display:'flex',alignItems:'center',gap:4}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                 Huddle
               </span>
-              ${inCall
-                ?html`<span style=${{fontSize:9,fontFamily:'monospace',color:'#22c55e',background:'rgba(34,197,94,.12)',padding:'2px 7px',borderRadius:10,fontWeight:700,border:'1px solid rgba(34,197,94,.25)'}}>● ${fmtTime(callState.elapsed||0)}</span>`
-                :html`<button style=${{fontSize:10,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.3)',borderRadius:7,padding:'3px 9px',cursor:'pointer',lineHeight:1.4}}
-                    onClick=${()=>onCallAction&&onCallAction({action:'start'})}>+ Start</button>`}
+              ${!inCall?html`<button
+                style=${{fontSize:10,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.3)',borderRadius:7,padding:'3px 9px',cursor:'pointer',lineHeight:1.4,transition:'all .15s'}}
+                onClick=${()=>onCallAction&&onCallAction({action:'start'})}>+ Start</button>`:null}
             </div>
             ${inCall?html`
-              <div style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.22)',borderRadius:11,padding:'9px 10px',marginBottom:7}}>
-                <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:7}}>
-                  <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
-                  <span style=${{fontSize:11,fontWeight:700,color:'#22c55e',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${callState.roomName||'Huddle'}</span>
+              <div style=${{margin:'0 4px 6px',background:'linear-gradient(135deg,rgba(34,197,94,.08),rgba(34,197,94,.04))',border:'1.5px solid rgba(34,197,94,.25)',borderRadius:12,overflow:'hidden'}}>
+                <div style=${{padding:'10px 11px 0'}}>
+                  <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:8}}>
+                    <div style=${{position:'relative',width:32,height:32,borderRadius:10,background:'linear-gradient(135deg,#16a34a,#15803d)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                      <div style=${{position:'absolute',top:-2,right:-2,width:9,height:9,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)',animation:'pulse 1.5s infinite'}}></div>
+                    </div>
+                    <div style=${{flex:1,minWidth:0}}>
+                      <div style=${{fontSize:11,fontWeight:800,color:'#22c55e',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${callState.roomName||'Huddle'}</div>
+                      <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtTime(callState.elapsed||0)} · ${(callState.participants||[]).length} in call</div>
+                    </div>
+                  </div>
+                  <div style=${{display:'flex',gap:3,flexWrap:'wrap',marginBottom:10}}>
+                    ${(callState.participants||[]).map(id=>{
+                      const u=(callState.allUsers||[]).find(x=>x.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'};
+                      return html`<div key=${id} title=${u.name} style=${{position:'relative'}}>
+                        <${Av} u=${u} size=${26}/>
+                        <div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div>
+                      </div>`;
+                    })}
+                  </div>
                 </div>
-                <div style=${{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
-                  ${(callState.participants||[]).map(id=>{const u=(callState.allUsers||[]).find(x=>x.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'};return html`
-                    <div key=${id} title=${u.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1.5}}>
-                      <div style=${{position:'relative'}}><${Av} u=${u} size=${26}/><div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',background:'#22c55e',border:'1.5px solid var(--sf)'}}></div></div>
-                      <span style=${{fontSize:7,color:'var(--tx3)',maxWidth:28,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.2}}>${u.name.split(' ')[0]}</span>
-                    </div>`;}) }
-                </div>
-                <div style=${{display:'flex',gap:5,marginBottom:callState.allUsers&&callState.allUsers.filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).length>0?8:0}}>
-                  <button title=${callState.muted?'Unmute':'Mute'}
-                    style=${{flex:1,height:28,borderRadius:7,border:'1px solid '+(callState.muted?'rgba(248,113,113,.4)':'var(--bd)'),background:callState.muted?'rgba(248,113,113,.15)':'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:4,color:callState.muted?'var(--rd)':'var(--tx2)',fontSize:10,fontWeight:600}}
+                <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0,borderTop:'1px solid rgba(34,197,94,.15)'}}>
+                  <button
+                    style=${{height:34,border:'none',borderRight:'1px solid rgba(34,197,94,.15)',background:callState.muted?'rgba(248,113,113,.1)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5,color:callState.muted?'#f87171':'#22c55e',fontSize:10,fontWeight:700,transition:'all .15s'}}
                     onClick=${()=>onCallAction&&onCallAction({action:'mute'})}>
-                    ${callState.muted?html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
-                    ${callState.muted?'Unmute':'Mute'}
+                    ${callState.muted
+                      ?html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`
+                      :html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
+                    ${callState.muted?'Unmuted':'Mute'}
                   </button>
-                  <button style=${{flex:1,height:28,borderRadius:7,border:'none',background:'linear-gradient(135deg,#ef4444,#dc2626)',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',gap:4}}
+                  <button
+                    style=${{height:34,border:'none',background:'rgba(239,68,68,.08)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:5,color:'#ef4444',fontSize:10,fontWeight:700,transition:'all .15s'}}
                     onClick=${()=>onCallAction&&onCallAction({action:'leave'})}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                     Leave
                   </button>
                 </div>
-                ${(callState.allUsers||[]).filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).length>0?html`
-                  <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:600,marginBottom:5}}>Invite teammates</div>
-                  <div style=${{display:'flex',flexDirection:'column',gap:3,maxHeight:110,overflowY:'auto'}}>
+              </div>
+              ${(callState.allUsers||[]).filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).length>0?html`
+                <div style=${{margin:'0 4px 6px',padding:'8px 10px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:10}}>
+                  <div style=${{fontSize:9,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:6}}>Invite to Huddle</div>
+                  <div style=${{display:'flex',flexDirection:'column',gap:4,maxHeight:100,overflowY:'auto'}}>
                     ${(callState.allUsers||[]).filter(u=>u.id!==cu.id&&!(callState.participants||[]).includes(u.id)).map(u=>html`
-                      <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:7,padding:'5px 7px',borderRadius:8,background:'var(--sf2)',border:'1px solid var(--bd)'}}>
+                      <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:7}}>
                         <${Av} u=${u} size=${22}/>
                         <span style=${{fontSize:11,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</span>
                         <button style=${{fontSize:9,fontWeight:700,color:'#22c55e',background:'rgba(34,197,94,.1)',border:'1px solid rgba(34,197,94,.25)',borderRadius:5,padding:'2px 7px',cursor:'pointer',whiteSpace:'nowrap'}}
-                          onClick=${()=>onCallAction&&onCallAction({action:'invite',userId:u.id,roomId:callState.roomId})}>Pull in</button>
+                          onClick=${()=>onCallAction&&onCallAction({action:'invite',userId:u.id,roomId:callState.roomId})}>
+                          Pull in
+                        </button>
                       </div>`)}
-                  </div>`:null}
-              </div>`:html`
-              <${SidebarCallsList} cu=${cu} onJoin=${(rid,rname)=>onCallAction&&onCallAction({action:'join',roomId:rid,roomName:rname})}/>`}
+                  </div>
+                </div>`:null}
+              `:html`
+              <div style=${{margin:'0 4px 6px'}}>
+                <${SidebarCallsList} cu=${cu} currentRoomId=${callState.roomId} onJoin=${(rid,rname)=>onCallAction&&onCallAction({action:'join',roomId:rid,roomName:rname})}/>
+              </div>`}
           </div>`:html`
           <div style=${{borderTop:'1px solid var(--bd)',marginTop:6,paddingTop:8,display:'flex',justifyContent:'center',paddingBottom:4}}>
             <button title=${inCall?('In Huddle · '+fmtTime(callState.elapsed||0)):'Start Huddle'}
@@ -3365,16 +3397,38 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#6366f1'});
   const activeAgenda=agenda.find(a=>a.active);
 
+  // ── Initiator user lookup for incoming call
+  const incomingInitiator=incomingCall?safe(users).find(u=>u.name===incomingCall.initiatorName)||{name:incomingCall.initiatorName,avatar:(incomingCall.initiatorName||'?')[0].toUpperCase(),color:'#22c55e'}:null;
+
   const incomingToast=incomingCall&&status==='idle'?html`
     <div class="incoming-call">
-      <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-        <div style=${{width:9,height:9,borderRadius:'50%',background:'#22c55e',animation:'pulse 1s infinite'}}></div>
-        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>${incomingCall.name}</span>
+      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+        <div style=${{position:'relative',flexShrink:0}}>
+          ${incomingInitiator?html`<${Av} u=${incomingInitiator} size=${40}/>`:null}
+          <div style=${{position:'absolute',bottom:-2,right:-2,width:14,height:14,borderRadius:'50%',background:'#22c55e',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <svg width="7" height="7" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+        </div>
+        <div style=${{flex:1,minWidth:0}}>
+          <div style=${{fontSize:11,fontWeight:800,color:'var(--tx)',marginBottom:1}}>${incomingCall.initiatorName}</div>
+          <div style=${{fontSize:12,color:'var(--tx)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${incomingCall.name}</div>
+          <div style=${{display:'flex',alignItems:'center',gap:4,marginTop:2}}>
+            <div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 1s infinite'}}></div>
+            <span style=${{fontSize:10,color:'#22c55e',fontWeight:600}}>Huddle in progress</span>
+          </div>
+        </div>
+        <button onClick=${()=>setIncomingCall(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,lineHeight:1,padding:4,flexShrink:0}}>✕</button>
       </div>
-      <p style=${{fontSize:11,color:'var(--tx2)',marginBottom:11}}>${incomingCall.initiatorName} started a huddle</p>
-      <div style=${{display:'flex',gap:7}}>
-        <button style=${{flex:1,height:32,borderRadius:9,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:12}} onClick=${()=>joinCall(incomingCall.id,incomingCall.name)}>🎙 Join</button>
-        <button class="btn bg" style=${{flex:1,height:32,justifyContent:'center',fontSize:12}} onClick=${()=>setIncomingCall(null)}>Dismiss</button>
+      <div style=${{display:'flex',gap:8}}>
+        <button style=${{flex:1,height:36,borderRadius:10,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 14px rgba(34,197,94,.35)'}}
+          onClick=${()=>joinCall(incomingCall.id,incomingCall.name)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Join Huddle
+        </button>
+        <button style=${{width:36,height:36,borderRadius:10,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',color:'#ef4444',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:11}}
+          onClick=${()=>setIncomingCall(null)} title="Decline">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
     </div>`:null;
 
