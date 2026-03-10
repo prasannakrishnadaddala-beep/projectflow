@@ -3196,16 +3196,18 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   useEffect(()=>{
     if(phase!=='preview')return;
     navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{s.getTracks().forEach(t=>t.stop());setPreviewMicOk(true);}).catch(()=>setPreviewMicOk(false));
-    if(popupPos.x===null)setPopupPos(centerPos(460,380));
+    setPopupPos(p=>(p&&p.x!==null)?p:centerPos(460,380));
   },[phase]);
 
   useEffect(()=>{
-    if(phase==='in-call'&&popupPos.x===null)setPopupPos(centerPos(780,540));
+    if(phase==='in-call')setPopupPos(p=>(p&&p.x!==null)?p:centerPos(780,540));
+    if(phase==='idle')setPopupPos({x:null,y:null});
   },[phase]);
 
   // Drag logic
   const onDragStart=e=>{
     if(e.button!==0)return;
+    if(!popupPos||popupPos.x===null)return;
     setDragging(true);
     dragOffset.current={x:e.clientX-popupPos.x,y:e.clientY-popupPos.y};
     e.preventDefault();
@@ -3361,7 +3363,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(!r||r.error){alert('Could not start huddle.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
     setRoomId(r.room_id);setRoomName(r.name||roomLabel);
     setParticipants([cu.id]);setPhase('in-call');setIncomingCall(null);
-    if(popupPos.x!==null){}else setPopupPos(centerPos(780,540));
+    setPopupPos(centerPos(780,540));
     // If targetUser, auto-invite them
     if(targetUser){
       setTimeout(()=>api.post('/api/calls/'+r.room_id+'/invite/'+targetUser.id,{}),500);
@@ -3380,7 +3382,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     const parts=r.participants||[];
     setRoomId(rid);setRoomName(r.name||rname||'Huddle');
     setParticipants(parts);setPhase('in-call');setIncomingCall(null);
-    if(popupPos.x===null)setPopupPos(centerPos(780,540));
+    setPopupPos(centerPos(780,540));
     playSound('notif');
     // Send offers to existing participants
     for(const uid of parts){
@@ -3526,8 +3528,8 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     </div>`:null;
 
   // ── PREVIEW POPUP
-  const previewPopup=phase==='preview'&&popupPos.x!==null?html`
-    <div style=${{position:'fixed',left:popupPos.x+'px',top:popupPos.y+'px',width:'460px',zIndex:8600,borderRadius:20,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.75)',background:'#1a1625',border:'1px solid rgba(255,255,255,.08)',userSelect:dragging?'none':'auto'}}>
+  const previewPopup=phase==='preview'&&popupPos&&popupPos.x!==null?html`
+    <div style=${{position:'fixed',left:(popupPos&&popupPos.x||100)+'px',top:(popupPos&&popupPos.y||60)+'px',width:'460px',zIndex:8600,borderRadius:20,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.75)',background:'#1a1625',border:'1px solid rgba(255,255,255,.08)',userSelect:dragging?'none':'auto'}}>
       <div onMouseDown=${onDragStart} style=${{background:'#221e30',padding:'13px 18px',display:'flex',alignItems:'center',gap:10,cursor:'move',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
         <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1}}>${targetUser?'Huddle with '+targetUser.name:'Start a Huddle'}</span>
@@ -3568,7 +3570,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         <button style=${{flex:1,height:42,borderRadius:12,background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.1)',color:'rgba(255,255,255,.6)',cursor:'pointer',fontWeight:600,fontSize:13}}
           onClick=${()=>{setPhase('idle');setTargetUser(null);}}>Cancel</button>
         <button style=${{flex:2,height:42,borderRadius:12,background:previewMicOk?'linear-gradient(135deg,#22c55e,#16a34a)':'rgba(255,255,255,.08)',border:'none',color:previewMicOk?'#fff':'rgba(255,255,255,.3)',cursor:previewMicOk?'pointer':'not-allowed',fontWeight:700,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:previewMicOk?'0 6px 20px rgba(34,197,94,.3)':'none',transition:'all .2s'}}
-          onClick=${previewMicOk?()=>{setPhase('idle');setPopupPos(null);doStart();}:null}>
+          onClick=${previewMicOk?()=>{doStart();}:null}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
           Start Huddle
         </button>
@@ -3576,8 +3578,8 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     </div>`:null;
 
   // ── IN-CALL POPUP
-  const callPopup=phase==='in-call'&&popupPos.x!==null?html`
-    <div style=${{position:'fixed',left:popupPos.x+'px',top:popupPos.y+'px',width:minimized?'240px':'780px',height:minimized?'auto':'540px',zIndex:8600,borderRadius:minimized?14:20,overflow:'hidden',boxShadow:'0 32px 100px rgba(0,0,0,.85)',background:'#0d0d1a',border:'1px solid rgba(255,255,255,.07)',display:'flex',flexDirection:'column',transition:dragging?'none':'width .2s, height .2s, border-radius .2s',userSelect:dragging?'none':'auto'}}>
+  const callPopup=phase==='in-call'&&popupPos&&popupPos.x!==null?html`
+    <div style=${{position:'fixed',left:(popupPos&&popupPos.x||100)+'px',top:(popupPos&&popupPos.y||60)+'px',width:minimized?'240px':'780px',height:minimized?'auto':'540px',zIndex:8600,borderRadius:minimized?14:20,overflow:'hidden',boxShadow:'0 32px 100px rgba(0,0,0,.85)',background:'#0d0d1a',border:'1px solid rgba(255,255,255,.07)',display:'flex',flexDirection:'column',transition:dragging?'none':'width .2s, height .2s, border-radius .2s',userSelect:dragging?'none':'auto'}}>
       <!-- Title bar (always visible, draggable) -->
       <div onMouseDown=${onDragStart} style=${{background:'rgba(0,0,0,.5)',padding:'9px 14px',display:'flex',alignItems:'center',gap:8,cursor:'move',flexShrink:0,backdropFilter:'blur(10px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.05)'}}>
         <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
