@@ -428,11 +428,27 @@ def create_task():
                    (tid,wid(),d["title"],d.get("description",""),d.get("project",""),
                     d.get("assignee",""),d.get("priority","medium"),d.get("stage","backlog"),
                     ts(),d.get("due",""),d.get("pct",0),json.dumps(d.get("comments",[]))))
-        # Notify assignee
+        creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cname=creator["name"] if creator else "Someone"
+        base_ts=int(datetime.now().timestamp()*1000)
+        # Notify assignee (if different from creator)
         if d.get("assignee") and d["assignee"]!=session["user_id"]:
-            nid=f"n{int(datetime.now().timestamp()*1000)}"
+            nid=f"n{base_ts}"
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"task_assigned",f"You were assigned to '{d['title']}'",d["assignee"],0,ts()))
+                       (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts()))
+        # Notify all other project members about the new task
+        if d.get("project"):
+            proj=db.execute("SELECT name,members FROM projects WHERE id=? AND workspace_id=?",(d["project"],wid())).fetchone()
+            if proj:
+                try:
+                    members=json.loads(proj["members"] or "[]")
+                except: members=[]
+                for i,uid in enumerate(members):
+                    # Skip creator and assignee (already notified above)
+                    if uid==session["user_id"] or uid==d.get("assignee"): continue
+                    nid2=f"n{base_ts+10+i}"
+                    db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                               (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts()))
         t=db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()
         # Auto-post system message to project channel
         if d.get("project"):
@@ -440,9 +456,7 @@ def create_task():
             if d.get("assignee"):
                 au=db.execute("SELECT name FROM users WHERE id=?",(d["assignee"],)).fetchone()
                 if au: assignee_name=f" → assigned to {au['name']}"
-            creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-            cname=(creator["name"] if creator else "Someone")
-            sysmid=f"m{int(datetime.now().timestamp()*1000)+1}"
+            sysmid=f"m{base_ts+1}"
             msg=f"📋 **{cname}** created task **{d['title']}**{assignee_name} [{d.get('priority','medium').title()}]"
             db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                        (sysmid,wid(),"system",d["project"],msg,ts(),1))
@@ -464,15 +478,27 @@ def update_task(tid):
                     d.get("due",t["due"]),d.get("pct",t["pct"]),
                     json.dumps(d.get("comments",json.loads(t["comments"]))),tid,wid()))
         if d.get("stage") and d["stage"]!=old_stage:
-            nid=f"n{int(datetime.now().timestamp()*1000)}"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"status_change",f"Task '{t['title']}' moved to {d['stage']}",
-                        t["assignee"],0,ts()))
-            # Post stage change to channel
+            base_ts2=int(datetime.now().timestamp()*1000)
+            # Notify assignee
+            if t["assignee"] and t["assignee"]!=session["user_id"]:
+                nid=f"n{base_ts2}"
+                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                           (nid,wid(),"status_change",f"Task '{t['title']}' moved to {d['stage']}",
+                            t["assignee"],0,ts()))
+            # Also notify project members (owner/creator etc)
             if t["project"]:
-                actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-                aname=actor["name"] if actor else "Someone"
-                sysmid=f"m{int(datetime.now().timestamp()*1000)+2}"
+                proj=db.execute("SELECT members FROM projects WHERE id=? AND workspace_id=?",(t["project"],wid())).fetchone()
+                if proj:
+                    try: members=json.loads(proj["members"] or "[]")
+                    except: members=[]
+                    actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+                    aname=actor["name"] if actor else "Someone"
+                    for i2,uid in enumerate(members):
+                        if uid==session["user_id"] or uid==t["assignee"]: continue
+                        nid2=f"n{base_ts2+20+i2}"
+                        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                                   (nid2,wid(),"status_change",f"{aname} moved '{t['title']}' → {d['stage']}",uid,0,ts()))
+                sysmid=f"m{base_ts2+2}"
                 db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                            (sysmid,wid(),"system",t["project"],
                             f"⚡ **{aname}** moved **{t['title']}** → {d['stage'].title()}",ts(),1))
@@ -570,6 +596,19 @@ def send_message():
     with get_db() as db:
         db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                    (mid,wid(),session["user_id"],d.get("project",""),d.get("content",""),ts(),0))
+        # Notify all OTHER workspace members about new channel message
+        sender=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        sender_name=sender["name"] if sender else "Someone"
+        project_row=db.execute("SELECT name FROM projects WHERE id=? AND workspace_id=?",(d.get("project",""),wid())).fetchone()
+        proj_name=project_row["name"] if project_row else "a project"
+        preview=d.get("content","")[:60]+("..." if len(d.get("content",""))>60 else "")
+        # Get all workspace members except sender
+        members=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
+        base_ts=int(datetime.now().timestamp()*1000)
+        for i,m in enumerate(members):
+            nid=f"n{base_ts+i}"
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",m["id"],0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()))
 
 # ── Direct Messages ───────────────────────────────────────────────────────────
@@ -983,264 +1022,206 @@ HTML = r"""<!DOCTYPE html>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;width:100%;overflow:hidden}
-body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:14px;-webkit-font-smoothing:antialiased}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   DARK THEME (default) — matches HubSpot reference images exactly
-   ═══════════════════════════════════════════════════════════════════════ */
+/* === DARK THEME (default) — precise HubSpot CRM workspace colours === */
 :root{
-  /* Canvas */
-  --bg:#0d0d0d;           /* near-black page background */
-  --sf:#1a1a1a;           /* card / panel surface */
-  --sf2:#222222;          /* secondary surface / input bg */
-  --sf3:#2a2a2a;          /* tertiary hover surface */
-  --bd:#333333;           /* border / divider */
-  --bd2:#2a2a2a;          /* subtle border */
-  /* Text */
-  --tx:#ffffff;           /* primary white */
-  --tx2:#a0a0a0;          /* secondary grey */
-  --tx3:#555555;          /* tertiary / disabled */
-  /* Sidebar */
-  --sb:#0a0a0a;           /* sidebar black */
-  --sb2:#141414;          /* sidebar hover */
-  --sb3:#1e1e1e;          /* sidebar active bg */
-  --sbt:#666666;          /* sidebar icon default */
-  /* Accent — lime green from HubSpot reference */
-  --ac:#aaff00;           /* primary lime green */
-  --ac2:#99ee00;          /* lime hover */
-  --ac3:rgba(170,255,0,.12); /* lime tint bg */
-  --ac-tx:#0a1a00;        /* text on lime */
-  /* Status colours */
-  --rd:#ff5757;           /* red / danger */
-  --rd2:#ff8080;          /* red light */
-  --gn:#4dde80;           /* green / success */
-  --gn2:#22c55e;          /* green dark */
-  --am:#ffbb33;           /* amber */
-  --cy:#22d3ee;           /* cyan */
-  --pu:#a78bfa;           /* purple */
-  /* Shadows */
-  --sh:0 1px 3px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3);
-  --sh2:0 4px 24px rgba(0,0,0,.5),0 12px 48px rgba(0,0,0,.4);
+  --bg:#111111;
+  --sf:#1c1c1c;
+  --sf2:#242424;
+  --sf3:#2c2c2c;
+  --bd:#2e2e2e;
+  --bd2:#252525;
+  --tx:#f5f5f5;
+  --tx2:#888888;
+  --tx3:#444444;
+  --sb:#0d0d0d;
+  --sb2:#161616;
+  --sb3:#1e1e1e;
+  --sbt:#505050;
+  --ac:#aaff00;
+  --ac2:#99ee00;
+  --ac3:rgba(170,255,0,.10);
+  --ac4:rgba(170,255,0,.06);
+  --ac-tx:#0d1f00;
+  --rd:#ff4444;
+  --rd2:#ff7070;
+  --gn:#3ecf6e;
+  --gn2:#22c55e;
+  --am:#f59e0b;
+  --cy:#22d3ee;
+  --pu:#a78bfa;
+  --or:#fb923c;
+  --pk:#f472b6;
+  --sh:0 1px 2px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
+  --sh2:0 4px 16px rgba(0,0,0,.6),0 8px 32px rgba(0,0,0,.4);
   --sh3:0 0 0 1px var(--bd);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   LIGHT THEME — applied via .lm class on body
-   ═══════════════════════════════════════════════════════════════════════ */
+/* === LIGHT THEME — via .lm on body. Cards: white on #ebebeb canvas === */
 .lm{
-  --bg:#f2f2f2;
+  --bg:#ebebeb;
   --sf:#ffffff;
-  --sf2:#f7f7f7;
-  --sf3:#efefef;
-  --bd:#e0e0e0;
-  --bd2:#ebebeb;
-  --tx:#0d0d0d;
-  --tx2:#5c5c5c;
-  --tx3:#aaaaaa;
+  --sf2:#f5f5f5;
+  --sf3:#eeeeee;
+  --bd:#dedede;
+  --bd2:#e8e8e8;
+  --tx:#111111;
+  --tx2:#666666;
+  --tx3:#b0b0b0;
   --sb:#111111;
-  --sb2:#1c1c1c;
-  --sb3:#282828;
-  --sbt:#888888;
+  --sb2:#1a1a1a;
+  --sb3:#222222;
+  --sbt:#777777;
   --ac:#aaff00;
   --ac2:#99ee00;
-  --ac3:rgba(170,255,0,.14);
-  --ac-tx:#0a1a00;
+  --ac3:rgba(170,255,0,.15);
+  --ac4:rgba(170,255,0,.08);
+  --ac-tx:#0d1f00;
   --rd:#e53535;
-  --rd2:#ff6b6b;
+  --rd2:#f87171;
   --gn:#16a34a;
   --gn2:#22c55e;
   --am:#d97706;
   --cy:#0891b2;
   --pu:#7c3aed;
-  --sh:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);
-  --sh2:0 4px 24px rgba(0,0,0,.10),0 12px 48px rgba(0,0,0,.08);
+  --or:#ea580c;
+  --pk:#db2777;
+  --sh:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.05);
+  --sh2:0 4px 16px rgba(0,0,0,.10),0 8px 32px rgba(0,0,0,.07);
   --sh3:0 0 0 1px var(--bd);
 }
-.lm body,.lm{color:var(--tx)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   SCROLLBAR
-   ═══════════════════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:8px}
 ::-webkit-scrollbar-thumb:hover{background:var(--tx3)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   DATE INPUT
-   ═══════════════════════════════════════════════════════════════════════ */
 input[type=date]{color-scheme:dark}
 .lm input[type=date]{color-scheme:light}
-input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.5;filter:invert(1)}
-.lm input[type=date]::-webkit-calendar-picker-indicator{filter:none}
+input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.45;filter:invert(1)}
+.lm input[type=date]::-webkit-calendar-picker-indicator{filter:none;opacity:.5}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   CARD
-   ═══════════════════════════════════════════════════════════════════════ */
-.card{background:var(--sf);border-radius:20px;padding:20px;box-shadow:var(--sh);border:1px solid var(--bd2)}
+.card{background:var(--sf);border-radius:18px;padding:18px;border:1px solid var(--bd2);transition:border-color .15s}
+.card:hover{border-color:var(--bd)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   BUTTONS
-   ═══════════════════════════════════════════════════════════════════════ */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:100px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap;line-height:1.2;font-family:inherit;letter-spacing:.01em}
-/* primary — lime */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:100px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .14s;white-space:nowrap;line-height:1;font-family:inherit;letter-spacing:.01em}
 .bp{background:var(--ac);color:var(--ac-tx)!important}
-.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 20px rgba(170,255,0,.3)}
+.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 3px 14px rgba(170,255,0,.3)}
 .bp:active{transform:translateY(0)}
-.bp:disabled{opacity:.45;cursor:not-allowed;transform:none}
-/* ghost */
+.bp:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .bg{background:transparent;color:var(--tx2)!important;border:1px solid var(--bd)}
 .bg:hover{background:var(--sf2);color:var(--tx)!important;border-color:var(--tx3)}
-/* danger */
-.brd{background:rgba(255,87,87,.08);color:var(--rd)!important;border:1px solid rgba(255,87,87,.2)}
-.brd:hover{background:rgba(255,87,87,.15)}
-/* warning */
-.bam{background:rgba(255,187,51,.10);color:var(--am)!important;border:1px solid rgba(255,187,51,.3)}
-.bam:hover{background:rgba(255,187,51,.18)}
-/* dark filled */
+.brd{background:rgba(255,68,68,.08);color:var(--rd)!important;border:1px solid rgba(255,68,68,.2)}
+.brd:hover{background:rgba(255,68,68,.14)}
+.bam{background:rgba(245,158,11,.08);color:var(--am)!important;border:1px solid rgba(245,158,11,.25)}
+.bam:hover{background:rgba(245,158,11,.16)}
 .bdk{background:var(--sb);color:#fff!important;border:1px solid var(--bd)}
 .bdk:hover{background:var(--sb2);transform:translateY(-1px)}
-/* white solid (for dark mode primary CTA) */
-.bwh{background:#ffffff;color:#0d0d0d!important;border:none}
+.bwh{background:#ffffff;color:#111111!important;border:none}
 .bwh:hover{background:#e8e8e8;transform:translateY(-1px)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   INPUTS & SELECTS
-   ═══════════════════════════════════════════════════════════════════════ */
-.inp{background:var(--sf2);border:1px solid var(--bd);border-radius:12px;padding:10px 14px;color:var(--tx);font-size:13px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s;font-family:inherit}
-.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(170,255,0,.15)}
+.inp{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;transition:border-color .14s,box-shadow .14s;font-family:inherit;line-height:1.4}
+.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(170,255,0,.12)}
 .inp::placeholder{color:var(--tx3)}
-textarea.inp{resize:vertical;min-height:68px;line-height:1.5}
-.sel{background:var(--sf2);border:1px solid var(--bd);border-radius:12px;padding:10px 32px 10px 14px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;transition:border-color .15s}
-.sel:focus{border-color:var(--ac);outline:none;box-shadow:0 0 0 3px rgba(170,255,0,.15)}
+textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
+.sel{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:9px 30px 9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;transition:border-color .14s}
+.sel:focus{border-color:var(--ac);outline:none;box-shadow:0 0 0 3px rgba(170,255,0,.12)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   BADGES & CHIPS
-   ═══════════════════════════════════════════════════════════════════════ */
-.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;line-height:1.4}
-/* Nav button (sidebar) */
-.nb{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;cursor:pointer;color:var(--tx2);font-size:13px;font-weight:500;transition:all .13s;border:none;background:transparent;width:100%;text-align:left;position:relative}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.2px;text-transform:uppercase;line-height:1.5}
+.nb{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:10px;cursor:pointer;color:var(--tx2);font-size:12px;font-weight:500;transition:all .12s;border:none;background:transparent;width:100%;text-align:left;position:relative}
 .nb:hover{background:var(--sf2);color:var(--tx)}
 .nb.act{background:var(--ac);color:var(--ac-tx)!important;font-weight:600}
 .nb.act svg{stroke:var(--ac-tx)!important}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   OVERLAY / MODAL
-   ═══════════════════════════════════════════════════════════════════════ */
-.ov{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(12px)}
-.mo{background:var(--sf);border-radius:24px;padding:28px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto;box-shadow:var(--sh2);border:1px solid var(--bd2)}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(14px)}
+.mo{background:var(--sf);border-radius:22px;padding:26px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto;box-shadow:var(--sh2);border:1px solid var(--bd2)}
 .mo-xl{max-width:920px}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   TASK CARD
-   ═══════════════════════════════════════════════════════════════════════ */
-.tkc{background:var(--sf);border-radius:18px;padding:16px;cursor:pointer;transition:all .18s;box-shadow:var(--sh);border:1px solid var(--bd2)}
+.tkc{background:var(--sf);border-radius:16px;padding:14px;cursor:pointer;transition:all .16s;border:1px solid var(--bd2)}
 .tkc:hover{transform:translateY(-2px);box-shadow:var(--sh2);border-color:var(--bd)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   PROGRESS BAR
-   ═══════════════════════════════════════════════════════════════════════ */
-.prog{height:4px;background:var(--bd);border-radius:100px;overflow:hidden}
+.prog{height:3px;background:var(--bd);border-radius:100px;overflow:hidden}
 .progf{height:100%;border-radius:100px;transition:width .5s ease}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   TAB BUTTONS (filter pills — like HubSpot All/Hot/Due Today)
-   ═══════════════════════════════════════════════════════════════════════ */
-.tb{padding:6px 14px;border-radius:100px;cursor:pointer;font-size:12px;font-weight:600;border:1px solid var(--bd);background:transparent;color:var(--tx2);transition:all .13s;font-family:inherit;letter-spacing:.01em}
-.tb.act{background:var(--tx);color:var(--bg)!important;border-color:var(--tx);box-shadow:none}
-.lm .tb.act{background:#111;color:#fff!important;border-color:#111}
+.tb{padding:5px 13px;border-radius:100px;cursor:pointer;font-size:11px;font-weight:600;border:1px solid var(--bd);background:transparent;color:var(--tx2);transition:all .12s;font-family:inherit;letter-spacing:.01em;white-space:nowrap}
+.tb.act{background:var(--tx);color:var(--bg)!important;border-color:transparent}
+.lm .tb.act{background:#111111;color:#ffffff!important;border-color:#111111}
 .tb:hover:not(.act){background:var(--sf2);color:var(--tx);border-color:var(--tx3)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   AVATAR
-   ═══════════════════════════════════════════════════════════════════════ */
 .av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;letter-spacing:-.3px}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   LABELS & CHIP SELECTORS
-   ═══════════════════════════════════════════════════════════════════════ */
-.lbl{color:var(--tx3);font-size:11px;margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.7px;font-weight:600}
-.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:100px;font-size:11px;font-weight:600;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;transition:all .13s}
+.lbl{color:var(--tx3);font-size:10px;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:600;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;transition:all .12s}
 .chip:hover{border-color:var(--ac);color:var(--ac);background:var(--ac3)}
 .chip.on{background:var(--ac3);border-color:var(--ac);color:var(--ac)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   DROP ZONE
-   ═══════════════════════════════════════════════════════════════════════ */
-.drop-zone{border:1.5px dashed var(--bd);border-radius:14px;padding:22px;text-align:center;cursor:pointer;transition:all .18s;color:var(--tx3);font-size:13px}
-.drop-zone:hover,.drop-zone.over{border-color:var(--ac);color:var(--ac);background:var(--ac3)}
+.drop-zone{border:1.5px dashed var(--bd);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .16s;color:var(--tx3);font-size:13px}
+.drop-zone:hover,.drop-zone.over{border-color:var(--ac);color:var(--ac);background:var(--ac4)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   ANIMATIONS
-   ═══════════════════════════════════════════════════════════════════════ */
-@keyframes fi{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.fi{animation:fi .2s ease forwards}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fi .18s ease forwards}
 @keyframes sp{to{transform:rotate(360deg)}}
-.spin{display:inline-block;width:15px;height:15px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .55s linear infinite;vertical-align:middle}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .5s linear infinite;vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .pulse{animation:pulse 1.4s ease-in-out infinite}
-@keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   AI ASSISTANT BUTTON & PANEL
-   ═══════════════════════════════════════════════════════════════════════ */
-.ai-btn{position:fixed;bottom:22px;right:22px;z-index:1800;width:48px;height:48px;border-radius:50%;background:var(--ac);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 20px rgba(170,255,0,.4);transition:all .2s}
-.ai-btn:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(170,255,0,.55)}
-.ai-panel{position:fixed;bottom:84px;right:22px;z-index:1800;width:380px;height:540px;background:var(--sf);border-radius:22px;display:flex;flex-direction:column;box-shadow:var(--sh2);overflow:hidden;border:1px solid var(--bd);animation:slideUp .2s ease}
-.ai-msg-user{align-self:flex-end;background:var(--ac);color:var(--ac-tx);border-radius:18px 18px 4px 18px;padding:10px 14px;font-size:13px;max-width:80%;line-height:1.5;font-weight:500}
-.ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border-radius:18px 18px 18px 4px;padding:10px 14px;font-size:13px;max-width:90%;line-height:1.6;white-space:pre-wrap;border:1px solid var(--bd2)}
-.ai-action{background:var(--ac3);border:1px solid rgba(170,255,0,.25);border-radius:10px;padding:8px 11px;font-size:11px;color:var(--ac);font-family:monospace;margin-top:5px}
+.ai-btn{position:fixed;bottom:20px;right:20px;z-index:1800;width:46px;height:46px;border-radius:50%;background:var(--ac);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 4px 18px rgba(170,255,0,.45);transition:all .18s}
+.ai-btn:hover{transform:scale(1.1);box-shadow:0 6px 26px rgba(170,255,0,.6)}
+.ai-panel{position:fixed;bottom:80px;right:20px;z-index:1800;width:370px;height:520px;background:var(--sf);border-radius:20px;display:flex;flex-direction:column;box-shadow:var(--sh2);overflow:hidden;border:1px solid var(--bd);animation:slideUp .18s ease}
+.ai-msg-user{align-self:flex-end;background:var(--ac);color:var(--ac-tx);border-radius:16px 16px 4px 16px;padding:9px 13px;font-size:12px;max-width:80%;line-height:1.5;font-weight:600}
+.ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border-radius:16px 16px 16px 4px;padding:9px 13px;font-size:12px;max-width:90%;line-height:1.55;white-space:pre-wrap;border:1px solid var(--bd2)}
+.ai-action{background:var(--ac3);border:1px solid rgba(170,255,0,.2);border-radius:8px;padding:7px 10px;font-size:10px;color:var(--ac);font-family:monospace;margin-top:4px}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   SIDEBAR NAV ICON BUTTONS
-   ═══════════════════════════════════════════════════════════════════════ */
-.snb{width:40px;height:40px;border-radius:12px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--sbt);transition:all .13s;flex-shrink:0}
-.snb:hover{background:var(--sb3);color:rgba(255,255,255,.7)}
+.snb{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--sbt);transition:all .12s;flex-shrink:0}
+.snb:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.65)}
 .snb.act{background:var(--ac)}
 .snb.act svg{stroke:var(--ac-tx)!important}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   PRIORITY / STATUS CHIPS
-   ═══════════════════════════════════════════════════════════════════════ */
-.pri-hi{background:rgba(255,87,87,.12);color:var(--rd);border:1px solid rgba(255,87,87,.25)}
-.pri-md{background:rgba(167,139,250,.12);color:var(--pu);border:1px solid rgba(167,139,250,.25)}
-.pri-lo{background:rgba(34,211,238,.12);color:var(--cy);border:1px solid rgba(34,211,238,.25)}
-.pri-gn{background:rgba(77,222,128,.12);color:var(--gn);border:1px solid rgba(77,222,128,.25)}
+.pri-hi{background:rgba(255,68,68,.1);color:var(--rd);border:1px solid rgba(255,68,68,.2)}
+.pri-md{background:rgba(167,139,250,.1);color:var(--pu);border:1px solid rgba(167,139,250,.2)}
+.pri-lo{background:rgba(34,211,238,.1);color:var(--cy);border:1px solid rgba(34,211,238,.2)}
+.pri-gn{background:rgba(62,207,110,.1);color:var(--gn);border:1px solid rgba(62,207,110,.2)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   STAT NUMBER DISPLAY — Space Grotesk for display numbers
-   ═══════════════════════════════════════════════════════════════════════ */
 .stat-num{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1;letter-spacing:-1.5px}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   HUBSPOT-STYLE LEAD / TASK CARDS
-   ═══════════════════════════════════════════════════════════════════════ */
-.hs-card{background:var(--sf);border:1px solid var(--bd2);border-radius:20px;padding:18px;transition:all .18s;position:relative;overflow:hidden}
-.hs-card:hover{border-color:var(--bd);box-shadow:var(--sh);transform:translateY(-1px)}
-.hs-card-accent{position:absolute;top:0;left:0;width:100%;height:3px;border-radius:20px 20px 0 0}
-
-/* Interest dots (HubSpot reference style) */
 .int-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   TOP SCHEDULE BAR PILLS
-   ═══════════════════════════════════════════════════════════════════════ */
-.sched-pill{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd);cursor:pointer;transition:all .14s;flex-shrink:0;min-width:0}
-.sched-pill:hover{border-color:var(--bd);background:var(--sf3)}
+.sched-pill{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd);cursor:pointer;transition:all .13s;flex-shrink:0}
+.sched-pill:hover{border-color:var(--tx3)}
 .sched-pill.active{background:var(--ac);border-color:var(--ac)}
 .sched-pill.active span{color:var(--ac-tx)!important}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   STATUS DROPDOWN PILL (Call scheduled / Waiting Proposal etc)
-   ═══════════════════════════════════════════════════════════════════════ */
-.status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:100px;font-size:11px;font-weight:600;border:1px solid var(--bd);background:var(--sf2);color:var(--tx2);cursor:pointer;transition:all .13s}
+.status-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:100px;font-size:10px;font-weight:600;border:1px solid var(--bd);background:var(--sf2);color:var(--tx2);cursor:pointer;transition:all .12s}
 .status-pill:hover{border-color:var(--tx3);color:var(--tx)}
 
-/* ═══════════════════════════════════════════════════════════════════════
-   SECTION TITLES (New Leads / Your Days Tasks style)
-   ═══════════════════════════════════════════════════════════════════════ */
-.section-title{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--tx);letter-spacing:-.3px}
-.section-count{font-size:12px;font-weight:600;color:var(--tx3);padding:2px 8px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd);letter-spacing:.2px}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--tx);letter-spacing:-.4px}
+.section-count{font-size:11px;font-weight:600;color:var(--tx3);padding:2px 7px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd)}
+
+.hs-card{background:var(--sf);border:1px solid var(--bd2);border-radius:18px;padding:16px;transition:all .16s;position:relative;overflow:hidden}
+.hs-card:hover{border-color:var(--bd);transform:translateY(-1px);box-shadow:var(--sh)}
+.hs-card-accent{position:absolute;top:0;left:0;width:100%;height:3px;border-radius:18px 18px 0 0}
+
+/* ═══════════════════════════════════════════════════════════════════
+   IN-APP TOAST / BANNER NOTIFICATIONS
+   Stacks from top-right, auto-dismisses, click to navigate
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-stack{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:9px;pointer-events:none;max-width:360px;width:360px}
+.toast{pointer-events:all;display:flex;align-items:flex-start;gap:11px;padding:13px 14px;border-radius:14px;border:1px solid var(--bd);background:var(--sf);box-shadow:0 4px 24px rgba(0,0,0,.55),0 1px 4px rgba(0,0,0,.3);cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.lm .toast{box-shadow:0 4px 24px rgba(0,0,0,.18),0 1px 4px rgba(0,0,0,.1)}
+.toast:hover{transform:translateX(-3px);box-shadow:0 6px 28px rgba(0,0,0,.65)}
+.toast-bar{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 14px 14px;transition:width linear}
+.toast-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.toast-body{flex:1;min-width:0}
+.toast-title{font-size:12px;font-weight:700;color:var(--tx);line-height:1.3;margin-bottom:2px}
+.toast-msg{font-size:11px;color:var(--tx2);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast-time{font-size:9px;color:var(--tx3);margin-top:3px;font-family:monospace}
+.toast-close{width:20px;height:20px;border-radius:6px;border:none;background:transparent;color:var(--tx3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;transition:all .12s;padding:0}
+.toast-close:hover{background:var(--sf2);color:var(--tx)}
+@keyframes toastIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(110%)}}
+.toast{animation:toastIn .25s cubic-bezier(.34,1.56,.64,1) forwards}
+.toast.leaving{animation:toastOut .2s ease forwards}
 </style></head><body>
 
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
@@ -1370,8 +1351,8 @@ function AuthScreen({onLogin}){
       <div class="fi" style=${{width:'100%',maxWidth:460}}>
         <div style=${{textAlign:'center',marginBottom:24}}>
           <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:64,height:64,background:'var(--ac)',borderRadius:20,marginBottom:14,boxShadow:'0 4px 24px rgba(170,255,0,.35)'}}><svg width="34" height="34" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-          <h1 style=${{fontSize:28,fontWeight:800,color:'var(--tx)',letterSpacing:-1,fontFamily:"'Space Grotesk',sans-serif"}}>ProjectFlow</h1>
-          <p style=${{color:'var(--tx2)',fontSize:13,marginTop:4}}>Team project management, your way</p>
+          <h1 style=${{fontSize:26,fontWeight:700,color:'var(--tx)',letterSpacing:-1,fontFamily:"'Space Grotesk',sans-serif"}}>ProjectFlow</h1>
+          <p style=${{color:'var(--tx2)',fontSize:12,marginTop:4}}>Team project management, your way</p>
         </div>
         <div class="card" style=${{padding:28}}>
           <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:10,padding:4,marginBottom:20}}>
@@ -1549,7 +1530,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         <div style=${{width:34,height:34,borderRadius:50,overflow:'hidden',border:'2px solid rgba(255,255,255,.1)',flexShrink:0,cursor:'pointer',borderRadius:'50%'}} onClick=${()=>setView('settings')} title=${cu&&cu.name}>
           ${cu&&cu.avatar_url
             ?html`<img src=${cu.avatar_url} style=${{width:'100%',height:'100%',objectFit:'cover'}}/>`
-            :html`<div style=${{width:'100%',height:'100%',background:cu&&cu.color||'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800,color:'#0a1a00'}}>${cu&&(cu.name||'?')[0].toUpperCase()}</div>`}
+            :html`<div style=${{width:'100%',height:'100%',background:cu&&cu.color||'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'#0a1a00'}}>${cu&&(cu.name||'?')[0].toUpperCase()}</div>`}
         </div>
       </div>
     </aside>`;
@@ -1610,7 +1591,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                       <div style=${{position:'relative'}}>
                         ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
                           html`<img src=${cu.avatar_data} style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',objectFit:'cover',border:isNow?'2px solid #22c55e':'2px solid rgba(170,255,0,.4)',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'none',transition:'all .18s'}}/>`:
-                          html`<div style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#aaff00,#88cc00)',border:isNow?'2px solid #22c55e':'2px solid rgba(170,255,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?10:8,fontWeight:800,color:isNow?'#fff':'#0a1a00',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'0 0 8px rgba(170,255,0,.25)',transition:'all .18s'}}>
+                          html`<div style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#aaff00,#88cc00)',border:isNow?'2px solid #22c55e':'2px solid rgba(170,255,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?10:8,fontWeight:700,color:isNow?'#fff':'#0a1a00',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'0 0 8px rgba(170,255,0,.25)',transition:'all .18s'}}>
                             ${(r.task_title||'?').charAt(0).toUpperCase()}
                           </div>`}
                         ${isNow?html`<div style=${{position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#22c55e',border:'1.5px solid #111',boxShadow:'0 0 4px #22c55e'}}></div>`:null}
@@ -1632,7 +1613,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
             <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              ${unread>0?html`<div style=${{position:'absolute',top:-3,right:-3,width:15,height:15,borderRadius:'50%',background:'#ef4444',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,color:'#fff'}}>${unread>9?'9+':unread}</div>`:null}
+              ${unread>0?html`<div style=${{position:'absolute',top:-3,right:-3,width:15,height:15,borderRadius:'50%',background:'#ef4444',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:'#fff'}}>${unread>9?'9+':unread}</div>`:null}
             </button>
             ${showNP?html`
               <div style=${{position:'absolute',top:38,right:0,width:320,maxHeight:400,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,boxShadow:'var(--sh2)',zIndex:3000,overflow:'hidden',display:'flex',flexDirection:'column'}}>
@@ -1676,7 +1657,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                     onClick=${e=>{e.stopPropagation();prImgRef.current&&prImgRef.current.click();}}>
                     ${(cu.avatar_data&&cu.avatar_data.startsWith('data:image'))?
                       html`<img src=${cu.avatar_data} style=${{width:68,height:68,borderRadius:'50%',objectFit:'cover',border:'3px solid var(--ac)',display:'block'}}/>`:
-                      html`<div style=${{width:68,height:68,borderRadius:'50%',background:cu.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:800,color:'#fff',border:'3px solid var(--ac)'}}>${cu.avatar||'?'}</div>`}
+                      html`<div style=${{width:68,height:68,borderRadius:'50%',background:cu.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:700,color:'#fff',border:'3px solid var(--ac)'}}>${cu.avatar||'?'}</div>`}
                     <div style=${{position:'absolute',bottom:2,right:2,width:22,height:22,borderRadius:'50%',background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,border:'2px solid var(--sf)',color:'#fff',pointerEvents:'none'}}>📷</div>
                   </div>
                   <input ref=${prImgRef} type="file" accept="image/*" style=${{display:'none'}} onChange=${async e=>{
@@ -1698,7 +1679,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                     reader.readAsDataURL(f);
                   }}/>
                   <div style=${{textAlign:'center',width:'100%'}}>
-                    <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)',marginBottom:2}}>${cu.name}</div>
+                    <div style=${{fontSize:15,fontWeight:700,color:'var(--tx)',marginBottom:2}}>${cu.name}</div>
                     <div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',marginBottom:4,wordBreak:'break-all'}}>${cu.email}</div>
                     <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(170,255,0,.15)',color:'var(--ac2)',textTransform:'uppercase'}}>${cu.role}</span>
                     ${uploadMsg?html`<div style=${{marginTop:8,fontSize:11,color:uploadMsg.startsWith('✓')?'var(--gn)':'var(--rd)',fontFamily:'monospace'}}>${uploadMsg}</div>`:null}
@@ -1712,9 +1693,9 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>`:null}
         </div>
       </div>
-      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 20px',height:50,borderTop:'1px solid var(--bd2)'}}>
+      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 20px',height:48,borderTop:'1px solid var(--bd2)'}}>
         <div>
-          <h1 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',letterSpacing:'-.3px',fontFamily:"'Space Grotesk',sans-serif"}}>${title}</h1>
+          <h1 style=${{fontSize:15,fontWeight:700,color:'var(--tx)',letterSpacing:'-.2px',fontFamily:"'Space Grotesk',sans-serif"}}>${title}</h1>
           ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:1,fontWeight:500,letterSpacing:'.1px'}}>${sub}</p>`:null}
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:7}}>${extra||null}</div>
@@ -1829,7 +1810,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
       <div class="mo fi">
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
           <div>
-            <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>${isEdit?'Edit Task':'New Task'}</h2>
+            <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>${isEdit?'Edit Task':'New Task'}</h2>
             ${isEdit?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${task.id}</span>`:null}
           </div>
           <div style=${{display:'flex',gap:7}}>
@@ -1996,8 +1977,8 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
           <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:14}}>
             <div style=${{display:'flex',alignItems:'center',gap:11}}>
               <div style=${{width:11,height:11,borderRadius:3,background:edit?color:project.color,flexShrink:0,marginTop:4}}></div>
-              ${edit?html`<input class="inp" style=${{fontSize:17,fontWeight:800,padding:'4px 8px'}} value=${name} onInput=${e=>setName(e.target.value)}/>`:
-                      html`<h2 style=${{fontSize:18,fontWeight:800,color:'var(--tx)'}}>${project.name}</h2>`}
+              ${edit?html`<input class="inp" style=${{fontSize:17,fontWeight:700,padding:'4px 8px'}} value=${name} onInput=${e=>setName(e.target.value)}/>`:
+                      html`<h2 style=${{fontSize:18,fontWeight:700,color:'var(--tx)'}}>${project.name}</h2>`}
             </div>
             <div style=${{display:'flex',gap:7,flexShrink:0}}>
               ${cu&&cu.role!=='Viewer'&&!edit?html`<button class="btn bg" style=${{fontSize:12,padding:'7px 12px'}} onClick=${()=>setEdit(true)}>✏ Edit</button>`:null}
@@ -2138,34 +2119,34 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
           const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
           const mems=safe(p.members).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
           return html`
-            <div key=${p.id} class="card" style=${{cursor:'pointer',transition:'all .18s',borderTop:'3px solid '+p.color}}
+            <div key=${p.id} class="card" style=${{cursor:'pointer',transition:'all .16s',borderTop:'2px solid '+p.color,padding:'16px'}}
               onClick=${()=>setDetail(p)}
-              onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 8px 24px rgba(0,0,0,.2)';}}
+              onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderTopColor=p.color;e.currentTarget.style.boxShadow='var(--sh)';}}
               onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
-              <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:10}}>
-                <h3 style=${{fontSize:15,fontWeight:700,color:'var(--tx)',flex:1,marginRight:6}}>${p.name}</h3>
-                <span class="badge" style=${{background:p.color+'22',color:p.color,flexShrink:0}}>${pt.length} tasks</span>
+              <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:9}}>
+                <h3 style=${{fontSize:14,fontWeight:700,color:'var(--tx)',flex:1,marginRight:6,lineHeight:1.3}}>${p.name}</h3>
+                <span class="badge" style=${{background:p.color+'18',color:p.color,flexShrink:0,fontSize:9}}>${pt.length} tasks</span>
               </div>
-              <p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.5,marginBottom:12,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
-              <div style=${{marginBottom:12}}>
-                <div style=${{display:'flex',justifyContent:'space-between',marginBottom:5}}>
-                  <span style=${{fontSize:11,color:'var(--tx3)'}}>Progress</span>
-                  <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
+              <p style=${{fontSize:12,color:'var(--tx2)',lineHeight:1.5,marginBottom:11,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
+              <div style=${{marginBottom:11}}>
+                <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px'}}>Progress</span>
+                  <span style=${{fontSize:10,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
                 </div>
                 <${Prog} pct=${pc} color=${p.color}/>
               </div>
-              <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:7,marginBottom:12}}>
+              <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:11}}>
                 ${[['Tasks',pt.length,'var(--tx)'],['Done',done,'var(--gn)'],['Open',pt.length-done,'var(--am)']].map(([l,v,c])=>html`
-                  <div key=${l} style=${{textAlign:'center',padding:'9px 4px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)'}}>
-                    <div style=${{fontSize:18,fontWeight:800,color:c}}>${v}</div>
-                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${l}</div>
+                  <div key=${l} style=${{textAlign:'center',padding:'8px 4px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd2)'}}>
+                    <div style=${{fontSize:16,fontWeight:700,color:c,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-0.5px'}}>${v}</div>
+                    <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:'.5px'}}>${l}</div>
                   </div>`)}
               </div>
               <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                 <div style=${{display:'flex'}}>
-                  ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-7:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${25}/></div>`)}
+                  ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${22}/></div>`)}
                 </div>
-                <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>Due ${fmtD(p.target_date)}</span>
+                <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>Due ${fmtD(p.target_date)}</span>
               </div>
             </div>`;
         })}
@@ -2175,7 +2156,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
           <div class="mo fi" style=${{maxWidth:500}}>
             <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}>
-              <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>New Project</h2>
+              <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>New Project</h2>
               <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowNew(false)}>✕</button>
             </div>
             <div style=${{display:'flex',flexDirection:'column',gap:12}}>
@@ -2456,39 +2437,45 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   const activeTasks=t.filter(x=>activeProjectIds.has(x.project)&&x.stage!=='completed');
   const priChart=[{name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)'},{name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)'},{name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)'},{name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)'}];
   const stats=[
-    {label:'Total Projects',val:p.length,   color:'var(--ac)', bg:'var(--ac3)',  icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
-    {label:'Active Tasks',  val:active,     color:'var(--cy)', bg:'rgba(34,211,238,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
-    {label:'Completed',     val:done,       color:'var(--gn)', bg:'rgba(77,222,128,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks'},
-    {label:'Blocked',       val:blocked,    color:'var(--rd)', bg:'rgba(255,87,87,.1)',  icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks'},
-    {label:'My Tasks',      val:myT.length, color:'var(--am)', bg:'rgba(255,187,51,.1)', icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks'},
-    {label:'Team Members',  val:u.length,   color:'var(--pu)', bg:'rgba(167,139,250,.1)',icon:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:'team'},
+    {label:'Total Projects',val:p.length,   color:'var(--ac)', bg:'var(--ac3)',           icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
+    {label:'Active Tasks',  val:active,     color:'var(--cy)', bg:'rgba(34,211,238,.08)',  icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
+    {label:'Completed',     val:done,       color:'var(--gn)', bg:'rgba(62,207,110,.08)',  icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks'},
+    {label:'Blocked',       val:blocked,    color:'var(--rd)', bg:'rgba(255,68,68,.08)',   icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks'},
+    {label:'My Tasks',      val:myT.length, color:'var(--am)', bg:'rgba(245,158,11,.08)',  icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks'},
+    {label:'Team Members',  val:u.length,   color:'var(--pu)', bg:'rgba(167,139,250,.08)', icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:'team'},
   ];
   return html`
-    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',display:'flex',flexDirection:'column',gap:16}}>
-      <div style=${{padding:'16px 20px',background:'var(--sf)',borderRadius:20,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:14}}>
-        <${Av} u=${cu} size=${44}/>
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
+      <!-- Greeting bar -->
+      <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:13}}>
+        <${Av} u=${cu} size=${40}/>
         <div style=${{flex:1}}>
-          <h2 style=${{fontSize:18,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
-          <p style=${{color:'var(--tx2)',fontSize:13,marginTop:3}}>You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
+          <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
+          <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
-        <div style=${{display:'flex',alignItems:'center',gap:6,background:'var(--ac3)',border:'1px solid rgba(170,255,0,.2)',borderRadius:100,padding:'5px 13px'}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',fontFamily:'monospace',letterSpacing:'.4px'}}>${new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span></div>
+        <div style=${{display:'flex',alignItems:'center',gap:5,background:'var(--ac3)',border:'1px solid rgba(170,255,0,.18)',borderRadius:100,padding:'4px 11px'}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span style=${{fontSize:10,fontWeight:700,color:'var(--ac)',fontFamily:'monospace',letterSpacing:'.5px'}}>${new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
+        </div>
       </div>
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
+      <!-- Stat cards — HubSpot "34 Deals / 20 Won / 3 Lost" style -->
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
         ${stats.map((s,i)=>html`
-          <div key=${i} class="card" onClick=${()=>onNav(s.nav)}
-            style=${{padding:'13px 15px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .18s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderColor=s.color;e.currentTarget.style.boxShadow='var(--sh2)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.borderColor='';e.currentTarget.style.boxShadow='';}}>
-            <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:s.color,borderRadius:'18px 18px 0 0',opacity:.7}}></div>
-            <div style=${{width:34,height:34,borderRadius:9,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:8,color:s.color}}>${s.icon}</div>
-            <div style=${{fontSize:32,fontWeight:700,color:'var(--tx)',lineHeight:1,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:-1.5}}>${s.val}</div>
-            <div style=${{fontSize:11,color:'var(--tx2)',marginTop:4}}>${s.label}</div>
-            <div style=${{fontSize:9,color:s.color,marginTop:2,fontFamily:'monospace',opacity:.7}}>click →</div>
+          <div key=${i} onClick=${()=>onNav(s.nav)}
+            style=${{background:'var(--sf)',borderRadius:16,padding:'14px 16px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .16s',border:'1px solid var(--bd2)'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color;e.currentTarget.style.transform='translateY(-2px)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='';e.currentTarget.style.transform='';}}>
+            <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:s.color,borderRadius:'16px 16px 0 0'}}></div>
+            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+              <div style=${{width:30,height:30,borderRadius:8,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color}}>${s.icon}</div>
+            </div>
+            <div style=${{fontSize:28,fontWeight:700,color:'var(--tx)',lineHeight:1,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:-1.5}}>${s.val}</div>
+            <div style=${{fontSize:11,color:'var(--tx2)',marginTop:5,fontWeight:500}}>${s.label}</div>
           </div>`)}
       </div>
       <div style=${{display:'grid',gridTemplateColumns:'1fr 260px',gap:14}}>
         <div class="card">
-          <h3 style=${{fontSize:13,fontWeight:800,color:'var(--tx)',marginBottom:13,fontFamily:"'Space Grotesk',sans-serif"}}>Tasks by Lifecycle Stage</h3>
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:13,fontFamily:"'Space Grotesk',sans-serif"}}>Tasks by Lifecycle Stage</h3>
           <${RC.ResponsiveContainer} width="100%" height=${180}>
             <${RC.BarChart} data=${stageChart} barSize=${18} margin=${{top:0,right:0,bottom:0,left:-20}}>
               <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
@@ -2500,7 +2487,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
           <//>
         </div>
         <div class="card">
-          <h3 style=${{fontSize:13,fontWeight:800,color:'var(--tx)',marginBottom:11,fontFamily:"'Space Grotesk',sans-serif"}}>Priority Split</h3>
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:11,fontFamily:"'Space Grotesk',sans-serif"}}>Priority Split</h3>
           <${RC.ResponsiveContainer} width="100%" height=${120}>
             <${RC.PieChart}>
               <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4}>
@@ -2802,7 +2789,7 @@ function TeamView({users,cu,reload}){
     </div>
     ${showNew?html`<div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
       <div class="mo fi" style=${{maxWidth:400}}>
-        <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}><h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>Add Member</h2><button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowNew(false)}>✕</button></div>
+        <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}><h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>Add Member</h2><button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowNew(false)}>✕</button></div>
         <div style=${{display:'flex',flexDirection:'column',gap:11}}>
           <input class="inp" placeholder="Full Name" value=${name} onInput=${e=>setName(e.target.value)}/>
           <input class="inp" type="email" placeholder="Email" value=${email} onInput=${e=>setEmail(e.target.value)}/>
@@ -2846,7 +2833,7 @@ function WorkspaceSettings({cu,onReload}){
 
   return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'24px'}}>
     <div style=${{maxWidth:640}}>
-      <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',marginBottom:20}}>⚙ Workspace Settings</h2>
+      <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',marginBottom:20}}>⚙ Workspace Settings</h2>
 
       <div class="card" style=${{marginBottom:16}}>
         <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:16}}>🏢 Workspace</h3>
@@ -2861,7 +2848,7 @@ function WorkspaceSettings({cu,onReload}){
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Share this code with teammates to join your workspace.</p>
         <div style=${{display:'flex',alignItems:'center',gap:10}}>
           <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(170,255,0,.12),rgba(167,139,250,.08))',borderRadius:12,border:'1px solid rgba(170,255,0,.18)'}}>
-            <div style=${{fontSize:28,fontWeight:800,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:4}}>${ws.invite_code}</div>
+            <div style=${{fontSize:28,fontWeight:700,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:4}}>${ws.invite_code}</div>
           </div>
           <div style=${{display:'flex',flexDirection:'column',gap:8}}>
             <button class="btn bp" style=${{fontSize:12,padding:'8px 14px'}} onClick=${()=>copy(ws.invite_code)}>📋 Copy</button>
@@ -3034,16 +3021,52 @@ function showBrowserNotif(title, body, onClick, opts={}){
   if(!('Notification' in window)||Notification.permission!=='granted')return;
   try{
     const n=new Notification(title,{
-      body,
-      icon:NOTIF_ICON,
-      badge:NOTIF_ICON,
+      body,icon:NOTIF_ICON,badge:NOTIF_ICON,
       tag:opts.tag||'pf-'+Date.now(),
       requireInteraction:opts.requireInteraction||false,
       silent:false,
     });
     if(onClick) n.onclick=()=>{window.focus();onClick();n.close();};
-    if(!opts.requireInteraction) setTimeout(()=>n.close(),7000);
+    if(!opts.requireInteraction) setTimeout(()=>n.close(),6000);
   }catch(e){}
+}
+
+/* ─── In-App Toast System ─────────────────────────────────────────────────── */
+// Global toast queue — controlled from App, shared via window ref
+window._pfToast=window._pfToast||null; // will be set to addToast fn after mount
+
+const TOAST_CFG={
+  dm:      {icon:'💬', color:'var(--ac)',  bg:'var(--ac3)',    nav:'dm'},
+  call:    {icon:'📞', color:'var(--gn)',  bg:'rgba(62,207,110,.12)', nav:'dashboard'},
+  task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'},
+  status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'},
+  comment: {icon:'💬', color:'var(--pu)',  bg:'rgba(167,139,250,.1)', nav:'tasks'},
+  deadline:{icon:'⏰', color:'var(--am)',  bg:'rgba(245,158,11,.1)',  nav:'tasks'},
+  project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'},
+  reminder:{icon:'⏰', color:'var(--rd)',  bg:'rgba(255,68,68,.1)',   nav:'reminders'},
+  message: {icon:'#️⃣', color:'#a78bfa',   bg:'rgba(167,139,250,.1)', nav:'messages'},
+  default: {icon:'🔔', color:'var(--ac)',  bg:'var(--ac3)',           nav:'notifs'},
+};
+
+function ToastStack({toasts,onDismiss,onNav}){
+  return html`
+    <div class="toast-stack">
+      ${toasts.map(t=>{
+        const cfg=TOAST_CFG[t.type]||TOAST_CFG.default;
+        return html`
+          <div key=${t.id} class=${'toast'+(t.leaving?' leaving':'')}
+            onClick=${()=>{onDismiss(t.id);onNav&&onNav(cfg.nav);}}>
+            <div class="toast-bar" style=${{width:t.progress+'%',background:cfg.color}}></div>
+            <div class="toast-icon" style=${{background:cfg.bg,color:cfg.color}}>${cfg.icon}</div>
+            <div class="toast-body">
+              <div class="toast-title">${t.title}</div>
+              <div class="toast-msg">${t.body}</div>
+              <div class="toast-time">${t.timeStr}</div>
+            </div>
+            <button class="toast-close" onClick=${e=>{e.stopPropagation();onDismiss(t.id);}}>✕</button>
+          </div>`;
+      })}
+    </div>`;
 }
 
 /* ─── ReminderModal ───────────────────────────────────────────────────────── */
@@ -3093,7 +3116,7 @@ function ReminderModal({task,onClose,onSaved}){
     <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
       <div class="mo" style=${{maxWidth:420}}>
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-          <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>⏰ Set Reminder</h2>
+          <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>⏰ Set Reminder</h2>
           <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
         </div>
         ${task?html`<div style=${{padding:'10px 13px',background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)',marginBottom:16,fontSize:13,color:'var(--tx2)'}}>
@@ -3210,7 +3233,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload}){
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowAdd(false)}>
           <div class="mo fi" style=${{maxWidth:460}}>
             <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-              <h2 style=${{fontSize:16,fontWeight:800,color:'var(--tx)'}}>⏰ Add Reminder</h2>
+              <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)'}}>⏰ Add Reminder</h2>
               <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowAdd(false)}>✕</button>
             </div>
             <div style=${{display:'flex',flexDirection:'column',gap:13}}>
@@ -3263,7 +3286,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload}){
       <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <span style=${{fontWeight:800,fontSize:13,color:'var(--tx)'}}>⚡ Upcoming</span>
+            <span style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>⚡ Upcoming</span>
             <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminder${upcoming.length!==1?'s':''}</span>
           </div>
           ${busy?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
@@ -3292,7 +3315,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload}){
         </div>
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <span style=${{fontWeight:800,fontSize:13,color:'var(--rd)'}}>🚨 Overdue</span>
+            <span style=${{fontWeight:700,fontSize:13,color:'var(--rd)'}}>🚨 Overdue</span>
             <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
           </div>
           ${!busy&&overdue.length===0?html`
@@ -3330,7 +3353,7 @@ function RemindersPanel({onClose,onReload}){
     <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
       <div class="mo" style=${{maxWidth:500}}>
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-          <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>⏰ My Reminders</h2>
+          <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>⏰ My Reminders</h2>
           <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
         </div>
         ${reminders.length===0?html`<p style=${{color:'var(--tx3)',fontSize:13,textAlign:'center',padding:'24px 0'}}>No active reminders.</p>`:null}
@@ -3744,7 +3767,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
       <div style=${{display:'flex',alignItems:'center',gap:11,marginBottom:14}}>
         <div style=${{position:'relative',flexShrink:0}}>
           ${incomingCall.initiator?html`<${Av} u=${incomingCall.initiator} size=${44}/>`:
-            html`<div style=${{width:44,height:44,borderRadius:14,background:'linear-gradient(135deg,#22c55e,#16a34a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:800,color:'#fff'}}>${(incomingCall.initiatorName||'?')[0]}</div>`}
+            html`<div style=${{width:44,height:44,borderRadius:14,background:'linear-gradient(135deg,#22c55e,#16a34a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:700,color:'#fff'}}>${(incomingCall.initiatorName||'?')[0]}</div>`}
           <div style=${{position:'absolute',bottom:-2,right:-2,width:16,height:16,borderRadius:'50%',background:'#22c55e',border:'2px solid #1a1625',display:'flex',alignItems:'center',justifyContent:'center'}}>
             <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
           </div>
@@ -3786,7 +3809,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <div style=${{position:'relative'}}>
             ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
               html`<img src=${cu.avatar_data} style=${{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'3px solid rgba(255,255,255,.15)'}}/>`:
-              html`<div style=${{width:80,height:80,borderRadius:'50%',background:cu.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:800,color:'#fff',border:'3px solid rgba(255,255,255,.15)'}}>${(cu.avatar||cu.name||'?')[0]}</div>`}
+              html`<div style=${{width:80,height:80,borderRadius:'50%',background:cu.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff',border:'3px solid rgba(255,255,255,.15)'}}>${(cu.avatar||cu.name||'?')[0]}</div>`}
             ${previewMicOk?html`<div style=${{position:'absolute',bottom:2,right:2,width:20,height:20,borderRadius:'50%',background:'#22c55e',border:'2.5px solid #2d2640',display:'flex',alignItems:'center',justifyContent:'center'}}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>
             </div>`:
@@ -3872,7 +3895,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1,pointerEvents:'none',background:'rgba(20,20,40,.3)'}}>
                   ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
                     html`<img src=${u.avatar_data} style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',objectFit:'cover',border:'2.5px solid rgba(255,255,255,.2)',opacity:(u.id===cu.id&&videoOn)||u.id!==cu.id?0:1,transition:'opacity .3s'}}/>`:
-                    html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:800,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
+                    html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:700,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
                 </div>
                 <!-- Name + indicator -->
                 <div style=${{position:'absolute',bottom:7,left:7,right:7,zIndex:3,display:'flex',alignItems:'center',gap:5}}>
@@ -3898,7 +3921,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 <button onClick=${()=>{setShowInvite(true);setShowParticipants(false);}}
                   style=${{flex:1,padding:'8px',background:showInvite?'rgba(170,255,0,.18)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:showInvite?'#99ee00':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,transition:'all .15s',position:'relative'}}>
                   Invite
-                  ${notInCall.length>0?html`<span style=${{position:'absolute',top:4,right:6,width:14,height:14,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>${notInCall.length}</span>`:null}
+                  ${notInCall.length>0?html`<span style=${{position:'absolute',top:4,right:6,width:14,height:14,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>${notInCall.length}</span>`:null}
                 </button>
               </div>
               <div style=${{flex:1,overflowY:'auto',padding:'8px'}}>
@@ -3973,7 +3996,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             <button onClick=${()=>{setShowInvite(p=>!p||showParticipants);setShowParticipants(false);}}
               style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(170,255,0,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(170,255,0,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#99ee00':'#fff',transition:'all .15s',position:'relative'}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              <span style=${{position:'absolute',top:-2,right:-2,width:15,height:15,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:800,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',border:'1.5px solid #0d0d1a'}}>${participants.length}</span>
+              <span style=${{position:'absolute',top:-2,right:-2,width:15,height:15,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',border:'1.5px solid #0d0d1a'}}>${participants.length}</span>
             </button>
             <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>People</span>
           </div>
@@ -3999,13 +4022,52 @@ function App(){
   const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
+  const [toasts,setToasts]=useState([]);
+  const toastTimers=useRef({});
+  const TOAST_DUR=6000; // ms before auto-dismiss
+
+  // ── Add in-app toast ────────────────────────────────────────────────────────
+  const addToast=useCallback((type,title,body)=>{
+    const id='t'+Date.now()+Math.random();
+    const timeStr=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    setToasts(prev=>[{id,type,title,body,timeStr,progress:100,leaving:false},...prev].slice(0,5));
+    // Countdown progress bar
+    const start=Date.now();
+    const tick=setInterval(()=>{
+      const elapsed=Date.now()-start;
+      const pct=Math.max(0,100-(elapsed/TOAST_DUR*100));
+      setToasts(prev=>prev.map(t=>t.id===id?{...t,progress:pct}:t));
+      if(elapsed>=TOAST_DUR){clearInterval(tick);dismissToast(id);}
+    },100);
+    toastTimers.current[id]=tick;
+  },[]);
+
+  const dismissToast=useCallback((id)=>{
+    if(toastTimers.current[id]){clearInterval(toastTimers.current[id]);delete toastTimers.current[id];}
+    setToasts(prev=>prev.map(t=>t.id===id?{...t,leaving:true}:t));
+    setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),220);
+  },[]);
+
+  // Expose addToast globally so polling closures can call it
+  useEffect(()=>{window._pfToast=addToast;},[addToast]);
+
+  // ── Fire both OS notif + in-app toast ───────────────────────────────────────
+  const notify=useCallback((type,title,body,navTo,opts={})=>{
+    // 1. In-app toast (always works, regardless of OS permission)
+    addToast(type,title,body);
+    // 2. OS/desktop notification (only when permission granted)
+    showBrowserNotif(title,body,()=>setView(navTo),{...opts,tag:opts.tag||type+'-'+Date.now()});
+    // 3. Sound
+    playSound(type==='call'?'call':'notif');
+  },[addToast]);
 
   // Show notification permission banner after login
   useEffect(()=>{
     if(cu&&'Notification' in window&&Notification.permission==='default'){
-      setTimeout(()=>setShowNotifBanner(true),2000);
+      setTimeout(()=>setShowNotifBanner(true),2500);
     }
   },[cu]);
+
   const [callState,setCallState]=useState({status:'idle',roomId:null,roomName:'',participants:[],elapsed:0,muted:false,incomingCall:null,allUsers:[]});
   const huddleCmdRef=useRef({});
 
@@ -4027,63 +4089,91 @@ function App(){
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{document.body.className=dark?'':'lm';},[dark]);
-  // Poll DM unread count every 5s — play sound + OS notification when new DMs arrive
+
+  // ── Poll DM unread every 5s ─────────────────────────────────────────────────
+  // Uses a ref for prevDms so closure stays fresh without re-creating interval
+  const prevDmsRef=useRef([]);
   useEffect(()=>{
     if(!cu)return;
-    let prevDms=[];
+    // Seed with current on first mount so we don't false-fire on login
+    api.get('/api/dm/unread').then(d=>{if(Array.isArray(d)){prevDmsRef.current=d;setDmUnread(d);}});
     const id=setInterval(()=>{
       api.get('/api/dm/unread').then(d=>{
-        if(Array.isArray(d)){
-          const total=d.reduce((a,x)=>a+(x.cnt||0),0);
-          const prevTotal=prevDms.reduce((a,x)=>a+(x.cnt||0),0);
-          if(total>prevTotal){
+        if(!Array.isArray(d))return;
+        const prev=prevDmsRef.current;
+        d.forEach(x=>{
+          const old=prev.find(p=>p.sender===x.sender);
+          if(!old||(x.cnt||0)>(old.cnt||0)){
+            // New DM from this sender
+            const sender=data.users.find(u=>u.id===x.sender);
+            const sname=sender?sender.name:'Someone';
+            window._pfToast&&window._pfToast('dm','💬 New message from '+sname,'Tap to open Direct Messages');
+            showBrowserNotif('💬 '+sname+' sent you a message','Tap to open',()=>setView('dm'),{tag:'dm-'+x.sender});
             playSound('notif');
-            // Find new senders to show their name
-            d.forEach(x=>{
-              const prev=prevDms.find(p=>p.sender===x.sender);
-              if(!prev||(x.cnt||0)>(prev.cnt||0)){
-                const sender=safe(data.users).find(u=>u.id===x.sender);
-                const sname=sender?sender.name:'Someone';
-                showBrowserNotif('💬 New Message',sname+' sent you a message',()=>setView('dm'),{tag:'dm-'+x.sender,requireInteraction:false});
-              }
-            });
           }
-          prevDms=d;
-          setDmUnread(d);
-        }
+        });
+        prevDmsRef.current=d;
+        setDmUnread(d);
       });
     },5000);
     return()=>clearInterval(id);
-  },[cu,data.users]);
-  // Poll notifications every 8s — OS notification + sound on new items
+  },[cu]); // intentionally omit data.users to avoid reset — sender name is best-effort
+
+  // ── Poll notifications every 6s — fixed: seed prevIds on mount ─────────────
+  const prevNotifIdsRef=useRef(null); // null = not yet seeded
+  const NTITLES={
+    task_assigned:'✅ Task assigned to you',
+    status_change:'🔄 Task status changed',
+    comment:'💬 New comment on task',
+    deadline:'⏰ Deadline approaching',
+    dm:'📨 New direct message',
+    project_added:'📁 Added to a project',
+    reminder:'⏰ Reminder',
+    call:'📞 Huddle call',
+    message:'#️⃣ New channel message',
+  };
+  const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
   useEffect(()=>{
     if(!cu)return;
-    let prevUnread=0;
-    let prevIds=new Set();
-    const NTITLES={task_assigned:'✅ Task Assigned',status_change:'🔄 Status Update',comment:'💬 New Comment',deadline:'⏰ Deadline',dm:'📨 Direct Message',project_added:'📁 Project Update',reminder:'⏰ Reminder',call:'📞 Huddle Call'};
+    // Seed: fetch current notifs so we know the baseline — don't fire for existing ones
+    api.get('/api/notifications').then(d=>{
+      if(Array.isArray(d)){
+        prevNotifIdsRef.current=new Set(d.map(n=>n.id));
+        setData(prev=>({...prev,notifs:d}));
+        const unread=d.filter(n=>!n.read).length;
+        updateBadge(unread+dmUnread.reduce((a,x)=>a+(x.cnt||0),0));
+      }
+    });
     const id=setInterval(()=>{
       api.get('/api/notifications').then(d=>{
-        if(Array.isArray(d)){
-          const unread=d.filter(n=>!n.read).length;
-          if(unread>prevUnread){
-            playSound('notif');
-            // Show OS notification for each new item
-            d.filter(n=>!n.read&&!prevIds.has(n.id)).forEach(n=>{
-              const title=NTITLES[n.type]||'ProjectFlow';
-              showBrowserNotif(title,n.content,()=>setView('notifs'),{tag:'notif-'+n.id,requireInteraction:n.type==='call'});
-            });
-          }
-          prevUnread=unread;
-          prevIds=new Set(d.map(n=>n.id));
-          setData(prev=>({...prev,notifs:d}));
-          // Update badge
-          const dmTotal=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
-          updateBadge(unread+dmTotal);
+        if(!Array.isArray(d))return;
+        if(prevNotifIdsRef.current===null){
+          // Still waiting for seed — just store
+          prevNotifIdsRef.current=new Set(d.map(n=>n.id));
+          return;
         }
+        // Only fire for genuinely NEW notification IDs
+        const brandNew=d.filter(n=>!prevNotifIdsRef.current.has(n.id));
+        brandNew.forEach(n=>{
+          const title=NTITLES[n.type]||'ProjectFlow';
+          const nav=NNAV[n.type]||'notifs';
+          // In-app toast
+          addToast(n.type,title,n.content||'');
+          // OS notification
+          showBrowserNotif(title,n.content||'',()=>setView(nav),{tag:'notif-'+n.id,requireInteraction:n.type==='call'});
+          // Sound
+          playSound(n.type==='call'?'call':'notif');
+        });
+        // Update the known-IDs set
+        prevNotifIdsRef.current=new Set(d.map(n=>n.id));
+        setData(prev=>({...prev,notifs:d}));
+        const unread=d.filter(n=>!n.read).length;
+        const dmTotal=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+        updateBadge(unread+dmTotal);
       });
-    },8000);
+    },6000);
     return()=>clearInterval(id);
-  },[cu,dmUnread]);
+  },[cu,addToast]);
 
   const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
   const logout=async()=>{await api.post('/api/auth/logout',{});setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);};
@@ -4098,15 +4188,16 @@ function App(){
     updateBadge(unread+dmTotal);
   },[data.notifs,dmUnread]);
 
-  // Poll for due reminders every 30s — fire OS notification + in-app notification + keep topbar in sync
+  // Poll for due reminders every 30s
   useEffect(()=>{
     if(!cu)return;
     const id=setInterval(async()=>{
       const due=await api.get('/api/reminders/due');
       if(Array.isArray(due)&&due.length>0){
         due.forEach(r=>{
+          addToast('reminder','⏰ Reminder due!',r.task_title||'Task reminder');
+          showBrowserNotif('⏰ Reminder Due!',r.task_title||'',()=>setView('tasks'),{tag:'rem-'+r.id,requireInteraction:true});
           playSound('reminder');
-          showBrowserNotif('⏰ Reminder Due!',r.task_title,()=>setView('tasks'),{tag:'rem-'+r.id,requireInteraction:true});
           const nid='rn'+Date.now();
           setData(prev=>({...prev,notifs:[
             {id:nid,type:'reminder',content:'⏰ Reminder: '+r.task_title,read:0,ts:new Date().toISOString()},
@@ -4114,12 +4205,11 @@ function App(){
           ]}));
         });
       }
-      // Keep topbar in sync
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
     },30000);
     return()=>clearInterval(id);
-  },[cu]);
+  },[cu,addToast]);
 
   if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
     <div style=${{position:'relative',width:100,height:100,display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -4185,18 +4275,31 @@ function App(){
     </div>
     <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
     <${HuddleCall} cu=${cu} users=${data.users} onStateChange=${s=>setCallState(prev=>({...prev,...s}))} cmdRef=${huddleCmdRef}/>
+
+    <!-- ★ In-app toast stack — always visible, no OS permission needed -->
+    <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${setView}/>
+
+    <!-- Notification permission banner — shown once after login -->
     ${showNotifBanner?html`
-      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9200,background:'#1e1b4b',border:'1px solid rgba(170,255,0,.4)',borderRadius:14,padding:'13px 18px',boxShadow:'0 12px 40px rgba(0,0,0,.5)',display:'flex',alignItems:'center',gap:12,maxWidth:420,animation:'slideUp .3s ease'}}>
-        <div style=${{width:36,height:36,borderRadius:10,background:'rgba(170,255,0,.18)',border:'1px solid rgba(170,255,0,.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:18}}>🔔</div>
-        <div style=${{flex:1}}>
-          <div style=${{fontSize:13,fontWeight:700,color:'#fff',marginBottom:2}}>Enable notifications</div>
-          <div style=${{fontSize:11,color:'rgba(255,255,255,.55)'}}>Get alerted for calls, messages & project updates</div>
+      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100,
+        background:'var(--sf)',border:'1px solid rgba(170,255,0,.35)',borderRadius:16,
+        padding:'14px 18px',boxShadow:'0 8px 32px rgba(0,0,0,.6)',
+        display:'flex',alignItems:'center',gap:12,maxWidth:400,
+        animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
+        <div style=${{width:38,height:38,borderRadius:11,background:'var(--ac3)',border:'1px solid rgba(170,255,0,.3)',
+          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:20}}>🔔</div>
+        <div style=${{flex:1,minWidth:0}}>
+          <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:2}}>Enable desktop notifications</div>
+          <div style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.4}}>Get alerted for messages, calls & task updates even when tab is in background</div>
         </div>
-        <button style=${{height:32,borderRadius:9,background:'linear-gradient(135deg,#aaff00,#4f46e5)',border:'none',color:'#fff',padding:'0 14px',cursor:'pointer',fontWeight:600,fontSize:12,flexShrink:0}}
-          onClick=${()=>{requestNotifPermission();setShowNotifBanner(false);}}>Allow</button>
-        <button style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.07)',border:'none',cursor:'pointer',color:'rgba(255,255,255,.4)',fontSize:16,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}
-          onClick=${()=>setShowNotifBanner(false)}>✕</button>
+        <div style=${{display:'flex',gap:7,flexShrink:0}}>
+          <button class="btn bp" style=${{padding:'6px 14px',fontSize:11}}
+            onClick=${()=>{requestNotifPermission();setShowNotifBanner(false);}}>Allow</button>
+          <button class="btn bg" style=${{padding:'6px 10px',fontSize:11}}
+            onClick=${()=>setShowNotifBanner(false)}>Later</button>
+        </div>
       </div>`:null}
+
     ${reminderTask!==null?html`<${ReminderModal} task=${reminderTask} onClose=${()=>setReminderTask(null)} onSaved=${()=>{setReminderTask(null);load();}}/>`:null}
     ${showReminders?html`<${RemindersPanel} onClose=${()=>{setShowReminders(false);load();}} onReload=${load}/>`:null}`;
 }
