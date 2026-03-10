@@ -1096,10 +1096,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const ICONS={
     dashboard:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
-    projects:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="6" height="7" rx="1"/><rect x="9" y="3" width="13" height="4" rx="1"/><rect x="9" y="10" width="13" height="4" rx="1"/><rect x="2" y="13" width="6" height="7" rx="1"/><rect x="9" y="17" width="13" height="4" rx="1"/></svg>`,
-    tasks:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/><polyline points="6 9 2 9 2 20 13 20"/></svg>`,
-    messages:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`,
-    dm:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/><circle cx="6" cy="6" r="3"/><line x1="6" y1="9" x2="6" y2="21"/></svg>`,
+    projects:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
+    tasks:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    messages:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+    dm:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>`,
     notifs:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
     reminders:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     team:html`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="4" cy="17" r="2"/><circle cx="20" cy="17" r="2"/></svg>`,
@@ -2074,7 +2074,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
             <${RC.BarChart} data=${stageChart} barSize=${18} margin=${{top:0,right:0,bottom:0,left:-20}}>
               <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
               <${RC.XAxis} dataKey="name" tick=${{fill:'var(--tx2)',fontSize:10,fontFamily:'monospace'}} axisLine=${false} tickLine=${false}/>
-              <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
+              <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false} domain=${[0,'dataMax+1']}/>
               <${RC.Tooltip} contentStyle=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,color:'var(--tx)',fontSize:12}}/>
               <${RC.Bar} dataKey="count" radius=${[4,4,0,0]}>${stageChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
             <//>
@@ -2651,7 +2651,7 @@ function ReminderModal({task,onClose,onSaved}){
 }
 
 /* ─── RemindersView ──────────────────────────────────────────────────────── */
-function RemindersView({cu,tasks,projects,onSetReminder}){
+function RemindersView({cu,tasks,projects,onSetReminder,onReload}){
   const [reminders,setReminders]=useState([]);
   const [busy,setBusy]=useState(true);
   const [showAdd,setShowAdd]=useState(false);
@@ -2673,7 +2673,7 @@ function RemindersView({cu,tasks,projects,onSetReminder}){
 
   useEffect(()=>{load();},[load]);
 
-  const del=async id=>{await api.del('/api/reminders/'+id);load();};
+  const del=async id=>{await api.del('/api/reminders/'+id);load();onReload&&onReload();};
 
   const saveReminder=async()=>{
     if(!addTaskId||!addDate||!addTime){return;}
@@ -2838,7 +2838,7 @@ function RemindersView({cu,tasks,projects,onSetReminder}){
     </div>`;
 }
 /* ─── RemindersPanel ──────────────────────────────────────────────────────── */
-function RemindersPanel({onClose}){
+function RemindersPanel({onClose,onReload}){
   const [reminders,setReminders]=useState([]);
   useEffect(()=>{
     api.get('/api/reminders').then(d=>{if(Array.isArray(d))setReminders(d);});
@@ -2846,6 +2846,7 @@ function RemindersPanel({onClose}){
   const del=async(id)=>{
     await api.del('/api/reminders/'+id);
     setReminders(prev=>prev.filter(r=>r.id!==id));
+    onReload&&onReload();
   };
   return html`
     <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
@@ -2956,6 +2957,9 @@ function App(){
           ]}));
         });
       }
+      // Keep topbar reminders in sync
+      const rems=await api.get('/api/reminders');
+      if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
     },30000);
     return()=>clearInterval(id);
   },[cu]);
@@ -2997,7 +3001,7 @@ function App(){
             ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
             ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
             ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead}/>`:null}
-            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
+            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${view==='team'&&cu.role==='Admin'?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${view==='settings'&&cu.role==='Admin'?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
@@ -3006,8 +3010,8 @@ function App(){
       </div>
     </div>
     <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
-    ${reminderTask!==null?html`<${ReminderModal} task=${reminderTask} onClose=${()=>setReminderTask(null)} onSaved=${()=>setReminderTask(null)}/>`:null}
-    ${showReminders?html`<${RemindersPanel} onClose=${()=>setShowReminders(false)}/>`:null}`;
+    ${reminderTask!==null?html`<${ReminderModal} task=${reminderTask} onClose=${()=>setReminderTask(null)} onSaved=${()=>{setReminderTask(null);load();}}/>`:null}
+    ${showReminders?html`<${RemindersPanel} onClose=${()=>{setShowReminders(false);load();}} onReload=${load}/>`:null}`;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary}><${App}<//>`);
