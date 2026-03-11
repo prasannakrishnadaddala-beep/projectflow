@@ -1480,13 +1480,25 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     {id:'messages', icon:ICONS.messages, label:'Channels'},
     {id:'dm',       icon:ICONS.dm,       label:'Direct Messages',badge:totalDm},
     {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
-    ...(cu&&cu.role==='Admin'?[{id:'team',icon:ICONS.team,label:'Team'}]:[]),
+    ...(cu&&cu.role==='Admin'?[{id:'team',icon:ICONS.team,label:'Team'},{id:'settings',icon:ICONS.settings,label:'Settings'}]:[]),
   ];
-  const themeIcon=dark
-    ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-    :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
   return html`
     <aside style=${{width:62,minWidth:62,background:'#0a0a0a',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:14,borderRight:'1px solid rgba(255,255,255,.05)'}}>
+      <!-- Logo -->
+      <div style=${{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px 0 14px',borderBottom:'1px solid rgba(255,255,255,.05)',marginBottom:6}}>
+        <div style=${{width:36,height:36,background:'var(--ac)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,boxShadow:'0 2px 12px rgba(170,255,0,.3)'}}
+          onClick=${()=>setView('dashboard')} title="ProjectFlow">
+          <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="7" fill="#0a1a00"/>
+            <circle cx="32" cy="13" r="5" fill="#0a1a00" opacity="0.9"/>
+            <circle cx="48" cy="43" r="5" fill="#0a1a00" opacity="0.9"/>
+            <circle cx="16" cy="43" r="5" fill="#0a1a00" opacity="0.9"/>
+            <line x1="32" y1="18" x2="32" y2="25" stroke="#0a1a00" strokeWidth="3" strokeLinecap="round"/>
+            <line x1="44" y1="40" x2="38" y2="36" stroke="#0a1a00" strokeWidth="3" strokeLinecap="round"/>
+            <line x1="20" y1="40" x2="26" y2="36" stroke="#0a1a00" strokeWidth="3" strokeLinecap="round"/>
+          </svg>
+        </div>
+      </div>
       <!-- Nav items -->
       <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:3,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 8px'}}>
         ${items.map(it=>html`
@@ -1509,12 +1521,25 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
             <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
           </button>`:null}
-        <button title="Settings" onClick=${()=>setView('settings')}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:view==='settings'?'var(--ac)':'transparent',color:view==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{if(view!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-          onMouseLeave=${e=>{if(view!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <button title=${dark?'Switch to Light':'Switch to Dark'} onClick=${()=>setDark&&setDark(!dark)}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.4)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(170,255,0,.1)';e.currentTarget.style.color='var(--ac)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.4)';}}>
+          ${dark
+            ?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+            :html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`}
         </button>
+        <button title="Sign Out" onClick=${onLogout}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.22)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s',marginBottom:6}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,87,87,.1)';e.currentTarget.style.color='var(--rd)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.22)';}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+        <div style=${{width:34,height:34,borderRadius:50,overflow:'hidden',border:'2px solid rgba(255,255,255,.1)',flexShrink:0,cursor:'pointer',borderRadius:'50%'}} onClick=${()=>setView('settings')} title=${cu&&cu.name}>
+          ${cu&&cu.avatar_url
+            ?html`<img src=${cu.avatar_url} style=${{width:'100%',height:'100%',objectFit:'cover'}}/>`
+            :html`<div style=${{width:'100%',height:'100%',background:cu&&cu.color||'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'#0a1a00'}}>${cu&&(cu.name||'?')[0].toUpperCase()}</div>`}
+        </div>
       </div>
     </aside>`;
 }
@@ -1591,14 +1616,6 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          <button title=${dark?'Switch to Light':'Switch to Dark'} onClick=${()=>setDark&&setDark(!dark)}
-            style=${{width:34,height:34,borderRadius:'50%',border:'none',background:'var(--sf)',boxShadow:'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='var(--sf2)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.color='var(--tx2)';e.currentTarget.style.background='var(--sf)';}}>
-            ${dark
-              ?html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-              :html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`}
-          </button>
           <div style=${{position:'relative'}} ref=${npRef}>
             <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
@@ -2443,7 +2460,10 @@ function Dashboard({cu,tasks,projects,users,onNav}){
           <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
           <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
-
+        <div style=${{display:'flex',alignItems:'center',gap:5,background:'var(--ac3)',border:'1px solid rgba(170,255,0,.18)',borderRadius:100,padding:'4px 11px'}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span style=${{fontSize:10,fontWeight:700,color:'var(--ac)',fontFamily:'monospace',letterSpacing:'.5px'}}>${new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
+        </div>
       </div>
       <!-- Stat cards — HubSpot "34 Deals / 20 Won / 3 Lost" style -->
       <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
