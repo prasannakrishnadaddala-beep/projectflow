@@ -1487,7 +1487,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
       <!-- Logo -->
       <div style=${{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px 0 14px',borderBottom:'1px solid rgba(255,255,255,.05)',marginBottom:6}}>
         <div style=${{width:36,height:36,background:'var(--ac)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,boxShadow:'0 2px 12px rgba(170,255,0,.3)'}}
-          onClick=${()=>setView('dashboard')} title="ProjectFlow">
+          onClick=${()=>setView('settings')} title="Settings">
           <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
             <circle cx="32" cy="32" r="7" fill="#0a1a00"/>
             <circle cx="32" cy="13" r="5" fill="#0a1a00" opacity="0.9"/>
@@ -1521,25 +1521,12 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
             <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
           </button>`:null}
-        <button title=${dark?'Switch to Light':'Switch to Dark'} onClick=${()=>setDark&&setDark(!dark)}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.4)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(170,255,0,.1)';e.currentTarget.style.color='var(--ac)';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.4)';}}>
-          ${dark
-            ?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-            :html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`}
+        <button title="Settings" onClick=${()=>setView('settings')}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:view==='settings'?'var(--ac)':'transparent',color:view==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s',marginBottom:6}}
+          onMouseEnter=${e=>{if(view!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+          onMouseLeave=${e=>{if(view!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}> 
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
         </button>
-        <button title="Sign Out" onClick=${onLogout}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.22)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s',marginBottom:6}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,87,87,.1)';e.currentTarget.style.color='var(--rd)';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.22)';}}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </button>
-        <div style=${{width:34,height:34,borderRadius:50,overflow:'hidden',border:'2px solid rgba(255,255,255,.1)',flexShrink:0,cursor:'pointer',borderRadius:'50%'}} onClick=${()=>setView('settings')} title=${cu&&cu.name}>
-          ${cu&&cu.avatar_url
-            ?html`<img src=${cu.avatar_url} style=${{width:'100%',height:'100%',objectFit:'cover'}}/>`
-            :html`<div style=${{width:'100%',height:'100%',background:cu&&cu.color||'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'#0a1a00'}}>${cu&&(cu.name||'?')[0].toUpperCase()}</div>`}
-        </div>
       </div>
     </aside>`;
 }
