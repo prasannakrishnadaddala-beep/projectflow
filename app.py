@@ -3869,21 +3869,34 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <!-- Gradient background -->
           <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 10% 40%,rgba(170,255,0,.15) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(251,146,60,.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 85%,rgba(34,197,94,.08) 0%,transparent 50%)',pointerEvents:'none'}}></div>
           <!-- Participant tiles -->
-          <div style=${{flex:1,display:'flex',flexWrap:'wrap',gap:10,padding:'14px',alignContent:'center',justifyContent:'center',position:'relative',zIndex:1}}>
+          <div style=${{flex:1,display:'flex',flexDirection:screenSharing?'column':'row',flexWrap:screenSharing?'nowrap':'wrap',gap:10,padding:'14px',alignContent:'center',justifyContent:'center',position:'relative',zIndex:1,overflow:'hidden'}}>
+            <!-- Screen share tile — shown first so it takes priority space -->
+            ${screenSharing?html`
+              <div style=${{width:'100%',flex:'1 1 auto',minHeight:200,borderRadius:12,overflow:'hidden',border:'2px solid rgba(170,255,0,.4)',background:'#000',position:'relative',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <video ref=${screenVideoRef} autoPlay playsInline muted style=${{width:'100%',height:'100%',objectFit:'contain',display:'block'}}></video>
+                <div style=${{position:'absolute',top:7,left:7,background:'rgba(170,255,0,.7)',borderRadius:6,padding:'2px 9px',fontSize:10,color:'#fff',fontWeight:700}}>📺 You are sharing</div>
+              </div>`:null}
+            <!-- Participant tiles row -->
+            <div style=${{display:'flex',flexWrap:'wrap',gap:10,justifyContent:'center',flexShrink:0}}>
             ${partUsers.map(u=>{
-              const tileW=partUsers.length===1?360:partUsers.length<=2?320:partUsers.length<=4?220:160;
-              const tileH=partUsers.length===1?280:partUsers.length<=2?240:partUsers.length<=4?170:130;
+              const tileW=screenSharing?(partUsers.length<=2?160:120):partUsers.length===1?360:partUsers.length<=2?320:partUsers.length<=4?220:160;
+              const tileH=screenSharing?90:partUsers.length===1?280:partUsers.length<=2?240:partUsers.length<=4?170:130;
               return html`
               <div key=${u.id} style=${{position:'relative',width:tileW,height:tileH,borderRadius:14,overflow:'hidden',background:'rgba(255,255,255,.05)',border:'2px solid '+(speaking[u.id]?'#22c55e':'rgba(255,255,255,.07)'),transition:'border-color .2s,box-shadow .2s',boxShadow:speaking[u.id]?'0 0 0 3px rgba(34,197,94,.2)':'none',flexShrink:0}}>
                 <!-- Video element for this remote user -->
                 ${u.id!==cu.id?html`<video ref=${el=>{if(el)remoteVideoRefs.current[u.id]=el;}} autoPlay playsInline style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
                 ${u.id===cu.id&&videoOn?html`<video ref=${localVideoRef} autoPlay playsInline muted style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
                 <!-- Avatar fallback (shown when no video) -->
-                <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1,pointerEvents:'none',background:'rgba(20,20,40,.3)'}}>
-                  ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
-                    html`<img src=${u.avatar_data} style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',objectFit:'cover',border:'2.5px solid rgba(255,255,255,.2)',opacity:(u.id===cu.id&&videoOn)||u.id!==cu.id?0:1,transition:'opacity .3s'}}/>`:
-                    html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:700,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
-                </div>
+                ${(()=>{
+                  // Show avatar when: local user with video off, OR remote user with no video stream yet
+                  const hasVideo = u.id===cu.id ? videoOn : !!(remoteVideoRefs.current[u.id]&&remoteVideoRefs.current[u.id].srcObject);
+                  const avatarOpacity = hasVideo ? 0 : 1;
+                  return html`<div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1,pointerEvents:'none',background:hasVideo?'transparent':'rgba(20,20,40,.6)',transition:'background .3s'}}>
+                    ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
+                      html`<img src=${u.avatar_data} style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',objectFit:'cover',border:'2.5px solid rgba(255,255,255,.2)',opacity:avatarOpacity,transition:'opacity .3s'}}/>`:
+                      html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:700,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)',opacity:avatarOpacity,transition:'opacity .3s'}}>${(u.avatar||u.name||'?')[0]}</div>`}
+                  </div>`;
+                })()}
                 <!-- Name + indicator -->
                 <div style=${{position:'absolute',bottom:7,left:7,right:7,zIndex:3,display:'flex',alignItems:'center',gap:5}}>
                   <div style=${{flex:1,background:'rgba(0,0,0,.6)',backdropFilter:'blur(6px)',borderRadius:8,padding:'3px 8px',display:'flex',alignItems:'center',gap:5,minWidth:0}}>
@@ -3892,12 +3905,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                   </div>
                 </div>
               </div>`;})}
-            <!-- Screen share tile -->
-            ${screenSharing?html`
-              <div style=${{width:'100%',height:160,borderRadius:12,overflow:'hidden',border:'2px solid rgba(170,255,0,.4)',background:'#000',position:'relative',flexShrink:0}}>
-                <video ref=${screenVideoRef} autoPlay playsInline muted style=${{width:'100%',height:'100%',objectFit:'contain'}}></video>
-                <div style=${{position:'absolute',top:7,left:7,background:'rgba(170,255,0,.7)',borderRadius:6,padding:'2px 9px',fontSize:10,color:'#fff',fontWeight:700}}>📺 You are sharing</div>
-              </div>`:null}
+            </div>
           </div>
           <!-- Side panels -->
           ${showParticipants||showInvite?html`
