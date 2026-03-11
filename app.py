@@ -2443,10 +2443,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
           <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
           <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
-        <div style=${{display:'flex',alignItems:'center',gap:5,background:'var(--ac3)',border:'1px solid rgba(170,255,0,.18)',borderRadius:100,padding:'4px 11px'}}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--ac)" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          <span style=${{fontSize:10,fontWeight:700,color:'var(--ac)',fontFamily:'monospace',letterSpacing:'.5px'}}>${new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
-        </div>
+
       </div>
       <!-- Stat cards — HubSpot "34 Deals / 20 Won / 3 Lost" style -->
       <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
