@@ -1484,21 +1484,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
   ];
   return html`
     <aside style=${{width:62,minWidth:62,background:'#0a0a0a',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:14,borderRight:'1px solid rgba(255,255,255,.05)'}}>
-      <!-- Logo -->
-      <div style=${{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px 0 14px',borderBottom:'1px solid rgba(255,255,255,.05)',marginBottom:6}}>
-        <div style=${{width:36,height:36,background:'var(--ac)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,boxShadow:'0 2px 12px rgba(170,255,0,.3)'}}
-          onClick=${()=>setView('settings')} title="Settings">
-          <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
-            <circle cx="32" cy="32" r="7" fill="#0a1a00"/>
-            <circle cx="32" cy="13" r="5" fill="#0a1a00" opacity="0.9"/>
-            <circle cx="48" cy="43" r="5" fill="#0a1a00" opacity="0.9"/>
-            <circle cx="16" cy="43" r="5" fill="#0a1a00" opacity="0.9"/>
-            <line x1="32" y1="18" x2="32" y2="25" stroke="#0a1a00" strokeWidth="3" strokeLinecap="round"/>
-            <line x1="44" y1="40" x2="38" y2="36" stroke="#0a1a00" strokeWidth="3" strokeLinecap="round"/>
-            <line x1="20" y1="40" x2="26" y2="36" stroke="#0a1a00" strokeWidth="3" strokeLinecap="round"/>
-          </svg>
-        </div>
-      </div>
       <!-- Nav items -->
       <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:3,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 8px'}}>
         ${items.map(it=>html`
