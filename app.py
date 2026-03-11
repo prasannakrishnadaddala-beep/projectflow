@@ -1506,14 +1506,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
             <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
           </button>`:null}
-        <button title=${dark?'Switch to Light':'Switch to Dark'} onClick=${()=>setDark&&setDark(!dark)}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.4)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(170,255,0,.1)';e.currentTarget.style.color='var(--ac)';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.4)';}}>
-          ${dark
-            ?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-            :html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`}
-        </button>
         <button title="Settings" onClick=${()=>setView('settings')}
           style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:view==='settings'?'var(--ac)':'transparent',color:view==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s',marginBottom:6}}
           onMouseEnter=${e=>{if(view!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
