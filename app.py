@@ -3875,16 +3875,19 @@ function TimelineView({cu,tasks,projects}){
   const t=safe(tasks);const p=safe(projects);
   const now=new Date();now.setHours(0,0,0,0);
   const [filterHealth,setFilterHealth]=useState('all');
-  const [filterProject,setFilterProject]=useState('all');
+  const [search,setSearch]=useState('');
   const [sortBy,setSortBy]=useState('health');
-  const healthCfg={
+
+  // Config — defined once, used for tabs and filter logic
+  const HC={
     'on-track':{label:'On Track',color:'var(--gn)',bg:'rgba(74,222,128,.12)'},
     'warning':{label:'At Risk',color:'var(--am)',bg:'rgba(251,191,36,.12)'},
     'at-risk':{label:'Needs Attention',color:'var(--rd)',bg:'rgba(248,113,113,.12)'},
     'overdue':{label:'Overdue',color:'var(--rd)',bg:'rgba(248,113,113,.2)'},
     'no-dates':{label:'No Dates',color:'var(--tx3)',bg:'rgba(255,255,255,.04)'},
   };
-  const healthOrder={'overdue':0,'at-risk':1,'warning':2,'on-track':3,'no-dates':4};
+  const HO={'overdue':0,'at-risk':1,'warning':2,'on-track':3,'no-dates':4};
+
   const timelines=useMemo(()=>p.map(proj=>{
     const start=proj.start_date?new Date(proj.start_date):null;
     const end=proj.target_date?new Date(proj.target_date):null;
@@ -3902,77 +3905,104 @@ function TimelineView({cu,tasks,projects}){
     return {...proj,start,end,totalDays,daysSpent,daysLeft,timeProgress,taskProgress,isOverdue,health,gap,
       taskCount:pt.length,doneTasks:pt.filter(x=>x.stage==='completed').length};
   }),[p,t,now]);
+
   const filtered=useMemo(()=>{
     let rows=[...timelines];
     if(filterHealth!=='all')rows=rows.filter(r=>r.health===filterHealth);
-    if(filterProject!=='all')rows=rows.filter(r=>r.id===filterProject);
+    if(search.trim()){const q=search.toLowerCase();rows=rows.filter(r=>r.name.toLowerCase().includes(q));}
     rows.sort((a,b)=>{
-      if(sortBy==='health')return(healthOrder[a.health]??9)-(healthOrder[b.health]??9);
+      if(sortBy==='health')return(HO[a.health]??9)-(HO[b.health]??9);
       if(sortBy==='name')return a.name.localeCompare(b.name);
       if(sortBy==='progress')return b.taskProgress-a.taskProgress;
       if(sortBy==='days_left'){if(a.daysLeft===null)return 1;if(b.daysLeft===null)return-1;return a.daysLeft-b.daysLeft;}
+      if(sortBy==='spent'){if(a.daysSpent===null)return 1;if(b.daysSpent===null)return-1;return b.daysSpent-a.daysSpent;}
       return 0;
     });
     return rows;
-  },[timelines,filterHealth,filterProject,sortBy]);
+  },[timelines,filterHealth,search,sortBy]);
+
   const fmtD=d=>d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
-  const summary={total:timelines.length,...Object.fromEntries(Object.keys(healthCfg).map(k=>[k,timelines.filter(r=>r.health===k).length]))};
+  const counts={total:timelines.length,...Object.fromEntries(Object.keys(HC).map(k=>[k,timelines.filter(r=>r.health===k).length]))};
+
   return html`
     <div style=${{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
-      <!-- Fixed header -->
-      <div style=${{flexShrink:0,padding:'16px 24px 12px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
-        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+
+      <!-- ── FIXED HEADER ── -->
+      <div style=${{flexShrink:0,padding:'12px 20px 10px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
+
+        <!-- Title + today -->
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
           <div>
-            <h2 style=${{fontSize:16,fontWeight:800,color:'var(--tx)',display:'flex',alignItems:'center',gap:8,margin:0}}>📅 Project Timeline Tracker</h2>
-            <p style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>Days spent vs. remaining per project — based on today</p>
+            <h2 style=${{fontSize:15,fontWeight:800,color:'var(--tx)',display:'flex',alignItems:'center',gap:7,margin:0}}>📅 Project Timeline Tracker</h2>
+            <p style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>Days spent vs. remaining — based on today</p>
           </div>
-          <span style=${{fontSize:11,color:'var(--tx3)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 10px',fontFamily:'monospace'}}>
-            Today: ${now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}
+          <span style=${{fontSize:11,color:'var(--tx3)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:7,padding:'4px 10px',fontFamily:'monospace',flexShrink:0}}>
+            ${now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}
           </span>
         </div>
-        <!-- Health tabs -->
-        <div style=${{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:12}}>
-          ${[['all','All','var(--ac)','rgba(170,255,0,.08)',summary.total],
-             ['on-track','On Track','var(--gn)','rgba(74,222,128,.1)',summary['on-track']],
-             ['warning','At Risk','var(--am)','rgba(251,191,36,.1)',summary['warning']],
-             ['at-risk','Needs Attn','var(--rd)','rgba(248,113,113,.1)',summary['at-risk']],
-             ['overdue','Overdue','var(--rd)','rgba(248,113,113,.15)',summary['overdue']],
+
+        <!-- Health tab cards -->
+        <div style=${{display:'flex',gap:7,marginBottom:10,flexWrap:'wrap'}}>
+          ${[['all','All','var(--ac)','rgba(170,255,0,.08)',counts.total],
+             ['on-track','On Track','var(--gn)','rgba(74,222,128,.1)',counts['on-track']],
+             ['warning','At Risk','var(--am)','rgba(251,191,36,.1)',counts['warning']],
+             ['at-risk','Needs Attn','var(--rd)','rgba(248,113,113,.1)',counts['at-risk']],
+             ['overdue','Overdue','var(--rd)','rgba(248,113,113,.15)',counts['overdue']],
+             ['no-dates','No Dates','var(--tx3)','rgba(255,255,255,.04)',counts['no-dates']],
           ].map(([k,lbl,color,bg,cnt])=>html`
             <div key=${k} onClick=${()=>setFilterHealth(k)}
               style=${{background:filterHealth===k?bg:'var(--sf)',border:'2px solid '+(filterHealth===k?color:'var(--bd)'),
-                borderRadius:10,padding:'10px 12px',cursor:'pointer',transition:'all .15s',textAlign:'center'}}
+                borderRadius:9,padding:'7px 14px',cursor:'pointer',transition:'all .15s',
+                display:'flex',alignItems:'center',gap:8}}
               onMouseEnter=${e=>{if(filterHealth!==k)e.currentTarget.style.borderColor=color+'66';}}
               onMouseLeave=${e=>{if(filterHealth!==k)e.currentTarget.style.borderColor='var(--bd)';}}>
-              <div style=${{fontSize:20,fontWeight:800,color,fontFamily:'monospace'}}>${cnt}</div>
-              <div style=${{fontSize:9,color:filterHealth===k?color:'var(--tx3)',fontWeight:700,marginTop:2,textTransform:'uppercase',letterSpacing:.5}}>${lbl}</div>
+              <span style=${{fontSize:17,fontWeight:800,color,fontFamily:'monospace',lineHeight:1}}>${cnt}</span>
+              <span style=${{fontSize:9,color:filterHealth===k?color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>${lbl}</span>
             </div>`)}
         </div>
-        <!-- Filter bar -->
-        <div style=${{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Filter:</span>
-          <select class="inp" style=${{height:28,fontSize:11,padding:'0 8px',minWidth:130}} value=${filterProject} onChange=${e=>setFilterProject(e.target.value)}>
-            <option value="all">All Projects</option>
-            ${p.map(pr=>html`<option key=${pr.id} value=${pr.id}>${pr.name}</option>`)}
-          </select>
-          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginLeft:6}}>Sort:</span>
-          <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1}}>
-            ${[['health','🚦 Health'],['name','🔤 Name'],['progress','✅ Progress'],['days_left','⏳ Days Left']].map(([k,lbl])=>html`
-              <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'3px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
+
+        <!-- Search + sort — single compact row -->
+        <div style=${{display:'flex',gap:8,alignItems:'center'}}>
+          <!-- Search -->
+          <div style=${{position:'relative',flex:1,maxWidth:260}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              style=${{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input class="inp" placeholder="Search projects..." value=${search}
+              style=${{height:26,fontSize:11,paddingLeft:26}}
+              onInput=${e=>setSearch(e.target.value)}/>
           </div>
-          <span style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)'}}>${filtered.length} of ${timelines.length} projects</span>
+          <!-- Sort -->
+          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Sort:</span>
+          <div style=${{display:'flex',background:'var(--sf2)',borderRadius:6,padding:2,gap:1}}>
+            ${[['health','🚦 Health'],['name','🔤 Name'],['progress','✅ Tasks'],['days_left','⏳ Days Left'],['spent','📆 Days Spent']].map(([k,lbl])=>html`
+              <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
+          </div>
+          <!-- Clear -->
+          ${(filterHealth!=='all'||search)?html`
+            <button class="btn bg" style=${{fontSize:10,padding:'3px 9px'}}
+              onClick=${()=>{setFilterHealth('all');setSearch('');}}>✕ Clear</button>`:null}
+          <span style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap'}}>${filtered.length}/${timelines.length} projects</span>
         </div>
       </div>
-      <!-- Scrollable list -->
-      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'14px 24px',display:'flex',flexDirection:'column',gap:10}}>
-        ${filtered.length===0?html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
-          <div style=${{fontSize:36,marginBottom:10}}>🔍</div><div>No projects match the selected filters.</div>
-        </div>`:null}
+
+      <!-- ── SCROLLABLE LIST ── -->
+      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:10}}>
+        ${filtered.length===0?html`
+          <div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
+            <div style=${{fontSize:36,marginBottom:10}}>🔍</div>
+            <div>No projects match "${search||filterHealth}".</div>
+            <button class="btn bg" style=${{marginTop:12,fontSize:11}} onClick=${()=>{setSearch('');setFilterHealth('all');}}>Clear filters</button>
+          </div>`:null}
         ${filtered.map(proj=>{
-          const hc=healthCfg[proj.health];
+          const hc=HC[proj.health];
           return html`
             <div key=${proj.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,
-              padding:'14px 18px',borderLeft:'4px solid '+proj.color}}>
-              <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:proj.totalDays!==null?10:0}}>
+              padding:'13px 17px',borderLeft:'4px solid '+proj.color,transition:'box-shadow .15s'}}
+              onMouseEnter=${e=>e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.3)'}
+              onMouseLeave=${e=>e.currentTarget.style.boxShadow=''}>
+              <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:proj.totalDays!==null?10:4}}>
                 <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',flex:1}}>${proj.name}</span>
                 <span style=${{fontSize:10,fontWeight:700,padding:'3px 10px',borderRadius:100,background:hc.bg,color:hc.color}}>${hc.label}</span>
                 <span style=${{fontSize:10,color:'var(--tx3)'}}>📋 ${proj.doneTasks}/${proj.taskCount}</span>
@@ -3980,7 +4010,7 @@ function TimelineView({cu,tasks,projects}){
               ${proj.totalDays!==null?html`
                 <div style=${{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
                   <div style=${{display:'flex',alignItems:'center',gap:10}}>
-                    <span style=${{fontSize:10,color:'var(--tx3)',width:95,flexShrink:0}}>⏱ Time elapsed</span>
+                    <span style=${{fontSize:10,color:'var(--tx3)',width:90,flexShrink:0}}>⏱ Time elapsed</span>
                     <div style=${{flex:1,height:7,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
                       <div style=${{height:'100%',width:proj.timeProgress+'%',borderRadius:100,
                         background:proj.isOverdue?'var(--rd)':proj.timeProgress>70?'var(--am)':'var(--cy)'}}></div>
@@ -3988,14 +4018,14 @@ function TimelineView({cu,tasks,projects}){
                     <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',width:34,textAlign:'right',fontWeight:700}}>${proj.timeProgress}%</span>
                   </div>
                   <div style=${{display:'flex',alignItems:'center',gap:10}}>
-                    <span style=${{fontSize:10,color:'var(--tx3)',width:95,flexShrink:0}}>✅ Tasks done</span>
+                    <span style=${{fontSize:10,color:'var(--tx3)',width:90,flexShrink:0}}>✅ Tasks done</span>
                     <div style=${{flex:1,height:7,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
                       <div style=${{height:'100%',width:proj.taskProgress+'%',borderRadius:100,background:proj.color}}></div>
                     </div>
                     <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',width:34,textAlign:'right',fontWeight:700}}>${proj.taskProgress}%</span>
                   </div>
                 </div>
-                <div style=${{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <div style=${{display:'flex',gap:7,flexWrap:'wrap'}}>
                   ${[
                     {lbl:'Start',val:fmtD(proj.start),c:'var(--tx2)'},
                     {lbl:'End',val:fmtD(proj.end),c:proj.isOverdue?'var(--rd)':'var(--tx2)'},
@@ -4004,9 +4034,9 @@ function TimelineView({cu,tasks,projects}){
                     {lbl:proj.isOverdue?'Overdue by':'Remaining',val:Math.abs(proj.daysLeft)+' days',c:proj.isOverdue?'var(--rd)':'var(--gn)'},
                     proj.gap!==null?{lbl:'Gap',val:(proj.gap>0?'+':'')+proj.gap+'%',c:proj.gap>15?'var(--rd)':proj.gap>0?'var(--am)':'var(--gn)'}:null,
                   ].filter(Boolean).map((ch,i)=>html`
-                    <div key=${i} style=${{padding:'3px 9px',background:'var(--sf2)',borderRadius:6,border:'1px solid var(--bd)'}}>
-                      <span style=${{fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${ch.lbl} </span>
-                      <span style=${{fontSize:11,fontWeight:700,color:ch.c,fontFamily:'monospace'}}>${ch.val}</span>
+                    <div key=${i} style=${{padding:'3px 8px',background:'var(--sf2)',borderRadius:6,border:'1px solid var(--bd)'}}>
+                      <span style=${{fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.4}}>${ch.lbl} </span>
+                      <span style=${{fontSize:10,fontWeight:700,color:ch.c,fontFamily:'monospace'}}>${ch.val}</span>
                     </div>`)}
                 </div>`:html`
                 <div style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>No dates set — edit project to enable timeline tracking.</div>`}
@@ -4316,6 +4346,8 @@ function MessagesView({projects,users,cu,tasks}){
   const [pid,setPid]=useState((safe(projects)[0]&&safe(projects)[0].id)||'');
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
   const [showInfo,setShowInfo]=useState(false);
+  const [chanSearch,setChanSearch]=useState('');
+  const [newestFirst,setNewestFirst]=useState(false);
 
   const loadMsgs=useCallback(async(id)=>{
     if(!id)return;
@@ -4340,9 +4372,12 @@ function MessagesView({projects,users,cu,tasks}){
     return()=>clearInterval(id);
   },[pid]);
 
-  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
+  // Auto-scroll: only scroll to bottom when newest-first is OFF
+  useEffect(()=>{
+    if(ref.current&&!newestFirst) ref.current.scrollTop=ref.current.scrollHeight;
+  },[msgs,newestFirst]);
+
   const sp=allProjects.find(p=>p.id===pid);
-  // Project stats for info panel
   const projTasks=safe(tasks).filter(t=>t.project===pid);
   const projMembers=safe(sp&&sp.members?JSON.parse(sp.members||'[]'):[]).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
   const doneTasks=projTasks.filter(t=>t.stage==='completed').length;
@@ -4355,39 +4390,90 @@ function MessagesView({projects,users,cu,tasks}){
     setMsgs(prev=>[...prev,m]);
   };
 
+  // Sort channels: most recently active first (by latest message ts), filtered by search
+  const sortedProjects=useMemo(()=>{
+    // Build a map of projectId → latest message timestamp from current msgs
+    // We use allProjects order as fallback
+    let rows=[...allProjects];
+    if(chanSearch.trim()){
+      const q=chanSearch.toLowerCase();
+      rows=rows.filter(p=>p.name.toLowerCase().includes(q));
+    }
+    // Sort by most recent activity — use created date of project as proxy since
+    // we don't have per-project last-message in state, but we do have tasks
+    // Use most recently created/updated task per project as activity signal
+    rows.sort((a,b)=>{
+      const aT=safe(tasks).filter(x=>x.project===a.id);
+      const bT=safe(tasks).filter(x=>x.project===b.id);
+      const aLast=aT.reduce((mx,x)=>Math.max(mx,new Date(x.created||0).getTime()),0);
+      const bLast=bT.reduce((mx,x)=>Math.max(mx,new Date(x.created||0).getTime()),0);
+      return bLast-aLast;
+    });
+    return rows;
+  },[allProjects,chanSearch,tasks]);
+
   return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
-    <!-- Channel list sidebar -->
-    <div style=${{width:210,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
-      <div style=${{padding:'11px 12px',borderBottom:'1px solid var(--bd)'}}>
-        <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7}}>Channels</span>
-        <div style=${{fontSize:10,color:'var(--tx3)',marginTop:3}}>${allProjects.length} projects</div>
+
+    <!-- ── Channel sidebar ── -->
+    <div style=${{width:220,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
+      <!-- Sidebar header + search -->
+      <div style=${{padding:'10px 10px 8px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:7}}>
+          <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7}}>Channels</span>
+          <span style=${{fontSize:10,color:'var(--tx3)'}}>${sortedProjects.length} of ${allProjects.length}</span>
+        </div>
+        <!-- Search -->
+        <div style=${{position:'relative'}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            style=${{position:'absolute',left:7,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="inp" placeholder="Search channels..." value=${chanSearch}
+            style=${{height:26,fontSize:11,paddingLeft:24,width:'100%'}}
+            onInput=${e=>setChanSearch(e.target.value)}/>
+        </div>
       </div>
-      <div style=${{flex:1,overflowY:'auto',padding:6}}>
-        ${allProjects.map(p=>{
+      <!-- Channel list — sorted by recent activity -->
+      <div style=${{flex:1,overflowY:'auto',padding:'4px 6px'}}>
+        ${sortedProjects.length===0?html`
+          <div style=${{textAlign:'center',padding:'24px 8px',color:'var(--tx3)',fontSize:11}}>No channels match "${chanSearch}"</div>`:null}
+        ${sortedProjects.map(p=>{
           const pt=safe(tasks).filter(t=>t.project===p.id);
           const activeCnt=pt.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length;
-          return html`<button key=${p.id} class=${'nb'+(pid===p.id?' act':'')} style=${{marginBottom:2,fontSize:12,flexDirection:'column',alignItems:'flex-start',height:'auto',padding:'8px 10px'}} onClick=${()=>setPid(p.id)}>
-            <div style=${{display:'flex',alignItems:'center',gap:7,width:'100%'}}>
-              <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
-              <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}># ${p.name}</span>
-              ${activeCnt>0?html`<span style=${{fontSize:9,background:p.color+'33',color:p.color,borderRadius:6,padding:'1px 5px',fontWeight:700,flexShrink:0}}>${activeCnt}</span>`:null}
-            </div>
-          </button>`;
+          const lastTask=pt.reduce((mx,x)=>Math.max(mx,new Date(x.created||0).getTime()),0);
+          const isRecent=lastTask>Date.now()-86400000; // active in last 24h
+          return html`
+            <button key=${p.id} class=${'nb'+(pid===p.id?' act':'')}
+              style=${{marginBottom:2,fontSize:12,flexDirection:'column',alignItems:'flex-start',height:'auto',padding:'8px 10px',width:'100%'}}
+              onClick=${()=>setPid(p.id)}>
+              <div style=${{display:'flex',alignItems:'center',gap:7,width:'100%'}}>
+                <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
+                <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,textAlign:'left'}}># ${p.name}</span>
+                ${isRecent?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0,boxShadow:'0 0 6px var(--ac)'}}></div>`:null}
+                ${activeCnt>0?html`<span style=${{fontSize:9,background:p.color+'33',color:p.color,borderRadius:5,padding:'1px 5px',fontWeight:700,flexShrink:0}}>${activeCnt}</span>`:null}
+              </div>
+            </button>`;
         })}
       </div>
     </div>
 
-    <!-- Main chat area -->
+    <!-- ── Main chat ── -->
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-      <!-- Channel header with project info toggle -->
-      <div style=${{padding:'10px 15px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
+      <!-- Channel header -->
+      <div style=${{padding:'9px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
         ${sp?html`
           <div style=${{width:9,height:9,borderRadius:2,background:sp.color}}></div>
           <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}># ${sp.name}</span>
           <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:4}}>${projTasks.length} tasks · ${pc}% done</span>
+          <!-- Newest first toggle -->
+          <button class=${'btn bg'+(newestFirst?' act':'')} style=${{fontSize:10,padding:'3px 9px',marginLeft:6}}
+            onClick=${()=>setNewestFirst(v=>!v)}
+            title=${newestFirst?'Showing newest first — click to show oldest first':'Showing oldest first — click to show newest first'}>
+            ${newestFirst?'↓ Newest first':'↑ Oldest first'}
+          </button>
           <button class=${'btn bg'+(showInfo?' act':'')} style=${{marginLeft:'auto',fontSize:11,padding:'4px 10px'}} onClick=${()=>setShowInfo(p=>!p)}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Project Info
+            Info
           </button>
         `:html`<span style=${{color:'var(--tx3)'}}>Select a channel</span>`}
       </div>
@@ -4407,7 +4493,6 @@ function MessagesView({projects,users,cu,tasks}){
                 <div style=${{fontSize:10,color:'var(--tx3)',marginTop:3}}>${s.label}</div>
               </div>`)}
           </div>
-          <!-- Progress bar -->
           <div style=${{marginBottom:10}}>
             <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
               <span style=${{fontSize:11,color:'var(--tx3)'}}>Overall Progress</span>
@@ -4417,7 +4502,6 @@ function MessagesView({projects,users,cu,tasks}){
               <div style=${{height:'100%',width:pc+'%',background:sp.color,borderRadius:100,transition:'width .5s'}}></div>
             </div>
           </div>
-          <!-- Stage breakdown -->
           <div style=${{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
             ${Object.entries(STAGES).map(([k,v])=>{
               const cnt=projTasks.filter(t=>t.stage===k).length;
@@ -4425,38 +4509,20 @@ function MessagesView({projects,users,cu,tasks}){
               return html`<span key=${k} style=${{fontSize:10,padding:'2px 8px',borderRadius:5,background:v.color+'22',color:v.color,fontWeight:600}}>${v.label}: ${cnt}</span>`;
             })}
           </div>
-          <!-- Members -->
           <div style=${{display:'flex',alignItems:'center',gap:6}}>
             <span style=${{fontSize:11,color:'var(--tx3)'}}>Members:</span>
             <div style=${{display:'flex',gap:-4}}>
               ${projMembers.slice(0,8).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf2)',borderRadius:'50%'}}><${Av} u=${m} size=${22}/></div>`)}
               ${projMembers.length>8?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:6}}>+${projMembers.length-8} more</span>`:null}
             </div>
-            ${sp.target_date?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:'auto',fontFamily:'monospace'}}>Due ${new Date(sp.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>`:null}
           </div>
         </div>`:null}
 
+      <!-- Messages area -->
       <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:0}}>
         ${(()=>{
-          // ── Sort all messages chronologically (oldest first) ──────────────
-          const sorted=[...msgs].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
-
-          // ── Helper: format date as DD/MM/YYYY ────────────────────────────
-          const fmtDate=iso=>{
-            const d=new Date(iso);
-            const dd=String(d.getDate()).padStart(2,'0');
-            const mm=String(d.getMonth()+1).padStart(2,'0');
-            const yyyy=d.getFullYear();
-            return dd+'/'+mm+'/'+yyyy;
-          };
-
-          // ── Helper: format time as HH:MM ─────────────────────────────────
-          const fmtTime=iso=>{
-            const d=new Date(iso);
-            return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-          };
-
-          // ── Helper: human-friendly date label ────────────────────────────
+          const fmtDate=iso=>{const d=new Date(iso);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();};
+          const fmtTime=iso=>{const d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
           const dateLabel=iso=>{
             const today=new Date();today.setHours(0,0,0,0);
             const yesterday=new Date(today);yesterday.setDate(today.getDate()-1);
@@ -4465,35 +4531,28 @@ function MessagesView({projects,users,cu,tasks}){
             if(d.getTime()===yesterday.getTime()) return 'Yesterday · '+fmtDate(iso);
             return fmtDate(iso);
           };
-
-          // ── Group messages by calendar date ──────────────────────────────
-          const groups=[];
-          let lastDate='';
+          // Sort: newest first OR oldest first based on toggle
+          const sorted=[...msgs].sort((a,b)=>newestFirst
+            ? new Date(b.ts)-new Date(a.ts)
+            : new Date(a.ts)-new Date(b.ts));
+          // Group by date
+          const groups=[];let lastDate='';
           sorted.forEach(m=>{
             const d=new Date(m.ts);
-            const dateKey=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
-            if(dateKey!==lastDate){
-              groups.push({type:'separator',label:dateLabel(m.ts),key:'sep-'+dateKey});
-              lastDate=dateKey;
-            }
+            const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+            if(key!==lastDate){groups.push({type:'separator',label:dateLabel(m.ts),key:'sep-'+key});lastDate=key;}
             groups.push({type:'msg',msg:m});
           });
-
-          // ── Render ────────────────────────────────────────────────────────
           return groups.map((item,idx)=>{
             if(item.type==='separator') return html`
               <div key=${item.key} style=${{display:'flex',alignItems:'center',gap:10,margin:'14px 0 10px'}}>
                 <div style=${{flex:1,height:1,background:'var(--bd)'}}></div>
-                <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:100,padding:'3px 12px',letterSpacing:.4,whiteSpace:'nowrap'}}>
-                  📅 ${item.label}
-                </span>
+                <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:100,padding:'3px 12px',letterSpacing:.4,whiteSpace:'nowrap'}}>📅 ${item.label}</span>
                 <div style=${{flex:1,height:1,background:'var(--bd)'}}></div>
               </div>`;
-
             const m=item.msg;
             const isSystem=m.is_system===1||m.sender==='system';
             const timeStr=fmtTime(m.ts);
-
             if(isSystem) return html`
               <div key=${m.id} style=${{display:'flex',justifyContent:'center',padding:'3px 0',marginBottom:6}}>
                 <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:3,maxWidth:'90%'}}>
@@ -4502,7 +4561,6 @@ function MessagesView({projects,users,cu,tasks}){
                   <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',letterSpacing:.2}}>${timeStr}</span>
                 </div>
               </div>`;
-
             const s=safe(users).find(u=>u.id===m.sender);
             const isMe=m.sender===cu.id;
             return html`
@@ -4521,11 +4579,12 @@ function MessagesView({projects,users,cu,tasks}){
         })()}
         ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:48,color:'var(--tx3)',fontSize:13}}>
           <div style=${{fontSize:28,marginBottom:8}}>💬</div>
-          <p>No messages yet.</p>
-          <p style=${{fontSize:11,marginTop:6}}>Task activity will appear here automatically.</p>
+          <p>No messages yet. Task activity will appear here automatically.</p>
         </div>`:null}
       </div>
-      <div style=${{padding:'10px 15px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
+
+      <!-- Message input -->
+      <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
         <input class="inp" style=${{flex:1}} placeholder=${'Message in #'+((sp&&sp.name)||'...')} value=${txt}
           onInput=${e=>setTxt(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}/>
         <button class="btn bp" style=${{padding:'8px 14px',fontSize:12}} onClick=${send}>➤</button>
