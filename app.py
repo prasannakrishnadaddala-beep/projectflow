@@ -399,8 +399,8 @@ def register():
         ws_id=f"ws{int(datetime.now().timestamp()*1000)}"
         invite=secrets.token_hex(4).upper()
         with get_db() as db:
-            db.execute("INSERT INTO workspaces VALUES (?,?,?,?,?,?)",
-                       (ws_id,d["workspace_name"],invite,uid,None,ts()))
+            db.execute("INSERT INTO workspaces VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (ws_id,d["workspace_name"],invite,uid,None,ts(),None,587,None,None,None,1))
     elif mode=="join":
         code=d.get("invite_code","").strip().upper()
         with get_db() as db:
