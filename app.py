@@ -3274,7 +3274,10 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
             ⚙ Filters${activeFilters>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,fontSize:9,padding:'1px 5px',marginLeft:3,fontFamily:'monospace'}}>${activeFilters}</span>`:''}
           </button>
           ${activeFilters>0?html`<button class="btn bam" style=${{padding:'7px 11px',fontSize:11}} onClick=${clearAll}>✕ Clear</button>`:null}
-
+          <button class=${'btn bg'+(showResolved?' act':'')} style=${{padding:'8px 13px',fontSize:12,borderColor:showResolved?'var(--gn)':'',color:showResolved?'var(--gn)':''}}
+            onClick=${()=>setShowResolved(!showResolved)} title="Toggle resolved/completed tasks">
+            ${showResolved?'✓ Resolved':'○ Resolved'}
+          </button>
           <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
             <button class=${'tb'+(mode==='kanban'?' act':'')} onClick=${()=>setMode('kanban')}>⊞ Board</button>
             <button class=${'tb'+(mode==='list'?' act':'')} onClick=${()=>setMode('list')}>☰ List</button>
@@ -3461,6 +3464,7 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
   const blocked=t.filter(x=>x.stage==='blocked').length;
   const [tickets,setTickets]=useState([]);
+  const [prodDev,setProdDev]=useState(null); // selected developer for productivity drill-down
   useEffect(()=>{api.get('/api/tickets').then(d=>setTickets(Array.isArray(d)?d:[]));},[]);
   const openTickets=tickets.filter(x=>x.status==='open').length;
   const inProgressTickets=tickets.filter(x=>x.status==='in-progress').length;
@@ -3485,8 +3489,73 @@ function Dashboard({cu,tasks,projects,users,onNav}){
     {label:'In Progress',   val:inProgressTickets,  color:'var(--am)', bg:'rgba(245,158,11,.08)',  icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:'tickets'},
     {label:'My Tickets',    val:myTickets,          color:'var(--or)', bg:'rgba(251,146,60,.08)',  icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets'},
   ];
+
+  // ── Project Timeline Tracker ───────────────────────────────────────────────
+  const now=new Date(); now.setHours(0,0,0,0);
+  const projectTimelines=useMemo(()=>p.map(proj=>{
+    const start=proj.start_date?new Date(proj.start_date):null;
+    const end=proj.target_date?new Date(proj.target_date):null;
+    if(start) start.setHours(0,0,0,0);
+    if(end) end.setHours(0,0,0,0);
+    const totalDays=(start&&end)?Math.max(1,Math.round((end-start)/(1000*60*60*24))):null;
+    const daysSpent=(start)?Math.max(0,Math.round((now-start)/(1000*60*60*24))):null;
+    const daysLeft=(end)?Math.max(0,Math.round((end-now)/(1000*60*60*24))):null;
+    const timeProgress=(totalDays&&daysSpent!==null)?Math.min(100,Math.round((daysSpent/totalDays)*100)):null;
+    const isOverdue=end&&now>end;
+    const notStarted=start&&now<start;
+    const pt=t.filter(x=>x.project===proj.id);
+    const taskProgress=pt.length?Math.round(pt.reduce((a,x)=>a+(x.pct||0),0)/pt.length):(proj.progress||0);
+    // Health: if time% >> task% → at risk
+    const gap=timeProgress!==null?(timeProgress-taskProgress):null;
+    const health=gap===null?'no-dates':gap>30?'at-risk':gap>15?'warning':isOverdue&&taskProgress<100?'overdue':'on-track';
+    return {...proj,start,end,totalDays,daysSpent,daysLeft,timeProgress,taskProgress,isOverdue,notStarted,health,gap,taskCount:pt.length,doneTasks:pt.filter(x=>x.stage==='completed').length};
+  }),[p,t,now]);
+
+  const healthCfg={
+    'on-track':{label:'On Track',color:'var(--gn)',bg:'rgba(74,222,128,.12)'},
+    'warning':{label:'At Risk',color:'var(--am)',bg:'rgba(251,191,36,.12)'},
+    'at-risk':{label:'Needs Attention',color:'var(--rd)',bg:'rgba(248,113,113,.12)'},
+    'overdue':{label:'Overdue',color:'var(--rd)',bg:'rgba(248,113,113,.18)'},
+    'no-dates':{label:'No Dates Set',color:'var(--tx3)',bg:'rgba(255,255,255,.04)'},
+  };
+
+  // ── Developer Productivity ─────────────────────────────────────────────────
+  const devProductivity=useMemo(()=>u.map(dev=>{
+    const devTasks=t.filter(x=>x.assignee===dev.id);
+    const completed=devTasks.filter(x=>x.stage==='completed');
+    const inProgress=devTasks.filter(x=>x.stage==='in-progress'||x.stage==='development');
+    const blockedTasks=devTasks.filter(x=>x.stage==='blocked');
+    const total=devTasks.length;
+    const completionRate=total?Math.round((completed.length/total)*100):0;
+    const avgPct=total?Math.round(devTasks.reduce((a,x)=>a+(x.pct||0),0)/total):0;
+    const highPriDone=completed.filter(x=>x.priority==='high'||x.priority==='critical').length;
+    const overdueTasks=devTasks.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length;
+    // Score: 0-100 based on completion rate, avg progress, no overdue
+    const score=Math.min(100,Math.round(completionRate*0.5+avgPct*0.3+Math.max(0,20-overdueTasks*5)));
+    const scoreColor=score>=70?'var(--gn)':score>=40?'var(--am)':'var(--rd)';
+    // Last 7 days activity: tasks updated/completed recently (use created date as proxy)
+    const last7=devTasks.filter(x=>{
+      const d=new Date(x.created||0);
+      return (now-d)<7*86400000;
+    }).length;
+    return {...dev,total,completed:completed.length,inProgress:inProgress.length,blocked:blockedTasks.length,completionRate,avgPct,highPriDone,overdueTasks,score,scoreColor,last7};
+  }).sort((a,b)=>b.score-a.score),[u,t,now]);
+
+  // Productivity bar chart data — top 7 devs
+  const prodBarData=devProductivity.slice(0,7).map(d=>({
+    name:d.name.split(' ')[0],
+    Completed:d.completed,
+    'In Progress':d.inProgress,
+    Blocked:d.blocked,
+    score:d.score,
+  }));
+
+  // Selected dev drill-down
+  const selectedDev=prodDev?devProductivity.find(d=>d.id===prodDev):null;
+
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
+
       <!-- Greeting bar -->
       <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:13}}>
         <${Av} u=${cu} size=${40}/>
@@ -3494,9 +3563,9 @@ function Dashboard({cu,tasks,projects,users,onNav}){
           <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
           <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
-
       </div>
-      <!-- Stat cards — HubSpot "34 Deals / 20 Won / 3 Lost" style -->
+
+      <!-- Stat cards -->
       <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:10}}>
         ${stats.map((s,i)=>html`
           <div key=${i} onClick=${()=>onNav(s.nav)}
@@ -3511,6 +3580,92 @@ function Dashboard({cu,tasks,projects,users,onNav}){
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:5,fontWeight:500}}>${s.label}</div>
           </div>`)}
       </div>
+
+      <!-- ── PROJECT TIMELINE TRACKER ── -->
+      <div class="card" style=${{padding:'18px 20px'}}>
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+          <div>
+            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif"}}>📅 Project Timeline Tracker</h3>
+            <p style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>Days spent vs. days remaining based on today's date</p>
+          </div>
+          <div style=${{display:'flex',gap:12,fontSize:10,color:'var(--tx3)'}}>
+            ${Object.entries(healthCfg).map(([k,v])=>html`
+              <div key=${k} style=${{display:'flex',alignItems:'center',gap:4}}>
+                <div style=${{width:7,height:7,borderRadius:2,background:v.color}}></div>${v.label}
+              </div>`)}
+          </div>
+        </div>
+        ${projectTimelines.length===0?html`<div style=${{textAlign:'center',padding:'24px',color:'var(--tx3)',fontSize:13}}>No projects yet.</div>`:null}
+        <div style=${{display:'flex',flexDirection:'column',gap:10}}>
+          ${projectTimelines.map(proj=>{
+            const hc=healthCfg[proj.health];
+            const fmtDate=d=>d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+            return html`
+              <div key=${proj.id} style=${{background:'var(--sf2)',borderRadius:12,padding:'13px 16px',border:'1px solid var(--bd)'}}>
+                <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+                  <div style=${{width:9,height:9,borderRadius:2,background:proj.color,flexShrink:0}}></div>
+                  <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',flex:1}}>${proj.name}</span>
+                  <span style=${{fontSize:10,fontWeight:700,padding:'2px 9px',borderRadius:100,background:hc.bg,color:hc.color}}>${hc.label}</span>
+                </div>
+
+                ${proj.totalDays!==null?html`
+                  <!-- Dual progress bar: time elapsed vs task completion -->
+                  <div style=${{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
+                    <!-- Time bar -->
+                    <div style=${{display:'flex',alignItems:'center',gap:8}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)',width:90,flexShrink:0}}>⏱ Time</span>
+                      <div style=${{flex:1,height:6,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                        <div style=${{height:'100%',width:proj.timeProgress+'%',background:proj.isOverdue?'var(--rd)':proj.timeProgress>70?'var(--am)':'var(--cy)',borderRadius:100,transition:'width .4s'}}></div>
+                      </div>
+                      <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',width:32,textAlign:'right'}}>${proj.timeProgress}%</span>
+                    </div>
+                    <!-- Task completion bar -->
+                    <div style=${{display:'flex',alignItems:'center',gap:8}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)',width:90,flexShrink:0}}>✅ Tasks</span>
+                      <div style=${{flex:1,height:6,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                        <div style=${{height:'100%',width:proj.taskProgress+'%',background:proj.color,borderRadius:100,transition:'width .4s'}}></div>
+                      </div>
+                      <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',width:32,textAlign:'right'}}>${proj.taskProgress}%</span>
+                    </div>
+                  </div>
+
+                  <!-- Stats row -->
+                  <div style=${{display:'flex',gap:16,flexWrap:'wrap'}}>
+                    <div style=${{display:'flex',gap:4,alignItems:'center'}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)'}}>Start:</span>
+                      <span style=${{fontSize:10,fontWeight:600,color:'var(--tx2)',fontFamily:'monospace'}}>${fmtDate(proj.start)}</span>
+                    </div>
+                    <div style=${{display:'flex',gap:4,alignItems:'center'}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)'}}>End:</span>
+                      <span style=${{fontSize:10,fontWeight:600,color:proj.isOverdue?'var(--rd)':'var(--tx2)',fontFamily:'monospace'}}>${fmtDate(proj.end)}</span>
+                    </div>
+                    <div style=${{display:'flex',gap:4,alignItems:'center'}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)'}}>Days spent:</span>
+                      <span style=${{fontSize:10,fontWeight:700,color:'var(--ac)',fontFamily:'monospace'}}>${proj.daysSpent}</span>
+                    </div>
+                    <div style=${{display:'flex',gap:4,alignItems:'center'}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)'}}>${proj.isOverdue?'Overdue by:':'Days left:'}</span>
+                      <span style=${{fontSize:10,fontWeight:700,color:proj.isOverdue?'var(--rd)':'var(--gn)',fontFamily:'monospace'}}>${proj.isOverdue?Math.abs(proj.daysLeft):proj.daysLeft} days</span>
+                    </div>
+                    <div style=${{display:'flex',gap:4,alignItems:'center'}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)'}}>Total:</span>
+                      <span style=${{fontSize:10,fontWeight:600,color:'var(--tx2)',fontFamily:'monospace'}}>${proj.totalDays} days</span>
+                    </div>
+                    <div style=${{display:'flex',gap:4,alignItems:'center'}}>
+                      <span style=${{fontSize:10,color:'var(--tx3)'}}>Tasks:</span>
+                      <span style=${{fontSize:10,fontWeight:600,color:'var(--tx2)',fontFamily:'monospace'}}>${proj.doneTasks}/${proj.taskCount} done</span>
+                    </div>
+                  </div>`:html`
+                  <div style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>
+                    ${proj.start?html`Start: <b style=${{color:'var(--tx2)'}}>${fmtDate(proj.start)}</b> · `:null}
+                    No ${proj.start?'end':'start or end'} date set — edit project to add dates for timeline tracking.
+                  </div>`}
+              </div>`;
+          })}
+        </div>
+      </div>
+
+      <!-- ── CHARTS ROW ── -->
       <div style=${{display:'grid',gridTemplateColumns:'1fr 260px',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:13,fontFamily:"'Space Grotesk',sans-serif"}}>Tasks by Lifecycle Stage</h3>
@@ -3545,6 +3700,145 @@ function Dashboard({cu,tasks,projects,users,onNav}){
           <p style=${{fontSize:10,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Click to filter by priority</p>
         </div>
       </div>
+
+      <!-- ── DEVELOPER PRODUCTIVITY ── -->
+      <div class="card" style=${{padding:'18px 20px'}}>
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+          <div>
+            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif"}}>👩‍💻 Developer Productivity</h3>
+            <p style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>Daily task completion, workload balance & productivity score per developer</p>
+          </div>
+          ${prodDev?html`<button class="btn bg" style=${{fontSize:11,padding:'5px 12px'}} onClick=${()=>setProdDev(null)}>← All Developers</button>`:null}
+        </div>
+
+        ${!selectedDev?html`
+          <!-- Overview table -->
+          <div style=${{overflowX:'auto',marginTop:12}}>
+            <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead>
+                <tr style=${{borderBottom:'1px solid var(--bd)'}}>
+                  ${['Developer','Role','Score','Tasks','Completed','In Progress','Blocked','Overdue','Avg %','Last 7d'].map(h=>html`
+                    <th key=${h} style=${{padding:'6px 10px',textAlign:'left',fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,whiteSpace:'nowrap'}}>${h}</th>`)}
+                </tr>
+              </thead>
+              <tbody>
+                ${devProductivity.map((dev,i)=>html`
+                  <tr key=${dev.id} style=${{borderBottom:'1px solid var(--bd)',cursor:'pointer',transition:'background .12s'}}
+                    onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
+                    onMouseLeave=${e=>e.currentTarget.style.background=''}
+                    onClick=${()=>setProdDev(dev.id)}>
+                    <td style=${{padding:'9px 10px'}}>
+                      <div style=${{display:'flex',alignItems:'center',gap:8}}>
+                        <${Av} u=${dev} size=${26}/>
+                        <span style=${{fontWeight:600,color:'var(--tx)'}}>${dev.name}</span>
+                        ${i===0?html`<span style=${{fontSize:9,background:'rgba(170,255,0,.15)',color:'var(--ac)',padding:'1px 6px',borderRadius:100,fontWeight:700}}>TOP</span>`:null}
+                      </div>
+                    </td>
+                    <td style=${{padding:'9px 10px',color:'var(--tx2)'}}>${dev.role||'—'}</td>
+                    <td style=${{padding:'9px 10px'}}>
+                      <div style=${{display:'flex',alignItems:'center',gap:6}}>
+                        <div style=${{width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,.04)',border:'2px solid '+dev.scoreColor,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:dev.scoreColor,fontFamily:'monospace'}}>${dev.score}</div>
+                      </div>
+                    </td>
+                    <td style=${{padding:'9px 10px',color:'var(--tx)',fontWeight:600,fontFamily:'monospace'}}>${dev.total}</td>
+                    <td style=${{padding:'9px 10px',color:'var(--gn)',fontWeight:700,fontFamily:'monospace'}}>${dev.completed}</td>
+                    <td style=${{padding:'9px 10px',color:'var(--cy)',fontFamily:'monospace'}}>${dev.inProgress}</td>
+                    <td style=${{padding:'9px 10px',color:dev.blocked>0?'var(--rd)':'var(--tx3)',fontFamily:'monospace'}}>${dev.blocked}</td>
+                    <td style=${{padding:'9px 10px',color:dev.overdueTasks>0?'var(--rd)':'var(--tx3)',fontFamily:'monospace'}}>${dev.overdueTasks}</td>
+                    <td style=${{padding:'9px 10px'}}>
+                      <div style=${{display:'flex',alignItems:'center',gap:6}}>
+                        <div style=${{flex:1,minWidth:50,height:5,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                          <div style=${{height:'100%',width:dev.avgPct+'%',background:dev.avgPct>70?'var(--gn)':dev.avgPct>40?'var(--am)':'var(--rd)',borderRadius:100}}></div>
+                        </div>
+                        <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',flexShrink:0}}>${dev.avgPct}%</span>
+                      </div>
+                    </td>
+                    <td style=${{padding:'9px 10px',color:dev.last7>0?'var(--ac)':'var(--tx3)',fontFamily:'monospace',fontWeight:dev.last7>0?700:400}}>${dev.last7} tasks</td>
+                  </tr>`)}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Productivity bar chart -->
+          <div style=${{marginTop:18}}>
+            <div style=${{fontSize:11,color:'var(--tx3)',marginBottom:8}}>Task distribution per developer</div>
+            <${RC.ResponsiveContainer} width="100%" height=${160}>
+              <${RC.BarChart} data=${prodBarData} barSize=${14} margin=${{top:0,right:0,bottom:0,left:-20}}>
+                <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
+                <${RC.XAxis} dataKey="name" tick=${{fill:'var(--tx2)',fontSize:10}} axisLine=${false} tickLine=${false}/>
+                <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
+                <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--tx)',fontSize:11}}/>
+                <${RC.Legend} iconSize=${8} wrapperStyle=${{fontSize:10,color:'var(--tx2)'}}/>
+                <${RC.Bar} dataKey="Completed" stackId="a" fill="var(--gn)" radius=${[0,0,0,0]}/>
+                <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
+                <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[4,4,0,0]}/>
+              <//>
+            <//>
+          </div>`:null}
+
+        ${selectedDev?html`
+          <!-- Developer drill-down -->
+          <div style=${{marginTop:12}}>
+            <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:16,padding:'14px 16px',background:'var(--sf2)',borderRadius:12,border:'1px solid var(--bd)'}}>
+              <${Av} u=${selectedDev} size=${44}/>
+              <div style=${{flex:1}}>
+                <div style=${{fontSize:15,fontWeight:700,color:'var(--tx)'}}>${selectedDev.name}</div>
+                <div style=${{fontSize:12,color:'var(--tx2)'}}>${selectedDev.role||'Team Member'}</div>
+              </div>
+              <!-- Score ring -->
+              <div style=${{textAlign:'center'}}>
+                <div style=${{width:52,height:52,borderRadius:'50%',border:'3px solid '+selectedDev.scoreColor,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',background:'rgba(255,255,255,.03)'}}>
+                  <span style=${{fontSize:16,fontWeight:800,color:selectedDev.scoreColor,fontFamily:'monospace',lineHeight:1}}>${selectedDev.score}</span>
+                  <span style=${{fontSize:8,color:'var(--tx3)'}}>score</span>
+                </div>
+              </div>
+              <!-- Quick stats -->
+              ${[
+                {label:'Total',val:selectedDev.total,c:'var(--tx)'},
+                {label:'Done',val:selectedDev.completed,c:'var(--gn)'},
+                {label:'Active',val:selectedDev.inProgress,c:'var(--cy)'},
+                {label:'Blocked',val:selectedDev.blocked,c:'var(--rd)'},
+                {label:'Overdue',val:selectedDev.overdueTasks,c:selectedDev.overdueTasks>0?'var(--rd)':'var(--tx3)'},
+              ].map(s=>html`
+                <div key=${s.label} style=${{textAlign:'center',padding:'8px 12px',background:'var(--bg)',borderRadius:8,border:'1px solid var(--bd)'}}>
+                  <div style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace'}}>${s.val}</div>
+                  <div style=${{fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${s.label}</div>
+                </div>`)}
+            </div>
+
+            <!-- Task list for this dev -->
+            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,marginBottom:8}}>All Assigned Tasks</div>
+            <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+              ${t.filter(x=>x.assignee===selectedDev.id).map(tk=>{
+                const proj=p.find(pr=>pr.id===tk.project);
+                const isOverdueTask=tk.due&&new Date(tk.due)<now&&tk.stage!=='completed';
+                return html`
+                  <div key=${tk.id} style=${{display:'flex',gap:10,padding:'10px 13px',background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)',alignItems:'center'}}>
+                    <div style=${{width:6,height:6,borderRadius:2,background:(STAGES[tk.stage]&&STAGES[tk.stage].color)||'var(--ac)',flexShrink:0}}></div>
+                    <div style=${{flex:1,minWidth:0}}>
+                      <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${tk.title}</div>
+                      <div style=${{display:'flex',gap:6,marginTop:3,flexWrap:'wrap'}}>
+                        <${SP} s=${tk.stage}/>
+                        <${PB} p=${tk.priority}/>
+                        ${proj?html`<span style=${{fontSize:10,color:'var(--tx3)'}}>📁 ${proj.name}</span>`:null}
+                        ${isOverdueTask?html`<span style=${{fontSize:10,color:'var(--rd)',fontWeight:700}}>⚠ Overdue</span>`:null}
+                      </div>
+                    </div>
+                    <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                      <div style=${{width:40,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                        <div style=${{height:'100%',width:(tk.pct||0)+'%',background:proj?proj.color:'var(--ac)',borderRadius:100}}></div>
+                      </div>
+                      <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)'}}>${tk.pct||0}%</span>
+                    </div>
+                  </div>`;
+              })}
+              ${t.filter(x=>x.assignee===selectedDev.id).length===0?html`
+                <div style=${{textAlign:'center',padding:'24px',color:'var(--tx3)',fontSize:13}}>No tasks assigned to this developer yet.</div>`:null}
+            </div>
+          </div>`:null}
+      </div>
+
+      <!-- Project Progress + My Tasks -->
       <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:12}}>Project Progress</h3>
@@ -4973,7 +5267,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
   const [addMins,setAddMins]=useState(10);
   const [saving,setSaving]=useState(false);
   const [addProjId,setAddProjId]=useState('');
-  const [activeTab,setActiveTab]=useState('upcoming');
+  const [showCompleted,setShowCompleted]=useState(false);
   const [editReminder,setEditReminder]=useState(null);
   const [editDate,setEditDate]=useState('');
   const [editTime,setEditTime]=useState('');
@@ -5041,12 +5335,11 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
     return{label:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),cls:'var(--tx2)',bg:'var(--sf2)'};
   };
 
-  const todayItems=active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();});
   const statCards=[
-    {label:'Upcoming',tab:'upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',activeBg:'rgba(34,211,238,.08)',icon:'⚡'},
-    {label:'Overdue',tab:'overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',activeBg:'rgba(248,113,113,.08)',icon:'🚨'},
-    {label:'Completed',tab:'completed',val:completed.length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',activeBg:'rgba(74,222,128,.08)',icon:'✅'},
-    {label:'Today',tab:'today',val:todayItems.length,color:'var(--ac)',bg:'rgba(170,255,0,.1)',activeBg:'rgba(170,255,0,.08)',icon:'📅'},
+    {label:'Upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
+    {label:'Overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
+    {label:'Completed',val:completed.length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'✅'},
+    {label:'Today',val:active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'var(--ac)',bg:'rgba(170,255,0,.1)',icon:'📅'},
   ];
 
   return html`
@@ -5055,22 +5348,21 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
       <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
         <div style=${{fontSize:13,color:'var(--tx3)'}}>Set reminders for your tasks — get notified with sound before they're due.</div>
         <div style=${{display:'flex',gap:8}}>
+          <button class=${'btn '+(showCompleted?'bp':'bg')} style=${{fontSize:12}} onClick=${()=>setShowCompleted(p=>!p)}>
+            ${showCompleted?'Hide Completed':'Show Completed ('+completed.length+')'}
+          </button>
           <button class="btn bp" style=${{fontSize:12}} onClick=${()=>setShowAdd(true)}>+ Add Reminder</button>
         </div>
       </div>
 
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:22}}>
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
         ${statCards.map(s=>{
-          const isActive=activeTab===s.tab;
           return html`
-            <div key=${s.label} onClick=${()=>setActiveTab(s.tab)}
-              style=${{background:isActive?s.activeBg:'var(--sf)',border:'2px solid '+(isActive?s.color:'var(--bd)'),borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12,cursor:'pointer',transition:'all .18s',boxShadow:isActive?('0 0 18px '+s.color+'22'):''}}
-              onMouseEnter=${e=>{if(!isActive)e.currentTarget.style.borderColor=s.color+'66'}}
-              onMouseLeave=${e=>{if(!isActive)e.currentTarget.style.borderColor='var(--bd)'}}>
+            <div key=${s.label} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12}}>
               <div style=${{width:40,height:40,borderRadius:10,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${s.icon}</div>
               <div>
                 <div style=${{fontSize:24,fontWeight:900,color:s.color,lineHeight:1}}>${s.val}</div>
-                <div style=${{fontSize:11,color:isActive?s.color:'var(--tx3)',marginTop:2,fontWeight:700}}>${s.label}</div>
+                <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600}}>${s.label}</div>
               </div>
             </div>`;
         })}
@@ -5191,58 +5483,80 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
           </div>
         </div>`:null}
 
-      ${(()=>{
-        const tabConfig={
-          upcoming:{items:upcoming,emptyIcon:'✅',emptyMsg:'No upcoming reminders',headerColor:'var(--cy)',headerLabel:'⚡ Upcoming',countSuffix:'reminder'},
-          overdue:{items:overdue,emptyIcon:'🎉',emptyMsg:'Nothing overdue!',headerColor:'var(--rd)',headerLabel:'🚨 Overdue',countSuffix:'past due'},
-          completed:{items:completed,emptyIcon:'📭',emptyMsg:'No completed reminders yet',headerColor:'var(--gn)',headerLabel:'✅ Completed',countSuffix:'done'},
-          today:{items:todayItems,emptyIcon:'📅',emptyMsg:'No reminders for today',headerColor:'var(--ac)',headerLabel:'📅 Today',countSuffix:'today'},
-        };
-        const cfg=tabConfig[activeTab]||tabConfig.upcoming;
-        const isCompleted=activeTab==='completed';
-        const isOverdue=activeTab==='overdue';
-        return html`
-          <div>
-            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <span style=${{fontWeight:700,fontSize:14,color:cfg.headerColor}}>${cfg.headerLabel}</span>
-              <span style=${{fontSize:11,color:'var(--tx3)'}}>${cfg.items.length} ${cfg.countSuffix}${cfg.items.length!==1&&cfg.countSuffix==='reminder'?'s':''}</span>
-            </div>
-            ${busy?html`<div class="spin" style=${{margin:'40px auto',display:'block'}}></div>`:null}
-            ${!busy&&cfg.items.length===0?html`
-              <div style=${{textAlign:'center',padding:'48px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
-                <div style=${{fontSize:36,marginBottom:10}}>${cfg.emptyIcon}</div>
-                <div>${cfg.emptyMsg}</div>
-              </div>`:null}
-            <div style=${{display:'flex',flexDirection:'column',gap:10}}>
-              ${cfg.items.map(r=>{
-                const ft=fmtRem(r.remind_at);
-                return html`
-                  <div key=${r.id} style=${{display:'flex',gap:10,padding:'12px 14px',
-                    background:isCompleted?'rgba(74,222,128,.04)':isOverdue?'rgba(248,113,113,.03)':'var(--sf)',
-                    borderRadius:10,
-                    border:'1px solid '+(isCompleted?'rgba(74,222,128,.15)':isOverdue?'rgba(248,113,113,.15)':'var(--bd)'),
-                    alignItems:'center',opacity:isCompleted?.8:1}}>
-                    <div style=${{width:36,height:36,borderRadius:9,
-                      background:isCompleted?'rgba(74,222,128,.1)':isOverdue?'rgba(248,113,113,.1)':'rgba(251,191,36,.1)',
-                      border:'1px solid '+(isCompleted?'rgba(74,222,128,.2)':isOverdue?'rgba(248,113,113,.2)':'rgba(251,191,36,.2)'),
-                      display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>
-                      ${isCompleted?'✅':isOverdue?'⚠️':'⏰'}
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+        <div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <span style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>⚡ Upcoming</span>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminder${upcoming.length!==1?'s':''}</span>
+          </div>
+          ${busy?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
+          ${!busy&&upcoming.length===0?html`
+            <div style=${{textAlign:'center',padding:'28px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
+              <div style=${{fontSize:28,marginBottom:8}}>✅</div>
+              <div>No upcoming reminders</div>
+            </div>`:null}
+          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
+            ${upcoming.map(r=>{
+              const ft=fmtRem(r.remind_at);
+              return html`
+                <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)',alignItems:'center'}}>
+                  <div style=${{width:36,height:36,borderRadius:9,background:'rgba(251,191,36,.1)',border:'1px solid rgba(251,191,36,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⏰</div>
+                  <div style=${{flex:1,minWidth:0}}>
+                    <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
+                    <div style=${{display:'flex',gap:6,alignItems:'center'}}>
+                      <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.cls,fontWeight:700}}>${ft.label}</span>
+                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                      ${r.minutes_before>0?html`<span style=${{fontSize:10,color:'var(--am)'}}>🔔 ${r.minutes_before}min before</span>`:null}
                     </div>
-                    <div style=${{flex:1,minWidth:0}}>
-                      <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3,textDecoration:isCompleted?'line-through':'none',opacity:isCompleted?.7:1}}>${r.task_title}</div>
-                      <div style=${{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-                        ${!isCompleted?html`<span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.cls,fontWeight:700}}>${ft.label}</span>`:null}
-                        <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
-                        ${r.minutes_before>0&&!isCompleted?html`<span style=${{fontSize:10,color:'var(--am)'}}>🔔 ${r.minutes_before}min before</span>`:null}
-                      </div>
-                    </div>
-                    ${!isCompleted?html`<button class="btn bg" title="Edit" style=${{fontSize:11,padding:'4px 8px',flexShrink:0,marginRight:4}} onClick=${()=>openEdit(r)}>✏️</button>`:null}
-                    <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-                  </div>`;
-              })}
-            </div>
-          </div>`;
-      })()}
+                  </div>
+                  <button class="btn bg" title="Edit" style=${{fontSize:11,padding:'4px 8px',flexShrink:0,marginRight:4}} onClick=${()=>openEdit(r)}>✏️</button>
+                  <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+                </div>`;
+            })}
+          </div>
+        </div>
+        <div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <span style=${{fontWeight:700,fontSize:13,color:'var(--rd)'}}>🚨 Overdue</span>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
+          </div>
+          ${!busy&&overdue.length===0?html`
+            <div style=${{textAlign:'center',padding:'28px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
+              <div style=${{fontSize:28,marginBottom:8}}>🎉</div>
+              <div>Nothing overdue!</div>
+            </div>`:null}
+          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
+            ${overdue.map(r=>html`
+              <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'rgba(248,113,113,.03)',borderRadius:10,border:'1px solid rgba(248,113,113,.15)',alignItems:'center'}}>
+                <div style=${{width:36,height:36,borderRadius:9,background:'rgba(248,113,113,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⚠️</div>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
+                  <span style=${{fontSize:10,color:'var(--rd)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                </div>
+                <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+              </div>`)}
+          </div>
+        </div>
+      </div>
+
+      ${showCompleted&&completed.length>0?html`
+        <div style=${{marginTop:20}}>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <span style=${{fontWeight:700,fontSize:13,color:'var(--gn)'}}>✅ Completed Reminders</span>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${completed.length} done</span>
+          </div>
+          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
+            ${completed.map(r=>html`
+              <div key=${r.id} style=${{display:'flex',gap:10,padding:'10px 13px',background:'rgba(74,222,128,.04)',borderRadius:10,border:'1px solid rgba(74,222,128,.15)',alignItems:'center',opacity:.75}}>
+                <div style=${{width:32,height:32,borderRadius:8,background:'rgba(74,222,128,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>✅</div>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:'line-through',opacity:.7}}>${r.task_title}</div>
+                  <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                </div>
+                <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+              </div>`)}
+          </div>
+        </div>`:null}
 
       ${editReminder?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setEditReminder(null)}>
