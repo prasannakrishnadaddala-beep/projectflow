@@ -316,7 +316,7 @@ def _seed_demo(db, ws_id):
         ("u4","David Kim",   "david@dev.io",hash_pw("pass123"),"Developer","DK","#d97706"),
         ("u5","Eva Wilson",  "eva@dev.io",  hash_pw("pass123"),"Viewer",   "EW","#dc2626"),
     ]:
-        try: db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",(u[0],ws_id,*u[1:],ts()))
+        try: db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",(u[0],ws_id,*u[1:],ts(),None))
         except: pass
     for p in [
         ("p1","E-Commerce Platform",   "Modern e-commerce with payment integration & inventory.",       "u1",'["u1","u2","u3","u4"]',"2025-01-15","2025-06-30",65,"#7c3aed"),
@@ -411,9 +411,9 @@ def register():
         return jsonify({"error":"Invalid mode"}),400
     try:
         with get_db() as db:
-            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",
+            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (uid,ws_id,d["name"],d["email"],hash_pw(d["password"]),
-                        d.get("role","Developer"),av,c,ts()))
+                        d.get("role","Developer"),av,c,ts(),None))
             session.permanent=True
             session["user_id"]=uid
             session["workspace_id"]=ws_id
@@ -530,9 +530,9 @@ def add_user():
     c=random.choice(CLRS)
     try:
         with get_db() as db:
-            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",
+            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (uid,wid(),d["name"],d["email"],hash_pw(d["password"]),
-                        d.get("role","Developer"),av,c,ts()))
+                        d.get("role","Developer"),av,c,ts(),None))
             return jsonify({"id":uid,"workspace_id":wid(),"name":d["name"],
                             "email":d["email"],"role":d.get("role","Developer"),"avatar":av,"color":c})
     except Exception as e:
