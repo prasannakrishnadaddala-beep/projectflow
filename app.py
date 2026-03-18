@@ -561,6 +561,14 @@ def del_user(uid):
         return jsonify({"ok":True})
 
 # ── Projects ──────────────────────────────────────────────────────────────────
+@app.route("/api/projects/all")
+@login_required
+def get_all_projects():
+    """Return ALL workspace projects — used by Channels so everyone can see all project status."""
+    with get_db() as db:
+        rows=db.execute("SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
 @app.route("/api/projects")
 @login_required
 def get_projects():
@@ -703,17 +711,33 @@ def create_task():
 def update_task(tid):
     d=request.json or {}
     with get_db() as db:
-        # Role check: only Admin/Manager/TeamLead can fully edit tasks
-        # Developers/Testers/Viewers may only update stage and pct (kanban moves)
         cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cu_role=cu["role"] if cu else "Viewer"
-        restricted_roles={"Developer","Tester","Viewer"}
-        if cu_role in restricted_roles:
-            allowed={"stage","pct"}
-            if any(k not in allowed for k in d.keys()):
-                return jsonify({"error":"Your role can only update stage and progress."}),403
         t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not t: return jsonify({"error":"Not found"}),404
+
+        # Permission check:
+        # - Admin and Manager: full access always
+        # - TeamLead: can fully edit any task in the workspace
+        # - Assignee of the task: can update stage/pct only
+        # - Project owner: full edit access for tasks in their project
+        # - Everyone else: no access
+        is_admin_manager = cu_role in ("Admin","Manager")
+        is_teamlead = cu_role == "TeamLead"
+        is_assignee = t["assignee"] == session["user_id"]
+        proj = db.execute("SELECT owner FROM projects WHERE id=? AND workspace_id=?",(t["project"],wid())).fetchone() if t["project"] else None
+        is_proj_owner = proj and proj["owner"] == session["user_id"]
+
+        if not (is_admin_manager or is_teamlead or is_proj_owner):
+            if is_assignee:
+                # Assignee can update stage, pct, and comments
+                allowed={"stage","pct","comments"}
+                if any(k not in allowed for k in d.keys()):
+                    return jsonify({"error":"You can only update stage, progress, and comments on tasks assigned to you."}),403
+            else:
+                return jsonify({"error":"You do not have permission to edit this task. Only the assignee, project owner, or managers can edit tasks."}),403
+
+        old_stage=t["stage"]
         old_stage=t["stage"]
         db.execute("""UPDATE tasks SET title=?,description=?,project=?,assignee=?,
                       priority=?,stage=?,due=?,pct=?,comments=? WHERE id=? AND workspace_id=?""",
@@ -2245,10 +2269,15 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
   const isEdit=!!(task&&task.id);
-  // Role-based permission checks
-  const EDIT_ROLES=['Admin','Manager','TeamLead'];
-  const canEditTask=!cu||EDIT_ROLES.includes(cu.role);
-  const canDeleteTask=!cu||EDIT_ROLES.includes(cu.role);
+  // Role-based + ownership permission checks
+  const FULL_EDIT_ROLES=['Admin','Manager','TeamLead'];
+  const isAdminManagerTeamLead=cu&&FULL_EDIT_ROLES.includes(cu.role);
+  const isAssignee=cu&&task&&task.assignee===cu.id;
+  // canEditTask: full form edit (title, desc, priority, assignee, etc.)
+  const canEditTask=isAdminManagerTeamLead||(!isEdit); // new tasks always editable
+  // canUpdateStage: can move stage/pct only (assignee privilege)
+  const canUpdateStage=isAdminManagerTeamLead||isAssignee;
+  const canDeleteTask=cu&&FULL_EDIT_ROLES.includes(cu.role);
   // Inline reminder - shown in form before creating task
   const [rmEnabled,setRmEnabled]=useState(false);
   const [rmDate,setRmDate]=useState(()=>{
@@ -2264,15 +2293,27 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     const updated=[...cmts,newCmt];
     setCmts(updated);setNc('');
     if(task&&task.id){
-      const payload={title:title.trim()||task.title,description:desc,project:pid,
-        assignee:ass,priority:pri,stage,due,pct,comments:updated,id:task.id};
+      // Everyone can add comments; send minimal payload that includes comments
+      const payload={comments:updated};
+      if(canEditTask){
+        Object.assign(payload,{title:title.trim()||task.title,description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct});
+      } else {
+        // Assignee or read-only — only update comments (backend will accept if assignee)
+        payload.stage=stage;payload.pct=pct;
+      }
       await api.put('/api/tasks/'+task.id,payload);
     }
   };
   const save=async(opts={})=>{
-    if(!title.trim()){setErr('Title required.');return null;}
+    if(!title.trim()&&(!isEdit||canEditTask)){setErr('Title required.');return null;}
     setSaving(true);setErr('');
-    const payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts};
+    let payload;
+    if(isEdit&&canUpdateStage&&!canEditTask){
+      // Assignee-only: send only stage + pct
+      payload={stage,pct};
+    } else {
+      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts};
+    }
     if(task&&task.id)payload.id=task.id;
     const result=await onSave(payload);
     setSaving(false);
@@ -2293,8 +2334,10 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
       <div class="mo fi">
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
           <div>
-            <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>${isEdit?(canEditTask?'Edit Task':'View Task'):'New Task'}</h2>
+            <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>${isEdit?(canEditTask?'Edit Task':canUpdateStage?'Update Stage':'View Task'):'New Task'}</h2>
             ${isEdit?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${task.id}</span>`:null}
+            ${isEdit&&!canEditTask&&canUpdateStage?html`<div style=${{fontSize:11,color:'var(--am)',marginTop:3}}>You can update stage & progress as the assignee.</div>`:null}
+            ${isEdit&&!canEditTask&&!canUpdateStage?html`<div style=${{fontSize:11,color:'var(--tx3)',marginTop:3}}>Read-only — you are not assigned to this task.</div>`:null}
           </div>
           <div style=${{display:'flex',gap:7}}>
             ${isEdit&&onDel&&canDeleteTask?html`<button class="btn brd" style=${{fontSize:12,padding:'6px 11px'}}
@@ -2312,43 +2355,76 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
 
         ${tab==='details'?html`
           <div style=${{display:'grid',gap:12}}>
-            <div><label class="lbl">Title *</label>
-              <input class="inp" placeholder="Task title..." value=${title} onInput=${e=>setTitle(e.target.value)}/></div>
-            <div><label class="lbl">Description</label>
-              <textarea class="inp" rows="3" placeholder="Describe the task..." onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
-            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-              <div><label class="lbl">Project</label>
-                <select class="sel" value=${pid} onChange=${e=>setPid(e.target.value)}>
-                  ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
-                </select></div>
-              <div><label class="lbl">Assignee</label>
-                <select class="sel" value=${ass} onChange=${e=>setAss(e.target.value)}>
-                  <option value="">Unassigned</option>
-                  ${safe(users).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
-                </select></div>
-            </div>
-            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:11}}>
-              <div><label class="lbl">Priority</label>
-                <select class="sel" value=${pri} onChange=${e=>setPri(e.target.value)}>
-                  ${Object.entries(PRIS).map(([k,v])=>html`<option key=${k} value=${k}>${v.sym} ${v.label}</option>`)}
-                </select></div>
+            ${!canEditTask&&!canUpdateStage?html`
+              <!-- Full read-only view -->
+              <div style=${{background:'var(--sf2)',borderRadius:10,padding:'12px 14px',border:'1px solid var(--bd)',display:'grid',gap:8}}>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Title</span><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${title}</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Stage</span><${SP} s=${stage}/></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Priority</span><${PB} p=${pri}/></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Due</span><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${fmtD(due)}</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Progress</span><span style=${{fontSize:12,color:'var(--ac)',fontWeight:700,fontFamily:'monospace'}}>${pct}%</span></div>
+              </div>
+            `:canUpdateStage&&!canEditTask?html`
+              <!-- Assignee-only view: stage + pct editable, rest read-only -->
+              <div style=${{background:'var(--sf2)',borderRadius:10,padding:'12px 14px',border:'1px solid var(--bd)',display:'grid',gap:8,marginBottom:4}}>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Title</span><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${title}</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Priority</span><${PB} p=${pri}/></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Due</span><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${fmtD(due)}</span></div>
+              </div>
               <div><label class="lbl">Stage</label>
                 <select class="sel" value=${stage} onChange=${e=>{
                   const ns=e.target.value;setStage(ns);
                   const ap=STAGE_PCT[ns];if(ap!==null&&ap!==undefined)setPct(ap);
-                  if(!due&&ns!=='backlog'&&ns!=='blocked'){const days=STAGE_DAYS[ns];if(days>0)setDue(addDays(days));}
                 }}>
                   ${Object.entries(STAGES).map(([k,v])=>html`<option key=${k} value=${k}>${v.label}</option>`)}
-                </select></div>
-              <div><label class="lbl">Due Date</label>
-                <input class="inp" type="date" value=${due} onChange=${e=>setDue(e.target.value)}/></div>
-            </div>
-            <div><label class="lbl">Completion: ${pct}%</label>
-              <div style=${{display:'flex',alignItems:'center',gap:12}}>
-                <input type="range" min="0" max="100" value=${pct} style=${{flex:1,accentColor:'var(--ac)',cursor:'pointer'}} onChange=${e=>setPct(parseInt(e.target.value))}/>
-                <span style=${{fontSize:13,color:'var(--ac)',fontWeight:700,fontFamily:'monospace',width:34,textAlign:'right'}}>${pct}%</span>
+                </select>
               </div>
-            </div>
+              <div><label class="lbl">Completion: ${pct}%</label>
+                <div style=${{display:'flex',alignItems:'center',gap:12}}>
+                  <input type="range" min="0" max="100" value=${pct} style=${{flex:1,accentColor:'var(--ac)',cursor:'pointer'}} onChange=${e=>setPct(parseInt(e.target.value))}/>
+                  <span style=${{fontSize:13,color:'var(--ac)',fontWeight:700,fontFamily:'monospace',width:34,textAlign:'right'}}>${pct}%</span>
+                </div>
+              </div>
+            `:html`
+              <!-- Full edit form (Admin/Manager/TeamLead/ProjectOwner) -->
+              <div><label class="lbl">Title *</label>
+                <input class="inp" placeholder="Task title..." value=${title} onInput=${e=>setTitle(e.target.value)}/></div>
+              <div><label class="lbl">Description</label>
+                <textarea class="inp" rows="3" placeholder="Describe the task..." onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
+                <div><label class="lbl">Project</label>
+                  <select class="sel" value=${pid} onChange=${e=>setPid(e.target.value)}>
+                    ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+                  </select></div>
+                <div><label class="lbl">Assignee</label>
+                  <select class="sel" value=${ass} onChange=${e=>setAss(e.target.value)}>
+                    <option value="">Unassigned</option>
+                    ${safe(users).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
+                  </select></div>
+              </div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:11}}>
+                <div><label class="lbl">Priority</label>
+                  <select class="sel" value=${pri} onChange=${e=>setPri(e.target.value)}>
+                    ${Object.entries(PRIS).map(([k,v])=>html`<option key=${k} value=${k}>${v.sym} ${v.label}</option>`)}
+                  </select></div>
+                <div><label class="lbl">Stage</label>
+                  <select class="sel" value=${stage} onChange=${e=>{
+                    const ns=e.target.value;setStage(ns);
+                    const ap=STAGE_PCT[ns];if(ap!==null&&ap!==undefined)setPct(ap);
+                    if(!due&&ns!=='backlog'&&ns!=='blocked'){const days=STAGE_DAYS[ns];if(days>0)setDue(addDays(days));}
+                  }}>
+                    ${Object.entries(STAGES).map(([k,v])=>html`<option key=${k} value=${k}>${v.label}</option>`)}
+                  </select></div>
+                <div><label class="lbl">Due Date</label>
+                  <input class="inp" type="date" value=${due} onChange=${e=>setDue(e.target.value)}/></div>
+              </div>
+              <div><label class="lbl">Completion: ${pct}%</label>
+                <div style=${{display:'flex',alignItems:'center',gap:12}}>
+                  <input type="range" min="0" max="100" value=${pct} style=${{flex:1,accentColor:'var(--ac)',cursor:'pointer'}} onChange=${e=>setPct(parseInt(e.target.value))}/>
+                  <span style=${{fontSize:13,color:'var(--ac)',fontWeight:700,fontFamily:'monospace',width:34,textAlign:'right'}}>${pct}%</span>
+                </div>
+              </div>
+            `}
             ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
             ${!isEdit?html`
               <div style=${{borderTop:'1px solid var(--bd)',paddingTop:12}}>
@@ -2388,9 +2464,9 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
               </div>
             `:null}
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:isEdit?'1px solid var(--bd)':'none'}}>
-              <button class="btn bg" onClick=${onClose}>${isEdit&&!canEditTask?'Close':'Cancel'}</button>
+              <button class="btn bg" onClick=${onClose}>${isEdit&&!canEditTask&&!canUpdateStage?'Close':'Cancel'}</button>
               ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
-              ${(!isEdit||canEditTask)?html`<button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>`:null}
+              ${(!isEdit||canEditTask||canUpdateStage)?html`<button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>`:null}
             </div>
           </div>`:null}
 
@@ -3075,9 +3151,12 @@ function Dashboard({cu,tasks,projects,users,onNav}){
 function renderMd(text){
   return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
 }
-function MessagesView({projects,users,cu}){
+function MessagesView({projects,users,cu,tasks}){
+  const [allProjects,setAllProjects]=useState(safe(projects));
+  useEffect(()=>{api.get('/api/projects/all').then(d=>{if(Array.isArray(d)&&d.length)setAllProjects(d);});},[]);
   const [pid,setPid]=useState((safe(projects)[0]&&safe(projects)[0].id)||'');
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
+  const [showInfo,setShowInfo]=useState(false);
 
   const loadMsgs=useCallback(async(id)=>{
     if(!id)return;
@@ -3085,10 +3164,8 @@ function MessagesView({projects,users,cu}){
     if(Array.isArray(d)) setMsgs(d);
   },[]);
 
-  // Load on channel change
   useEffect(()=>{loadMsgs(pid);},[pid]);
 
-  // Auto-poll every 4s for new channel messages
   useEffect(()=>{
     if(!pid)return;
     const id=setInterval(()=>{
@@ -3105,7 +3182,14 @@ function MessagesView({projects,users,cu}){
   },[pid]);
 
   useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
-  const sp=safe(projects).find(p=>p.id===pid);
+  const sp=allProjects.find(p=>p.id===pid);
+  // Project stats for info panel
+  const projTasks=safe(tasks).filter(t=>t.project===pid);
+  const projMembers=safe(sp&&sp.members?JSON.parse(sp.members||'[]'):[]).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
+  const doneTasks=projTasks.filter(t=>t.stage==='completed').length;
+  const blockedTasks=projTasks.filter(t=>t.stage==='blocked').length;
+  const pc=projTasks.length?Math.round(projTasks.reduce((a,t)=>a+(t.pct||0),0)/projTasks.length):0;
+
   const send=async()=>{
     if(!txt.trim())return;const c=txt.trim();setTxt('');
     const m=await api.post('/api/messages',{project:pid,content:c});
@@ -3113,21 +3197,86 @@ function MessagesView({projects,users,cu}){
   };
 
   return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
+    <!-- Channel list sidebar -->
     <div style=${{width:210,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
-      <div style=${{padding:'11px 12px',borderBottom:'1px solid var(--bd)'}}><span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7}}>Channels</span></div>
+      <div style=${{padding:'11px 12px',borderBottom:'1px solid var(--bd)'}}>
+        <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7}}>Channels</span>
+        <div style=${{fontSize:10,color:'var(--tx3)',marginTop:3}}>${allProjects.length} projects</div>
+      </div>
       <div style=${{flex:1,overflowY:'auto',padding:6}}>
-        ${safe(projects).map(p=>html`<button key=${p.id} class=${'nb'+(pid===p.id?' act':'')} style=${{marginBottom:2,fontSize:12}} onClick=${()=>setPid(p.id)}>
-          <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
-          <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}># ${p.name}</span>
-        </button>`)}
+        ${allProjects.map(p=>{
+          const pt=safe(tasks).filter(t=>t.project===p.id);
+          const activeCnt=pt.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length;
+          return html`<button key=${p.id} class=${'nb'+(pid===p.id?' act':'')} style=${{marginBottom:2,fontSize:12,flexDirection:'column',alignItems:'flex-start',height:'auto',padding:'8px 10px'}} onClick=${()=>setPid(p.id)}>
+            <div style=${{display:'flex',alignItems:'center',gap:7,width:'100%'}}>
+              <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
+              <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}># ${p.name}</span>
+              ${activeCnt>0?html`<span style=${{fontSize:9,background:p.color+'33',color:p.color,borderRadius:6,padding:'1px 5px',fontWeight:700,flexShrink:0}}>${activeCnt}</span>`:null}
+            </div>
+          </button>`;
+        })}
       </div>
     </div>
+
+    <!-- Main chat area -->
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-      <div style=${{padding:'11px 15px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
-        ${sp?html`<div style=${{width:8,height:8,borderRadius:2,background:sp.color}}></div>`:null}
-        <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${sp?'# '+sp.name:'Select a channel'}</span>
-        ${sp?html`<span style=${{fontSize:11,color:'var(--tx3)',marginLeft:'auto'}}>Tasks & comments auto-post here</span>`:null}
+      <!-- Channel header with project info toggle -->
+      <div style=${{padding:'10px 15px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
+        ${sp?html`
+          <div style=${{width:9,height:9,borderRadius:2,background:sp.color}}></div>
+          <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}># ${sp.name}</span>
+          <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:4}}>${projTasks.length} tasks · ${pc}% done</span>
+          <button class=${'btn bg'+(showInfo?' act':'')} style=${{marginLeft:'auto',fontSize:11,padding:'4px 10px'}} onClick=${()=>setShowInfo(p=>!p)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Project Info
+          </button>
+        `:html`<span style=${{color:'var(--tx3)'}}>Select a channel</span>`}
       </div>
+
+      <!-- Project info panel (collapsible) -->
+      ${showInfo&&sp?html`
+        <div style=${{padding:'12px 16px',background:'var(--sf2)',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:10,marginBottom:12}}>
+            ${[
+              {label:'Total Tasks',val:projTasks.length,color:'var(--tx)'},
+              {label:'Completed',val:doneTasks,color:'var(--gn)'},
+              {label:'In Progress',val:projTasks.filter(t=>t.stage==='development'||t.stage==='testing'||t.stage==='uat').length,color:'var(--cy)'},
+              {label:'Blocked',val:blockedTasks,color:'var(--rd)'},
+            ].map(s=>html`
+              <div key=${s.label} style=${{background:'var(--sf)',borderRadius:9,padding:'10px 12px',border:'1px solid var(--bd)'}}>
+                <div style=${{fontSize:20,fontWeight:800,color:s.color,lineHeight:1}}>${s.val}</div>
+                <div style=${{fontSize:10,color:'var(--tx3)',marginTop:3}}>${s.label}</div>
+              </div>`)}
+          </div>
+          <!-- Progress bar -->
+          <div style=${{marginBottom:10}}>
+            <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+              <span style=${{fontSize:11,color:'var(--tx3)'}}>Overall Progress</span>
+              <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
+            </div>
+            <div style=${{height:6,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+              <div style=${{height:'100%',width:pc+'%',background:sp.color,borderRadius:100,transition:'width .5s'}}></div>
+            </div>
+          </div>
+          <!-- Stage breakdown -->
+          <div style=${{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+            ${Object.entries(STAGES).map(([k,v])=>{
+              const cnt=projTasks.filter(t=>t.stage===k).length;
+              if(!cnt)return null;
+              return html`<span key=${k} style=${{fontSize:10,padding:'2px 8px',borderRadius:5,background:v.color+'22',color:v.color,fontWeight:600}}>${v.label}: ${cnt}</span>`;
+            })}
+          </div>
+          <!-- Members -->
+          <div style=${{display:'flex',alignItems:'center',gap:6}}>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>Members:</span>
+            <div style=${{display:'flex',gap:-4}}>
+              ${projMembers.slice(0,8).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf2)',borderRadius:'50%'}}><${Av} u=${m} size=${22}/></div>`)}
+              ${projMembers.length>8?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:6}}>+${projMembers.length-8} more</span>`:null}
+            </div>
+            ${sp.target_date?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:'auto',fontFamily:'monospace'}}>Due ${new Date(sp.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>`:null}
+          </div>
+        </div>`:null}
+
       <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:8}}>
         ${msgs.map(m=>{
           const isSystem=m.is_system===1||m.sender==='system';
@@ -4338,12 +4487,15 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
   };
 
   const saveReminder=async()=>{
-    if((!addTaskId&&!addCustomTitle.trim())||!addDate||!addTime){return;}
+    // Accept: task selected OR custom title filled (or both — task takes priority for linking)
+    const realTaskId=(addTaskId&&addTaskId!=='__custom__')?addTaskId:'';
+    const titleToUse=realTaskId
+      ?(safe(tasks).find(t=>t.id===realTaskId)||{title:addCustomTitle.trim()||'Reminder'}).title
+      :(addCustomTitle.trim()||'Reminder');
+    if(!titleToUse||!addDate||!addTime)return;
     setSaving(true);
     const dt=new Date(addDate+'T'+addTime);
-    const task=addTaskId?safe(tasks).find(t=>t.id===addTaskId):null;
-    const title=task?task.title:(addCustomTitle.trim()||'Reminder');
-    await api.post('/api/reminders',{task_id:addTaskId||'',task_title:title,remind_at:dt.toISOString(),minutes_before:addMins});
+    await api.post('/api/reminders',{task_id:realTaskId,task_title:titleToUse,remind_at:dt.toISOString(),minutes_before:addMins});
     setSaving(false);
     setShowAdd(false);
     setAddTaskId('');setAddCustomTitle('');setAddDate('');setAddTime('');setAddMins(10);
@@ -4401,59 +4553,115 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
 
       ${showAdd?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowAdd(false)}>
-          <div class="mo fi" style=${{maxWidth:460}}>
-            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-              <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)'}}>⏰ Add Reminder</h2>
-              <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowAdd(false)}>✕</button>
+          <div class="mo fi" style=${{maxWidth:600}}>
+            <!-- Header -->
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <div>
+                <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:8}}>
+                  <span style=${{width:32,height:32,borderRadius:9,background:'rgba(251,191,36,.15)',border:'1px solid rgba(251,191,36,.3)',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:16}}>⏰</span>
+                  Add Reminder
+                </h2>
+                <p style=${{fontSize:11,color:'var(--tx3)',marginTop:3,marginLeft:40}}>Fill in one or both sections, then pick a date &amp; time.</p>
+              </div>
+              <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>{setShowAdd(false);setAddCustomTitle('');setAddTaskId('');}}>✕</button>
             </div>
-            <div style=${{display:'flex',flexDirection:'column',gap:13}}>
-              <div>
-                <label class="lbl">Project (optional filter)</label>
-                <select class="inp" value=${addProjId} onChange=${e=>{setAddProjId(e.target.value);setAddTaskId('');}}>
-                  <option value="">— All projects —</option>
-                  ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
-                </select>
+
+            <!-- TWO SECTIONS SIDE BY SIDE -->
+            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:16}}>
+
+              <!-- SECTION 1: Project Reminder -->
+              <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'2px solid '+(addTaskId&&addTaskId!=='__custom__'?'var(--ac)':'var(--bd)'),transition:'border-color .15s',position:'relative',overflow:'hidden'}}>
+                <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,var(--ac),var(--cy))',borderRadius:'14px 14px 0 0',opacity:addTaskId&&addTaskId!=='__custom__'?1:.3,transition:'opacity .15s'}}></div>
+                <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
+                  <div style=${{width:28,height:28,borderRadius:7,background:'rgba(170,255,0,.12)',border:'1px solid rgba(170,255,0,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>📋</div>
+                  <div>
+                    <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)'}}>Project Reminder</div>
+                    <div style=${{fontSize:10,color:'var(--tx3)'}}>Linked to a task</div>
+                  </div>
+                </div>
+                <div style=${{display:'flex',flexDirection:'column',gap:10}}>
+                  <div>
+                    <label class="lbl">Project <span style=${{color:'var(--tx3)',fontWeight:400,textTransform:'none',fontSize:9}}>(filter tasks)</span></label>
+                    <select class="inp" style=${{fontSize:12}} value=${addProjId} onChange=${e=>{setAddProjId(e.target.value);setAddTaskId('');}}>
+                      <option value="">— All projects —</option>
+                      ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="lbl">Task <span style=${{color:'var(--tx3)',fontWeight:400,textTransform:'none',fontSize:9}}>(optional)</span></label>
+                    <select class="inp" style=${{fontSize:12}} value=${addTaskId==='__custom__'?'':addTaskId} onChange=${e=>{setAddTaskId(e.target.value);if(e.target.value)setAddCustomTitle('');}}>
+                      <option value="">— Select a task (or set custom below) —</option>
+                      ${filteredTasks.map(t=>html`<option key=${t.id} value=${t.id}>${t.title}</option>`)}
+                    </select>
+                  </div>
+                  ${addTaskId&&addTaskId!=='__custom__'?html`
+                    <div style=${{padding:'7px 10px',background:'rgba(170,255,0,.07)',borderRadius:8,border:'1px solid rgba(170,255,0,.18)',fontSize:11,color:'var(--tx2)',display:'flex',alignItems:'center',gap:6}}>
+                      <span style=${{color:'var(--ac)'}}>✓</span>
+                      <span>Linked: <b style=${{color:'var(--tx)'}}>${(safe(tasks).find(t=>t.id===addTaskId)||{title:''}).title}</b></span>
+                    </div>`:null}
+                </div>
               </div>
-              <div>
-                <label class="lbl">Task <span style=${{color:'var(--tx3)',fontWeight:400}}>(optional)</span></label>
-                <select class="inp" value=${addTaskId} onChange=${e=>{setAddTaskId(e.target.value);if(e.target.value)setAddCustomTitle('');}}>
-                  <option value="">— Select a task (or set custom below) —</option>
-                  ${filteredTasks.map(t=>html`<option key=${t.id} value=${t.id}>${t.title}</option>`)}
-                </select>
+
+              <!-- SECTION 2: Custom Reminder -->
+              <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'2px solid '+(addTaskId==='__custom__'||(!addTaskId&&addCustomTitle.trim())?'var(--pu)':'var(--bd)'),transition:'border-color .15s',position:'relative',overflow:'hidden'}}>
+                <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,var(--pu),var(--pk))',borderRadius:'14px 14px 0 0',opacity:addTaskId==='__custom__'||(!addTaskId&&addCustomTitle.trim())?1:.3,transition:'opacity .15s'}}></div>
+                <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
+                  <div style=${{width:28,height:28,borderRadius:7,background:'rgba(167,139,250,.12)',border:'1px solid rgba(167,139,250,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>✏️</div>
+                  <div>
+                    <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)'}}>Custom Reminder</div>
+                    <div style=${{fontSize:10,color:'var(--tx3)'}}>Standalone note or meeting</div>
+                  </div>
+                </div>
+                <div>
+                  <label class="lbl">Reminder Title <span style=${{color:'var(--rd)',fontWeight:600}}>*</span></label>
+                  <input class="inp" style=${{fontSize:12}} value=${addCustomTitle}
+                    onInput=${e=>{setAddCustomTitle(e.target.value);if(e.target.value)setAddTaskId('__custom__');else if(addTaskId==='__custom__')setAddTaskId('');}}
+                    placeholder="e.g. Team standup, Review designs, Call client…"/>
+                </div>
+                <div style=${{marginTop:10,padding:'8px 10px',background:'rgba(167,139,250,.07)',borderRadius:8,border:'1px solid rgba(167,139,250,.18)',fontSize:11,color:'var(--tx3)',lineHeight:1.5}}>
+                  💡 Use this for meetings, calls, or any non-task reminder.
+                </div>
               </div>
-              ${!addTaskId?html`
+            </div>
+
+            <!-- SHARED DATE / TIME / NOTIFY section -->
+            <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'1px solid var(--bd)',marginBottom:16}}>
+              <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
+                <div style=${{width:28,height:28,borderRadius:7,background:'rgba(34,211,238,.12)',border:'1px solid rgba(34,211,238,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>📅</div>
+                <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)'}}>Date, Time &amp; Notification</div>
+              </div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
                 <div>
-                  <label class="lbl">Custom Reminder Title *</label>
-                  <input class="inp" value=${addCustomTitle} onInput=${e=>setAddCustomTitle(e.target.value)} placeholder="e.g. Team standup, Review designs, Call client…"/>
-                </div>`:null}
-              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-                <div>
-                  <label class="lbl">Date *</label>
+                  <label class="lbl">Date <span style=${{color:'var(--rd)',fontWeight:600}}>*</span></label>
                   <input class="inp" type="date" value=${addDate} onChange=${e=>setAddDate(e.target.value)} min=${new Date().toISOString().split('T')[0]}/>
                 </div>
                 <div>
-                  <label class="lbl">Time *</label>
+                  <label class="lbl">Time <span style=${{color:'var(--rd)',fontWeight:600}}>*</span></label>
                   <input class="inp" type="time" value=${addTime} onChange=${e=>setAddTime(e.target.value)}/>
                 </div>
               </div>
               <div>
                 <label class="lbl">Notify me before</label>
-                <div style=${{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
+                <div style=${{display:'flex',gap:6,flexWrap:'wrap',marginTop:6}}>
                   ${[5,10,15,30,60].map(m=>html`
-                    <button key=${m} class=${'chip'+(addMins===m?' on':'')} onClick=${()=>setAddMins(m)} style=${{fontSize:12,padding:'5px 12px'}}>
+                    <button key=${m} onClick=${()=>setAddMins(m)}
+                      style=${{padding:'6px 14px',borderRadius:100,fontSize:12,fontWeight:700,border:'2px solid '+(addMins===m?'var(--ac)':'var(--bd)'),background:addMins===m?'var(--ac)':'transparent',color:addMins===m?'var(--ac-tx)':'var(--tx2)',cursor:'pointer',transition:'all .12s'}}>
                       ${m<60?m+' min':'1 hr'}
                     </button>`)}
                 </div>
               </div>
-              <div style=${{background:'rgba(170,255,0,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(170,255,0,.15)'}}>
-                🔔 You'll get a browser notification + sound ${addMins} min before the reminder time.
+              <div style=${{marginTop:12,background:'rgba(170,255,0,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(170,255,0,.15)',display:'flex',alignItems:'center',gap:8}}>
+                <span style=${{fontSize:16}}>🔔</span>
+                <span>You'll get a browser notification + sound <b style=${{color:'var(--ac)'}}>${addMins} min</b> before the reminder time.</span>
               </div>
-              <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4}}>
-                <button class="btn bg" onClick=${()=>{setShowAdd(false);setAddCustomTitle('');setAddTaskId('');}}>Cancel</button>
-                <button class="btn bp" onClick=${saveReminder} disabled=${saving||(!addTaskId&&!addCustomTitle.trim())||!addDate||!addTime}>
-                  ${saving?'Saving...':'Set Reminder'}
-                </button>
-              </div>
+            </div>
+
+            <div style=${{display:'flex',gap:9,justifyContent:'flex-end'}}>
+              <button class="btn bg" onClick=${()=>{setShowAdd(false);setAddCustomTitle('');setAddTaskId('');}}>Cancel</button>
+              <button class="btn bp" style=${{minWidth:120}} onClick=${saveReminder}
+                disabled=${saving||(!addTaskId&&!addCustomTitle.trim())||!addDate||!addTime}>
+                ${saving?html`<span class="spin"></span>`:'⏰ Set Reminder'}
+              </button>
             </div>
           </div>
         </div>`:null}
@@ -5693,7 +5901,7 @@ function App(){
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
             />`:null}
-            ${baseView==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
+            ${baseView==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu} tasks=${data.tasks}/>`:null}
             ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
             ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
