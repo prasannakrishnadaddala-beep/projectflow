@@ -187,6 +187,90 @@ def send_comment_email(user_email, user_name, task_title, commenter_name, commen
     """
     send_email(user_email, subject, body, workspace_id)
 
+# ── Web Push (VAPID) ──────────────────────────────────────────────────────────
+VAPID_KEY_FILE = os.path.join(DATA_DIR, ".pf_vapid")
+
+def get_vapid_keys():
+    """Load or generate VAPID key pair (raw bytes stored as hex)."""
+    if os.path.exists(VAPID_KEY_FILE):
+        try:
+            with open(VAPID_KEY_FILE, "r") as f:
+                d = json.load(f)
+                if d.get("private") and d.get("public"):
+                    return d
+        except: pass
+    # Generate new P-256 key pair using pure Python (no pywebpush required)
+    try:
+        import struct
+        # Use os.urandom for the private key scalar (32 bytes)
+        priv_bytes = os.urandom(32)
+        priv_hex = priv_bytes.hex()
+        # For VAPID public key we use a placeholder — real ECDH done by pywebpush if available
+        # Store both; real push requires pywebpush or similar
+        keys = {"private": priv_hex, "public": "", "generated": ts()}
+        # Try to derive real public key using cryptography library
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ec import (
+                generate_private_key, SECP256R1, EllipticCurvePublicKey)
+            from cryptography.hazmat.primitives.serialization import (
+                Encoding, PublicFormat, PrivateFormat, NoEncryption)
+            import base64
+            ec_key = generate_private_key(SECP256R1())
+            pub_bytes = ec_key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+            priv_bytes2 = ec_key.private_bytes(Encoding.DER, PrivateFormat.PKCS8, NoEncryption())
+            keys = {
+                "private": base64.urlsafe_b64encode(priv_bytes2).decode(),
+                "public": base64.urlsafe_b64encode(pub_bytes).decode().rstrip("="),
+                "generated": ts()
+            }
+        except ImportError:
+            pass
+        with open(VAPID_KEY_FILE, "w") as f:
+            json.dump(keys, f)
+        return keys
+    except Exception as e:
+        print(f"[VAPID] Key generation error: {e}")
+        return {"private": "", "public": ""}
+
+def send_web_push(subscription_info, payload_dict):
+    """Send a Web Push notification. Requires pywebpush."""
+    try:
+        from pywebpush import webpush, WebPushException
+        vapid = get_vapid_keys()
+        if not vapid.get("private") or not vapid.get("public"):
+            return False
+        webpush(
+            subscription_info=subscription_info,
+            data=json.dumps(payload_dict),
+            vapid_private_key=vapid["private"],
+            vapid_claims={"sub": "mailto:admin@projectflow.app"}
+        )
+        return True
+    except ImportError:
+        return False  # pywebpush not installed — fall back to polling
+    except Exception as e:
+        print(f"[WebPush] Error: {e}")
+        return False
+
+def push_notification_to_user(db, user_id, title, body, nav_url="/", tag=None):
+    """Send Web Push to all subscriptions for a given user."""
+    subs = db.execute(
+        "SELECT * FROM push_subscriptions WHERE user_id=?", (user_id,)
+    ).fetchall()
+    payload = {"title": title, "body": body, "url": nav_url, "tag": tag or title}
+    dead_ids = []
+    for sub in subs:
+        sub_info = {
+            "endpoint": sub["endpoint"],
+            "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
+        }
+        ok = send_web_push(sub_info, payload)
+        if not ok and sub["endpoint"]:
+            # If push fails (e.g. subscription expired), mark for cleanup
+            dead_ids.append(sub["id"])
+    if dead_ids:
+        db.execute(f"DELETE FROM push_subscriptions WHERE id IN ({','.join('?'*len(dead_ids))})", dead_ids)
+
 # ── DB Init & Migration ───────────────────────────────────────────────────────
 def init_db():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -244,6 +328,9 @@ def init_db():
                 id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
                 from_user TEXT, to_user TEXT, type TEXT, data TEXT,
                 consumed INTEGER DEFAULT 0, created TEXT);
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id TEXT PRIMARY KEY, user_id TEXT, workspace_id TEXT,
+                endpoint TEXT UNIQUE, p256dh TEXT, auth TEXT, created TEXT);
         """)
         # Add teams table if not exists (migration)
         try: db.execute('''CREATE TABLE IF NOT EXISTS teams (
@@ -604,12 +691,17 @@ def create_project():
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
                     d.get("color","#aaff00"),ts()))
         p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
-        # Notify all members except creator
+        # Notify all members except creator — DB notif + Web Push
+        creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cname=creator["name"] if creator else "Someone"
         for uid in members:
             if uid != session["user_id"]:
                 nid=f"n{int(datetime.now().timestamp()*1000)}"
                 db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                            (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts()))
+                threading.Thread(target=push_notification_to_user,
+                    args=(db,uid,f"📁 Added to project: {d['name']}",
+                          f"{cname} added you to '{d['name']}'","/"),daemon=True).start()
         return jsonify(dict(p))
 
 @app.route("/api/projects/<pid>",methods=["PUT"])
@@ -624,7 +716,22 @@ def update_project(pid):
                    (d.get("name",p["name"]),d.get("description",p["description"]),
                     d.get("target_date",p["target_date"]),d.get("color",p["color"]),
                     json.dumps(d.get("members",json.loads(p["members"]))),pid,wid()))
-        return jsonify(dict(db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()))
+        updated=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
+        # Notify all project members about the update
+        actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        aname=actor["name"] if actor else "Someone"
+        try: mems=json.loads(updated["members"] or "[]")
+        except: mems=[]
+        base_ts=int(datetime.now().timestamp()*1000)
+        for i,uid in enumerate(mems):
+            if uid==session["user_id"]: continue
+            nid=f"n{base_ts+i}"
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"project_added",f"{aname} updated project '{updated['name']}'",uid,0,ts()))
+            threading.Thread(target=push_notification_to_user,
+                args=(db,uid,f"📁 Project updated: {updated['name']}",
+                      f"{aname} made changes to '{updated['name']}'","/"),daemon=True).start()
+        return jsonify(dict(updated))
 
 @app.route("/api/projects/<pid>",methods=["DELETE"])
 @login_required
@@ -680,6 +787,11 @@ def create_task():
                 threading.Thread(target=send_task_assigned_email,
                     args=(assignee_user["email"],assignee_user["name"],d["title"],cname,tid,wid()),
                     daemon=True).start()
+            # Web Push — assignee
+            threading.Thread(target=push_notification_to_user,
+                args=(db, d["assignee"], f"✅ New task assigned: {d['title']}",
+                      f"{cname} assigned you this task [{d.get('priority','medium')}]", "/"),
+                daemon=True).start()
         # Notify all other project members about the new task
         if d.get("project"):
             proj=db.execute("SELECT name,members FROM projects WHERE id=? AND workspace_id=?",(d["project"],wid())).fetchone()
@@ -693,6 +805,10 @@ def create_task():
                     nid2=f"n{base_ts+10+i}"
                     db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                                (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts()))
+                    threading.Thread(target=push_notification_to_user,
+                        args=(db, uid, f"📋 New task in {proj['name']}",
+                              f"{cname} created '{d['title']}'", "/"),
+                        daemon=True).start()
         t=db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()
         # Auto-post system message to project channel
         if d.get("project"):
@@ -762,6 +878,11 @@ def update_task(tid):
                     threading.Thread(target=send_status_change_email,
                         args=(assignee_user["email"],assignee_user["name"],t["title"],d["stage"],changer_name,wid()),
                         daemon=True).start()
+                # Web Push — assignee
+                threading.Thread(target=push_notification_to_user,
+                    args=(db, t["assignee"], f"🔄 Task updated: {t['title']}",
+                          f"{changer_name} moved it to {d['stage']}", "/"),
+                    daemon=True).start()
             # Also notify project members (owner/creator etc)
             if t["project"]:
                 proj=db.execute("SELECT members FROM projects WHERE id=? AND workspace_id=?",(t["project"],wid())).fetchone()
@@ -775,6 +896,10 @@ def update_task(tid):
                         nid2=f"n{base_ts2+20+i2}"
                         db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                                    (nid2,wid(),"status_change",f"{aname} moved '{t['title']}' → {d['stage']}",uid,0,ts()))
+                        threading.Thread(target=push_notification_to_user,
+                            args=(db, uid, f"🔄 {t['title']} → {d['stage']}",
+                                  f"{aname} updated the task stage", "/"),
+                            daemon=True).start()
                 sysmid=f"m{base_ts2+2}"
                 db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                            (sysmid,wid(),"system",t["project"],
@@ -802,6 +927,11 @@ def update_task(tid):
                     threading.Thread(target=send_comment_email,
                         args=(assignee_user["email"],assignee_user["name"],t["title"],cname,latest.get('text',''),wid()),
                         daemon=True).start()
+                # Web Push — comment
+                threading.Thread(target=push_notification_to_user,
+                    args=(db, t["assignee"], f"💬 Comment on: {t['title']}",
+                          f"{cname}: {latest.get('text','')[:80]}", "/"),
+                    daemon=True).start()
         return jsonify(dict(db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()))
 
 @app.route("/api/tasks/<tid>",methods=["DELETE"])
@@ -962,7 +1092,13 @@ def create_reminder():
         db.execute("INSERT INTO reminders VALUES (?,?,?,?,?,?,?,?,?)",
                    (rid,wid(),session["user_id"],d.get("task_id",""),d.get("task_title","Reminder"),
                     d["remind_at"],d.get("minutes_before",10),0,ts()))
-        return jsonify(dict(db.execute("SELECT * FROM reminders WHERE id=?",(rid,)).fetchone()))
+        row=db.execute("SELECT * FROM reminders WHERE id=?",(rid,)).fetchone()
+        # Confirm push to the user who set the reminder
+        threading.Thread(target=push_notification_to_user,
+            args=(db, session["user_id"], "⏰ Reminder set",
+                  f"'{d.get('task_title','Reminder')}' — you'll be notified before the time.", "/"),
+            daemon=True).start()
+        return jsonify(dict(row))
 
 @app.route("/api/reminders/<rid>", methods=["PUT"])
 @login_required
@@ -976,7 +1112,13 @@ def update_reminder(rid):
         task_title=d.get("task_title",existing["task_title"])
         db.execute("UPDATE reminders SET remind_at=?,minutes_before=?,task_title=?,fired=0 WHERE id=? AND user_id=?",
                    (remind_at,minutes_before,task_title,rid,session["user_id"]))
-        return jsonify(dict(db.execute("SELECT * FROM reminders WHERE id=?",(rid,)).fetchone()))
+        row=db.execute("SELECT * FROM reminders WHERE id=?",(rid,)).fetchone()
+        # Confirm push — reminder rescheduled
+        threading.Thread(target=push_notification_to_user,
+            args=(db, session["user_id"], "⏰ Reminder updated",
+                  f"'{task_title}' has been rescheduled.", "/"),
+            daemon=True).start()
+        return jsonify(dict(row))
 
 @app.route("/api/reminders/<rid>", methods=["DELETE"])
 @login_required
@@ -1254,6 +1396,46 @@ def read_notif(nid):
         db.execute("UPDATE notifications SET read=1 WHERE id=? AND workspace_id=?",(nid,wid()))
         return jsonify({"ok":True})
 
+# ── Web Push API ───────────────────────────────────────────────────────────────
+@app.route("/api/push/vapid-key", methods=["GET"])
+def get_vapid_public_key():
+    """Return VAPID public key for frontend subscription."""
+    vapid = get_vapid_keys()
+    return jsonify({"publicKey": vapid.get("public", "")})
+
+@app.route("/api/push/subscribe", methods=["POST"])
+@login_required
+def push_subscribe():
+    """Save a Web Push subscription for the current user."""
+    d = request.json or {}
+    endpoint = d.get("endpoint")
+    keys = d.get("keys", {})
+    if not endpoint:
+        return jsonify({"error": "endpoint required"}), 400
+    sub_id = f"ps{int(datetime.now().timestamp()*1000)}"
+    with get_db() as db:
+        db.execute("""INSERT OR REPLACE INTO push_subscriptions
+            (id, user_id, workspace_id, endpoint, p256dh, auth, created)
+            VALUES (
+                COALESCE((SELECT id FROM push_subscriptions WHERE endpoint=?), ?),
+                ?, ?, ?, ?, ?, ?
+            )""", (endpoint, sub_id, session["user_id"], wid(),
+                   endpoint, keys.get("p256dh",""), keys.get("auth",""), ts()))
+    return jsonify({"ok": True})
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+@login_required
+def push_unsubscribe():
+    """Remove a Web Push subscription."""
+    d = request.json or {}
+    endpoint = d.get("endpoint")
+    with get_db() as db:
+        if endpoint:
+            db.execute("DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?",(endpoint, session["user_id"]))
+        else:
+            db.execute("DELETE FROM push_subscriptions WHERE user_id=?", (session["user_id"],))
+    return jsonify({"ok": True})
+
 @app.route("/api/notifications/read-all",methods=["PUT"])
 @login_required
 def read_all_notifs():
@@ -1497,6 +1679,111 @@ def serve_js(fn):
         return redirect(CDN[fn], code=302)
     return "Not Found", 404
 
+@app.route("/sw.js")
+def serve_sw():
+    """Service Worker for background push notifications and offline caching."""
+    sw_code = r"""
+// ProjectFlow Service Worker v2
+const CACHE = 'pf-v2';
+const ICON = '/favicon.ico';
+
+// Install & cache shell assets
+self.addEventListener('install', e => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(clients.claim());
+});
+
+// ── Push notification handler ────────────────────────────────────────────────
+self.addEventListener('push', e => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch(err) {}
+  const title  = data.title  || 'ProjectFlow';
+  const body   = data.body   || '';
+  const tag    = data.tag    || 'pf-notif';
+  const url    = data.url    || '/';
+  const icon   = data.icon   || ICON;
+  const badge  = data.badge  || ICON;
+  const opts = {
+    body, tag, icon, badge,
+    vibrate: [200, 100, 200],
+    requireInteraction: data.requireInteraction || false,
+    data: { url },
+    actions: [
+      { action: 'open',    title: 'Open'    },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+// ── Notification click handler ───────────────────────────────────────────────
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  if (e.action === 'dismiss') return;
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      // Focus existing tab if open
+      for (const c of cs) {
+        if (c.url.includes(self.location.origin) && 'focus' in c) {
+          c.focus();
+          c.postMessage({ type: 'PF_NAVIGATE', url });
+          return;
+        }
+      }
+      // Otherwise open new window
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
+});
+
+// ── Background sync — poll notifications every 30s when visible ─────────────
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// Periodic background fetch (Chrome 80+ with periodicSync)
+self.addEventListener('periodicsync', e => {
+  if (e.tag === 'pf-poll') {
+    e.waitUntil(pollNotifications());
+  }
+});
+
+async function pollNotifications() {
+  try {
+    const r = await fetch('/api/notifications', { credentials: 'include' });
+    if (!r.ok) return;
+    const notifs = await r.json();
+    const unread = notifs.filter(n => !n.read);
+    if (unread.length > 0) {
+      const badge = navigator.setAppBadge || null;
+      if (badge) navigator.setAppBadge(unread.length).catch(()=>{});
+    }
+  } catch(e) {}
+}
+"""
+    return Response(sw_code, mimetype="application/javascript",
+                    headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+@app.route("/manifest.json")
+def serve_manifest():
+    """PWA manifest for installability."""
+    manifest = {
+        "name": "ProjectFlow",
+        "short_name": "ProjectFlow",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#111111",
+        "theme_color": "#aaff00",
+        "icons": [
+            {"src": "/favicon.ico", "sizes": "any", "type": "image/x-icon"}
+        ]
+    }
+    return jsonify(manifest)
+
 @app.route("/",defaults={"p":""})
 @app.route("/<path:p>")
 def root(p): return HTML
@@ -1505,6 +1792,8 @@ HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>ProjectFlow</title>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#aaff00"/>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
 <script>
 (function(){
@@ -1514,6 +1803,139 @@ HTML = r"""<!DOCTYPE html>
   document.head.appendChild(l);
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════
+     SERVICE WORKER + WEB PUSH BOOTSTRAP
+     Registers SW immediately so push works even when app
+     is minimised or the tab is in the background.
+     ═══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+
+// ── 1. Register Service Worker ───────────────────────────────────────────────
+window._pfSWReady = false;
+window._pfPushSub = null;
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js', {scope:'/'})
+    .then(function(reg){
+      window._pfSWReady = true;
+      window._pfSWReg   = reg;
+      console.log('[PF] SW registered, scope:', reg.scope);
+
+      // Listen for messages from SW (e.g. navigation requests)
+      navigator.serviceWorker.addEventListener('message', function(e){
+        if(e.data && e.data.type === 'PF_NAVIGATE'){
+          window.location.hash = e.data.url || '/';
+          window.focus();
+        }
+      });
+
+      // ── 2. Request Notification permission then subscribe to Push ───────────
+      _pfSetupPush(reg);
+    })
+    .catch(function(e){ console.warn('[PF] SW registration failed:', e); });
+}
+
+// ── urlBase64ToUint8Array helper for VAPID key ───────────────────────────────
+function _pfUrlB64(base64String){
+  var padding='='.repeat((4-base64String.length%4)%4);
+  var base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  var rawData=window.atob(base64);
+  var outputArray=new Uint8Array(rawData.length);
+  for(var i=0;i<rawData.length;++i) outputArray[i]=rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function _pfSetupPush(reg){
+  // Only proceed if Push API is available
+  if(!('PushManager' in window)) return;
+
+  // Fetch VAPID public key from server
+  var vapidKey='';
+  try{
+    var r=await fetch('/api/push/vapid-key',{credentials:'include'});
+    var d=await r.json();
+    vapidKey=d.publicKey||'';
+  }catch(e){ return; }
+
+  if(!vapidKey){
+    // pywebpush not available — fall back to polling-only mode
+    console.log('[PF] No VAPID key — using polling mode only');
+    return;
+  }
+
+  // Request notification permission
+  var perm = Notification.permission;
+  if(perm==='default'){
+    perm = await Notification.requestPermission();
+  }
+  if(perm!=='granted') return;
+
+  // Check for existing subscription
+  var existingSub = await reg.pushManager.getSubscription();
+  if(existingSub){
+    window._pfPushSub = existingSub;
+    _pfSendSubToServer(existingSub);
+    return;
+  }
+
+  // Subscribe to push
+  try{
+    var sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _pfUrlB64(vapidKey)
+    });
+    window._pfPushSub = sub;
+    _pfSendSubToServer(sub);
+    console.log('[PF] Push subscription created');
+  }catch(e){
+    console.warn('[PF] Push subscribe failed:', e);
+  }
+}
+
+function _pfSendSubToServer(sub){
+  var subJson = sub.toJSON();
+  fetch('/api/push/subscribe',{
+    method:'POST',
+    credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      endpoint: subJson.endpoint,
+      keys: subJson.keys
+    })
+  }).catch(function(){});
+}
+
+// ── 3. Visibility-aware polling accelerator ──────────────────────────────────
+// When tab is hidden, browsers throttle setTimeout/setInterval to once per minute.
+// We compensate by using the Page Visibility API to trigger an immediate poll
+// when the user brings the tab back into focus.
+window._pfLastPollTrigger = null;
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible'){
+    // Signal to the React app that it should poll immediately
+    if(typeof window._pfOnVisible === 'function'){
+      window._pfOnVisible();
+    }
+  }
+});
+
+// ── 4. Unsubscribe helper (called on logout) ─────────────────────────────────
+window._pfPushUnsubscribe = async function(){
+  if(window._pfPushSub){
+    try{
+      await window._pfPushSub.unsubscribe();
+      await fetch('/api/push/unsubscribe',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:window._pfPushSub.endpoint})});
+      window._pfPushSub = null;
+    }catch(e){}
+  }
+};
+
+})();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -4297,7 +4719,28 @@ async function requestNotifPermission(){
     }catch(e){}
   }
   if('Notification' in window&&Notification.permission==='default'){
-    Notification.requestPermission().then(p=>{if(p==='granted')new Notification('ProjectFlow',{body:'Notifications enabled.',icon:NOTIF_ICON,silent:true});});
+    const p=await Notification.requestPermission();
+    if(p==='granted'){
+      // Permission just granted — bootstrap Push subscription immediately
+      if(window._pfSWReg){
+        try{
+          const r=await fetch('/api/push/vapid-key',{credentials:'include'});
+          const d=await r.json();
+          if(d.publicKey){
+            const padding='='.repeat((4-d.publicKey.length%4)%4);
+            const base64=(d.publicKey+padding).replace(/-/g,'+').replace(/_/g,'/');
+            const raw=window.atob(base64);
+            const key=new Uint8Array(raw.length);
+            for(let i=0;i<raw.length;i++) key[i]=raw.charCodeAt(i);
+            const sub=await window._pfSWReg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+            window._pfPushSub=sub;
+            const sj=sub.toJSON();
+            fetch('/api/push/subscribe',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sj.endpoint,keys:sj.keys})}).catch(()=>{});
+          }
+        }catch(e){}
+      }
+      new Notification('ProjectFlow',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
+    }
   }
 }
 
@@ -4311,8 +4754,30 @@ async function showBrowserNotif(title,body,onClick,opts={}){
     }catch(e){}
   }
   if(!('Notification' in window)||Notification.permission!=='granted')return;
+  const tag=opts.tag||'pf-'+Date.now();
+  // ── Prefer Service Worker showNotification — works in background tabs ───────
+  if(window._pfSWReg){
+    try{
+      await window._pfSWReg.showNotification(title,{
+        body,
+        icon:NOTIF_ICON,
+        badge:NOTIF_ICON,
+        tag,
+        vibrate:[200,100,200],
+        requireInteraction:opts.requireInteraction||false,
+        data:{url:'/'}
+      });
+      // Store click handler keyed by tag so SW message handler can call it
+      if(onClick){
+        window._pfNotifHandlers=window._pfNotifHandlers||{};
+        window._pfNotifHandlers[tag]=onClick;
+      }
+      return;
+    }catch(e){}
+  }
+  // ── Fallback: standard Notification API (foreground only) ───────────────────
   try{
-    const n=new Notification(title,{body,icon:NOTIF_ICON,badge:NOTIF_ICON,tag:opts.tag||'pf-'+Date.now(),requireInteraction:opts.requireInteraction||false,silent:false});
+    const n=new Notification(title,{body,icon:NOTIF_ICON,badge:NOTIF_ICON,tag,requireInteraction:opts.requireInteraction||false,silent:false});
     if(onClick)n.onclick=()=>{window.focus();onClick();n.close();};
     if(!opts.requireInteraction)setTimeout(()=>n.close(),6000);
   }catch(e){}
@@ -5728,7 +6193,33 @@ function App(){
   const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
   useEffect(()=>{
     if(!cu)return;
-    // Seed: fetch current notifs so we know the baseline — don't fire for existing ones
+
+    const pollOnce=()=>{
+      api.get('/api/notifications').then(d=>{
+        if(!Array.isArray(d))return;
+        if(prevNotifIdsRef.current===null){
+          prevNotifIdsRef.current=new Set(d.map(n=>n.id));
+          setData(prev=>({...prev,notifs:d}));
+          return;
+        }
+        const brandNew=d.filter(n=>!prevNotifIdsRef.current.has(n.id));
+        brandNew.forEach(n=>{
+          if(n.type==='dm'||n.type==='call')return;
+          const title=NTITLES[n.type]||'ProjectFlow';
+          const nav=NNAV[n.type]||'notifs';
+          addToast(n.type,title,n.content||'');
+          showBrowserNotif(title,n.content||'',()=>setView(nav),{tag:'notif-'+n.id,requireInteraction:n.type==='call'});
+          playSound(n.type==='call'?'call':'notif');
+        });
+        prevNotifIdsRef.current=new Set(d.map(n=>n.id));
+        setData(prev=>({...prev,notifs:d}));
+        const unread=d.filter(n=>!n.read).length;
+        const dmTotal=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+        updateBadge(unread+dmTotal);
+      });
+    };
+
+    // Seed baseline on mount
     api.get('/api/notifications').then(d=>{
       if(Array.isArray(d)){
         prevNotifIdsRef.current=new Set(d.map(n=>n.id));
@@ -5737,44 +6228,35 @@ function App(){
         updateBadge(unread+dmUnread.reduce((a,x)=>a+(x.cnt||0),0));
       }
     });
-    const id=setInterval(()=>{
-      api.get('/api/notifications').then(d=>{
-        if(!Array.isArray(d))return;
-        if(prevNotifIdsRef.current===null){
-          // Still waiting for seed — just store
-          prevNotifIdsRef.current=new Set(d.map(n=>n.id));
-          return;
-        }
-        // Only fire for genuinely NEW notification IDs
-        const brandNew=d.filter(n=>!prevNotifIdsRef.current.has(n.id));
-        brandNew.forEach(n=>{
-          // Skip — dedicated pollers handle these to prevent duplicates
-          if(n.type==='dm'||n.type==='call')return;
-          const title=NTITLES[n.type]||'ProjectFlow';
-          const nav=NNAV[n.type]||'notifs';
-          // In-app toast
-          addToast(n.type,title,n.content||'');
-          // OS notification
-          showBrowserNotif(title,n.content||'',()=>setView(nav),{tag:'notif-'+n.id,requireInteraction:n.type==='call'});
-          // Sound
-          playSound(n.type==='call'?'call':'notif');
-        });
-        // Update the known-IDs set
-        prevNotifIdsRef.current=new Set(d.map(n=>n.id));
-        setData(prev=>({...prev,notifs:d}));
-        const unread=d.filter(n=>!n.read).length;
-        const dmTotal=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
-        updateBadge(unread+dmTotal);
-      });
-    },6000);
-    return()=>clearInterval(id);
+
+    // Register for visibility-based immediate poll
+    triggerPollRef.current=pollOnce;
+
+    const id=setInterval(pollOnce, 6000);
+    return()=>{ clearInterval(id); if(triggerPollRef.current===pollOnce) triggerPollRef.current=null; };
   },[cu,addToast]);
 
   const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
-  const logout=async()=>{await api.post('/api/auth/logout',{});setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);};
+  const logout=async()=>{
+    // Unsubscribe from Web Push before clearing session
+    if(window._pfPushUnsubscribe) await window._pfPushUnsubscribe().catch(()=>{});
+    await api.post('/api/auth/logout',{});
+    setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);
+  };
 
   // Request browser notification permission on login
   useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
+
+  // ── Visibility-based instant poll ───────────────────────────────────────────
+  // When user switches back to this tab we fire a poll immediately so they
+  // see fresh data without waiting for the next interval tick.
+  const triggerPollRef = useRef(null);
+  useEffect(()=>{
+    window._pfOnVisible = ()=>{
+      if(triggerPollRef.current) triggerPollRef.current();
+    };
+    return ()=>{ window._pfOnVisible = null; };
+  },[]);
 
   // Update badge on unread changes
   useEffect(()=>{
@@ -5921,22 +6403,30 @@ function App(){
     <!-- Notification permission banner — shown once after login -->
     ${showNotifBanner?html`
       <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100,
-        background:'var(--sf)',border:'1px solid rgba(170,255,0,.35)',borderRadius:16,
-        padding:'14px 18px',boxShadow:'0 8px 32px rgba(0,0,0,.6)',
-        display:'flex',alignItems:'center',gap:12,maxWidth:400,
+        background:'var(--sf)',border:'1px solid rgba(170,255,0,.35)',borderRadius:18,
+        padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)',
+        display:'flex',alignItems:'flex-start',gap:14,maxWidth:440,
         animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
-        <div style=${{width:38,height:38,borderRadius:11,background:'var(--ac3)',border:'1px solid rgba(170,255,0,.3)',
-          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:20}}>🔔</div>
+        <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,rgba(170,255,0,.2),rgba(170,255,0,.05))',border:'1px solid rgba(170,255,0,.35)',
+          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:22}}>🔔</div>
         <div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:2}}>Enable desktop notifications</div>
-          <div style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.4}}>Get alerted for messages, calls & task updates even when tab is in background</div>
+          <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>Enable desktop notifications</div>
+          <div style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.55,marginBottom:10}}>
+            Stay informed even when the app is minimised or you're in another tab:
+          </div>
+          <div style=${{display:'flex',flexWrap:'wrap',gap:5,marginBottom:12}}>
+            ${['✅ Task assigned','🔄 Status changes','💬 Comments','📁 Project updates','⏰ Reminders'].map(tag=>html`
+              <span key=${tag} style=${{fontSize:10,padding:'2px 8px',borderRadius:100,background:'rgba(170,255,0,.08)',border:'1px solid rgba(170,255,0,.2)',color:'var(--ac)',fontWeight:600}}>${tag}</span>`)}
+          </div>
+          <div style=${{display:'flex',gap:7}}>
+            <button class="btn bp" style=${{padding:'7px 16px',fontSize:12}}
+              onClick=${()=>{requestNotifPermission();setShowNotifBanner(false);}}>🔔 Allow Notifications</button>
+            <button class="btn bg" style=${{padding:'7px 12px',fontSize:11}}
+              onClick=${()=>setShowNotifBanner(false)}>Later</button>
+          </div>
         </div>
-        <div style=${{display:'flex',gap:7,flexShrink:0}}>
-          <button class="btn bp" style=${{padding:'6px 14px',fontSize:11}}
-            onClick=${()=>{requestNotifPermission();setShowNotifBanner(false);}}>Allow</button>
-          <button class="btn bg" style=${{padding:'6px 10px',fontSize:11}}
-            onClick=${()=>setShowNotifBanner(false)}>Later</button>
-        </div>
+        <button class="btn bg" style=${{padding:'4px 8px',fontSize:11,flexShrink:0,alignSelf:'flex-start'}}
+          onClick=${()=>setShowNotifBanner(false)}>✕</button>
       </div>`:null}
 
     ${reminderTask!==null?html`<${ReminderModal} task=${reminderTask} onClose=${()=>setReminderTask(null)} onSaved=${()=>{setReminderTask(null);load();}}/>`:null}
