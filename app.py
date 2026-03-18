@@ -3723,11 +3723,14 @@ function TimelineView({cu,tasks,projects}){
 function ProductivityView({cu,tasks,projects,users}){
   const t=safe(tasks);const p=safe(projects);const u=safe(users);
   const now=new Date();now.setHours(0,0,0,0);
+  const [tab,setTab]=useState('table'); // 'table' | 'chart' | 'detail'
   const [selectedDev,setSelectedDev]=useState(null);
   const [filterRole,setFilterRole]=useState('all');
   const [filterProject,setFilterProject]=useState('all');
   const [sortBy,setSortBy]=useState('score');
+  const [search,setSearch]=useState('');
   const roles=[...new Set(u.map(x=>x.role).filter(Boolean))];
+
   const devStats=useMemo(()=>u.map(dev=>{
     let devTasks=t.filter(x=>x.assignee===dev.id);
     if(filterProject!=='all')devTasks=devTasks.filter(x=>x.project===filterProject);
@@ -3745,166 +3748,214 @@ function ProductivityView({cu,tasks,projects,users}){
     return {...dev,total,completed:completed.length,inProg:inProg.length,blocked:blocked.length,
       overdue:overdue.length,completionRate,avgPct,score,scoreColor,last7,projCount:projSet.size};
   }),[u,t,filterProject,now]);
+
   const filtered=useMemo(()=>{
     let rows=[...devStats];
     if(filterRole!=='all')rows=rows.filter(r=>r.role===filterRole);
+    if(search.trim())rows=rows.filter(r=>r.name.toLowerCase().includes(search.toLowerCase()));
     rows.sort((a,b)=>{
       if(sortBy==='score')return b.score-a.score;
       if(sortBy==='name')return a.name.localeCompare(b.name);
       if(sortBy==='completed')return b.completed-a.completed;
       if(sortBy==='overdue')return b.overdue-a.overdue;
+      if(sortBy==='tasks')return b.total-a.total;
       return 0;
     });
     return rows;
-  },[devStats,filterRole,sortBy]);
+  },[devStats,filterRole,search,sortBy]);
+
   const selDev=selectedDev?devStats.find(d=>d.id===selectedDev):null;
   const selTasks=selDev?t.filter(x=>x.assignee===selDev.id&&(filterProject==='all'||x.project===filterProject)):[];
-  const chartData=filtered.slice(0,8).map(d=>({
-    name:d.name.split(' ')[0],Completed:d.completed,'In Progress':d.inProg,Blocked:d.blocked
-  }));
+  const chartData=filtered.map(d=>({name:d.name.split(' ')[0],Completed:d.completed,'In Progress':d.inProg,Blocked:d.blocked}));
+
+  const openDetail=(devId)=>{setSelectedDev(devId);setTab('detail');};
+  const closeDetail=()=>{setSelectedDev(null);setTab('table');};
+
   return html`
     <div style=${{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
 
-      <!-- ── FIXED TOP ── -->
-      <div style=${{flexShrink:0,padding:'14px 20px 10px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
-        <!-- Header -->
-        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
-          <div>
-            <h2 style=${{fontSize:15,fontWeight:800,color:'var(--tx)',display:'flex',alignItems:'center',gap:8,margin:0}}>👩‍💻 Developer Productivity</h2>
-            <p style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>Task completion, workload &amp; productivity score per developer</p>
-          </div>
-          ${selDev?html`<button class="btn bg" style=${{fontSize:11,padding:'5px 12px'}} onClick=${()=>setSelectedDev(null)}>← All Developers</button>`:null}
+      <!-- ── TOP BAR (very compact) ── -->
+      <div style=${{flexShrink:0,padding:'10px 18px',borderBottom:'1px solid var(--bd)',background:'var(--bg)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+
+        <!-- Title -->
+        <div style=${{marginRight:4}}>
+          <span style=${{fontSize:14,fontWeight:800,color:'var(--tx)'}}>👩‍💻 Dev Productivity</span>
+          <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:8}}>${u.length} developers · ${t.length} tasks</span>
         </div>
-        <!-- Summary chips — compact -->
-        <div style=${{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
-          ${[
-            {lbl:'Developers',val:u.length,c:'var(--ac)',bg:'rgba(170,255,0,.07)'},
-            {lbl:'Total Tasks',val:t.length,c:'var(--cy)',bg:'rgba(34,211,238,.07)'},
-            {lbl:'Completed',val:t.filter(x=>x.stage==='completed').length,c:'var(--gn)',bg:'rgba(74,222,128,.07)'},
-            {lbl:'Blocked',val:t.filter(x=>x.stage==='blocked').length,c:'var(--rd)',bg:'rgba(248,113,113,.07)'},
-            {lbl:'Overdue',val:t.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length,c:'var(--am)',bg:'rgba(251,191,36,.07)'},
-          ].map((s,i)=>html`
-            <div key=${i} style=${{background:s.bg,border:'1px solid var(--bd)',borderRadius:8,padding:'6px 14px',display:'flex',alignItems:'center',gap:8}}>
-              <span style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.val}</span>
-              <span style=${{fontSize:9,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>${s.lbl}</span>
-            </div>`)}
+
+        <!-- Search -->
+        <div style=${{position:'relative',flex:'1',maxWidth:200}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            style=${{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="inp" placeholder="Search developer..." value=${search}
+            style=${{height:26,fontSize:11,paddingLeft:26}}
+            onInput=${e=>setSearch(e.target.value)}/>
         </div>
-        <!-- Filter + sort bar — single row -->
-        <div style=${{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Filter:</span>
-          <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',minWidth:110}} value=${filterRole}
-            onChange=${e=>{setFilterRole(e.target.value);setSelectedDev(null);}}>
-            <option value="all">All Roles</option>
-            ${roles.map(r=>html`<option key=${r} value=${r}>${r}</option>`)}
-          </select>
-          <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',minWidth:130}} value=${filterProject}
-            onChange=${e=>{setFilterProject(e.target.value);setSelectedDev(null);}}>
-            <option value="all">All Projects</option>
-            ${p.map(pr=>html`<option key=${pr.id} value=${pr.id}>${pr.name}</option>`)}
-          </select>
-          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginLeft:4}}>Sort:</span>
-          <div style=${{display:'flex',background:'var(--sf2)',borderRadius:6,padding:2,gap:1}}>
-            ${[['score','🏆 Score'],['name','🔤 Name'],['completed','✅ Done'],['overdue','⚠ Overdue']].map(([k,lbl])=>html`
-              <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
-          </div>
-          <span style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)'}}>${filtered.length} developer${filtered.length!==1?'s':''}</span>
+
+        <!-- Role filter -->
+        <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:120}} value=${filterRole}
+          onChange=${e=>{setFilterRole(e.target.value);setSelectedDev(null);}}>
+          <option value="all">All Roles</option>
+          ${roles.map(r=>html`<option key=${r} value=${r}>${r}</option>`)}
+        </select>
+
+        <!-- Project filter -->
+        <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:140}} value=${filterProject}
+          onChange=${e=>{setFilterProject(e.target.value);setSelectedDev(null);}}>
+          <option value="all">All Projects</option>
+          ${p.map(pr=>html`<option key=${pr.id} value=${pr.id}>${pr.name}</option>`)}
+        </select>
+
+        <!-- Sort -->
+        <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:130}} value=${sortBy}
+          onChange=${e=>setSortBy(e.target.value)}>
+          <option value="score">Sort: Score</option>
+          <option value="name">Sort: Name</option>
+          <option value="tasks">Sort: Tasks</option>
+          <option value="completed">Sort: Done</option>
+          <option value="overdue">Sort: Overdue</option>
+        </select>
+
+        <!-- Tab switcher -->
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,marginLeft:'auto'}}>
+          ${[['table','📋 Table'],['chart','📊 Chart']].map(([k,lbl])=>html`
+            <button key=${k} class=${'tb'+(tab===k&&!selDev?' act':'')} style=${{fontSize:10,padding:'3px 10px'}}
+              onClick=${()=>{closeDetail();setTab(k);}}>${lbl}</button>`)}
         </div>
+
+        <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap'}}>${filtered.length}/${u.length}</span>
       </div>
 
-      <!-- ── SCROLLABLE BODY ── -->
-      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
+      <!-- ── SUMMARY STRIP ── -->
+      ${!selDev?html`
+        <div style=${{flexShrink:0,display:'flex',gap:0,borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
+          ${[
+            {lbl:'Total Tasks',val:t.length,c:'var(--tx)'},
+            {lbl:'Completed',val:t.filter(x=>x.stage==='completed').length,c:'var(--gn)'},
+            {lbl:'In Progress',val:t.filter(x=>x.stage==='in-progress'||x.stage==='development').length,c:'var(--cy)'},
+            {lbl:'Blocked',val:t.filter(x=>x.stage==='blocked').length,c:'var(--rd)'},
+            {lbl:'Overdue',val:t.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length,c:'var(--am)'},
+          ].map((s,i)=>html`
+            <div key=${i} style=${{flex:1,textAlign:'center',padding:'8px 4px',borderRight:i<4?'1px solid var(--bd)':'none'}}>
+              <div style=${{fontSize:16,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.val}</div>
+              <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:600,marginTop:2,textTransform:'uppercase',letterSpacing:.4}}>${s.lbl}</div>
+            </div>`)}
+        </div>`:null}
 
-        ${!selDev?html`
-          <!-- Developer table -->
-          <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
-            <div style=${{overflowX:'auto'}}>
-              <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:820}}>
-                <thead>
-                  <tr style=${{background:'var(--sf2)',borderBottom:'2px solid var(--bd)'}}>
-                    ${['#','Developer','Role','Score','Tasks','Done','Active','Blocked','Overdue','Avg %','Last 7d','Projects'].map(h=>html`
-                      <th key=${h} style=${{padding:'9px 11px',textAlign:'left',fontSize:9,fontWeight:700,
-                        color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.6,whiteSpace:'nowrap'}}>${h}</th>`)}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${filtered.map((dev,i)=>html`
-                    <tr key=${dev.id} style=${{borderBottom:'1px solid var(--bd)',cursor:'pointer',transition:'background .1s'}}
-                      onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}
-                      onMouseLeave=${e=>e.currentTarget.style.background=''}
-                      onClick=${()=>setSelectedDev(dev.id)}>
-                      <td style=${{padding:'10px 11px',fontSize:13,width:36,textAlign:'center'}}>
-                        ${i===0?'🥇':i===1?'🥈':i===2?'🥉':html`<span style=${{color:'var(--tx3)',fontFamily:'monospace',fontSize:10}}>${i+1}</span>`}
-                      </td>
-                      <td style=${{padding:'10px 11px',minWidth:150}}>
-                        <div style=${{display:'flex',alignItems:'center',gap:9}}>
-                          <${Av} u=${dev} size=${30}/>
-                          <div>
-                            <div style=${{fontWeight:600,color:'var(--tx)',fontSize:12,lineHeight:1.2}}>${dev.name}</div>
-                            ${dev.id===cu.id?html`<div style=${{fontSize:9,color:'var(--ac)',fontWeight:700}}>YOU</div>`:null}
-                          </div>
-                        </div>
-                      </td>
-                      <td style=${{padding:'10px 11px',color:'var(--tx2)',fontSize:11,whiteSpace:'nowrap'}}>${dev.role||'—'}</td>
-                      <td style=${{padding:'10px 11px'}}>
-                        <div style=${{width:34,height:34,borderRadius:'50%',border:'2.5px solid '+dev.scoreColor,
-                          display:'flex',alignItems:'center',justifyContent:'center',
-                          background:'rgba(255,255,255,.02)',fontSize:11,fontWeight:800,
-                          color:dev.scoreColor,fontFamily:'monospace'}}>${dev.score}</div>
-                      </td>
-                      <td style=${{padding:'10px 11px',fontFamily:'monospace',fontWeight:600,color:'var(--tx)',textAlign:'center'}}>${dev.total}</td>
-                      <td style=${{padding:'10px 11px',fontFamily:'monospace',fontWeight:700,color:'var(--gn)',textAlign:'center'}}>${dev.completed}</td>
-                      <td style=${{padding:'10px 11px',fontFamily:'monospace',color:'var(--cy)',textAlign:'center'}}>${dev.inProg}</td>
-                      <td style=${{padding:'10px 11px',fontFamily:'monospace',color:dev.blocked>0?'var(--rd)':'var(--tx3)',textAlign:'center'}}>${dev.blocked}</td>
-                      <td style=${{padding:'10px 11px',fontFamily:'monospace',fontWeight:dev.overdue>0?700:400,
-                        color:dev.overdue>0?'var(--rd)':'var(--tx3)',textAlign:'center'}}>${dev.overdue}</td>
-                      <td style=${{padding:'10px 11px',minWidth:100}}>
-                        <div style=${{display:'flex',alignItems:'center',gap:6}}>
-                          <div style=${{flex:1,height:5,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
-                            <div style=${{height:'100%',width:dev.avgPct+'%',borderRadius:100,
-                              background:dev.avgPct>70?'var(--gn)':dev.avgPct>40?'var(--am)':'var(--rd)'}}></div>
-                          </div>
-                          <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',flexShrink:0,minWidth:28}}>${dev.avgPct}%</span>
-                        </div>
-                      </td>
-                      <td style=${{padding:'10px 11px',fontFamily:'monospace',color:dev.last7>0?'var(--ac)':'var(--tx3)',
-                        fontWeight:dev.last7>0?700:400,textAlign:'center'}}>${dev.last7}</td>
-                      <td style=${{padding:'10px 11px',color:'var(--tx2)',fontFamily:'monospace',textAlign:'center'}}>${dev.projCount}</td>
-                    </tr>`)}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <!-- Bar chart -->
-          <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
-            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:14}}>Task Distribution per Developer</h3>
-            <${RC.ResponsiveContainer} width="100%" height=${200}>
-              <${RC.BarChart} data=${chartData} barSize=${20} margin=${{top:0,right:10,bottom:0,left:-20}}>
-                <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
-                <${RC.XAxis} dataKey="name" tick=${{fill:'var(--tx2)',fontSize:11}} axisLine=${false} tickLine=${false}/>
-                <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
-                <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--tx)',fontSize:11}}/>
-                <${RC.Legend} iconSize=${8} wrapperStyle=${{fontSize:10,color:'var(--tx2)',paddingTop:8}}/>
-                <${RC.Bar} dataKey="Completed" stackId="a" fill="var(--gn)" radius=${[0,0,0,0]}/>
-                <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
-                <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[4,4,0,0]}/>
+      <!-- ── SCROLLABLE CONTENT ── -->
+      <div style=${{flex:1,minHeight:0,overflowY:'auto'}}>
+
+        <!-- TABLE TAB -->
+        ${tab==='table'&&!selDev?html`
+          <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead style=${{position:'sticky',top:0,zIndex:10}}>
+              <tr style=${{background:'var(--sf2)',borderBottom:'2px solid var(--bd)'}}>
+                ${[['#','36px'],['Developer','180px'],['Role','90px'],['Score','60px'],
+                   ['Tasks','60px'],['Done','60px'],['Active','60px'],['Blocked','70px'],
+                   ['Overdue','70px'],['Avg %','100px'],['Last 7d','70px'],['Projects','70px'],['','48px']
+                ].map(([h,w])=>html`
+                  <th key=${h} style=${{padding:'8px 10px',textAlign:'left',fontSize:9,fontWeight:700,
+                    color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,whiteSpace:'nowrap',
+                    minWidth:w,width:w}}>${h}</th>`)}
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map((dev,i)=>html`
+                <tr key=${dev.id} style=${{borderBottom:'1px solid var(--bd)',cursor:'pointer',transition:'background .1s'}}
+                  onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}
+                  onMouseLeave=${e=>e.currentTarget.style.background=''}
+                  onClick=${()=>openDetail(dev.id)}>
+                  <!-- Rank -->
+                  <td style=${{padding:'9px 10px',textAlign:'center',fontSize:12}}>
+                    ${i===0?'🥇':i===1?'🥈':i===2?'🥉':html`<span style=${{color:'var(--tx3)',fontFamily:'monospace',fontSize:10}}>${i+1}</span>`}
+                  </td>
+                  <!-- Developer -->
+                  <td style=${{padding:'9px 10px'}}>
+                    <div style=${{display:'flex',alignItems:'center',gap:8}}>
+                      <${Av} u=${dev} size=${28}/>
+                      <div>
+                        <div style=${{fontWeight:600,color:'var(--tx)',fontSize:12,lineHeight:1.2,whiteSpace:'nowrap'}}>${dev.name}</div>
+                        ${dev.id===cu.id?html`<div style=${{fontSize:9,color:'var(--ac)',fontWeight:700}}>YOU</div>`:null}
+                      </div>
+                    </div>
+                  </td>
+                  <td style=${{padding:'9px 10px',color:'var(--tx2)',fontSize:11,whiteSpace:'nowrap'}}>${dev.role||'—'}</td>
+                  <!-- Score ring -->
+                  <td style=${{padding:'9px 10px'}}>
+                    <div style=${{width:32,height:32,borderRadius:'50%',border:'2.5px solid '+dev.scoreColor,
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      background:'rgba(255,255,255,.02)',fontSize:10,fontWeight:800,
+                      color:dev.scoreColor,fontFamily:'monospace'}}>${dev.score}</div>
+                  </td>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',fontWeight:600,color:'var(--tx)',textAlign:'center'}}>${dev.total}</td>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',fontWeight:700,color:'var(--gn)',textAlign:'center'}}>${dev.completed}</td>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',color:'var(--cy)',textAlign:'center'}}>${dev.inProg}</td>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',color:dev.blocked>0?'var(--rd)':'var(--tx3)',textAlign:'center'}}>${dev.blocked}</td>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',fontWeight:dev.overdue>0?700:400,
+                    color:dev.overdue>0?'var(--rd)':'var(--tx3)',textAlign:'center'}}>${dev.overdue}</td>
+                  <!-- Avg % bar -->
+                  <td style=${{padding:'9px 10px'}}>
+                    <div style=${{display:'flex',alignItems:'center',gap:5}}>
+                      <div style=${{width:50,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden',flexShrink:0}}>
+                        <div style=${{height:'100%',width:dev.avgPct+'%',borderRadius:100,
+                          background:dev.avgPct>70?'var(--gn)':dev.avgPct>40?'var(--am)':'var(--rd)'}}></div>
+                      </div>
+                      <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',flexShrink:0}}>${dev.avgPct}%</span>
+                    </div>
+                  </td>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',color:dev.last7>0?'var(--ac)':'var(--tx3)',
+                    fontWeight:dev.last7>0?700:400,textAlign:'center'}}>${dev.last7}</td>
+                  <td style=${{padding:'9px 10px',color:'var(--tx2)',fontFamily:'monospace',textAlign:'center'}}>${dev.projCount}</td>
+                  <td style=${{padding:'9px 10px',textAlign:'center'}}>
+                    <button class="btn bg" style=${{fontSize:10,padding:'3px 8px',whiteSpace:'nowrap'}}
+                      onClick=${e=>{e.stopPropagation();openDetail(dev.id);}}>View →</button>
+                  </td>
+                </tr>`)}
+              ${filtered.length===0?html`
+                <tr><td colspan="13" style=${{textAlign:'center',padding:'48px',color:'var(--tx3)',fontSize:13}}>
+                  <div style=${{fontSize:32,marginBottom:8}}>🔍</div>No developers match the filter.
+                </td></tr>`:null}
+            </tbody>
+          </table>`:null}
+
+        <!-- CHART TAB -->
+        ${tab==='chart'&&!selDev?html`
+          <div style=${{padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
+            <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
+              <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:14}}>Task Distribution per Developer</h3>
+              <${RC.ResponsiveContainer} width="100%" height=${Math.max(200,filtered.length*28)}>
+                <${RC.BarChart} data=${chartData} layout="vertical" barSize=${14} margin=${{top:0,right:30,bottom:0,left:60}}>
+                  <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" horizontal=${false}/>
+                  <${RC.XAxis} type="number" tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
+                  <${RC.YAxis} type="category" dataKey="name" tick=${{fill:'var(--tx2)',fontSize:11}} axisLine=${false} tickLine=${false} width=${55}/>
+                  <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--tx)',fontSize:11}}/>
+                  <${RC.Legend} iconSize=${8} wrapperStyle=${{fontSize:10,color:'var(--tx2)',paddingTop:8}}/>
+                  <${RC.Bar} dataKey="Completed" stackId="a" fill="var(--gn)" radius=${[0,0,0,0]}/>
+                  <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
+                  <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[0,4,4,0]}/>
+                <//>
               <//>
-            <//>
+              <p style=${{fontSize:10,color:'var(--tx3)',marginTop:8,textAlign:'center'}}>All ${filtered.length} developers shown — horizontal bars scale with task count</p>
+            </div>
           </div>`:null}
 
+        <!-- DETAIL VIEW -->
         ${selDev?html`
-          <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
-            <!-- Dev header -->
-            <div style=${{padding:'16px 20px',background:'var(--sf2)',borderBottom:'1px solid var(--bd)',
+          <div style=${{padding:'14px 18px',display:'flex',flexDirection:'column',gap:12}}>
+            <!-- Dev profile card -->
+            <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px',
               display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
-              <${Av} u=${selDev} size=${50}/>
+              <${Av} u=${selDev} size=${52}/>
               <div style=${{flex:1,minWidth:100}}>
-                <div style=${{fontSize:16,fontWeight:800,color:'var(--tx)'}}>${selDev.name}</div>
+                <div style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>${selDev.name}</div>
                 <div style=${{fontSize:12,color:'var(--tx2)',marginTop:3}}>${selDev.role||'Team Member'}</div>
               </div>
-              <div style=${{width:56,height:56,borderRadius:'50%',border:'3px solid '+selDev.scoreColor,
+              <div style=${{width:58,height:58,borderRadius:'50%',border:'3px solid '+selDev.scoreColor,
                 display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',
                 background:'rgba(255,255,255,.03)',flexShrink:0}}>
-                <span style=${{fontSize:18,fontWeight:900,color:selDev.scoreColor,fontFamily:'monospace',lineHeight:1}}>${selDev.score}</span>
+                <span style=${{fontSize:20,fontWeight:900,color:selDev.scoreColor,fontFamily:'monospace',lineHeight:1}}>${selDev.score}</span>
                 <span style=${{fontSize:8,color:'var(--tx3)',textTransform:'uppercase'}}>score</span>
               </div>
               ${[
@@ -3913,57 +3964,52 @@ function ProductivityView({cu,tasks,projects,users}){
                 {l:'Active',v:selDev.inProg,c:'var(--cy)'},
                 {l:'Blocked',v:selDev.blocked,c:selDev.blocked>0?'var(--rd)':'var(--tx3)'},
                 {l:'Overdue',v:selDev.overdue,c:selDev.overdue>0?'var(--rd)':'var(--tx3)'},
-                {l:'Avg %',v:selDev.avgPct+'%',c:selDev.avgPct>70?'var(--gn)':selDev.avgPct>40?'var(--am)':'var(--rd)'},
-                {l:'Last 7d',v:selDev.last7,c:selDev.last7>0?'var(--ac)':'var(--tx3)'},
+                {l:'Avg%',v:selDev.avgPct+'%',c:selDev.avgPct>70?'var(--gn)':selDev.avgPct>40?'var(--am)':'var(--rd)'},
+                {l:'Last7d',v:selDev.last7,c:selDev.last7>0?'var(--ac)':'var(--tx3)'},
               ].map(s=>html`
-                <div key=${s.l} style=${{textAlign:'center',padding:'7px 11px',background:'var(--bg)',borderRadius:8,border:'1px solid var(--bd)',minWidth:52}}>
+                <div key=${s.l} style=${{textAlign:'center',padding:'6px 10px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',minWidth:48}}>
                   <div style=${{fontSize:16,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.v}</div>
                   <div style=${{fontSize:8,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.4,marginTop:2}}>${s.l}</div>
                 </div>`)}
             </div>
-            <!-- Task list -->
-            <div style=${{padding:'14px 20px'}}>
-              <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.6,marginBottom:10}}>
-                Assigned Tasks <span style=${{color:'var(--ac)'}}>(${selTasks.length})</span>
-                ${filterProject!=='all'?' — filtered by project':''}
-              </div>
-              ${selTasks.length===0?html`
-                <div style=${{textAlign:'center',padding:'32px',color:'var(--tx3)',fontSize:13}}>
-                  <div style=${{fontSize:28,marginBottom:8}}>📭</div>
-                  No tasks assigned${filterProject!=='all'?' in this project':''}.
-                </div>`:null}
-              <div style=${{display:'flex',flexDirection:'column',gap:6}}>
-                ${selTasks.map(tk=>{
-                  const proj=p.find(pr=>pr.id===tk.project);
-                  const isOvd=tk.due&&new Date(tk.due)<now&&tk.stage!=='completed';
-                  return html`
-                    <div key=${tk.id} style=${{display:'flex',gap:10,padding:'10px 14px',
-                      background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)',alignItems:'center'}}>
-                      <div style=${{width:6,height:6,borderRadius:2,flexShrink:0,
-                        background:(STAGES[tk.stage]&&STAGES[tk.stage].color)||'var(--ac)'}}></div>
-                      <div style=${{flex:1,minWidth:0}}>
-                        <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${tk.title}</div>
-                        <div style=${{display:'flex',gap:5,marginTop:3,flexWrap:'wrap',alignItems:'center'}}>
-                          <${SP} s=${tk.stage}/><${PB} p=${tk.priority}/>
-                          ${proj?html`<span style=${{fontSize:10,color:'var(--tx3)',display:'flex',alignItems:'center',gap:3}}>
-                            <div style=${{width:5,height:5,borderRadius:1,background:proj.color}}></div>${proj.name}
-                          </span>`:null}
-                          ${isOvd?html`<span style=${{fontSize:10,color:'var(--rd)',fontWeight:700}}>⚠ Overdue</span>`:null}
-                        </div>
+            <!-- Tasks -->
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>
+              Assigned Tasks <span style=${{color:'var(--ac)'}}>(${selTasks.length})</span>${filterProject!=='all'?' — filtered':''}
+            </div>
+            ${selTasks.length===0?html`
+              <div style=${{textAlign:'center',padding:'32px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
+                <div style=${{fontSize:28,marginBottom:8}}>📭</div>No tasks assigned${filterProject!=='all'?' in this project':''}.
+              </div>`:null}
+            <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+              ${selTasks.map(tk=>{
+                const proj=p.find(pr=>pr.id===tk.project);
+                const isOvd=tk.due&&new Date(tk.due)<now&&tk.stage!=='completed';
+                return html`
+                  <div key=${tk.id} style=${{display:'flex',gap:10,padding:'9px 14px',background:'var(--sf)',borderRadius:9,border:'1px solid var(--bd)',alignItems:'center'}}>
+                    <div style=${{width:6,height:6,borderRadius:2,flexShrink:0,background:(STAGES[tk.stage]&&STAGES[tk.stage].color)||'var(--ac)'}}></div>
+                    <div style=${{flex:1,minWidth:0}}>
+                      <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${tk.title}</div>
+                      <div style=${{display:'flex',gap:5,marginTop:3,flexWrap:'wrap',alignItems:'center'}}>
+                        <${SP} s=${tk.stage}/><${PB} p=${tk.priority}/>
+                        ${proj?html`<span style=${{fontSize:10,color:'var(--tx3)',display:'flex',alignItems:'center',gap:3}}>
+                          <div style=${{width:5,height:5,borderRadius:1,background:proj.color,flexShrink:0}}></div>${proj.name}</span>`:null}
+                        ${isOvd?html`<span style=${{fontSize:10,color:'var(--rd)',fontWeight:700}}>⚠ Overdue</span>`:null}
                       </div>
-                      <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
-                        <div style=${{width:50,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
-                          <div style=${{height:'100%',width:(tk.pct||0)+'%',background:proj?proj.color:'var(--ac)',borderRadius:100}}></div>
-                        </div>
-                        <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',minWidth:28,textAlign:'right'}}>${tk.pct||0}%</span>
+                    </div>
+                    <div style=${{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+                      <div style=${{width:48,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                        <div style=${{height:'100%',width:(tk.pct||0)+'%',background:proj?proj.color:'var(--ac)',borderRadius:100}}></div>
                       </div>
-                    </div>`;
-                })}
-              </div>
+                      <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',minWidth:26,textAlign:'right'}}>${tk.pct||0}%</span>
+                    </div>
+                  </div>`;
+              })}
             </div>
           </div>`:null}
-      </div>
+
+      </div><!-- end scroll -->
     </div>`;
+}
 }
 function renderMd(text){
   return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
