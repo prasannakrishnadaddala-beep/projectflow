@@ -1784,18 +1784,9 @@ def serve_manifest():
     }
     return jsonify(manifest)
 
-@app.route("/", defaults={"p": ""})
+@app.route("/",defaults={"p":""})
 @app.route("/<path:p>")
-def root(p):
-    # If user clicked Sign In or Create Account from landing page, serve the React app
-    action = request.args.get("action", "")
-    if action in ("login", "register") or p != "":
-        return HTML
-    # Otherwise serve the landing page
-    landing_path = os.path.join(BASE_DIR, "index.html")
-    if os.path.exists(landing_path):
-        return send_file(landing_path)
-    return HTML  # fallback if index.html not found
+def root(p): return HTML
 
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -3283,10 +3274,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
             ⚙ Filters${activeFilters>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,fontSize:9,padding:'1px 5px',marginLeft:3,fontFamily:'monospace'}}>${activeFilters}</span>`:''}
           </button>
           ${activeFilters>0?html`<button class="btn bam" style=${{padding:'7px 11px',fontSize:11}} onClick=${clearAll}>✕ Clear</button>`:null}
-          <button class=${'btn bg'+(showResolved?' act':'')} style=${{padding:'8px 13px',fontSize:12,borderColor:showResolved?'var(--gn)':'',color:showResolved?'var(--gn)':''}}
-            onClick=${()=>setShowResolved(!showResolved)} title="Toggle resolved/completed tasks">
-            ${showResolved?'✓ Resolved':'○ Resolved'}
-          </button>
+
           <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
             <button class=${'tb'+(mode==='kanban'?' act':'')} onClick=${()=>setMode('kanban')}>⊞ Board</button>
             <button class=${'tb'+(mode==='list'?' act':'')} onClick=${()=>setMode('list')}>☰ List</button>
@@ -4985,7 +4973,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
   const [addMins,setAddMins]=useState(10);
   const [saving,setSaving]=useState(false);
   const [addProjId,setAddProjId]=useState('');
-  const [showCompleted,setShowCompleted]=useState(false);
+  const [activeTab,setActiveTab]=useState('upcoming');
   const [editReminder,setEditReminder]=useState(null);
   const [editDate,setEditDate]=useState('');
   const [editTime,setEditTime]=useState('');
@@ -5053,11 +5041,12 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
     return{label:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),cls:'var(--tx2)',bg:'var(--sf2)'};
   };
 
+  const todayItems=active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();});
   const statCards=[
-    {label:'Upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
-    {label:'Overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
-    {label:'Completed',val:completed.length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'✅'},
-    {label:'Today',val:active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'var(--ac)',bg:'rgba(170,255,0,.1)',icon:'📅'},
+    {label:'Upcoming',tab:'upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',activeBg:'rgba(34,211,238,.08)',icon:'⚡'},
+    {label:'Overdue',tab:'overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',activeBg:'rgba(248,113,113,.08)',icon:'🚨'},
+    {label:'Completed',tab:'completed',val:completed.length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',activeBg:'rgba(74,222,128,.08)',icon:'✅'},
+    {label:'Today',tab:'today',val:todayItems.length,color:'var(--ac)',bg:'rgba(170,255,0,.1)',activeBg:'rgba(170,255,0,.08)',icon:'📅'},
   ];
 
   return html`
@@ -5066,21 +5055,22 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
       <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
         <div style=${{fontSize:13,color:'var(--tx3)'}}>Set reminders for your tasks — get notified with sound before they're due.</div>
         <div style=${{display:'flex',gap:8}}>
-          <button class=${'btn '+(showCompleted?'bp':'bg')} style=${{fontSize:12}} onClick=${()=>setShowCompleted(p=>!p)}>
-            ${showCompleted?'Hide Completed':'Show Completed ('+completed.length+')'}
-          </button>
           <button class="btn bp" style=${{fontSize:12}} onClick=${()=>setShowAdd(true)}>+ Add Reminder</button>
         </div>
       </div>
 
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:22}}>
         ${statCards.map(s=>{
+          const isActive=activeTab===s.tab;
           return html`
-            <div key=${s.label} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12}}>
+            <div key=${s.label} onClick=${()=>setActiveTab(s.tab)}
+              style=${{background:isActive?s.activeBg:'var(--sf)',border:'2px solid '+(isActive?s.color:'var(--bd)'),borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'center',gap:12,cursor:'pointer',transition:'all .18s',boxShadow:isActive?('0 0 18px '+s.color+'22'):''}}
+              onMouseEnter=${e=>{if(!isActive)e.currentTarget.style.borderColor=s.color+'66'}}
+              onMouseLeave=${e=>{if(!isActive)e.currentTarget.style.borderColor='var(--bd)'}}>
               <div style=${{width:40,height:40,borderRadius:10,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${s.icon}</div>
               <div>
                 <div style=${{fontSize:24,fontWeight:900,color:s.color,lineHeight:1}}>${s.val}</div>
-                <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600}}>${s.label}</div>
+                <div style=${{fontSize:11,color:isActive?s.color:'var(--tx3)',marginTop:2,fontWeight:700}}>${s.label}</div>
               </div>
             </div>`;
         })}
@@ -5201,80 +5191,58 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
           </div>
         </div>`:null}
 
-      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-        <div>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <span style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>⚡ Upcoming</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminder${upcoming.length!==1?'s':''}</span>
-          </div>
-          ${busy?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
-          ${!busy&&upcoming.length===0?html`
-            <div style=${{textAlign:'center',padding:'28px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
-              <div style=${{fontSize:28,marginBottom:8}}>✅</div>
-              <div>No upcoming reminders</div>
-            </div>`:null}
-          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
-            ${upcoming.map(r=>{
-              const ft=fmtRem(r.remind_at);
-              return html`
-                <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)',alignItems:'center'}}>
-                  <div style=${{width:36,height:36,borderRadius:9,background:'rgba(251,191,36,.1)',border:'1px solid rgba(251,191,36,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⏰</div>
-                  <div style=${{flex:1,minWidth:0}}>
-                    <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
-                    <div style=${{display:'flex',gap:6,alignItems:'center'}}>
-                      <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.cls,fontWeight:700}}>${ft.label}</span>
-                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
-                      ${r.minutes_before>0?html`<span style=${{fontSize:10,color:'var(--am)'}}>🔔 ${r.minutes_before}min before</span>`:null}
+      ${(()=>{
+        const tabConfig={
+          upcoming:{items:upcoming,emptyIcon:'✅',emptyMsg:'No upcoming reminders',headerColor:'var(--cy)',headerLabel:'⚡ Upcoming',countSuffix:'reminder'},
+          overdue:{items:overdue,emptyIcon:'🎉',emptyMsg:'Nothing overdue!',headerColor:'var(--rd)',headerLabel:'🚨 Overdue',countSuffix:'past due'},
+          completed:{items:completed,emptyIcon:'📭',emptyMsg:'No completed reminders yet',headerColor:'var(--gn)',headerLabel:'✅ Completed',countSuffix:'done'},
+          today:{items:todayItems,emptyIcon:'📅',emptyMsg:'No reminders for today',headerColor:'var(--ac)',headerLabel:'📅 Today',countSuffix:'today'},
+        };
+        const cfg=tabConfig[activeTab]||tabConfig.upcoming;
+        const isCompleted=activeTab==='completed';
+        const isOverdue=activeTab==='overdue';
+        return html`
+          <div>
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <span style=${{fontWeight:700,fontSize:14,color:cfg.headerColor}}>${cfg.headerLabel}</span>
+              <span style=${{fontSize:11,color:'var(--tx3)'}}>${cfg.items.length} ${cfg.countSuffix}${cfg.items.length!==1&&cfg.countSuffix==='reminder'?'s':''}</span>
+            </div>
+            ${busy?html`<div class="spin" style=${{margin:'40px auto',display:'block'}}></div>`:null}
+            ${!busy&&cfg.items.length===0?html`
+              <div style=${{textAlign:'center',padding:'48px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
+                <div style=${{fontSize:36,marginBottom:10}}>${cfg.emptyIcon}</div>
+                <div>${cfg.emptyMsg}</div>
+              </div>`:null}
+            <div style=${{display:'flex',flexDirection:'column',gap:10}}>
+              ${cfg.items.map(r=>{
+                const ft=fmtRem(r.remind_at);
+                return html`
+                  <div key=${r.id} style=${{display:'flex',gap:10,padding:'12px 14px',
+                    background:isCompleted?'rgba(74,222,128,.04)':isOverdue?'rgba(248,113,113,.03)':'var(--sf)',
+                    borderRadius:10,
+                    border:'1px solid '+(isCompleted?'rgba(74,222,128,.15)':isOverdue?'rgba(248,113,113,.15)':'var(--bd)'),
+                    alignItems:'center',opacity:isCompleted?.8:1}}>
+                    <div style=${{width:36,height:36,borderRadius:9,
+                      background:isCompleted?'rgba(74,222,128,.1)':isOverdue?'rgba(248,113,113,.1)':'rgba(251,191,36,.1)',
+                      border:'1px solid '+(isCompleted?'rgba(74,222,128,.2)':isOverdue?'rgba(248,113,113,.2)':'rgba(251,191,36,.2)'),
+                      display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>
+                      ${isCompleted?'✅':isOverdue?'⚠️':'⏰'}
                     </div>
-                  </div>
-                  <button class="btn bg" title="Edit" style=${{fontSize:11,padding:'4px 8px',flexShrink:0,marginRight:4}} onClick=${()=>openEdit(r)}>✏️</button>
-                  <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-                </div>`;
-            })}
-          </div>
-        </div>
-        <div>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <span style=${{fontWeight:700,fontSize:13,color:'var(--rd)'}}>🚨 Overdue</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
-          </div>
-          ${!busy&&overdue.length===0?html`
-            <div style=${{textAlign:'center',padding:'28px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
-              <div style=${{fontSize:28,marginBottom:8}}>🎉</div>
-              <div>Nothing overdue!</div>
-            </div>`:null}
-          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
-            ${overdue.map(r=>html`
-              <div key=${r.id} style=${{display:'flex',gap:10,padding:'11px 13px',background:'rgba(248,113,113,.03)',borderRadius:10,border:'1px solid rgba(248,113,113,.15)',alignItems:'center'}}>
-                <div style=${{width:36,height:36,borderRadius:9,background:'rgba(248,113,113,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⚠️</div>
-                <div style=${{flex:1,minWidth:0}}>
-                  <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
-                  <span style=${{fontSize:10,color:'var(--rd)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
-                </div>
-                <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-              </div>`)}
-          </div>
-        </div>
-      </div>
-
-      ${showCompleted&&completed.length>0?html`
-        <div style=${{marginTop:20}}>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <span style=${{fontWeight:700,fontSize:13,color:'var(--gn)'}}>✅ Completed Reminders</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${completed.length} done</span>
-          </div>
-          <div style=${{display:'flex',flexDirection:'column',gap:8}}>
-            ${completed.map(r=>html`
-              <div key=${r.id} style=${{display:'flex',gap:10,padding:'10px 13px',background:'rgba(74,222,128,.04)',borderRadius:10,border:'1px solid rgba(74,222,128,.15)',alignItems:'center',opacity:.75}}>
-                <div style=${{width:32,height:32,borderRadius:8,background:'rgba(74,222,128,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>✅</div>
-                <div style=${{flex:1,minWidth:0}}>
-                  <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:'line-through',opacity:.7}}>${r.task_title}</div>
-                  <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
-                </div>
-                <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
-              </div>`)}
-          </div>
-        </div>`:null}
+                    <div style=${{flex:1,minWidth:0}}>
+                      <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3,textDecoration:isCompleted?'line-through':'none',opacity:isCompleted?.7:1}}>${r.task_title}</div>
+                      <div style=${{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+                        ${!isCompleted?html`<span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.cls,fontWeight:700}}>${ft.label}</span>`:null}
+                        <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                        ${r.minutes_before>0&&!isCompleted?html`<span style=${{fontSize:10,color:'var(--am)'}}>🔔 ${r.minutes_before}min before</span>`:null}
+                      </div>
+                    </div>
+                    ${!isCompleted?html`<button class="btn bg" title="Edit" style=${{fontSize:11,padding:'4px 8px',flexShrink:0,marginRight:4}} onClick=${()=>openEdit(r)}>✏️</button>`:null}
+                    <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
+                  </div>`;
+              })}
+            </div>
+          </div>`;
+      })()}
 
       ${editReminder?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setEditReminder(null)}>
