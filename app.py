@@ -4,7 +4,7 @@ ProjectFlow v4.0
 Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 """
 import os, sys, json, hashlib, sqlite3, secrets, random, urllib.request, urllib.error
-import socket, threading, time, webbrowser, mimetypes, base64, smtplib
+import socket, threading, time, webbrowser, mimetypes, base64, smtplib, csv, io
 from datetime import datetime
 from functools import wraps
 from email.mime.text import MIMEText
@@ -49,6 +49,82 @@ def get_db():
     return c
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 def ts(): return datetime.utcnow().isoformat() + 'Z'
+# ── CSV Import Processing ──────────────────────────────────────────────────
+def process_csv_import(file_obj, workspace_id, user_id):
+    """Process CSV file and create projects and tasks automatically"""
+    results = {'projects_created': 0, 'tasks_created': 0, 'errors': []}
+    
+    try:
+        file_content = file_obj.read().decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(file_content))
+        
+        db = get_db()
+        project_cache = {}
+        
+        for row_idx, row in enumerate(csv_reader, start=2):
+            try:
+                project_name = row.get('Project', '').strip()
+                task_title = row.get('Task', '').strip()
+                task_desc = row.get('Description', '').strip()
+                priority = row.get('Priority', 'Medium').strip()
+                stage = row.get('Stage', 'Planning').strip()
+                assigned_to = row.get('AssignedTo', '').strip()
+                
+                if not project_name or not task_title:
+                    results['errors'].append(f"Row {row_idx}: Missing Project or Task name")
+                    continue
+                
+                if project_name not in project_cache:
+                    project_id = 'proj_' + secrets.token_hex(6)
+                    db.execute("""INSERT INTO projects 
+                        (id, workspace_id, name, owner_id, color, created_at) 
+                        VALUES (?, ?, ?, ?, ?, ?)""",
+                        (project_id, workspace_id, project_name, user_id, 
+                         CLRS[len(project_cache) % len(CLRS)], ts()))
+                    project_cache[project_name] = project_id
+                    results['projects_created'] += 1
+                else:
+                    project_id = project_cache[project_name]
+                
+                assigned_user_id = None
+                if assigned_to:
+                    user_row = db.execute(
+                        "SELECT id FROM users WHERE workspace_id=? AND (email=? OR name=?)",
+                        (workspace_id, assigned_to, assigned_to)).fetchone()
+                    if user_row:
+                        assigned_user_id = user_row[0]
+                
+                task_id = 'task_' + secrets.token_hex(6)
+                db.execute("""INSERT INTO tasks 
+                    (id, workspace_id, project_id, title, description, priority, 
+                     stage, created_by, assigned_to, created_at, updated_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (task_id, workspace_id, project_id, task_title, task_desc, 
+                     priority, stage, user_id, assigned_user_id, ts(), ts()))
+                
+                if assigned_user_id:
+                    notif_id = 'notif_' + secrets.token_hex(6)
+                    db.execute("""INSERT INTO notifications 
+                        (id, workspace_id, user_id, type, title, message, task_id, created_at) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (notif_id, workspace_id, assigned_user_id, 'task_assigned', 
+                         f'Task assigned: {task_title}', 
+                         f'You have been assigned to: {task_title}', 
+                         task_id, ts()))
+                
+                results['tasks_created'] += 1
+                
+            except Exception as e:
+                results['errors'].append(f"Row {row_idx}: {str(e)}")
+        
+        db.commit()
+        db.close()
+        
+    except Exception as e:
+        results['errors'].append(f"CSV parsing error: {str(e)}")
+    
+    return results
+
 
 # ── Email Configuration & Function ────────────────────────────────────────────
 # Configure these environment variables or modify directly:
