@@ -3621,7 +3621,7 @@ function TimelineView({cu,tasks,projects}){
   const fmtD=d=>d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
   const summary={total:timelines.length,...Object.fromEntries(Object.keys(healthCfg).map(k=>[k,timelines.filter(r=>r.health===k).length]))};
   return html`
-    <div style=${{height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+    <div style=${{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
       <!-- Fixed header -->
       <div style=${{flexShrink:0,padding:'16px 24px 12px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
         <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
@@ -3666,7 +3666,7 @@ function TimelineView({cu,tasks,projects}){
         </div>
       </div>
       <!-- Scrollable list -->
-      <div style=${{flex:1,overflowY:'auto',padding:'14px 24px',display:'flex',flexDirection:'column',gap:10}}>
+      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'14px 24px',display:'flex',flexDirection:'column',gap:10}}>
         ${filtered.length===0?html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
           <div style=${{fontSize:36,marginBottom:10}}>🔍</div><div>No projects match the selected filters.</div>
         </div>`:null}
@@ -3763,20 +3763,20 @@ function ProductivityView({cu,tasks,projects,users}){
     name:d.name.split(' ')[0],Completed:d.completed,'In Progress':d.inProg,Blocked:d.blocked
   }));
   return html`
-    <div style=${{height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
+    <div style=${{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
 
       <!-- ── FIXED TOP ── -->
-      <div style=${{flexShrink:0,padding:'16px 24px 12px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
+      <div style=${{flexShrink:0,padding:'14px 20px 10px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
         <!-- Header -->
-        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,flexWrap:'wrap',gap:8}}>
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
           <div>
-            <h2 style=${{fontSize:16,fontWeight:800,color:'var(--tx)',display:'flex',alignItems:'center',gap:8,margin:0}}>👩‍💻 Developer Productivity</h2>
+            <h2 style=${{fontSize:15,fontWeight:800,color:'var(--tx)',display:'flex',alignItems:'center',gap:8,margin:0}}>👩‍💻 Developer Productivity</h2>
             <p style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>Task completion, workload &amp; productivity score per developer</p>
           </div>
-          ${selDev?html`<button class="btn bg" style=${{fontSize:11,padding:'6px 14px'}} onClick=${()=>setSelectedDev(null)}>← All Developers</button>`:null}
+          ${selDev?html`<button class="btn bg" style=${{fontSize:11,padding:'5px 12px'}} onClick=${()=>setSelectedDev(null)}>← All Developers</button>`:null}
         </div>
-        <!-- Summary chips -->
-        <div style=${{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:12}}>
+        <!-- Summary chips — compact -->
+        <div style=${{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
           ${[
             {lbl:'Developers',val:u.length,c:'var(--ac)',bg:'rgba(170,255,0,.07)'},
             {lbl:'Total Tasks',val:t.length,c:'var(--cy)',bg:'rgba(34,211,238,.07)'},
@@ -3784,35 +3784,35 @@ function ProductivityView({cu,tasks,projects,users}){
             {lbl:'Blocked',val:t.filter(x=>x.stage==='blocked').length,c:'var(--rd)',bg:'rgba(248,113,113,.07)'},
             {lbl:'Overdue',val:t.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length,c:'var(--am)',bg:'rgba(251,191,36,.07)'},
           ].map((s,i)=>html`
-            <div key=${i} style=${{background:s.bg,border:'1px solid var(--bd)',borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
-              <div style=${{fontSize:22,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.val}</div>
-              <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:700,marginTop:3,textTransform:'uppercase',letterSpacing:.5}}>${s.lbl}</div>
+            <div key=${i} style=${{background:s.bg,border:'1px solid var(--bd)',borderRadius:8,padding:'6px 14px',display:'flex',alignItems:'center',gap:8}}>
+              <span style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.val}</span>
+              <span style=${{fontSize:9,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>${s.lbl}</span>
             </div>`)}
         </div>
-        <!-- Filter + sort bar -->
+        <!-- Filter + sort bar — single row -->
         <div style=${{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Filter:</span>
-          <select class="inp" style=${{height:28,fontSize:11,padding:'0 8px',minWidth:120}} value=${filterRole}
+          <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',minWidth:110}} value=${filterRole}
             onChange=${e=>{setFilterRole(e.target.value);setSelectedDev(null);}}>
             <option value="all">All Roles</option>
             ${roles.map(r=>html`<option key=${r} value=${r}>${r}</option>`)}
           </select>
-          <select class="inp" style=${{height:28,fontSize:11,padding:'0 8px',minWidth:140}} value=${filterProject}
+          <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',minWidth:130}} value=${filterProject}
             onChange=${e=>{setFilterProject(e.target.value);setSelectedDev(null);}}>
             <option value="all">All Projects</option>
             ${p.map(pr=>html`<option key=${pr.id} value=${pr.id}>${pr.name}</option>`)}
           </select>
-          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginLeft:6}}>Sort:</span>
-          <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1}}>
+          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginLeft:4}}>Sort:</span>
+          <div style=${{display:'flex',background:'var(--sf2)',borderRadius:6,padding:2,gap:1}}>
             ${[['score','🏆 Score'],['name','🔤 Name'],['completed','✅ Done'],['overdue','⚠ Overdue']].map(([k,lbl])=>html`
-              <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'3px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
+              <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
           </div>
           <span style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)'}}>${filtered.length} developer${filtered.length!==1?'s':''}</span>
         </div>
       </div>
 
       <!-- ── SCROLLABLE BODY ── -->
-      <div style=${{flex:1,overflowY:'auto',padding:'14px 24px',display:'flex',flexDirection:'column',gap:14}}>
+      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
 
         ${!selDev?html`
           <!-- Developer table -->
@@ -6833,7 +6833,7 @@ function App(){
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
           onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
         />
-        <div style=${{flex:1,overflow:'hidden'}}>
+        <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
             ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
