@@ -1784,8 +1784,12 @@ def serve_manifest():
     }
     return jsonify(manifest)
 
-@app.route("/",defaults={"p":""})
-@app.route("/<path:p>")
+@app.route("/")
+def landing():
+    return send_file("index.html")
+
+@app.route("/app", defaults={"p": ""})
+@app.route("/app/<path:p>")
 def root(p): return HTML
 
 HTML = r"""<!DOCTYPE html>
