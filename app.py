@@ -2398,6 +2398,8 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     team:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>`,
     tickets:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,
     settings:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>`,
+    timeline:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/><line x1="8" y1="18" x2="11" y2="18"/></svg>`,
+    productivity:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><polyline points="2 20 22 20"/></svg>`,
   };
   const MGMT_ROLES=['Admin','Manager','TeamLead'];
   const items=[
@@ -2408,6 +2410,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
     {id:'tickets',icon:ICONS.tickets,label:'Tickets'},
     ...(cu&&MGMT_ROLES.includes(cu.role)?[{id:'team',icon:ICONS.team,label:'Team'}]:[]),
+    ...(cu&&(cu.role==='Admin'||cu.role==='Manager')?[
+      {id:'timeline',icon:ICONS.timeline,label:'Timeline Tracker'},
+      {id:'productivity',icon:ICONS.productivity,label:'Dev Productivity'},
+    ]:[]),
   ];
   // base view strips filter params (e.g. 'tasks:stage:dev' → 'tasks')
   const baseView=view.split(':')[0];
@@ -3857,6 +3863,464 @@ function Dashboard({cu,tasks,projects,users,onNav}){
           ${myT.length===0?html`<div style=${{color:'var(--tx3)',fontSize:13,textAlign:'center',paddingTop:16}}>No tasks assigned.</div>`:null}
         </div>
       </div>
+    </div>`;
+}
+
+/* ─── TimelineView ────────────────────────────────────────────────────────── */
+function TimelineView({cu,tasks,projects}){
+  const t=safe(tasks); const p=safe(projects);
+  const now=new Date(); now.setHours(0,0,0,0);
+  const [filterHealth,setFilterHealth]=useState('all');
+  const [filterProject,setFilterProject]=useState('all');
+  const [sortBy,setSortBy]=useState('health'); // health | name | progress | days_left
+
+  const healthCfg={
+    'on-track':{label:'On Track',color:'var(--gn)',bg:'rgba(74,222,128,.12)'},
+    'warning':{label:'At Risk',color:'var(--am)',bg:'rgba(251,191,36,.12)'},
+    'at-risk':{label:'Needs Attention',color:'var(--rd)',bg:'rgba(248,113,113,.12)'},
+    'overdue':{label:'Overdue',color:'var(--rd)',bg:'rgba(248,113,113,.2)'},
+    'no-dates':{label:'No Dates',color:'var(--tx3)',bg:'rgba(255,255,255,.04)'},
+  };
+  const healthOrder={'overdue':0,'at-risk':1,'warning':2,'on-track':3,'no-dates':4};
+
+  const timelines=useMemo(()=>p.map(proj=>{
+    const start=proj.start_date?new Date(proj.start_date):null;
+    const end=proj.target_date?new Date(proj.target_date):null;
+    if(start) start.setHours(0,0,0,0);
+    if(end) end.setHours(0,0,0,0);
+    const totalDays=(start&&end)?Math.max(1,Math.round((end-start)/(86400000))):null;
+    const daysSpent=start?Math.max(0,Math.round((now-start)/86400000)):null;
+    const daysLeft=end?Math.round((end-now)/86400000):null;
+    const timeProgress=(totalDays&&daysSpent!==null)?Math.min(100,Math.round((daysSpent/totalDays)*100)):null;
+    const isOverdue=end&&now>end;
+    const pt=t.filter(x=>x.project===proj.id);
+    const taskProgress=pt.length?Math.round(pt.reduce((a,x)=>a+(x.pct||0),0)/pt.length):(proj.progress||0);
+    const gap=timeProgress!==null?(timeProgress-taskProgress):null;
+    const health=gap===null?'no-dates':isOverdue&&taskProgress<100?'overdue':gap>30?'at-risk':gap>15?'warning':'on-track';
+    return {...proj,start,end,totalDays,daysSpent,daysLeft,timeProgress,taskProgress,isOverdue,health,gap,
+      taskCount:pt.length,doneTasks:pt.filter(x=>x.stage==='completed').length};
+  }),[p,t,now]);
+
+  const filtered=useMemo(()=>{
+    let rows=timelines;
+    if(filterHealth!=='all') rows=rows.filter(r=>r.health===filterHealth);
+    if(filterProject!=='all') rows=rows.filter(r=>r.id===filterProject);
+    rows=[...rows].sort((a,b)=>{
+      if(sortBy==='health') return (healthOrder[a.health]??9)-(healthOrder[b.health]??9);
+      if(sortBy==='name') return a.name.localeCompare(b.name);
+      if(sortBy==='progress') return b.taskProgress-a.taskProgress;
+      if(sortBy==='days_left'){
+        if(a.daysLeft===null) return 1; if(b.daysLeft===null) return -1;
+        return a.daysLeft-b.daysLeft;
+      }
+      return 0;
+    });
+    return rows;
+  },[timelines,filterHealth,filterProject,sortBy]);
+
+  const fmtDate=d=>d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+  const summary={total:timelines.length,...Object.fromEntries(Object.keys(healthCfg).map(k=>[k,timelines.filter(r=>r.health===k).length]))};
+
+  return html`
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 24px',display:'flex',flexDirection:'column',gap:16}}>
+
+      <!-- Header -->
+      <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+        <div>
+          <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',letterSpacing:'-.3px',display:'flex',alignItems:'center',gap:9}}>
+            <span style=${{fontSize:22}}>📅</span> Project Timeline Tracker
+          </h2>
+          <p style=${{fontSize:12,color:'var(--tx3)',marginTop:3}}>Days spent vs. days remaining per project — based on today's date</p>
+        </div>
+        <div style=${{fontSize:11,color:'var(--tx3)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,padding:'6px 12px',fontFamily:'monospace'}}>
+          Today: ${now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}
+        </div>
+      </div>
+
+      <!-- Health summary cards -->
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10}}>
+        ${[['all','All Projects','var(--ac)','rgba(170,255,0,.08)',summary.total],
+           ['on-track','On Track','var(--gn)','rgba(74,222,128,.1)',summary['on-track']],
+           ['warning','At Risk','var(--am)','rgba(251,191,36,.1)',summary['warning']],
+           ['at-risk','Needs Attn','var(--rd)','rgba(248,113,113,.1)',summary['at-risk']],
+           ['overdue','Overdue','var(--rd)','rgba(248,113,113,.15)',summary['overdue']],
+        ].map(([k,lbl,color,bg,cnt])=>html`
+          <div key=${k} onClick=${()=>setFilterHealth(k)}
+            style=${{background:filterHealth===k?bg:'var(--sf)',border:'2px solid '+(filterHealth===k?color:'var(--bd)'),
+              borderRadius:12,padding:'12px 14px',cursor:'pointer',transition:'all .15s',textAlign:'center'}}
+            onMouseEnter=${e=>{if(filterHealth!==k)e.currentTarget.style.borderColor=color+'88';}}
+            onMouseLeave=${e=>{if(filterHealth!==k)e.currentTarget.style.borderColor='var(--bd)';}}>
+            <div style=${{fontSize:22,fontWeight:800,color,fontFamily:'monospace'}}>${cnt}</div>
+            <div style=${{fontSize:10,color:filterHealth===k?color:'var(--tx3)',fontWeight:700,marginTop:2,textTransform:'uppercase',letterSpacing:.5}}>${lbl}</div>
+          </div>`)}
+      </div>
+
+      <!-- Filters & sort bar -->
+      <div style=${{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',padding:'10px 14px',background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
+        <span style=${{fontSize:11,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Filter:</span>
+        <select class="inp" style=${{height:30,fontSize:11,padding:'0 8px',flex:'1',minWidth:140,maxWidth:220}}
+          value=${filterProject} onChange=${e=>setFilterProject(e.target.value)}>
+          <option value="all">All Projects</option>
+          ${p.map(pr=>html`<option key=${pr.id} value=${pr.id}>${pr.name}</option>`)}
+        </select>
+        <select class="inp" style=${{height:30,fontSize:11,padding:'0 8px',flex:'1',minWidth:140,maxWidth:200}}
+          value=${filterHealth} onChange=${e=>setFilterHealth(e.target.value)}>
+          <option value="all">All Health</option>
+          ${Object.entries(healthCfg).map(([k,v])=>html`<option key=${k} value=${k}>${v.label}</option>`)}
+        </select>
+        <span style=${{fontSize:11,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginLeft:8}}>Sort:</span>
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:8,padding:2,gap:2}}>
+          ${[['health','🚦 Health'],['name','🔤 Name'],['progress','✅ Progress'],['days_left','⏳ Days Left']].map(([k,lbl])=>html`
+            <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'3px 9px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
+        </div>
+        <span style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)'}}>${filtered.length} of ${timelines.length} projects</span>
+      </div>
+
+      <!-- Legend -->
+      <div style=${{display:'flex',gap:16,flexWrap:'wrap',fontSize:10,color:'var(--tx3)'}}>
+        ${Object.entries(healthCfg).map(([k,v])=>html`
+          <div key=${k} style=${{display:'flex',alignItems:'center',gap:5}}>
+            <div style=${{width:8,height:8,borderRadius:2,background:v.color}}></div>
+            <span>${v.label}</span>
+          </div>`)}
+        <div style=${{display:'flex',alignItems:'center',gap:5,marginLeft:12}}>
+          <div style=${{width:24,height:5,background:'var(--cy)',borderRadius:100}}></div><span>Time elapsed</span>
+        </div>
+        <div style=${{display:'flex',alignItems:'center',gap:5}}>
+          <div style=${{width:24,height:5,background:'var(--ac)',borderRadius:100}}></div><span>Tasks done</span>
+        </div>
+      </div>
+
+      <!-- Project cards -->
+      ${filtered.length===0?html`
+        <div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
+          <div style=${{fontSize:36,marginBottom:10}}>🔍</div>
+          <div>No projects match the selected filters.</div>
+        </div>`:null}
+
+      <div style=${{display:'flex',flexDirection:'column',gap:12}}>
+        ${filtered.map(proj=>{
+          const hc=healthCfg[proj.health];
+          return html`
+            <div key=${proj.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'16px 20px',
+              borderLeft:'4px solid '+proj.color,transition:'box-shadow .15s'}}
+              onMouseEnter=${e=>e.currentTarget.style.boxShadow='var(--sh)'}
+              onMouseLeave=${e=>e.currentTarget.style.boxShadow=''}>
+
+              <!-- Row 1: name + health badge + task count -->
+              <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+                <div style=${{width:10,height:10,borderRadius:3,background:proj.color,flexShrink:0}}></div>
+                <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)',flex:1}}>${proj.name}</span>
+                <span style=${{fontSize:10,fontWeight:700,padding:'3px 10px',borderRadius:100,background:hc.bg,color:hc.color}}>${hc.label}</span>
+                <span style=${{fontSize:10,color:'var(--tx3)'}}>📋 ${proj.doneTasks}/${proj.taskCount} tasks done</span>
+              </div>
+
+              ${proj.totalDays!==null?html`
+                <!-- Dual bars -->
+                <div style=${{display:'flex',flexDirection:'column',gap:6,marginBottom:12}}>
+                  <div style=${{display:'flex',alignItems:'center',gap:10}}>
+                    <span style=${{fontSize:10,color:'var(--tx3)',width:100,flexShrink:0}}>⏱ Time elapsed</span>
+                    <div style=${{flex:1,height:8,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
+                      <div style=${{height:'100%',width:proj.timeProgress+'%',
+                        background:proj.isOverdue?'var(--rd)':proj.timeProgress>70?'var(--am)':'var(--cy)',
+                        borderRadius:100,transition:'width .5s'}}></div>
+                    </div>
+                    <span style=${{fontSize:11,fontFamily:'monospace',color:'var(--tx2)',width:36,textAlign:'right',fontWeight:700}}>${proj.timeProgress}%</span>
+                  </div>
+                  <div style=${{display:'flex',alignItems:'center',gap:10}}>
+                    <span style=${{fontSize:10,color:'var(--tx3)',width:100,flexShrink:0}}>✅ Tasks done</span>
+                    <div style=${{flex:1,height:8,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
+                      <div style=${{height:'100%',width:proj.taskProgress+'%',background:proj.color,borderRadius:100,transition:'width .5s'}}></div>
+                    </div>
+                    <span style=${{fontSize:11,fontFamily:'monospace',color:'var(--tx2)',width:36,textAlign:'right',fontWeight:700}}>${proj.taskProgress}%</span>
+                  </div>
+                </div>
+
+                <!-- Stats chips -->
+                <div style=${{display:'flex',gap:8,flexWrap:'wrap'}}>
+                  ${[
+                    {lbl:'Start',val:fmtDate(proj.start),c:'var(--tx2)'},
+                    {lbl:'End',val:fmtDate(proj.end),c:proj.isOverdue?'var(--rd)':'var(--tx2)'},
+                    {lbl:'Total',val:proj.totalDays+' days',c:'var(--tx2)'},
+                    {lbl:'Spent',val:proj.daysSpent+' days',c:'var(--ac)'},
+                    {lbl:proj.isOverdue?'Overdue by':'Remaining',
+                     val:Math.abs(proj.daysLeft)+' days',
+                     c:proj.isOverdue?'var(--rd)':'var(--gn)'},
+                    proj.gap!==null?{lbl:'Gap',val:(proj.gap>0?'+':'')+proj.gap+'%',
+                     c:proj.gap>15?'var(--rd)':proj.gap>0?'var(--am)':'var(--gn)'}:null,
+                  ].filter(Boolean).map((chip,i)=>html`
+                    <div key=${i} style=${{padding:'4px 10px',background:'var(--sf2)',borderRadius:7,border:'1px solid var(--bd)'}}>
+                      <span style=${{fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${chip.lbl} </span>
+                      <span style=${{fontSize:11,fontWeight:700,color:chip.c,fontFamily:'monospace'}}>${chip.val}</span>
+                    </div>`)}
+                </div>`:html`
+                <div style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic',padding:'6px 0'}}>
+                  No ${!proj.start?'start or end dates':'end date'} set — edit this project to enable timeline tracking.
+                </div>`}
+            </div>`;
+        })}
+      </div>
+    </div>`;
+}
+
+/* ─── ProductivityView ───────────────────────────────────────────────────── */
+function ProductivityView({cu,tasks,projects,users}){
+  const t=safe(tasks); const p=safe(projects); const u=safe(users);
+  const now=new Date(); now.setHours(0,0,0,0);
+  const [selectedDev,setSelectedDev]=useState(null);
+  const [filterRole,setFilterRole]=useState('all');
+  const [filterProject,setFilterProject]=useState('all');
+  const [sortBy,setSortBy]=useState('score');
+
+  const roles=[...new Set(u.map(x=>x.role).filter(Boolean))];
+
+  const devStats=useMemo(()=>u.map(dev=>{
+    let devTasks=t.filter(x=>x.assignee===dev.id);
+    if(filterProject!=='all') devTasks=devTasks.filter(x=>x.project===filterProject);
+    const completed=devTasks.filter(x=>x.stage==='completed');
+    const inProg=devTasks.filter(x=>x.stage==='in-progress'||x.stage==='development');
+    const blocked=devTasks.filter(x=>x.stage==='blocked');
+    const overdue=devTasks.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed');
+    const total=devTasks.length;
+    const completionRate=total?Math.round((completed.length/total)*100):0;
+    const avgPct=total?Math.round(devTasks.reduce((a,x)=>a+(x.pct||0),0)/total):0;
+    const highPri=completed.filter(x=>x.priority==='high'||x.priority==='critical').length;
+    const score=Math.min(100,Math.round(completionRate*0.5+avgPct*0.3+Math.max(0,20-overdue.length*5)));
+    const scoreColor=score>=70?'var(--gn)':score>=40?'var(--am)':'var(--rd)';
+    const last7=t.filter(x=>x.assignee===dev.id&&(now-new Date(x.created||0))<7*86400000).length;
+    const projSet=new Set(devTasks.map(x=>x.project));
+    return {...dev,total,completed:completed.length,inProg:inProg.length,
+      blocked:blocked.length,overdue:overdue.length,completionRate,avgPct,
+      highPri,score,scoreColor,last7,projCount:projSet.size};
+  }),[u,t,filterProject,now]);
+
+  const filtered=useMemo(()=>{
+    let rows=devStats;
+    if(filterRole!=='all') rows=rows.filter(r=>r.role===filterRole);
+    rows=[...rows].sort((a,b)=>{
+      if(sortBy==='score') return b.score-a.score;
+      if(sortBy==='name') return a.name.localeCompare(b.name);
+      if(sortBy==='completed') return b.completed-a.completed;
+      if(sortBy==='overdue') return b.overdue-a.overdue;
+      return 0;
+    });
+    return rows;
+  },[devStats,filterRole,sortBy]);
+
+  const selDev=selectedDev?devStats.find(d=>d.id===selectedDev):null;
+  const selTasks=selDev?t.filter(x=>x.assignee===selDev.id&&(filterProject==='all'||x.project===filterProject)):[];
+
+  // Chart data
+  const chartData=filtered.slice(0,8).map(d=>({
+    name:d.name.split(' ')[0],
+    Completed:d.completed,'In Progress':d.inProg,Blocked:d.blocked,score:d.score
+  }));
+
+  return html`
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 24px',display:'flex',flexDirection:'column',gap:16}}>
+
+      <!-- Header -->
+      <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+        <div>
+          <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',letterSpacing:'-.3px',display:'flex',alignItems:'center',gap:9}}>
+            <span style=${{fontSize:22}}>👩‍💻</span> Developer Productivity
+          </h2>
+          <p style=${{fontSize:12,color:'var(--tx3)',marginTop:3}}>Daily task completion, workload balance &amp; productivity score</p>
+        </div>
+        ${selDev?html`
+          <button class="btn bg" style=${{fontSize:11,padding:'6px 14px'}} onClick=${()=>setSelectedDev(null)}>
+            ← All Developers
+          </button>`:null}
+      </div>
+
+      <!-- Team summary chips -->
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10}}>
+        ${[
+          {lbl:'Developers',val:u.length,c:'var(--ac)',bg:'rgba(170,255,0,.08)'},
+          {lbl:'Total Tasks',val:t.length,c:'var(--cy)',bg:'rgba(34,211,238,.08)'},
+          {lbl:'Completed',val:t.filter(x=>x.stage==='completed').length,c:'var(--gn)',bg:'rgba(74,222,128,.08)'},
+          {lbl:'Blocked',val:t.filter(x=>x.stage==='blocked').length,c:'var(--rd)',bg:'rgba(248,113,113,.08)'},
+          {lbl:'Overdue',val:t.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length,c:'var(--am)',bg:'rgba(251,191,36,.08)'},
+        ].map((s,i)=>html`
+          <div key=${i} style=${{background:s.bg,border:'1px solid var(--bd)',borderRadius:12,padding:'12px 14px',textAlign:'center'}}>
+            <div style=${{fontSize:24,fontWeight:800,color:s.c,fontFamily:'monospace'}}>${s.val}</div>
+            <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,marginTop:2,textTransform:'uppercase',letterSpacing:.5}}>${s.lbl}</div>
+          </div>`)}
+      </div>
+
+      <!-- Filters bar -->
+      <div style=${{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',padding:'10px 14px',background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
+        <span style=${{fontSize:11,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Filter:</span>
+        <select class="inp" style=${{height:30,fontSize:11,padding:'0 8px',minWidth:140,maxWidth:200}}
+          value=${filterRole} onChange=${e=>{setFilterRole(e.target.value);setSelectedDev(null);}}>
+          <option value="all">All Roles</option>
+          ${roles.map(r=>html`<option key=${r} value=${r}>${r}</option>`)}
+        </select>
+        <select class="inp" style=${{height:30,fontSize:11,padding:'0 8px',minWidth:140,maxWidth:220}}
+          value=${filterProject} onChange=${e=>{setFilterProject(e.target.value);setSelectedDev(null);}}>
+          <option value="all">All Projects</option>
+          ${p.map(pr=>html`<option key=${pr.id} value=${pr.id}>${pr.name}</option>`)}
+        </select>
+        <span style=${{fontSize:11,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginLeft:8}}>Sort:</span>
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:8,padding:2,gap:2}}>
+          ${[['score','🏆 Score'],['name','🔤 Name'],['completed','✅ Done'],['overdue','⚠ Overdue']].map(([k,lbl])=>html`
+            <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'3px 9px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
+        </div>
+        <span style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)'}}>${filtered.length} developers</span>
+      </div>
+
+      ${!selDev?html`
+        <!-- Developer table -->
+        <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,overflow:'hidden'}}>
+          <div style=${{overflowX:'auto'}}>
+            <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead>
+                <tr style=${{background:'var(--sf2)',borderBottom:'1px solid var(--bd)'}}>
+                  ${['Rank','Developer','Role','Score','Tasks','Done','Active','Blocked','Overdue','Avg %','Last 7d','Projects'].map(h=>html`
+                    <th key=${h} style=${{padding:'9px 11px',textAlign:'left',fontSize:10,fontWeight:700,
+                      color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,whiteSpace:'nowrap'}}>${h}</th>`)}
+                </tr>
+              </thead>
+              <tbody>
+                ${filtered.map((dev,i)=>html`
+                  <tr key=${dev.id}
+                    style=${{borderBottom:'1px solid var(--bd)',cursor:'pointer',transition:'background .12s'}}
+                    onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.03)'}
+                    onMouseLeave=${e=>e.currentTarget.style.background=''}
+                    onClick=${()=>setSelectedDev(dev.id)}>
+                    <td style=${{padding:'10px 11px',color:'var(--tx3)',fontFamily:'monospace',fontWeight:700,fontSize:11}}>
+                      ${i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1)}
+                    </td>
+                    <td style=${{padding:'10px 11px'}}>
+                      <div style=${{display:'flex',alignItems:'center',gap:8}}>
+                        <${Av} u=${dev} size=${28}/>
+                        <div>
+                          <div style=${{fontWeight:600,color:'var(--tx)',fontSize:12}}>${dev.name}</div>
+                          ${dev.id===cu.id?html`<div style=${{fontSize:9,color:'var(--ac)',fontWeight:700}}>YOU</div>`:null}
+                        </div>
+                      </div>
+                    </td>
+                    <td style=${{padding:'10px 11px',color:'var(--tx2)',fontSize:11}}>${dev.role||'—'}</td>
+                    <td style=${{padding:'10px 11px'}}>
+                      <div style=${{width:36,height:36,borderRadius:'50%',border:'2.5px solid '+dev.scoreColor,
+                        display:'flex',alignItems:'center',justifyContent:'center',
+                        background:'rgba(255,255,255,.03)',fontSize:11,fontWeight:800,
+                        color:dev.scoreColor,fontFamily:'monospace'}}>${dev.score}</div>
+                    </td>
+                    <td style=${{padding:'10px 11px',fontFamily:'monospace',fontWeight:600,color:'var(--tx)'}}>${dev.total}</td>
+                    <td style=${{padding:'10px 11px',fontFamily:'monospace',fontWeight:700,color:'var(--gn)'}}>${dev.completed}</td>
+                    <td style=${{padding:'10px 11px',fontFamily:'monospace',color:'var(--cy)'}}>${dev.inProg}</td>
+                    <td style=${{padding:'10px 11px',fontFamily:'monospace',color:dev.blocked>0?'var(--rd)':'var(--tx3)'}}>${dev.blocked}</td>
+                    <td style=${{padding:'10px 11px',fontFamily:'monospace',color:dev.overdue>0?'var(--rd)':'var(--tx3)',fontWeight:dev.overdue>0?700:400}}>${dev.overdue}</td>
+                    <td style=${{padding:'10px 11px'}}>
+                      <div style=${{display:'flex',alignItems:'center',gap:6,minWidth:80}}>
+                        <div style=${{flex:1,height:5,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                          <div style=${{height:'100%',width:dev.avgPct+'%',
+                            background:dev.avgPct>70?'var(--gn)':dev.avgPct>40?'var(--am)':'var(--rd)',
+                            borderRadius:100}}></div>
+                        </div>
+                        <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',flexShrink:0}}>${dev.avgPct}%</span>
+                      </div>
+                    </td>
+                    <td style=${{padding:'10px 11px',color:dev.last7>0?'var(--ac)':'var(--tx3)',
+                      fontFamily:'monospace',fontWeight:dev.last7>0?700:400}}>${dev.last7}</td>
+                    <td style=${{padding:'10px 11px',color:'var(--tx2)',fontFamily:'monospace'}}>${dev.projCount}</td>
+                  </tr>`)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Stacked bar chart -->
+        <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'16px 20px'}}>
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:14}}>Task Distribution per Developer</h3>
+          <${RC.ResponsiveContainer} width="100%" height=${200}>
+            <${RC.BarChart} data=${chartData} barSize=${18} margin=${{top:0,right:0,bottom:0,left:-20}}>
+              <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
+              <${RC.XAxis} dataKey="name" tick=${{fill:'var(--tx2)',fontSize:11}} axisLine=${false} tickLine=${false}/>
+              <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
+              <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--tx)',fontSize:11}}/>
+              <${RC.Legend} iconSize=${8} wrapperStyle=${{fontSize:10,color:'var(--tx2)'}}/>
+              <${RC.Bar} dataKey="Completed" stackId="a" fill="var(--gn)" radius=${[0,0,0,0]}/>
+              <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
+              <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[4,4,0,0]}/>
+            <//>
+          <//>
+        </div>`:null}
+
+      ${selDev?html`
+        <!-- Developer drill-down -->
+        <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'18px 20px'}}>
+          <!-- Dev header -->
+          <div style=${{display:'flex',alignItems:'center',gap:14,marginBottom:18,padding:'14px 16px',
+            background:'var(--sf2)',borderRadius:12,border:'1px solid var(--bd)'}}>
+            <${Av} u=${selDev} size=${48}/>
+            <div style=${{flex:1}}>
+              <div style=${{fontSize:16,fontWeight:800,color:'var(--tx)'}}>${selDev.name}</div>
+              <div style=${{fontSize:12,color:'var(--tx2)',marginTop:2}}>${selDev.role||'Team Member'}</div>
+            </div>
+            <!-- Score ring -->
+            <div style=${{textAlign:'center'}}>
+              <div style=${{width:56,height:56,borderRadius:'50%',border:'3px solid '+selDev.scoreColor,
+                display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',
+                background:'rgba(255,255,255,.03)'}}>
+                <span style=${{fontSize:18,fontWeight:800,color:selDev.scoreColor,fontFamily:'monospace',lineHeight:1}}>${selDev.score}</span>
+                <span style=${{fontSize:8,color:'var(--tx3)'}}>score</span>
+              </div>
+            </div>
+            <!-- Stat chips -->
+            ${[
+              {l:'Total',v:selDev.total,c:'var(--tx)'},
+              {l:'Done',v:selDev.completed,c:'var(--gn)'},
+              {l:'Active',v:selDev.inProg,c:'var(--cy)'},
+              {l:'Blocked',v:selDev.blocked,c:selDev.blocked>0?'var(--rd)':'var(--tx3)'},
+              {l:'Overdue',v:selDev.overdue,c:selDev.overdue>0?'var(--rd)':'var(--tx3)'},
+              {l:'Avg %',v:selDev.avgPct+'%',c:selDev.avgPct>70?'var(--gn)':selDev.avgPct>40?'var(--am)':'var(--rd)'},
+            ].map(s=>html`
+              <div key=${s.l} style=${{textAlign:'center',padding:'8px 14px',background:'var(--bg)',
+                borderRadius:10,border:'1px solid var(--bd)',minWidth:60}}>
+                <div style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace'}}>${s.v}</div>
+                <div style=${{fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,marginTop:1}}>${s.l}</div>
+              </div>`)}
+          </div>
+
+          <!-- Task list -->
+          <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',
+            letterSpacing:.5,marginBottom:10}}>Assigned Tasks ${filterProject!=='all'?'(filtered by project)':''}</div>
+          <div style=${{display:'flex',flexDirection:'column',gap:7}}>
+            ${selTasks.length===0?html`
+              <div style=${{textAlign:'center',padding:'32px',color:'var(--tx3)',fontSize:13}}>
+                No tasks assigned to this developer${filterProject!=='all'?' in this project':''}.
+              </div>`:null}
+            ${selTasks.map(tk=>{
+              const proj=p.find(pr=>pr.id===tk.project);
+              const isOvd=tk.due&&new Date(tk.due)<now&&tk.stage!=='completed';
+              return html`
+                <div key=${tk.id} style=${{display:'flex',gap:10,padding:'10px 14px',
+                  background:'var(--sf2)',borderRadius:10,border:'1px solid var(--bd)',alignItems:'center'}}>
+                  <div style=${{width:6,height:6,borderRadius:2,flexShrink:0,
+                    background:(STAGES[tk.stage]&&STAGES[tk.stage].color)||'var(--ac)'}}></div>
+                  <div style=${{flex:1,minWidth:0}}>
+                    <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',
+                      overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${tk.title}</div>
+                    <div style=${{display:'flex',gap:6,marginTop:3,flexWrap:'wrap',alignItems:'center'}}>
+                      <${SP} s=${tk.stage}/>
+                      <${PB} p=${tk.priority}/>
+                      ${proj?html`<span style=${{fontSize:10,color:'var(--tx3)'}}>📁 ${proj.name}</span>`:null}
+                      ${isOvd?html`<span style=${{fontSize:10,color:'var(--rd)',fontWeight:700}}>⚠ Overdue</span>`:null}
+                    </div>
+                  </div>
+                  <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                    <div style=${{width:48,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                      <div style=${{height:'100%',width:(tk.pct||0)+'%',
+                        background:proj?proj.color:'var(--ac)',borderRadius:100}}></div>
+                    </div>
+                    <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',minWidth:28,textAlign:'right'}}>${tk.pct||0}%</span>
+                  </div>
+                </div>`;
+            })}
+          </div>
+        </div>`:null}
     </div>`;
 }
 
@@ -6687,6 +7151,8 @@ function App(){
     notifs:{title:'Notifications',sub:unread+' unread'},
     team:{title:'Team',sub:data.users.length+' members'},
     settings:{title:'Settings',sub:wsName||'Workspace configuration'},
+    timeline:{title:'Timeline Tracker',sub:'Project schedule & days spent'},
+    productivity:{title:'Dev Productivity',sub:'Team performance analytics'},
   };
 
   // Parse view — may include filter params like 'tasks:stage:development' or 'tasks:priority:high'
@@ -6742,6 +7208,8 @@ function App(){
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${data.users} projects=${data.projects} onReload=${load}/>`:null}
             ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
+            ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${data.tasks} projects=${data.projects}/>`:null}
+            ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users}/>`:null}
           <//>
         </div>
       </div>
