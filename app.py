@@ -624,8 +624,8 @@ def del_project(pid):
     with get_db() as db:
         cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cu_role=cu["role"] if cu else "Viewer"
-        if cu_role not in ("Admin","Manager","TeamLead"):
-            return jsonify({"error":"Only Admin, Manager, or TeamLead can delete projects."}),403
+        if cu_role not in ("Admin","Manager"):
+            return jsonify({"error":"Only Admin or Manager can delete projects."}),403
         db.execute("DELETE FROM projects WHERE id=? AND workspace_id=?",(pid,wid()))
         db.execute("DELETE FROM tasks WHERE project=? AND workspace_id=?",(pid,wid()))
         db.execute("DELETE FROM files WHERE project_id=? AND workspace_id=?",(pid,wid()))
@@ -703,14 +703,15 @@ def create_task():
 def update_task(tid):
     d=request.json or {}
     with get_db() as db:
-        # Role check: Developers can only update stage/pct (not full edit)
+        # Role check: only Admin/Manager/TeamLead can fully edit tasks
+        # Developers/Testers/Viewers may only update stage and pct (kanban moves)
         cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cu_role=cu["role"] if cu else "Viewer"
-        if cu_role=="Developer":
-            # Developers may only change stage and pct
+        restricted_roles={"Developer","Tester","Viewer"}
+        if cu_role in restricted_roles:
             allowed={"stage","pct"}
             if any(k not in allowed for k in d.keys()):
-                return jsonify({"error":"Developers can only update stage and progress."}),403
+                return jsonify({"error":"Your role can only update stage and progress."}),403
         t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not t: return jsonify({"error":"Not found"}),404
         old_stage=t["stage"]
@@ -2244,6 +2245,10 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
   const isEdit=!!(task&&task.id);
+  // Role-based permission checks
+  const EDIT_ROLES=['Admin','Manager','TeamLead'];
+  const canEditTask=!cu||EDIT_ROLES.includes(cu.role);
+  const canDeleteTask=!cu||EDIT_ROLES.includes(cu.role);
   // Inline reminder - shown in form before creating task
   const [rmEnabled,setRmEnabled]=useState(false);
   const [rmDate,setRmDate]=useState(()=>{
@@ -2288,11 +2293,11 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
       <div class="mo fi">
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
           <div>
-            <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>${isEdit?'Edit Task':'New Task'}</h2>
+            <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>${isEdit?(canEditTask?'Edit Task':'View Task'):'New Task'}</h2>
             ${isEdit?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${task.id}</span>`:null}
           </div>
           <div style=${{display:'flex',gap:7}}>
-            ${isEdit&&onDel&&cu&&cu.role!=='Developer'?html`<button class="btn brd" style=${{fontSize:12,padding:'6px 11px'}}
+            ${isEdit&&onDel&&canDeleteTask?html`<button class="btn brd" style=${{fontSize:12,padding:'6px 11px'}}
               onClick=${async()=>{if(window.confirm('Delete this task?')){await onDel(task.id);onClose();}}}>🗑</button>`:null}
             <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
           </div>
@@ -2383,9 +2388,9 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
               </div>
             `:null}
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:isEdit?'1px solid var(--bd)':'none'}}>
-              <button class="btn bg" onClick=${onClose}>Cancel</button>
+              <button class="btn bg" onClick=${onClose}>${isEdit&&!canEditTask?'Close':'Cancel'}</button>
               ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
-              <button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>
+              ${(!isEdit||canEditTask)?html`<button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>`:null}
             </div>
           </div>`:null}
 
@@ -2461,7 +2466,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
             <div style=${{display:'flex',gap:7,flexShrink:0}}>
               ${cu&&cu.role!=='Viewer'&&!edit?html`<button class="btn bg" style=${{fontSize:12,padding:'7px 12px'}} onClick=${()=>setEdit(true)}>✏ Edit</button>`:null}
               ${edit?html`<button class="btn bg" onClick=${()=>setEdit(false)}>Cancel</button><button class="btn bp" onClick=${saveEdit} disabled=${saving}>${saving?html`<span class="spin"></span>`:'Save'}</button>`:null}
-              ${cu&&cu.role==='Admin'&&!edit?html`<button class="btn brd" style=${{fontSize:12,padding:'7px 12px'}} onClick=${delProject}>🗑</button>`:null}
+              ${cu&&(cu.role==='Admin'||cu.role==='Manager')&&!edit?html`<button class="btn brd" style=${{fontSize:12,padding:'7px 12px'}} onClick=${delProject}>🗑</button>`:null}
               <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
             </div>
           </div>
@@ -2780,9 +2785,20 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
             <button class=${'tb'+(mode==='list'?' act':'')} onClick=${()=>setMode('list')}>☰ List</button>
           </div>
           <input ref=${csvRef} type="file" accept=".csv" style=${{display:'none'}} onChange=${importCsv}/>
-          <button class="btn bg" style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}} onClick=${()=>csvRef.current&&csvRef.current.click()} disabled=${csvImporting} title="Import tasks from CSV">
-            ${csvImporting?html`<span class="spin"></span>`:'⬆ CSV'}
-          </button>
+          <div style=${{display:'flex',gap:0,flex:'0 0 auto',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
+            <button style=${{fontSize:12,padding:'7px 12px',background:'transparent',border:'none',borderRight:'1px solid var(--bd)',cursor:'pointer',color:'var(--tx2)',fontWeight:600,display:'inline-flex',alignItems:'center',gap:5,transition:'background .12s'}}
+              onClick=${()=>csvRef.current&&csvRef.current.click()} disabled=${csvImporting} title="Import tasks from CSV"
+              onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'} onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
+              ${csvImporting?html`<span class="spin"></span>`:html`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`}
+              Import
+            </button>
+            <a href="/api/export/csv" style=${{fontSize:12,padding:'7px 12px',background:'transparent',color:'var(--tx2)',fontWeight:600,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:5,transition:'background .12s'}}
+              title="Export tasks to CSV"
+              onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'} onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export
+            </a>
+          </div>
           <button class="btn bp" style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}} onClick=${()=>setNewT(true)}>+ New Task</button>
         </div>
         ${csvResult?html`<div style=${{marginTop:8,padding:'8px 12px',borderRadius:8,fontSize:12,background:csvResult.error?'rgba(255,68,68,.08)':'rgba(62,207,110,.08)',border:'1px solid '+(csvResult.error?'rgba(255,68,68,.2)':'rgba(62,207,110,.2)'),color:csvResult.error?'var(--rd)':'var(--gn)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -3503,23 +3519,27 @@ function TicketsView({cu,users,projects,onReload}){
   const [nStatus,setNStatus]=useState('open');
   const [saving,setSaving]=useState(false);
 
+  // Always load ALL tickets – filter entirely client-side so counts stay accurate
   const load=useCallback(async()=>{
     setBusy(true);
-    const d=await api.get('/api/tickets'+(filterStatus?'?status='+filterStatus:''));
+    const d=await api.get('/api/tickets');
     setTickets(Array.isArray(d)?d:[]);
     setBusy(false);
-  },[filterStatus]);
+  },[]);
   useEffect(()=>{load();},[load]);
 
-  // Filter out resolved/closed unless showResolved
+  // Client-side filtering (status chip + priority + type + resolved toggle)
   const visibleTickets=useMemo(()=>{
     return tickets.filter(t=>{
-      if(!showResolved&&(t.status==='resolved'||t.status==='closed'))return false;
+      // Resolved toggle: hide resolved/closed unless showResolved OR the status chip for resolved/closed is active
+      const isResolved=t.status==='resolved'||t.status==='closed';
+      if(isResolved&&!showResolved&&filterStatus!=='resolved'&&filterStatus!=='closed')return false;
+      if(filterStatus&&t.status!==filterStatus)return false;
       if(filterPriority&&t.priority!==filterPriority)return false;
       if(filterType&&t.type!==filterType)return false;
       return true;
     });
-  },[tickets,showResolved,filterPriority,filterType]);
+  },[tickets,showResolved,filterStatus,filterPriority,filterType]);
 
   const saveTicket=async()=>{
     if(!nTitle.trim())return;
@@ -3586,12 +3606,6 @@ function TicketsView({cu,users,projects,onReload}){
     resolved:{icon:'🟢',color:'var(--gn)',label:'Resolved'},
     closed:{icon:'⚫',color:'var(--tx3)',label:'Closed'},
   };
-
-  const visible=tickets.filter(t=>{
-    if(filterPriority&&t.priority!==filterPriority)return false;
-    if(filterType&&t.type!==filterType)return false;
-    return true;
-  });
 
   const statCounts=Object.keys(STATUS_CFG).reduce((a,s)=>{a[s]=tickets.filter(t=>t.status===s).length;return a;},{});
 
@@ -3797,21 +3811,21 @@ function WorkspaceSettings({cu,onReload}){
   const [ws,setWs]=useState(null);const [wsName,setWsName]=useState('');const [aiKey,setAiKey]=useState('');const [showKey,setShowKey]=useState(false);const [saving,setSaving]=useState(false);const [saved,setSaved]=useState(false);
   const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);
   const PERM_DEFAULTS={
-    'Create & Edit Projects':{Admin:true,Manager:true,TeamLead:true,Developer:false,Tester:false,Viewer:false},
-    'Create & Assign Tasks':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
-    'Edit Tasks':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:false},
-    'Edit Own Tasks':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:false},
-    'Create Tickets':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:false},
-    'Close / Resolve Tickets':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
-    'Send Channel Messages':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
-    'Manage Team Members':{Admin:true,Manager:true,TeamLead:true,Developer:false,Tester:false,Viewer:false},
-    'Manage Workspace Settings':{Admin:true,Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
-    'View All Projects':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
-    'Start Huddle Calls':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
-    'Delete Projects':{Admin:true,Manager:true,TeamLead:false,Developer:false,Tester:false,Viewer:false},
-    'Delete Tasks':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
-    'Delete Tickets':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
-    'Delete Team Members':{Admin:true,Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
+    'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false},
+    'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
+    'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
+    'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
+    'Start Huddle Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
+    'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
   };
   const storedPerms=()=>{try{return JSON.parse(localStorage.getItem('pf_perms')||'null');}catch{return null;}};
   const [perms,setPerms]=useState(()=>storedPerms()||PERM_DEFAULTS);
@@ -3964,7 +3978,7 @@ function WorkspaceSettings({cu,onReload}){
             <thead>
               <tr>
                 <th style=${{padding:'8px 12px',textAlign:'left',color:'var(--tx3)',fontWeight:600,borderBottom:'1px solid var(--bd)'}}>Permission</th>
-                ${['Admin','TeamLead','Developer','Tester','Viewer'].map(r=>html`
+                ${['Admin','Manager','TeamLead','Developer','Tester','Viewer'].map(r=>html`
                   <th key=${r} style=${{padding:'8px 12px',textAlign:'center',color:r==='Admin'?'var(--ac)':'var(--tx3)',fontWeight:700,borderBottom:'1px solid var(--bd)',minWidth:80,fontSize:11}}>
                     ${r}${r==='Admin'?html`<div style=${{fontSize:9,fontWeight:400,color:'var(--tx3)'}}>locked</div>`:null}
                   </th>`)}
@@ -3974,7 +3988,7 @@ function WorkspaceSettings({cu,onReload}){
               ${Object.entries(perms).map(([label,roleMap],i)=>html`
                 <tr key=${label} style=${{background:i%2===0?'transparent':'var(--sf2)'}}>
                   <td style=${{padding:'9px 12px',color:'var(--tx2)',fontWeight:500,fontSize:12}}>${label}</td>
-                  ${['Admin','TeamLead','Developer','Tester','Viewer'].map(r=>html`
+                  ${['Admin','Manager','TeamLead','Developer','Tester','Viewer'].map(r=>html`
                     <td key=${r} style=${{padding:'9px 12px',textAlign:'center'}}>
                       <label style=${{cursor:r==='Admin'?'not-allowed':'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center'}}>
                         <input type="checkbox" checked=${!!roleMap[r]} disabled=${r==='Admin'}
@@ -5640,7 +5654,7 @@ function App(){
   const taskFilterValue=viewParts[2]||null;  // e.g. 'development' | 'high'
 
   const info=TITLES[baseView]||{title:baseView,sub:''};
-  const extra=baseView==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null;
+  const extra=null;
 
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
