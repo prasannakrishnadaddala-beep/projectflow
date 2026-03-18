@@ -622,6 +622,10 @@ def update_project(pid):
 @login_required
 def del_project(pid):
     with get_db() as db:
+        cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cu_role=cu["role"] if cu else "Viewer"
+        if cu_role not in ("Admin","Manager","TeamLead"):
+            return jsonify({"error":"Only Admin, Manager, or TeamLead can delete projects."}),403
         db.execute("DELETE FROM projects WHERE id=? AND workspace_id=?",(pid,wid()))
         db.execute("DELETE FROM tasks WHERE project=? AND workspace_id=?",(pid,wid()))
         db.execute("DELETE FROM files WHERE project_id=? AND workspace_id=?",(pid,wid()))
@@ -699,6 +703,14 @@ def create_task():
 def update_task(tid):
     d=request.json or {}
     with get_db() as db:
+        # Role check: Developers can only update stage/pct (not full edit)
+        cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cu_role=cu["role"] if cu else "Viewer"
+        if cu_role=="Developer":
+            # Developers may only change stage and pct
+            allowed={"stage","pct"}
+            if any(k not in allowed for k in d.keys()):
+                return jsonify({"error":"Developers can only update stage and progress."}),403
         t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not t: return jsonify({"error":"Not found"}),404
         old_stage=t["stage"]
@@ -771,6 +783,10 @@ def update_task(tid):
 @login_required
 def del_task(tid):
     with get_db() as db:
+        cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cu_role=cu["role"] if cu else "Viewer"
+        if cu_role not in ("Admin","Manager","TeamLead"):
+            return jsonify({"error":"Only Admin, Manager, or TeamLead can delete tasks."}),403
         db.execute("DELETE FROM tasks WHERE id=? AND workspace_id=?",(tid,wid()))
         return jsonify({"ok":True})
 
@@ -1020,6 +1036,10 @@ def create_ticket():
 def update_ticket(tid):
     d=request.json or {}
     with get_db() as db:
+        cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cu_role=cu["role"] if cu else "Viewer"
+        if cu_role=="Developer":
+            return jsonify({"error":"Developers cannot edit tickets."}),403
         t=db.execute("SELECT * FROM tickets WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not t: return jsonify({"error":"not found"}),404
         now=ts()
@@ -1034,6 +1054,10 @@ def update_ticket(tid):
 @login_required
 def delete_ticket(tid):
     with get_db() as db:
+        cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cu_role=cu["role"] if cu else "Viewer"
+        if cu_role not in ("Admin","Manager","TeamLead"):
+            return jsonify({"error":"Only Admin, Manager, or TeamLead can delete tickets."}),403
         db.execute("DELETE FROM tickets WHERE id=? AND workspace_id=?",(tid,wid()))
         db.execute("DELETE FROM ticket_comments WHERE ticket_id=? AND workspace_id=?",(tid,wid()))
         return jsonify({"ok":True})
@@ -1344,6 +1368,81 @@ def export_csv():
         lines.append(f'"{t["id"]}","{t["title"]}","{t["project"]}","{t["assignee"]}","{t["priority"]}","{t["stage"]}","{t["due"]}","{t["pct"]}"')
     return Response("\n".join(lines),mimetype="text/csv",
                     headers={"Content-Disposition":"attachment;filename=tasks.csv"})
+
+@app.route("/api/import/csv", methods=["POST"])
+@login_required
+def import_csv():
+    """Import tasks (and optionally projects) from CSV upload."""
+    import csv, io
+    f = request.files.get("file")
+    if not f: return jsonify({"error":"No file uploaded"}), 400
+    try:
+        content = f.read().decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(content))
+    except Exception as e:
+        return jsonify({"error": f"Could not parse CSV: {e}"}), 400
+
+    created_projects = 0
+    created_tasks = 0
+    errors = []
+    with get_db() as db:
+        for i, row in enumerate(reader):
+            try:
+                # Normalize keys (strip whitespace)
+                row = {k.strip().lower(): (v or "").strip() for k, v in row.items()}
+                # --- Project auto-creation ---
+                proj_id = row.get("project_id", "").strip()
+                proj_name = row.get("project", row.get("project_name", "")).strip()
+                if proj_name and not proj_id:
+                    existing = db.execute(
+                        "SELECT id FROM projects WHERE workspace_id=? AND name=?", (wid(), proj_name)
+                    ).fetchone()
+                    if existing:
+                        proj_id = existing["id"]
+                    else:
+                        proj_id = f"p{int(datetime.now().timestamp()*1000)+i}"
+                        db.execute(
+                            "INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                            (proj_id, wid(), proj_name, "", session["user_id"],
+                             json.dumps([session["user_id"]]), "", "", 0, "#aaff00", ts())
+                        )
+                        created_projects += 1
+                # --- Task creation ---
+                title = row.get("title", row.get("task", row.get("task_title", ""))).strip()
+                if not title:
+                    errors.append(f"Row {i+2}: missing title, skipped")
+                    continue
+                valid_stages = set(["backlog","planning","development","code_review","testing","uat","release","production","completed","blocked"])
+                stage = row.get("stage", "backlog").strip()
+                if stage not in valid_stages: stage = "backlog"
+                valid_pris = {"critical","high","medium","low"}
+                pri = row.get("priority", "medium").strip().lower()
+                if pri not in valid_pris: pri = "medium"
+                due = row.get("due", row.get("due_date", "")).strip()
+                pct_raw = row.get("pct", row.get("progress", row.get("completion", "0"))).strip().replace("%","")
+                try: pct = int(float(pct_raw))
+                except: pct = 0
+                # Resolve assignee by name if given
+                assignee_id = row.get("assignee_id", row.get("assignee", "")).strip()
+                if assignee_id and not assignee_id.startswith("u"):
+                    # Try to match by name
+                    u = db.execute("SELECT id FROM users WHERE workspace_id=? AND name=?", (wid(), assignee_id)).fetchone()
+                    if u: assignee_id = u["id"]
+                    else: assignee_id = ""
+                tid = next_task_id(db, wid())
+                db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                           (tid, wid(), title, row.get("description",""), proj_id,
+                            assignee_id, pri, stage, ts(), due, pct, "[]"))
+                created_tasks += 1
+            except Exception as e:
+                errors.append(f"Row {i+2}: {e}")
+
+    return jsonify({
+        "ok": True,
+        "created_tasks": created_tasks,
+        "created_projects": created_projects,
+        "errors": errors
+    })
 
 # ── Serve ─────────────────────────────────────────────────────────────────────
 @app.route("/health")
@@ -1853,6 +1952,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     tickets:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,
     settings:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>`,
   };
+  const MGMT_ROLES=['Admin','Manager','TeamLead'];
   const items=[
     {id:'dashboard',icon:ICONS.dashboard,label:'Dashboard'},
     {id:'projects', icon:ICONS.projects, label:'Projects'},
@@ -1860,8 +1960,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     {id:'messages', icon:ICONS.messages, label:'Channels'},
     {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
     {id:'tickets',icon:ICONS.tickets,label:'Tickets'},
-    ...(cu&&cu.role==='Admin'||cu&&cu.role==='TeamLead'?[{id:'team',icon:ICONS.team,label:'Team'}]:[]),
+    ...(cu&&MGMT_ROLES.includes(cu.role)?[{id:'team',icon:ICONS.team,label:'Team'}]:[]),
   ];
+  // base view strips filter params (e.g. 'tasks:stage:dev' → 'tasks')
+  const baseView=view.split(':')[0];
   const themeIcon=dark
     ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
     :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
@@ -1872,11 +1974,11 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         ${items.map(it=>html`
           <button key=${it.id} title=${it.label} onClick=${()=>setView(it.id)}
             style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',flexShrink:0,transition:'all .14s',
-              background:view===it.id?'var(--ac)':'transparent',
-              color:view===it.id?'var(--ac-tx)':'rgba(255,255,255,.32)'
+              background:baseView===it.id?'var(--ac)':'transparent',
+              color:baseView===it.id?'var(--ac-tx)':'rgba(255,255,255,.32)'
             }}
-            onMouseEnter=${e=>{if(view!==it.id){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(view!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
+            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
             ${it.icon}
             ${it.badge>0?html`<div style=${{position:'absolute',top:6,right:6,width:6,height:6,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid #0a0a0a'}}></div>`:null}
           </button>`)}
@@ -1890,9 +1992,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
           </button>`:null}
         <button title="Settings" onClick=${()=>setView('settings')}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:view==='settings'?'var(--ac)':'transparent',color:view==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{if(view!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-          onMouseLeave=${e=>{if(view!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:baseView==='settings'?'var(--ac)':'transparent',color:baseView==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
+          onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+          onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
         <button title="Sign Out" onClick=${onLogout}
@@ -2190,7 +2292,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
             ${isEdit?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${task.id}</span>`:null}
           </div>
           <div style=${{display:'flex',gap:7}}>
-            ${isEdit&&onDel?html`<button class="btn brd" style=${{fontSize:12,padding:'6px 11px'}}
+            ${isEdit&&onDel&&cu&&cu.role!=='Developer'?html`<button class="btn brd" style=${{fontSize:12,padding:'6px 11px'}}
               onClick=${async()=>{if(window.confirm('Delete this task?')){await onDel(task.id);onClose();}}}>🗑</button>`:null}
             <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
           </div>
@@ -2565,18 +2667,31 @@ const STAGE_DAYS={backlog:0,planning:7,development:21,code_review:28,testing:35,
 const STAGE_PCT={backlog:0,planning:10,development:35,code_review:55,testing:70,uat:80,release:90,production:95,completed:100,blocked:null};
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
 
-function TasksView({tasks,projects,users,cu,reload,onSetReminder}){
+function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,initialPriority}){
   const [mode,setMode]=useState('kanban');
   const [pid,setPid]=useState('all');
-  const [priF,setPriF]=useState('all');
-  const [stageF,setStageF]=useState('all');
+  const [priF,setPriF]=useState(initialPriority||'all');
+  const [stageF,setStageF]=useState(initialStage||'all');
   const [assF,setAssF]=useState('all');
   const [dueF,setDueF]=useState('all'); // 'all','overdue','today','week','month'
   const [search,setSearch]=useState('');
-  const [showFilters,setShowFilters]=useState(false);
+  const [showFilters,setShowFilters]=useState(!!(initialStage||initialPriority));
+  const [showResolved,setShowResolved]=useState(false); // #8: hide resolved by default
   const [sortCol,setSortCol]=useState(null);  // 'assignee'|'priority'|'stage'|'due'|'pct'
   const [sortDir,setSortDir]=useState('asc'); // 'asc'|'desc'
   const [editT,setEditT]=useState(null);const [newT,setNewT]=useState(false);
+  // CSV import state
+  const [csvImporting,setCsvImporting]=useState(false);
+  const [csvResult,setCsvResult]=useState(null);
+  const csvRef=useRef(null);
+
+  // Apply initial filters when props change (navigating from Dashboard)
+  useEffect(()=>{
+    if(initialStage){setStageF(initialStage);setShowFilters(true);}
+    if(initialPriority){setPriF(initialPriority);setShowFilters(true);}
+  },[initialStage,initialPriority]);
+
+  const RESOLVED_STAGES=new Set(['completed']);
 
   const activeFilters=[pid,priF,stageF,assF,dueF].filter(v=>v!=='all').length;
   const clearAll=()=>{setPid('all');setPriF('all');setStageF('all');setAssF('all');setDueF('all');setSearch('');};
@@ -2586,6 +2701,8 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder}){
     const endOfWeek=new Date(today);endOfWeek.setDate(today.getDate()+7);
     const endOfMonth=new Date(today);endOfMonth.setDate(today.getDate()+30);
     return safe(tasks).filter(t=>{
+      // #8: Hide resolved/completed tasks unless showResolved is true or filter explicitly set to completed
+      if(!showResolved && RESOLVED_STAGES.has(t.stage) && stageF!=='completed') return false;
       if(pid!=='all'&&t.project!==pid)return false;
       if(priF!=='all'&&t.priority!==priF)return false;
       if(stageF!=='all'&&t.stage!==stageF)return false;
@@ -2600,7 +2717,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder}){
       } else if(dueF!=='all'&&!t.due) return false;
       return true;
     });
-  },[tasks,pid,priF,stageF,assF,dueF,search]);
+  },[tasks,pid,priF,stageF,assF,dueF,search,showResolved]);
 
   const toggleSort=col=>{if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}};
 
@@ -2629,6 +2746,18 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder}){
     await api.put('/api/tasks/'+tid,payload);reload();
   };
 
+  const importCsv=async(e)=>{
+    const file=e.target.files&&e.target.files[0];
+    if(!file)return;
+    setCsvImporting(true);setCsvResult(null);
+    const fd=new FormData();fd.append('file',file);
+    const r=await api.upload('/api/import/csv',fd);
+    setCsvImporting(false);
+    setCsvResult(r);
+    reload();
+    e.target.value='';
+  };
+
   return html`
     <div class="fi" style=${{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
       <div style=${{padding:'8px 18px',borderBottom:'1px solid var(--bd)',background:'var(--sf)',flexShrink:0}}>
@@ -2642,12 +2771,24 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder}){
             ⚙ Filters${activeFilters>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,fontSize:9,padding:'1px 5px',marginLeft:3,fontFamily:'monospace'}}>${activeFilters}</span>`:''}
           </button>
           ${activeFilters>0?html`<button class="btn bam" style=${{padding:'7px 11px',fontSize:11}} onClick=${clearAll}>✕ Clear</button>`:null}
+          <button class=${'btn bg'+(showResolved?' act':'')} style=${{padding:'8px 13px',fontSize:12,borderColor:showResolved?'var(--gn)':'',color:showResolved?'var(--gn)':''}}
+            onClick=${()=>setShowResolved(!showResolved)} title="Toggle resolved/completed tasks">
+            ${showResolved?'✓ Resolved':'○ Resolved'}
+          </button>
           <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
             <button class=${'tb'+(mode==='kanban'?' act':'')} onClick=${()=>setMode('kanban')}>⊞ Board</button>
             <button class=${'tb'+(mode==='list'?' act':'')} onClick=${()=>setMode('list')}>☰ List</button>
           </div>
+          <input ref=${csvRef} type="file" accept=".csv" style=${{display:'none'}} onChange=${importCsv}/>
+          <button class="btn bg" style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}} onClick=${()=>csvRef.current&&csvRef.current.click()} disabled=${csvImporting} title="Import tasks from CSV">
+            ${csvImporting?html`<span class="spin"></span>`:'⬆ CSV'}
+          </button>
           <button class="btn bp" style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}} onClick=${()=>setNewT(true)}>+ New Task</button>
         </div>
+        ${csvResult?html`<div style=${{marginTop:8,padding:'8px 12px',borderRadius:8,fontSize:12,background:csvResult.error?'rgba(255,68,68,.08)':'rgba(62,207,110,.08)',border:'1px solid '+(csvResult.error?'rgba(255,68,68,.2)':'rgba(62,207,110,.2)'),color:csvResult.error?'var(--rd)':'var(--gn)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <span>${csvResult.error?'✕ '+csvResult.error:'✓ Imported '+csvResult.created_tasks+' task(s)'+(csvResult.created_projects>0?' & '+csvResult.created_projects+' project(s)':'')+(csvResult.errors&&csvResult.errors.length?' · '+csvResult.errors.length+' skipped':'')}</span>
+          <button class="btn bg" style=${{padding:'3px 8px',fontSize:10}} onClick=${()=>setCsvResult(null)}>✕</button>
+        </div>`:null}
         ${showFilters?html`
           <div style=${{display:'flex',gap:8,flexWrap:'wrap',marginTop:9,paddingTop:9,borderTop:'1px solid var(--bd)'}}>
             <div style=${{display:'flex',flexDirection:'column',gap:3}}>
@@ -2813,10 +2954,15 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   const openTickets=tickets.filter(x=>x.status==='open').length;
   const inProgressTickets=tickets.filter(x=>x.status==='in-progress').length;
   const myTickets=tickets.filter(x=>x.assignee===cu.id&&x.status!=='closed'&&x.status!=='resolved').length;
-  const stageChart=Object.entries(STAGES).map(([k,v])=>({name:v.label,count:t.filter(x=>x.stage===k).length,color:v.color})).filter(d=>d.count>0);
+  const stageChart=Object.entries(STAGES).map(([k,v])=>({name:v.label,count:t.filter(x=>x.stage===k).length,color:v.color,stageKey:k})).filter(d=>d.count>0);
   const activeProjectIds=new Set(p.map(proj=>proj.id));
   const activeTasks=t.filter(x=>activeProjectIds.has(x.project)&&x.stage!=='completed');
-  const priChart=[{name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)'},{name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)'},{name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)'},{name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)'}];
+  const priChart=[
+    {name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)',priKey:'critical'},
+    {name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)',priKey:'high'},
+    {name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)',priKey:'medium'},
+    {name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)',priKey:'low'}
+  ];
   const stats=[
     {label:'Total Projects',val:p.length,   color:'var(--ac)', bg:'var(--ac3)',           icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
     {label:'Active Tasks',  val:active,     color:'var(--cy)', bg:'rgba(34,211,238,.08)',  icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
@@ -2862,24 +3008,30 @@ function Dashboard({cu,tasks,projects,users,onNav}){
               <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" vertical=${false}/>
               <${RC.XAxis} dataKey="name" tick=${{fill:'var(--tx2)',fontSize:10,fontFamily:'monospace'}} axisLine=${false} tickLine=${false}/>
               <${RC.YAxis} tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false} domain=${[0,'dataMax+1']}/>
-              <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,color:'var(--tx)',fontSize:12,boxShadow:'var(--sh2)'}}/>
-              <${RC.Bar} dataKey="count" radius=${[4,4,0,0]}>${stageChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
+              <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,color:'var(--tx)',fontSize:12,boxShadow:'var(--sh2)'}} formatter=${(val,name,props)=>[val,'count']}/>
+              <${RC.Bar} dataKey="count" radius=${[4,4,0,0]} cursor="pointer" onClick=${(data)=>{if(data&&data.stageKey)onNav('tasks:stage:'+data.stageKey);}}>
+                ${stageChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}
+              <//>
             <//>
           <//>
+          <p style=${{fontSize:10,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Click a bar to filter the Task Board by stage</p>
         </div>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:11,fontFamily:"'Space Grotesk',sans-serif"}}>Priority Split</h3>
           <${RC.ResponsiveContainer} width="100%" height=${120}>
             <${RC.PieChart}>
-              <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4}>
+              <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4} cursor="pointer"
+                onClick=${(data)=>{if(data&&data.priKey)onNav('tasks:priority:'+data.priKey);}}>
                 ${priChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
               <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,color:'var(--tx)',fontSize:12,boxShadow:'var(--sh2)'}}/>
             <//>
           <//>
-          ${priChart.map((item,i)=>html`<div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<2?'1px solid var(--bd)':'none'}}>
+          ${priChart.map((item,i)=>html`<div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<2?'1px solid var(--bd)':'none',cursor:'pointer'}}
+            onClick=${()=>onNav('tasks:priority:'+item.priKey)}>
             <div style=${{display:'flex',alignItems:'center',gap:7}}><div style=${{width:7,height:7,borderRadius:2,background:item.color}}></div><span style=${{fontSize:12,color:'var(--tx2)'}}>${item.name}</span></div>
             <span style=${{fontSize:12,color:'var(--tx)',fontFamily:'monospace',fontWeight:700}}>${item.value}</span>
           </div>`)}
+          <p style=${{fontSize:10,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Click to filter by priority</p>
         </div>
       </div>
       <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
@@ -3335,6 +3487,11 @@ function TicketsView({cu,users,projects,onReload}){
   const [comments,setComments]=useState([]);
   const [newComment,setNewComment]=useState('');
   const [savingComment,setSavingComment]=useState(false);
+  const [showResolved,setShowResolved]=useState(false); // #8: hide resolved by default
+
+  // Role checks
+  const canEdit=cu&&cu.role!=='Developer'&&cu.role!=='Viewer';
+  const canDelete=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
 
   // New ticket form state
   const [nTitle,setNTitle]=useState('');
@@ -3353,6 +3510,16 @@ function TicketsView({cu,users,projects,onReload}){
     setBusy(false);
   },[filterStatus]);
   useEffect(()=>{load();},[load]);
+
+  // Filter out resolved/closed unless showResolved
+  const visibleTickets=useMemo(()=>{
+    return tickets.filter(t=>{
+      if(!showResolved&&(t.status==='resolved'||t.status==='closed'))return false;
+      if(filterPriority&&t.priority!==filterPriority)return false;
+      if(filterType&&t.type!==filterType)return false;
+      return true;
+    });
+  },[tickets,showResolved,filterPriority,filterType]);
 
   const saveTicket=async()=>{
     if(!nTitle.trim())return;
@@ -3512,8 +3679,8 @@ function TicketsView({cu,users,projects,onReload}){
             </div>
           </div>
           <div style=${{display:'flex',gap:6,flexShrink:0}}>
-            <button class="btn bg" style=${{fontSize:11,padding:'5px 9px'}} onClick=${()=>openEdit(detailTicket)}>✏️ Edit</button>
-            <button class="btn brd" style=${{fontSize:11,padding:'5px 9px',color:'var(--rd)'}} onClick=${()=>del(detailTicket.id)}>🗑</button>
+            ${canEdit?html`<button class="btn bg" style=${{fontSize:11,padding:'5px 9px'}} onClick=${()=>openEdit(detailTicket)}>✏️ Edit</button>`:null}
+            ${canDelete?html`<button class="btn brd" style=${{fontSize:11,padding:'5px 9px',color:'var(--rd)'}} onClick=${()=>del(detailTicket.id)}>🗑</button>`:null}
             <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setDetailTicket(null)}>✕</button>
           </div>
         </div>
@@ -3566,7 +3733,7 @@ function TicketsView({cu,users,projects,onReload}){
       </div>
 
       <!-- Filter bar -->
-      <div style=${{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+      <div style=${{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
         <select class="sel" style=${{fontSize:11,padding:'5px 10px',height:30}} value=${filterPriority} onChange=${e=>setFilterPriority(e.target.value)}>
           <option value="">All Priorities</option>
           ${Object.entries(PRIORITY_CFG).map(([v,c])=>html`<option key=${v} value=${v}>${c.icon} ${c.label}</option>`)}
@@ -3575,19 +3742,23 @@ function TicketsView({cu,users,projects,onReload}){
           <option value="">All Types</option>
           ${Object.entries(TYPE_CFG).map(([v,c])=>html`<option key=${v} value=${v}>${c.icon} ${c.label}</option>`)}
         </select>
-        <span style=${{fontSize:11,color:'var(--tx3)',alignSelf:'center',marginLeft:4}}>${visible.length} ticket${visible.length!==1?'s':''}</span>
+        <button class=${'btn bg'+(showResolved?' act':'')} style=${{padding:'5px 11px',fontSize:11,height:30,borderColor:showResolved?'var(--gn)':'',color:showResolved?'var(--gn)':''}}
+          onClick=${()=>setShowResolved(!showResolved)}>
+          ${showResolved?'✓ Resolved':'○ Resolved'}
+        </button>
+        <span style=${{fontSize:11,color:'var(--tx3)',alignSelf:'center',marginLeft:4}}>${visibleTickets.length} ticket${visibleTickets.length!==1?'s':''}</span>
       </div>
 
       <!-- Ticket list -->
       ${busy?html`<div style=${{textAlign:'center',padding:40}}><div class="spin" style=${{margin:'0 auto'}}></div></div>`:null}
-      ${!busy&&visible.length===0?html`
+      ${!busy&&visibleTickets.length===0?html`
         <div style=${{textAlign:'center',padding:'48px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
           <div style=${{fontSize:36,marginBottom:12}}>🎫</div>
           <div style=${{fontWeight:600,marginBottom:6}}>No tickets yet</div>
           <div>Create a ticket to track bugs, features, and tasks</div>
         </div>`:null}
       <div style=${{display:'flex',flexDirection:'column',gap:8}}>
-        ${visible.map(t=>{
+        ${visibleTickets.map(t=>{
           const tc=TYPE_CFG[t.type]||TYPE_CFG.bug;
           const pc=PRIORITY_CFG[t.priority]||PRIORITY_CFG.medium;
           const sc=STATUS_CFG[t.status]||STATUS_CFG.open;
@@ -3818,59 +3989,6 @@ function WorkspaceSettings({cu,onReload}){
         <div style=${{marginTop:12,padding:'9px 13px',background:'rgba(170,255,0,.05)',borderRadius:9,border:'1px solid rgba(170,255,0,.15)',fontSize:12,color:'var(--tx3)'}}>
           💡 Changes save automatically. Assign roles in the <b style=${{color:'var(--tx2)'}}>Team</b> tab.
         </div>
-      </div>
-
-      <div class="card" style=${{marginBottom:16}}>
-        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>📧 Email Notifications</h3>
-        <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Configure SMTP settings to send email notifications for task assignments, status changes, and comments.</p>
-        
-        <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:16,padding:'10px 12px',background:'var(--sf2)',borderRadius:8}}>
-          <label style=${{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
-            <input type="checkbox" checked=${emailEnabled} onChange=${e=>setEmailEnabled(e.target.checked)} style=${{width:18,height:18,accentColor:'var(--ac)',cursor:'pointer'}}/>
-            <span style=${{fontSize:13,fontWeight:600,color:'var(--tx)'}}>Enable Email Notifications</span>
-          </label>
-        </div>
-
-        ${emailEnabled?html`
-          <div style=${{display:'flex',flexDirection:'column',gap:12}}>
-            <div style=${{display:'grid',gridTemplateColumns:'1fr 120px',gap:10}}>
-              <div><label class="lbl">SMTP Server</label><input class="inp" placeholder="smtp.gmail.com" value=${smtpServer} onInput=${e=>setSmtpServer(e.target.value)}/></div>
-              <div><label class="lbl">Port</label><input class="inp" type="number" placeholder="587" value=${smtpPort} onInput=${e=>setSmtpPort(parseInt(e.target.value)||587)}/></div>
-            </div>
-            <div><label class="lbl">SMTP Username (Email)</label><input class="inp" type="email" placeholder="your-email@gmail.com" value=${smtpUsername} onInput=${e=>setSmtpUsername(e.target.value)}/></div>
-            <div><label class="lbl">SMTP Password (App Password for Gmail)</label>
-              <div style=${{position:'relative'}}>
-                <input class="inp" style=${{paddingRight:40,fontFamily:'monospace'}} type=${showSmtpPass?'text':'password'} placeholder=${smtpPassword.startsWith('•')?'••••••••••••••••':'Enter password'} value=${smtpPassword}
-                  onInput=${e=>setSmtpPassword(e.target.value)} onFocus=${()=>{if(smtpPassword.startsWith('•'))setSmtpPassword('');}}/>
-                <button onClick=${()=>setShowSmtpPass(!showSmtpPass)} style=${{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16}}>${showSmtpPass?'🙈':'👁'}</button>
-              </div>
-            </div>
-            <div><label class="lbl">From Email (Optional - defaults to SMTP username)</label><input class="inp" type="email" placeholder="notifications@yourcompany.com" value=${fromEmail} onInput=${e=>setFromEmail(e.target.value)}/></div>
-            
-            <div style=${{marginTop:8,padding:'12px',background:'rgba(99,102,241,.07)',borderRadius:8,border:'1px solid rgba(170,255,0,.15)'}}>
-              <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',marginBottom:8}}>🧪 Test Email Configuration</div>
-              <div style=${{display:'flex',gap:8,alignItems:'flex-end'}}>
-                <div style=${{flex:1}}><input class="inp" type="email" placeholder="test@example.com" value=${testEmail} onInput=${e=>setTestEmail(e.target.value)} style=${{fontSize:12}}/></div>
-                <button class="btn bp" onClick=${sendTestEmail} disabled=${testingEmail||!testEmail} style=${{fontSize:12,padding:'8px 14px',whiteSpace:'nowrap'}}>
-                  ${testingEmail?html`<span class="spin"></span>`:'Send Test'}
-                </button>
-              </div>
-              ${testResult?html`<div style=${{marginTop:8,padding:'8px 10px',borderRadius:6,fontSize:11,background:testResult.success?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)',border:'1px solid '+(testResult.success?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)'),color:testResult.success?'var(--gn)':'var(--rd)'}}>
-                ${testResult.success?'✓':'✕'} ${testResult.message}
-              </div>`:null}
-            </div>
-
-            <div style=${{padding:'10px 12px',background:'rgba(251,191,36,.08)',borderRadius:8,border:'1px solid rgba(251,191,36,.2)',fontSize:11,color:'var(--tx2)',lineHeight:1.6}}>
-              <div style=${{fontWeight:700,marginBottom:4,color:'var(--tx)'}}>📝 Gmail Setup Instructions:</div>
-              <ol style=${{margin:0,paddingLeft:20}}>
-                <li>Enable 2-Factor Authentication on your Google account</li>
-                <li>Visit <b style=${{color:'var(--ac2)',fontFamily:'monospace'}}>myaccount.google.com/apppasswords</b></li>
-                <li>Generate an App Password (select "Mail" and your device)</li>
-                <li>Copy the 16-character password and paste above</li>
-              </ol>
-              <div style=${{marginTop:6,fontSize:10,color:'var(--tx3)'}}>For other providers: Outlook (smtp.office365.com:587), Yahoo (smtp.mail.yahoo.com:587)</div>
-            </div>
-          </div>`:html`<div style=${{padding:'12px',textAlign:'center',color:'var(--tx3)',fontSize:12,fontStyle:'italic'}}>Email notifications are disabled</div>`}
       </div>
 
       <div style=${{display:'flex',gap:10,justifyContent:'flex-end'}}>
@@ -5514,12 +5632,19 @@ function App(){
     team:{title:'Team',sub:data.users.length+' members'},
     settings:{title:'Settings',sub:wsName||'Workspace configuration'},
   };
-  const info=TITLES[view]||{title:view,sub:''};
-  const extra=view==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null;
+
+  // Parse view — may include filter params like 'tasks:stage:development' or 'tasks:priority:high'
+  const baseView=view.split(':')[0];
+  const viewParts=view.split(':');
+  const taskFilterType=viewParts[1]||null;   // 'stage' | 'priority'
+  const taskFilterValue=viewParts[2]||null;  // e.g. 'development' | 'high'
+
+  const info=TITLES[baseView]||{title:baseView,sub:''};
+  const extra=baseView==='tasks'?html`<a href="/api/export/csv" class="btn bg" style=${{fontSize:12,padding:'6px 11px'}}>⬇ CSV</a>`:null;
 
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
-      <${Sidebar} cu=${cu} view=${view} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}
+      <${Sidebar} cu=${cu} view=${baseView} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}
         dark=${dark} setDark=${setDark}
         callState=${{...callState,allUsers:data.users}}
         onCallAction=${async cmd=>{
@@ -5535,22 +5660,32 @@ function App(){
         <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
           cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
           notifs=${data.notifs}
-          onNotifClick=${async n=>{if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard'};setView(nav[n.type]||'notifs');load();}}
+          onNotifClick=${async n=>{
+            if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});
+            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard'};
+            const dest=nav[n.type]||'notifs';
+            setView(dest);
+            // #3: Force reload so latest data shows immediately after notification click
+            await load();
+          }}
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
           onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
         />
         <div style=${{flex:1,overflow:'hidden'}}>
           <${ErrorBoundary}>
-            ${view==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
-            ${view==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
-            ${view==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
-            ${view==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
-            ${view==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
-            ${view==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
-            ${view==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
-            ${view==='tickets'?html`<${TicketsView} cu=${cu} users=${data.users} projects=${data.projects} onReload=${load}/>`:null}
-            ${view==='team'&&(cu.role==='Admin'||cu.role==='TeamLead')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
-            ${view==='settings'&&(cu.role==='Admin'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
+            ${baseView==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
+            ${baseView==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}
+              initialStage=${taskFilterType==='stage'?taskFilterValue:null}
+              initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
+            />`:null}
+            ${baseView==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu}/>`:null}
+            ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
+            ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
+            ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
+            ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${data.users} projects=${data.projects} onReload=${load}/>`:null}
+            ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
           <//>
         </div>
       </div>
