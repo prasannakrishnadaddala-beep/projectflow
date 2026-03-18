@@ -4010,7 +4010,6 @@ function ProductivityView({cu,tasks,projects,users}){
       </div><!-- end scroll -->
     </div>`;
 }
-}
 function renderMd(text){
   return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
 }
