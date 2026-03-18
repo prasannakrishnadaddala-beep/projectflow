@@ -352,8 +352,8 @@
       <li><a href="#pricing">Pricing</a></li>
     </ul>
     <div class="nav-cta">
-      <a href="/login" class="btn btn-outline">Sign In</a>
-      <a href="/register" class="btn btn-primary">Get Started Free</a>
+      <a href="/?action=login" class="btn btn-outline">Sign In</a>
+      <a href="/?action=register" class="btn btn-primary">Get Started Free</a>
     </div>
     <div class="hamburger" onclick="document.querySelector('.nav-links').style.display='flex';document.querySelector('.nav-cta').style.display='flex';">
       <span></span><span></span><span></span>
@@ -368,8 +368,8 @@
     <h1 class="anim-2">Manage projects.<br><span class="ac">Ship faster.</span><br>Together.</h1>
     <p class="hero-sub anim-3">The all-in-one project management platform with multi-tenant workspaces, AI assistant, real-time messaging, and huddle calls — built for modern engineering teams.</p>
     <div class="hero-actions anim-4">
-      <a href="/register" class="btn btn-primary btn-lg">🚀 Create Your Workspace</a>
-      <a href="/login" class="btn btn-outline btn-lg">Sign In</a>
+      <a href="/?action=register" class="btn btn-primary btn-lg">🚀 Create Your Workspace</a>
+      <a href="/?action=login" class="btn btn-outline btn-lg">Sign In</a>
     </div>
 
     <div class="hero-visual anim-5">
@@ -791,7 +791,7 @@
           <li><span class="chk">✓</span> Priority support</li>
           <li><span class="chk">✓</span> SSL & security updates</li>
         </ul>
-        <a href="/register" class="btn btn-primary" style="width:100%;justify-content:center;">Start Free Trial</a>
+        <a href="/?action=register" class="btn btn-primary" style="width:100%;justify-content:center;">Start Free Trial</a>
       </div>
       <div class="price-card">
         <div class="price-name">Enterprise</div>
@@ -805,7 +805,7 @@
           <li><span class="chk">✓</span> SLA guarantees</li>
           <li><span class="chk">✓</span> White-labeling</li>
         </ul>
-        <a href="mailto:hello@projectflow.app" class="btn btn-outline" style="width:100%;justify-content:center;">Contact Sales</a>
+        <a href="/cdn-cgi/l/email-protection#563e333a3a39162624393c333522303a392178372626" class="btn btn-outline" style="width:100%;justify-content:center;">Contact Sales</a>
       </div>
     </div>
   </div>
@@ -818,8 +818,8 @@
       <h2>Ready to ship faster, together?</h2>
       <p>Create your free workspace in under 2 minutes. No credit card required.</p>
       <div class="cta-actions">
-        <a href="/register" class="btn btn-primary btn-lg">🚀 Create Your Workspace</a>
-        <a href="/login" class="btn btn-outline btn-lg">Sign In to Existing Workspace</a>
+        <a href="/?action=register" class="btn btn-primary btn-lg">🚀 Create Your Workspace</a>
+        <a href="/?action=login" class="btn btn-outline btn-lg">Sign In to Existing Workspace</a>
       </div>
     </div>
   </div>
@@ -834,13 +834,13 @@
       <a href="#ai">AI Assistant</a>
       <a href="#pricing">Pricing</a>
       <a href="#how">How it works</a>
-      <a href="mailto:hello@projectflow.app">Contact</a>
+      <a href="/cdn-cgi/l/email-protection#036b666f6f6c4373716c69666077656f6c742d627373">Contact</a>
     </div>
     <div class="footer-copy">© 2025 ProjectFlow v4.0 — Built with ❤️ on Railway</div>
   </div>
 </footer>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
   // Scroll fade-in for bento cards
   const observer = new IntersectionObserver(entries => {
     entries.forEach((e, i) => {
@@ -853,10 +853,3 @@
 
   document.querySelectorAll('.bento-card, .step, .role-card, .notif-item, .price-card').forEach((el, i) => {
     el.style.opacity = '0';
-    el.style.transform = 'translateY(24px)';
-    el.style.transition = `opacity .5s ${i * 0.07}s ease, transform .5s ${i * 0.07}s ease`;
-    observer.observe(el);
-  });
-</script>
-</body>
-</html>

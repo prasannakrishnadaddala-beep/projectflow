@@ -1784,13 +1784,18 @@ def serve_manifest():
     }
     return jsonify(manifest)
 
-@app.route("/")
-def landing():
-    return send_file("index.html")
-
-@app.route("/app", defaults={"p": ""})
-@app.route("/app/<path:p>")
-def root(p): return HTML
+@app.route("/", defaults={"p": ""})
+@app.route("/<path:p>")
+def root(p):
+    # If user clicked Sign In or Create Account from landing page, serve the React app
+    action = request.args.get("action", "")
+    if action in ("login", "register") or p != "":
+        return HTML
+    # Otherwise serve the landing page
+    landing_path = os.path.join(BASE_DIR, "index.html")
+    if os.path.exists(landing_path):
+        return send_file(landing_path)
+    return HTML  # fallback if index.html not found
 
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
