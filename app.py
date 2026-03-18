@@ -3699,28 +3699,89 @@ function MessagesView({projects,users,cu,tasks}){
           </div>
         </div>`:null}
 
-      <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:8}}>
-        ${msgs.map(m=>{
-          const isSystem=m.is_system===1||m.sender==='system';
-          if(isSystem) return html`
-            <div key=${m.id} style=${{display:'flex',justifyContent:'center',padding:'5px 0'}}>
-              <div style=${{fontSize:12,color:'var(--tx)',fontWeight:500,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:20,padding:'5px 16px',maxWidth:'88%',textAlign:'center',lineHeight:1.5}}
-                dangerouslySetInnerHTML=${{__html:renderMd(m.content)}}></div>
-            </div>`;
-          const s=safe(users).find(u=>u.id===m.sender);const isMe=m.sender===cu.id;
-          return html`
-            <div key=${m.id} style=${{display:'flex',gap:8,alignItems:'flex-end',flexDirection:isMe?'row-reverse':'row'}}>
-              ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
-              <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
-                ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
-                <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5,
-                  background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)',
-                  border:isMe?'none':'1px solid var(--bd)',
-                  borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
-                <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(m.ts)}</span>
-              </div>
-            </div>`;
-        })}
+      <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:0}}>
+        ${(()=>{
+          // ── Sort all messages chronologically (oldest first) ──────────────
+          const sorted=[...msgs].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+
+          // ── Helper: format date as DD/MM/YYYY ────────────────────────────
+          const fmtDate=iso=>{
+            const d=new Date(iso);
+            const dd=String(d.getDate()).padStart(2,'0');
+            const mm=String(d.getMonth()+1).padStart(2,'0');
+            const yyyy=d.getFullYear();
+            return dd+'/'+mm+'/'+yyyy;
+          };
+
+          // ── Helper: format time as HH:MM ─────────────────────────────────
+          const fmtTime=iso=>{
+            const d=new Date(iso);
+            return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+          };
+
+          // ── Helper: human-friendly date label ────────────────────────────
+          const dateLabel=iso=>{
+            const today=new Date();today.setHours(0,0,0,0);
+            const yesterday=new Date(today);yesterday.setDate(today.getDate()-1);
+            const d=new Date(iso);d.setHours(0,0,0,0);
+            if(d.getTime()===today.getTime()) return 'Today · '+fmtDate(iso);
+            if(d.getTime()===yesterday.getTime()) return 'Yesterday · '+fmtDate(iso);
+            return fmtDate(iso);
+          };
+
+          // ── Group messages by calendar date ──────────────────────────────
+          const groups=[];
+          let lastDate='';
+          sorted.forEach(m=>{
+            const d=new Date(m.ts);
+            const dateKey=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+            if(dateKey!==lastDate){
+              groups.push({type:'separator',label:dateLabel(m.ts),key:'sep-'+dateKey});
+              lastDate=dateKey;
+            }
+            groups.push({type:'msg',msg:m});
+          });
+
+          // ── Render ────────────────────────────────────────────────────────
+          return groups.map((item,idx)=>{
+            if(item.type==='separator') return html`
+              <div key=${item.key} style=${{display:'flex',alignItems:'center',gap:10,margin:'14px 0 10px'}}>
+                <div style=${{flex:1,height:1,background:'var(--bd)'}}></div>
+                <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:100,padding:'3px 12px',letterSpacing:.4,whiteSpace:'nowrap'}}>
+                  📅 ${item.label}
+                </span>
+                <div style=${{flex:1,height:1,background:'var(--bd)'}}></div>
+              </div>`;
+
+            const m=item.msg;
+            const isSystem=m.is_system===1||m.sender==='system';
+            const timeStr=fmtTime(m.ts);
+
+            if(isSystem) return html`
+              <div key=${m.id} style=${{display:'flex',justifyContent:'center',padding:'3px 0',marginBottom:6}}>
+                <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:3,maxWidth:'90%'}}>
+                  <div style=${{fontSize:12,color:'var(--tx)',fontWeight:500,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:20,padding:'5px 16px',textAlign:'center',lineHeight:1.5}}
+                    dangerouslySetInnerHTML=${{__html:renderMd(m.content)}}></div>
+                  <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',letterSpacing:.2}}>${timeStr}</span>
+                </div>
+              </div>`;
+
+            const s=safe(users).find(u=>u.id===m.sender);
+            const isMe=m.sender===cu.id;
+            return html`
+              <div key=${m.id} style=${{display:'flex',gap:8,alignItems:'flex-end',flexDirection:isMe?'row-reverse':'row',marginBottom:6}}>
+                ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
+                <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
+                  ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
+                  <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5,
+                    background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)',
+                    border:isMe?'none':'1px solid var(--bd)',
+                    borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
+                  <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${timeStr}</span>
+                </div>
+              </div>`;
+          });
+        })()}
         ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:48,color:'var(--tx3)',fontSize:13}}>
           <div style=${{fontSize:28,marginBottom:8}}>💬</div>
           <p>No messages yet.</p>
