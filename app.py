@@ -1398,7 +1398,7 @@ HTML = r"""<!DOCTYPE html>
 <script src="/js/htm.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;width:100%;overflow:hidden}
+html,body{height:100%;width:100%;overflow:auto}
 body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 
 /* === DARK THEME (default) — precise HubSpot CRM workspace colours === */
