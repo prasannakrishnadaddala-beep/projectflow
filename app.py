@@ -1654,7 +1654,7 @@ const STAGES={
 };
 const KCOLS=['backlog','planning','development','code_review','testing','uat','release','production','completed','blocked'];
 const PRIS={critical:{label:'Critical',color:'var(--rd)',sym:'🔴'},high:{label:'High',color:'var(--rd2)',sym:'↑'},medium:{label:'Medium',color:'var(--pu)',sym:'→'},low:{label:'Low',color:'var(--cy)',sym:'↓'}};
-const ROLES=['Admin','TeamLead','Developer','Tester','Viewer'];
+const ROLES=['Admin','Manager','TeamLead','Developer','Tester','Viewer'];
 const JOIN_ROLES=['Developer','Tester','Viewer']; // roles available when joining via invite code
 const PAL=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#aaff00'];
 const fmtD=d=>{if(!d)return'—';try{return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return d;}};
@@ -3175,7 +3175,7 @@ function TeamView({users,cu,reload}){
   const toggleMember=id=>{setTMembers(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);};
 
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
-  const ROLE_COLORS={Admin:'var(--ac)',TeamLead:'var(--cy)',Developer:'var(--pu)',Tester:'var(--am)',Viewer:'var(--tx3)'};
+  const ROLE_COLORS={Admin:'var(--ac)',Manager:'var(--gn)',TeamLead:'var(--cy)',Developer:'var(--pu)',Tester:'var(--am)',Viewer:'var(--tx3)'};
 
   return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
     <!-- Tab switcher -->
@@ -3626,16 +3626,20 @@ function WorkspaceSettings({cu,onReload}){
   const [ws,setWs]=useState(null);const [wsName,setWsName]=useState('');const [aiKey,setAiKey]=useState('');const [showKey,setShowKey]=useState(false);const [saving,setSaving]=useState(false);const [saved,setSaved]=useState(false);
   const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);
   const PERM_DEFAULTS={
-    'Create & Edit Projects':{Admin:true,TeamLead:true,Developer:false,Tester:false,Viewer:false},
-    'Create & Assign Tasks':{Admin:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
-    'Edit Own Tasks':{Admin:true,TeamLead:true,Developer:true,Tester:true,Viewer:false},
-    'Create Tickets':{Admin:true,TeamLead:true,Developer:true,Tester:true,Viewer:false},
-    'Close / Resolve Tickets':{Admin:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
-    'Send Channel Messages':{Admin:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
-    'Manage Team Members':{Admin:true,TeamLead:true,Developer:false,Tester:false,Viewer:false},
-    'Manage Workspace Settings':{Admin:true,TeamLead:false,Developer:false,Tester:false,Viewer:false},
-    'View All Projects':{Admin:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
-    'Start Huddle Calls':{Admin:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
+    'Create & Edit Projects':{Admin:true,Manager:true,TeamLead:true,Developer:false,Tester:false,Viewer:false},
+    'Create & Assign Tasks':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
+    'Edit Own Tasks':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:false},
+    'Create Tickets':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:false},
+    'Close / Resolve Tickets':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:false,Viewer:false},
+    'Send Channel Messages':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
+    'Manage Team Members':{Admin:true,Manager:true,TeamLead:true,Developer:false,Tester:false,Viewer:false},
+    'Manage Workspace Settings':{Admin:true,Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'View All Projects':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
+    'Start Huddle Calls':{Admin:true,Manager:true,TeamLead:true,Developer:true,Tester:true,Viewer:true},
+    'Delete Projects':{Admin:true,Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'Delete Tasks':{Admin:true,Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'Delete Tickets':{Admin:true,Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'Delete Team Members':{Admin:true,Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
   };
   const storedPerms=()=>{try{return JSON.parse(localStorage.getItem('pf_perms')||'null');}catch{return null;}};
   const [perms,setPerms]=useState(()=>storedPerms()||PERM_DEFAULTS);
