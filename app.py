@@ -3703,8 +3703,8 @@ function MessagesView({projects,users,cu,tasks}){
         ${msgs.map(m=>{
           const isSystem=m.is_system===1||m.sender==='system';
           if(isSystem) return html`
-            <div key=${m.id} style=${{display:'flex',justifyContent:'center',padding:'4px 0'}}>
-              <div style=${{fontSize:11,color:'var(--tx3)',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:20,padding:'4px 14px',maxWidth:'80%',textAlign:'center'}}
+            <div key=${m.id} style=${{display:'flex',justifyContent:'center',padding:'5px 0'}}>
+              <div style=${{fontSize:12,color:'var(--tx)',fontWeight:500,background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:20,padding:'5px 16px',maxWidth:'88%',textAlign:'center',lineHeight:1.5}}
                 dangerouslySetInnerHTML=${{__html:renderMd(m.content)}}></div>
             </div>`;
           const s=safe(users).find(u=>u.id===m.sender);const isMe=m.sender===cu.id;
