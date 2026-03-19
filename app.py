@@ -5083,6 +5083,16 @@ function ProductivityView({cu,tasks,projects,users}){
         <!-- DETAIL VIEW -->
         ${selDev?html`
           <div style=${{padding:'14px 18px',display:'flex',flexDirection:'column',gap:12}}>
+            <!-- Back button -->
+            <div>
+              <button onClick=${()=>setSelectedDev(null)}
+                style=${{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--sf)',color:'var(--tx2)',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .12s'}}
+                onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                All Developers
+              </button>
+            </div>
             <!-- Dev profile card -->
             <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px',
               display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
