@@ -7623,7 +7623,7 @@ function App(){
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
     }catch(e){console.error(e);}
-  },[cu,teamCtx]);
+  },[cu]);
 
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
@@ -7836,23 +7836,15 @@ function App(){
     return()=>clearInterval(id);
   },[cu,addToast]);
 
-  // ── Team Context filtering ──────────────────────────────────────────────────
-  // Compute which team is active; validate it still exists
+  // ── Team Context ─────────────────────────────────────────────────────────────
+  // activeTeam: the currently selected team object (or null = all workspace)
   const activeTeam=useMemo(()=>teamCtx?safe(data.teams).find(t=>t.id===teamCtx)||null:null,[teamCtx,data.teams]);
-  const teamMemberIds=useMemo(()=>activeTeam?new Set(JSON.parse(activeTeam.member_ids||'[]')):null,[activeTeam]);
-  // When teamCtx is set, data.projects/tasks are ALREADY server-filtered via API ?team_id=
-  // The useMemo below is a client-side safety net for projects that don't have team_id yet
-  const scopedProjects=useMemo(()=>{
-    if(!activeTeam)return data.projects;
-    // Data was server-filtered; return as-is (server already handles the logic)
-    return data.projects;
-  },[data.projects,activeTeam]);
-  const scopedProjectIds=useMemo(()=>new Set(scopedProjects.map(p=>p.id)),[scopedProjects]);
-  const scopedTasks=useMemo(()=>{
-    if(!activeTeam)return data.tasks;
-    // Data was server-filtered; return as-is
-    return data.tasks;
-  },[data.tasks,activeTeam]);
+  const teamMemberIds=useMemo(()=>activeTeam?new Set(JSON.parse(activeTeam.member_ids||'[]')):new Set(),[activeTeam]);
+  // When teamCtx is set, data.projects/tasks are server-filtered (API ?team_id=).
+  // scopedProjects/scopedTasks are direct aliases — clean, no duplication.
+  const scopedProjects=data.projects;
+  const scopedTasks=data.tasks;
+  // scopedUsers: team members only when a team is active
   const scopedUsers=useMemo(()=>{
     if(!activeTeam)return data.users;
     return safe(data.users).filter(u=>teamMemberIds.has(u.id));
@@ -7898,7 +7890,7 @@ function App(){
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${baseView} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}
         dark=${dark} setDark=${setDark}
-        teams=${data.teams} users=${data.users} projects=${data.projects} tasks=${data.tasks}
+        teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}
         teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
         callState=${{...callState,allUsers:data.users}}
         onCallAction=${async cmd=>{
@@ -7946,7 +7938,7 @@ function App(){
         </div>
       </div>
     </div>
-    <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
+    <${AIAssistant} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users}/>
     <${HuddleCall} cu=${cu} users=${data.users} onStateChange=${s=>setCallState(prev=>({...prev,...s}))} cmdRef=${huddleCmdRef}/>
 
     <!-- Team switch loading overlay -->
