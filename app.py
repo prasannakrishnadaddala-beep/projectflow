@@ -5089,7 +5089,7 @@ function ProductivityView({cu,tasks,projects,users}){
           <div style=${{padding:'14px 18px',display:'flex',flexDirection:'column',gap:12}}>
             <!-- Back button -->
             <div>
-              <button onClick=${()=>setSelectedDev(null)}
+              <button onClick=${()=>closeDetail()}
                 style=${{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--sf)',color:'var(--tx2)',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .12s'}}
                 onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
                 onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
