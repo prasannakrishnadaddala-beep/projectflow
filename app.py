@@ -2922,6 +2922,11 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
         </div>
         <div style=${{display:'flex',gap:5,alignItems:'center'}}>
           ${activeTeam?html`<button onClick=${()=>setTeamCtx&&setTeamCtx('')} style=${{fontSize:10,padding:'3px 8px',borderRadius:6,border:'1px solid var(--bd)',background:'transparent',color:'var(--tx3)',cursor:'pointer',whiteSpace:'nowrap'}}>× All</button>`:null}
+          ${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`
+            <button title="Manage Teams" onClick=${()=>{onSetView('team');}}
+              style=${{fontSize:10,padding:'3px 8px',borderRadius:6,border:'1px solid var(--ac)',background:'transparent',color:'var(--ac)',cursor:'pointer',whiteSpace:'nowrap',fontWeight:600}}>
+              ⚙ Manage
+            </button>`:null}
           <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
         </div>
       </div>
@@ -2933,7 +2938,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
       <div style=${{flex:1,overflowY:'auto',padding:'6px'}}>
         ${filtered.length===0?html`
           <div style=${{textAlign:'center',padding:'24px 8px',color:'var(--tx3)',fontSize:12}}>
-            ${safe(teams).length===0?html`<div><div style=${{fontSize:28,marginBottom:6}}>🏷</div>No teams yet.<br/>Go to <b>Team</b> settings to create teams.</div>`:'No teams match your search.'}
+            ${safe(teams).length===0?html`<div><div style=${{fontSize:28,marginBottom:6}}>🏷</div>No teams yet.${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`<br/>Click <b>⚙ Manage</b> above to create teams.`:html`<br/>Ask your Admin to create teams.`}</div>`:'No teams match your search.'}
           </div>`:null}
         ${filtered.map(team=>{
           const memberIds=JSON.parse(team.member_ids||'[]');
@@ -3047,8 +3052,8 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             ${it.icon}
             ${it.badge>0?html`<div style=${{position:'absolute',top:6,right:6,width:6,height:6,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid #0a0a0a'}}></div>`:null}
           </button>`)}
-        ${safe(teams).length>0?html`
-          <button title=${activeTeam?'Team: '+activeTeam.name+' (click to switch)':'Select Team Context'} onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
+        ${safe(teams).length>0||isAdminManager?html`
+          <button title=${activeTeam?'Team: '+activeTeam.name+' — click to switch/manage':'Teams — click to view & switch'} onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
             style=${{width:40,height:40,borderRadius:12,border:activeTeam?'2px solid var(--ac)':'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
               background:showTeamPanel?'var(--ac)':activeTeam?'rgba(170,255,0,.12)':'transparent',
               color:showTeamPanel?'var(--ac-tx)':activeTeam?'var(--ac)':'rgba(255,255,255,.32)',
@@ -3058,17 +3063,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             onMouseLeave=${e=>{if(!showTeamPanel){e.currentTarget.style.background=activeTeam?'rgba(170,255,0,.12)':'transparent';e.currentTarget.style.color=activeTeam?'var(--ac)':'rgba(255,255,255,.32)';}}}>
             ${ICONS.team}
             ${activeTeam?html`<div style=${{position:'absolute',bottom:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--ac)',border:'1.5px solid #0a0a0a'}}></div>`:null}
-          </button>`:null}
-        ${isAdminManager?html`
-          <button title="Manage Teams" onClick=${()=>{setShowTeamPanel(false);setView('team');}}
-            style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
-              background:baseView==='team'&&!showTeamPanel?'var(--ac)':'transparent',
-              color:baseView==='team'&&!showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)'
-            }}
-            onMouseEnter=${e=>{if(!(baseView==='team'&&!showTeamPanel)){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(!(baseView==='team'&&!showTeamPanel)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}
-            title="Manage Teams">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><line x1="19" y1="8" x2="23" y2="8"/><line x1="21" y1="6" x2="21" y2="10"/></svg>
           </button>`:null}
       </nav>
       <!-- Bottom actions -->
