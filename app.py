@@ -287,7 +287,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, description TEXT,
                 owner TEXT, members TEXT DEFAULT '[]', start_date TEXT,
-                target_date TEXT, progress INTEGER DEFAULT 0, color TEXT, created TEXT);
+                target_date TEXT, progress INTEGER DEFAULT 0, color TEXT, created TEXT,
+                team_id TEXT DEFAULT '');
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
                 project TEXT, assignee TEXT, priority TEXT, stage TEXT,
@@ -321,7 +322,8 @@ def init_db():
                 id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
                 type TEXT DEFAULT 'bug', priority TEXT DEFAULT 'medium',
                 status TEXT DEFAULT 'open', assignee TEXT, reporter TEXT,
-                project TEXT, tags TEXT DEFAULT '[]', created TEXT, updated TEXT);
+                project TEXT, tags TEXT DEFAULT '[]', created TEXT, updated TEXT,
+                team_id TEXT DEFAULT '');
             CREATE TABLE IF NOT EXISTS ticket_comments (
                 id TEXT PRIMARY KEY, workspace_id TEXT, ticket_id TEXT,
                 user_id TEXT, content TEXT, created TEXT);
@@ -352,6 +354,11 @@ def init_db():
                 id TEXT PRIMARY KEY, workspace_id TEXT, ticket_id TEXT,
                 user_id TEXT, content TEXT, created TEXT);
         ''')
+        except: pass
+        # Add team_id to projects/tasks/tickets if not exists (migration)
+        try: db.execute("ALTER TABLE projects ADD COLUMN team_id TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE tickets ADD COLUMN team_id TEXT DEFAULT ''")
         except: pass
         # Add team_id to tasks if not exists (migration)
         try: db.execute("ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''")
@@ -690,10 +697,10 @@ def create_project():
     members=d.get("members",[session["user_id"]])
     if session["user_id"] not in members: members.insert(0,session["user_id"])
     with get_db() as db:
-        db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                    (pid,wid(),d["name"],d.get("description",""),session["user_id"],
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
-                    d.get("color","#aaff00"),ts()))
+                    d.get("color","#aaff00"),ts(),d.get("team_id","")))
         p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
         # Notify all members except creator — DB notif + Web Push
         creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
@@ -715,12 +722,14 @@ def update_project(pid):
     with get_db() as db:
         p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
         if not p: return jsonify({"error":"Not found"}),404
-        db.execute("""UPDATE projects SET name=?,description=?,start_date=?,target_date=?,color=?,members=?
+        p_team = p["team_id"] if "team_id" in p.keys() else ""
+        db.execute("""UPDATE projects SET name=?,description=?,start_date=?,target_date=?,color=?,members=?,team_id=?
                       WHERE id=? AND workspace_id=?""",
                    (d.get("name",p["name"]),d.get("description",p["description"]),
                     d.get("start_date",p["start_date"]),d.get("target_date",p["target_date"]),
                     d.get("color",p["color"]),
-                    json.dumps(d.get("members",json.loads(p["members"]))),pid,wid()))
+                    json.dumps(d.get("members",json.loads(p["members"]))),
+                    d.get("team_id",p_team),pid,wid()))
         updated=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
         # Notify all project members about the update
         actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
@@ -750,6 +759,22 @@ def del_project(pid):
         db.execute("DELETE FROM tasks WHERE project=? AND workspace_id=?",(pid,wid()))
         db.execute("DELETE FROM files WHERE project_id=? AND workspace_id=?",(pid,wid()))
         return jsonify({"ok":True})
+
+@app.route("/api/projects/bulk-assign-team",methods=["POST"])
+@login_required
+def bulk_assign_team():
+    """Assign a team_id to multiple projects at once."""
+    d=request.json or {}
+    team_id=d.get("team_id","")
+    project_ids=d.get("project_ids",[])
+    if not project_ids: return jsonify({"error":"project_ids required"}),400
+    with get_db() as db:
+        cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager"):
+            return jsonify({"error":"Only Admin or Manager can assign teams to projects."}),403
+        for pid in project_ids:
+            db.execute("UPDATE projects SET team_id=? WHERE id=? AND workspace_id=?",(team_id,pid,wid()))
+        return jsonify({"ok":True,"updated":len(project_ids)})
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
 @app.route("/api/tasks")
@@ -2735,7 +2760,7 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
 }
 
 /* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
-function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams}){
+function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams,teamCtx,setTeamCtx,activeTeam}){
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
   const [search,setSearch]=useState('');
   const [dashboard,setDashboard]=useState(null); // loaded team dashboard data
@@ -2772,6 +2797,15 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
             <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
             ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
           </div>
+          ${teamCtx===team.id?html`
+            <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
+              style=${{fontSize:10,padding:'4px 8px',borderRadius:7,border:'1px solid var(--ac)',background:'var(--ac)',color:'var(--ac-tx)',cursor:'pointer',fontWeight:700,flexShrink:0,whiteSpace:'nowrap'}}>
+              ✓ Active
+            </button>`:html`
+            <button onClick=${()=>setTeamCtx&&setTeamCtx(team.id)}
+              style=${{fontSize:10,padding:'4px 8px',borderRadius:7,border:'1px solid var(--ac)',background:'transparent',color:'var(--ac)',cursor:'pointer',fontWeight:700,flexShrink:0,whiteSpace:'nowrap'}}>
+              Switch →
+            </button>`}
           <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
         </div>
 
@@ -2856,8 +2890,14 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
   return html`
     <div style=${{width:240,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
       <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>👥 Teams</span>
-        <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
+        <div>
+          <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>👥 Teams</span>
+          ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',marginTop:2}}>Viewing: <b>${activeTeam.name}</b></div>`:html`<div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>All workspace data</div>`}
+        </div>
+        <div style=${{display:'flex',gap:5,alignItems:'center'}}>
+          ${activeTeam?html`<button onClick=${()=>setTeamCtx&&setTeamCtx('')} style=${{fontSize:10,padding:'3px 8px',borderRadius:6,border:'1px solid var(--bd)',background:'transparent',color:'var(--tx3)',cursor:'pointer',whiteSpace:'nowrap'}}>× All</button>`:null}
+          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
+        </div>
       </div>
       <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
         <input class="inp" placeholder="Search teams..." value=${search}
@@ -2888,8 +2928,10 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
               onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)55';}}
               onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd)';}}>
               <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:7}}>
-                <div style=${{width:9,height:9,borderRadius:2,background:'var(--ac)',flexShrink:0}}></div>
+                <div style=${{width:9,height:9,borderRadius:2,background:teamCtx===team.id?'var(--ac)':'var(--tx3)',flexShrink:0}}></div>
                 <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
+                ${teamCtx===team.id?html`
+                  <span style=${{fontSize:9,color:'var(--ac)',fontWeight:700,background:'rgba(170,255,0,.12)',padding:'2px 6px',borderRadius:4,flexShrink:0}}>ACTIVE</span>`:null}
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
               ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
@@ -2920,7 +2962,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks}){
+function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
@@ -2962,6 +3004,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
   return html`
     <div style=${{display:'flex',height:'100vh',flexShrink:0}}>
     <aside style=${{width:62,minWidth:62,background:'#0a0a0a',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:14,borderRight:'1px solid rgba(255,255,255,.05)'}}>
+      <!-- Team context dot indicator at very top -->
+      ${activeTeam?html`
+        <div title=${'Team: '+activeTeam.name} style=${{width:36,height:5,borderRadius:3,background:'var(--ac)',margin:'6px 0 2px',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>`:
+        html`<div style=${{width:36,height:5,margin:'6px 0 2px',flexShrink:0}}></div>`}
       <!-- Nav items -->
       <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:3,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 8px'}}>
         ${items.map(it=>html`
@@ -2975,14 +3021,29 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             ${it.icon}
             ${it.badge>0?html`<div style=${{position:'absolute',top:6,right:6,width:6,height:6,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid #0a0a0a'}}></div>`:null}
           </button>`)}
-        ${isAdminManager?html`
-          <button title="Teams" onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
-            style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
-              background:showTeamPanel?'var(--ac)':'transparent',
-              color:showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)'
+        ${safe(teams).length>0?html`
+          <button title=${activeTeam?'Team: '+activeTeam.name+' (click to switch)':'Select Team Context'} onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
+            style=${{width:40,height:40,borderRadius:12,border:activeTeam?'2px solid var(--ac)':'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
+              background:showTeamPanel?'var(--ac)':activeTeam?'rgba(170,255,0,.12)':'transparent',
+              color:showTeamPanel?'var(--ac-tx)':activeTeam?'var(--ac)':'rgba(255,255,255,.32)',
+              position:'relative'
             }}
             onMouseEnter=${e=>{if(!showTeamPanel){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(!showTeamPanel){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>${ICONS.team}</button>`:null}
+            onMouseLeave=${e=>{if(!showTeamPanel){e.currentTarget.style.background=activeTeam?'rgba(170,255,0,.12)':'transparent';e.currentTarget.style.color=activeTeam?'var(--ac)':'rgba(255,255,255,.32)';}}}>
+            ${ICONS.team}
+            ${activeTeam?html`<div style=${{position:'absolute',bottom:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--ac)',border:'1.5px solid #0a0a0a'}}></div>`:null}
+          </button>`:null}
+        ${isAdminManager?html`
+          <button title="Manage Teams" onClick=${()=>{setShowTeamPanel(false);setView('team');}}
+            style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
+              background:baseView==='team'&&!showTeamPanel?'var(--ac)':'transparent',
+              color:baseView==='team'&&!showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)'
+            }}
+            onMouseEnter=${e=>{if(!(baseView==='team'&&!showTeamPanel)){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+            onMouseLeave=${e=>{if(!(baseView==='team'&&!showTeamPanel)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}
+            title="Manage Teams">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><line x1="19" y1="8" x2="23" y2="8"/><line x1="21" y1="6" x2="21" y2="10"/></svg>
+          </button>`:null}
       </nav>
       <!-- Bottom actions -->
       <div style=${{display:'flex',flexDirection:'column',gap:4,alignItems:'center',padding:'0 8px'}}>
@@ -3006,9 +3067,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         </button>
       </div>
     </aside>
-    ${showTeamPanel&&isAdminManager?html`
+    ${showTeamPanel&&safe(teams).length>0?html`
       <${TeamSidePanel} cu=${cu} teams=${teams||[]} users=${users||[]} projects=${projects||[]} tasks=${tasks||[]}
         selectedTeam=${selectedTeam} onSelectTeam=${setSelectedTeam}
+        teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
         onClose=${()=>{setShowTeamPanel(false);setSelectedTeam(null);}}
         onSetView=${v=>{setView(v);setShowTeamPanel(false);setSelectedTeam(null);}}
       />`:null}
@@ -3016,7 +3078,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
-function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewReminders,notifs,onNotifClick,onMarkAllRead,onClearAll}){
+function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewReminders,notifs,onNotifClick,onMarkAllRead,onClearAll,activeTeam,teams,setTeamCtx}){
   const [showNP,setShowNP]=useState(false);
   const [showProfile,setShowProfile]=useState(false);
   const [uploadMsg,setUploadMsg]=useState('');
@@ -3050,6 +3112,17 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
+        <!-- Team context pill -->
+        ${safe(teams).length>0?html`
+          <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'5px 10px 5px 12px',background:activeTeam?'rgba(170,255,0,.10)':'rgba(255,255,255,.04)',borderRadius:100,border:'1px solid '+(activeTeam?'rgba(170,255,0,.3)':'rgba(255,255,255,.08)'),cursor:'pointer',transition:'all .15s'}}
+            onClick=${()=>{/* trigger team panel via sidebar — just show visual */}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke=${activeTeam?'#aaff00':'rgba(255,255,255,.35)'} strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
+            ${activeTeam?html`
+              <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.2px',maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</span>
+              <button onClick=${e=>{e.stopPropagation();setTeamCtx&&setTeamCtx('');}}
+                style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(170,255,0,.6)',fontSize:14,lineHeight:1,padding:'0 2px',flexShrink:0}} title="Clear team filter">×</button>`:html`
+              <span style=${{fontSize:11,color:'rgba(255,255,255,.35)',letterSpacing:'.2px'}}>All Teams</span>`}
+          </div>`:null}
         <!-- Schedule timeline -->
         <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none'}}>
           <div style=${{height:40,background:'#111111',borderRadius:100,display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden',border:'1px solid rgba(255,255,255,.05)'}}>
@@ -3628,24 +3701,19 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
 }
 
 /* ─── ProjectsView ────────────────────────────────────────────────────────── */
-function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
+function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,activeTeam}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
   const [name,setName]=useState('');const [desc,setDesc]=useState('');
   const [sDate,setSDate]=useState('');const [tDate,setTDate]=useState('');
   const [color,setColor]=useState('#aaff00');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
   const [search,setSearch]=useState('');
-  const [sortBy,setSortBy]=useState('newest'); // newest|oldest|name|progress|tasks
-  const [viewMode,setViewMode]=useState('grid'); // grid|compact|team
-  const [teams,setTeams]=useState([]);
-  const [projTeam,setProjTeam]=useState(''); // for new project modal
+  const [sortBy,setSortBy]=useState('newest');
+  const [viewMode,setViewMode]=useState('grid');
+  const [projTeam,setProjTeam]=useState('');
 
   useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
-  // Load teams for Admin/Manager team view
-  useEffect(()=>{
-    if(cu&&(cu.role==='Admin'||cu.role==='Manager')){
-      api.get('/api/teams').then(d=>{if(Array.isArray(d))setTeams(d);});
-    }
-  },[cu]);
+  // Auto-select active team for new projects
+  useEffect(()=>{if(activeTeam)setProjTeam(activeTeam.id);},[activeTeam]);
 
   const create=async()=>{
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
@@ -3659,7 +3727,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
           teamMids.forEach(mid=>{if(!mems.includes(mid))mems.push(mid);});
         }
       }
-      const newProj=await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems});
+      const newProj=await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems,team_id:projTeam||''});
       if(newProj&&newProj.error){setErr(newProj.error);return;}
       if(!newProj||!newProj.id){setErr('Failed to create project. Please try again.');return;}
       setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);setProjTeam('');
@@ -3775,9 +3843,18 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
                     <div style=${{display:'flex'}}>
                       ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${20}/></div>`)}
                     </div>
-                    <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>
-                      ${p.start_date?fmtShort(p.start_date)+' → ':''}${fmtShort(p.target_date)||'No date'}
-                    </span>
+                    <div style=${{display:'flex',alignItems:'center',gap:5}}>
+                      ${(()=>{const pt=safe(teams).find(t=>t.id===p.team_id);return pt?html`<span style=${{fontSize:9,color:'var(--ac)',background:'rgba(170,255,0,.1)',border:'1px solid rgba(170,255,0,.25)',padding:'1px 6px',borderRadius:4,fontWeight:600}}>${pt.name}</span>`:
+                        cu&&(cu.role==='Admin'||cu.role==='Manager')&&safe(teams).length>0?html`<select style=${{fontSize:9,padding:'1px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx3)',cursor:'pointer'}}
+                          value="" onChange=${async e=>{if(!e.target.value)return;await api.post('/api/projects/bulk-assign-team',{team_id:e.target.value,project_ids:[p.id]});reload();}}
+                          onClick=${e=>e.stopPropagation()}>
+                          <option value="">+ Team</option>
+                          ${safe(teams).map(t=>html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}
+                        </select>`:null;})()}
+                      <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>
+                        ${p.start_date?fmtShort(p.start_date)+' → ':''}${fmtShort(p.target_date)||'No date'}
+                      </span>
+                    </div>
                   </div>
                 </div>`;
             })}
@@ -7373,6 +7450,8 @@ function App(){
     }catch(e){}
   },[]);
   const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[],teams:[]});
+  const [teamCtx,setTeamCtxRaw]=useState(()=>{try{return localStorage.getItem('pf_team_ctx')||'';}catch{return '';}});
+  const setTeamCtx=useCallback((id)=>{setTeamCtxRaw(id);try{localStorage.setItem('pf_team_ctx',id||'');}catch{};},[]);
   const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
@@ -7428,15 +7507,12 @@ function App(){
   const load=useCallback(async()=>{
     if(!cu)return;
     try{
-      const [users,projects,tasks,notifs,dmu,ws]=await Promise.all([
+      const [users,projects,tasks,notifs,dmu,ws,teamsRaw]=await Promise.all([
         api.get('/api/users'),api.get('/api/projects'),api.get('/api/tasks'),
         api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'),
+        api.get('/api/teams'),
       ]);
-      let teams=[];
-      if(cu.role==='Admin'||cu.role==='Manager'){
-        const t=await api.get('/api/teams');
-        if(Array.isArray(t))teams=t;
-      }
+      const teams=Array.isArray(teamsRaw)?teamsRaw:[];
       setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
       if(ws&&ws.name)setWsName(ws.name);
@@ -7656,26 +7732,56 @@ function App(){
 
   const unread=safe(data.notifs).filter(n=>!n.read).length;
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
+
+  // ── Team Context filtering ──────────────────────────────────────────────────
+  // Compute which team is active; validate it still exists
+  const activeTeam=useMemo(()=>teamCtx?safe(data.teams).find(t=>t.id===teamCtx)||null:null,[teamCtx,data.teams]);
+  // Member ids belonging to the active team
+  const teamMemberIds=useMemo(()=>activeTeam?new Set(JSON.parse(activeTeam.member_ids||'[]')):null,[activeTeam]);
+  // Scoped data: when a team is active filter all collections; otherwise show everything
+  const scopedProjects=useMemo(()=>{
+    if(!activeTeam)return data.projects;
+    return safe(data.projects).filter(p=>{
+      if(p.team_id&&p.team_id===activeTeam.id)return true;
+      const pm=safe(p.members);
+      return pm.some(mid=>teamMemberIds.has(mid));
+    });
+  },[data.projects,activeTeam,teamMemberIds]);
+  const scopedProjectIds=useMemo(()=>new Set(scopedProjects.map(p=>p.id)),[scopedProjects]);
+  const scopedTasks=useMemo(()=>{
+    if(!activeTeam)return data.tasks;
+    return safe(data.tasks).filter(t=>{
+      if(t.team_id&&t.team_id===activeTeam.id)return true;
+      if(t.assignee&&teamMemberIds.has(t.assignee))return true;
+      if(t.project&&scopedProjectIds.has(t.project))return true;
+      return false;
+    });
+  },[data.tasks,activeTeam,teamMemberIds,scopedProjectIds]);
+  const scopedUsers=useMemo(()=>{
+    if(!activeTeam)return data.users;
+    return safe(data.users).filter(u=>teamMemberIds.has(u.id));
+  },[data.users,activeTeam,teamMemberIds]);
+
+  const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:'Overview of your work'},
-    projects:{title:'Projects',sub:data.projects.length+' projects'},
-    tasks:{title:'Task Board',sub:data.tasks.length+' total tasks'},
-    messages:{title:'Channels',sub:'Project team channels'},
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' team overview':'Overview of your work'},
+    projects:{title:'Projects',sub:(activeTeamName?activeTeamName+' · ':'')+scopedProjects.length+' projects'},
+    tasks:{title:'Task Board',sub:(activeTeamName?activeTeamName+' · ':'')+scopedTasks.length+' tasks'},
+    messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'},
     dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'},
     reminders:{title:'Reminders',sub:'Upcoming task reminders'},
     notifs:{title:'Notifications',sub:unread+' unread'},
-    team:{title:'Team',sub:data.users.length+' members'},
+    team:{title:'Team Management',sub:'Members & sub-teams'},
     settings:{title:'Settings',sub:wsName||'Workspace configuration'},
-    timeline:{title:'Timeline Tracker',sub:'Project schedule & days spent'},
-    productivity:{title:'Dev Productivity',sub:'Team performance analytics'},
+    timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'},
+    productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'},
+    tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'},
   };
 
-  // Parse view — may include filter params like 'tasks:stage:development' or 'tasks:priority:high'
   const baseView=view.split(':')[0];
   const viewParts=view.split(':');
-  const taskFilterType=viewParts[1]||null;   // 'stage' | 'priority'
-  const taskFilterValue=viewParts[2]||null;  // e.g. 'development' | 'high'
-
+  const taskFilterType=viewParts[1]||null;
+  const taskFilterValue=viewParts[2]||null;
   const info=TITLES[baseView]||{title:baseView,sub:''};
   const extra=null;
 
@@ -7684,6 +7790,7 @@ function App(){
       <${Sidebar} cu=${cu} view=${baseView} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}
         dark=${dark} setDark=${setDark}
         teams=${data.teams} users=${data.users} projects=${data.projects} tasks=${data.tasks}
+        teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
         callState=${{...callState,allUsers:data.users}}
         onCallAction=${async cmd=>{
           const h=huddleCmdRef.current;
@@ -7698,12 +7805,12 @@ function App(){
         <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
           cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
           notifs=${data.notifs}
+          activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}
           onNotifClick=${async n=>{
             if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});
             const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard'};
             const dest=nav[n.type]||'notifs';
             setView(dest);
-            // #3: Force reload so latest data shows immediately after notification click
             await load();
           }}
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
@@ -7711,21 +7818,21 @@ function App(){
         />
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
-            ${baseView==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
-            ${baseView==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView}/>`:null}
+            ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}/>`:null}
+            ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
             />`:null}
-            ${baseView==='messages'?html`<${MessagesView} projects=${data.projects} users=${data.users} cu=${cu} tasks=${data.tasks}/>`:null}
+            ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks}/>`:null}
             ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
-            ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
+            ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
-            ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${data.users} projects=${data.projects} onReload=${load}/>`:null}
+            ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam}/>`:null}
             ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
-            ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${data.tasks} projects=${data.projects}/>`:null}
-            ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users}/>`:null}
+            ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
+            ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
           <//>
         </div>
       </div>
