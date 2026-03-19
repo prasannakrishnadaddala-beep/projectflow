@@ -3078,6 +3078,143 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
+/* ─── TeamsLandingPage ──────────────────────────────────────────────────── */
+function TeamsLandingPage({cu,teams,projects,tasks,users,setTeamCtx,onLogout,dark,setDark,wsName}){
+  const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
+  const myTeams=useMemo(()=>{
+    if(isAdminManager)return safe(teams);
+    return safe(teams).filter(t=>{try{return JSON.parse(t.member_ids||'[]').includes(cu.id);}catch{return false;}});
+  },[teams,cu,isAdminManager]);
+  const teamStats=useMemo(()=>{
+    const stats={};
+    myTeams.forEach(t=>{
+      const tProjects=safe(projects).filter(p=>String(p.team_id)===String(t.id));
+      const projIds=new Set(tProjects.map(p=>p.id));
+      const tTasks=safe(tasks).filter(tk=>projIds.has(tk.project));
+      let memberIds=[];try{memberIds=JSON.parse(t.member_ids||'[]');}catch{}
+      stats[t.id]={projects:tProjects.length,members:memberIds.length,activeTasks:tTasks.filter(tk=>tk.stage!=='completed').length};
+    });
+    return stats;
+  },[myTeams,projects,tasks]);
+  const themeIcon=dark
+    ?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+    :html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+  return html`
+    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',flexDirection:'column'}}>
+      <!-- Top bar -->
+      <div style=${{padding:'14px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--bd)',background:'var(--sf)',flexShrink:0}}>
+        <div style=${{display:'flex',alignItems:'center',gap:10}}>
+          <div style=${{width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <svg width="18" height="18" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
+          </div>
+          <div>
+            <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)'}}>${wsName||'ProjectFlow'}</div>
+            <div style=${{fontSize:11,color:'var(--tx3)'}}>Select your team workspace</div>
+          </div>
+        </div>
+        <div style=${{display:'flex',alignItems:'center',gap:8}}>
+          <button class="btn bg" style=${{padding:'7px 9px'}} title=${dark?'Light mode':'Dark mode'} onClick=${()=>setDark&&setDark(d=>!d)}>${themeIcon}</button>
+          <div style=${{display:'flex',alignItems:'center',gap:8,padding:'6px 12px',borderRadius:10,background:'var(--sf2)',border:'1px solid var(--bd)'}}>
+            <${Av} u=${cu} size=${24}/>
+            <div>
+              <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)'}}>${cu.name}</div>
+              <div style=${{fontSize:10,color:'var(--tx3)',background:'rgba(170,255,0,.1)',borderRadius:4,padding:'0 5px',display:'inline-block',marginTop:1}}>${cu.role}</div>
+            </div>
+          </div>
+          <button class="btn bg" style=${{fontSize:12,padding:'7px 12px'}} onClick=${onLogout}>Sign out</button>
+        </div>
+      </div>
+
+      <!-- Page body -->
+      <div style=${{flex:1,padding:'36px 32px',maxWidth:1120,width:'100%',margin:'0 auto',boxSizing:'border-box'}}>
+        <div style=${{marginBottom:28}}>
+          <h1 style=${{fontSize:24,fontWeight:900,color:'var(--tx)',marginBottom:6,display:'flex',alignItems:'center',gap:10}}>
+            <span style=${{fontSize:26}}>👥</span>
+            ${isAdminManager?'All Team Workspaces':'Your Teams'}
+          </h1>
+          <p style=${{fontSize:13,color:'var(--tx3)',maxWidth:520}}>
+            ${isAdminManager
+              ?'Click any team card to enter its workspace. All projects, tasks and analytics are team-scoped inside.'
+              :'Click your team card to open your workspace. Everything inside is scoped to your team.'}
+          </p>
+        </div>
+
+        ${myTeams.length===0?html`
+          <div style=${{textAlign:'center',padding:'60px 24px',color:'var(--tx3)',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd)'}}>
+            <div style=${{fontSize:38,marginBottom:12}}>🏗️</div>
+            <div style=${{fontSize:15,fontWeight:700,color:'var(--tx)',marginBottom:8}}>${isAdminManager?'No teams created yet':'You\'re not assigned to any team'}</div>
+            <div style=${{fontSize:13}}>${isAdminManager?'Go to Team Management to create your first team.':'Ask your Admin to add you to a team.'}</div>
+          </div>`:null}
+
+        <!-- Team cards grid -->
+        <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))',gap:18}}>
+          ${myTeams.map(team=>{
+            const s=teamStats[team.id]||{projects:0,members:0,activeTasks:0};
+            const col=team.color||'#7c3aed';
+            let memberIds=[];try{memberIds=JSON.parse(team.member_ids||'[]');}catch{}
+            const memberUsers=memberIds.slice(0,5).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
+            return html`
+              <div key=${team.id}
+                onClick=${()=>setTeamCtx(team.id)}
+                style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'20px 22px',cursor:'pointer',transition:'all .18s',position:'relative',overflow:'hidden',display:'flex',flexDirection:'column',gap:0}}
+                onMouseEnter=${e=>{e.currentTarget.style.borderColor=col;e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 8px 28px rgba(0,0,0,.25)';}}
+                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='none';}}>
+                <!-- Color accent top bar -->
+                <div style=${{position:'absolute',top:0,left:0,right:0,height:4,background:col,borderRadius:'16px 16px 0 0'}}></div>
+                <!-- Header -->
+                <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginTop:10,marginBottom:14}}>
+                  <div style=${{flex:1,minWidth:0}}>
+                    <div style=${{fontSize:17,fontWeight:800,color:'var(--tx)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
+                    ${team.description?html`<div style=${{fontSize:11,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.description}</div>`:
+                    html`<div style=${{fontSize:11,color:'var(--tx3)'}}>${s.members} member${s.members!==1?'s':''} · ${cu.role==='Developer'?'Your team':'Team workspace'}</div>`}
+                  </div>
+                  <div style=${{width:38,height:38,borderRadius:10,background:col+'22',border:'1.5px solid '+col+'55',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:10}}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${col}" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
+                  </div>
+                </div>
+                <!-- Stats row -->
+                <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
+                  ${[
+                    {label:'Projects',val:s.projects,icon:'◈',c:'var(--cy)'},
+                    {label:'Active Tasks',val:s.activeTasks,icon:'☑',c:'var(--gn)'},
+                    {label:'Members',val:s.members,icon:'👤',c:'var(--ac)'},
+                  ].map(st=>html`
+                    <div key=${st.label} style=${{background:'var(--sf2)',borderRadius:9,padding:'9px 10px',textAlign:'center'}}>
+                      <div style=${{fontSize:18,fontWeight:900,color:st.c,lineHeight:1}}>${st.val}</div>
+                      <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:600,textTransform:'uppercase',letterSpacing:.5,marginTop:2}}>${st.label}</div>
+                    </div>`)}
+                </div>
+                <!-- Members + Enter -->
+                <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:'auto'}}>
+                  <div style=${{display:'flex',alignItems:'center'}}>
+                    ${memberUsers.map((u,i)=>html`
+                      <div key=${u.id} title=${u.name} style=${{marginLeft:i>0?-7:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i,flexShrink:0}}>
+                        <${Av} u=${u} size=${27}/>
+                      </div>`)}
+                    ${s.members>5?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:8,fontWeight:600}}>+${s.members-5}</span>`:null}
+                  </div>
+                  <div style=${{fontSize:12,fontWeight:700,color:col,display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+                    Open workspace
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </div>
+                </div>
+              </div>`;
+          })}
+
+          <!-- Create team card (Admin/Manager only) -->
+          ${isAdminManager?html`
+            <div style=${{background:'transparent',border:'2px dashed var(--bd)',borderRadius:16,padding:'20px 22px',cursor:'pointer',transition:'all .18s',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,minHeight:180,color:'var(--tx3)'}}
+              onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='rgba(170,255,0,.04)';}}
+              onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx3)';e.currentTarget.style.background='transparent';}}
+              onClick=${()=>{/* could open team management */ window._pfToast&&window._pfToast('info','Create a team','Go to Team Management → create a new team');}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+              <div style=${{fontSize:13,fontWeight:600}}>Create New Team</div>
+            </div>`:null}
+        </div>
+      </div>
+    </div>`;
+}
+
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const inCall=callState&&callState.status==='in-call';
@@ -3238,6 +3375,14 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.4)';e.currentTarget.style.borderColor='rgba(255,255,255,.08)';}}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
             Switch Team
+          </button>
+          <!-- Back to Teams landing -->
+          <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
+            style=${{width:'100%',padding:'6px 10px',borderRadius:8,border:'none',background:'transparent',color:'rgba(255,255,255,.28)',fontSize:10,cursor:'pointer',display:'flex',alignItems:'center',gap:6,transition:'all .12s',marginTop:3}}
+            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.6)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.28)';}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+            All Teams
           </button>
         </div>
       </div>`:null}
@@ -8076,6 +8221,9 @@ function App(){
     <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlow...</p>
   </div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
+
+  // ── Teams landing page — shown when no team is selected ─────────────────
+  if(!teamCtx) return html`<${TeamsLandingPage} cu=${cu} teams=${data.teams} projects=${data.projects} tasks=${data.tasks} users=${data.users} setTeamCtx=${setTeamCtx} onLogout=${logout} dark=${dark} setDark=${setDark} wsName=${wsName}/>`;
 
   const unread=safe(data.notifs).filter(n=>!n.read).length;
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
