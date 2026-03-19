@@ -2384,21 +2384,25 @@ window._pfPushUnsubscribe = async function(){
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script>
-// Load JS libs: try local cache first, fall back to CDN
+// Load JS libs sequentially so React is ready before ReactDOM, ReactDOM before Recharts/htm
 (function(){
   var libs=[
-    ['/js/react.min.js','https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js'],
-    ['/js/react-dom.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js'],
-    ['/js/prop-types.min.js','https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js'],
-    ['/js/recharts.min.js','https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js'],
-    ['/js/htm.min.js','https://unpkg.com/htm@3.1.1/dist/htm.js'],
+    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js',
+    'https://unpkg.com/htm@3.1.1/dist/htm.js',
   ];
-  libs.forEach(function(lib){
+  function loadNext(i){
+    if(i>=libs.length) return;
     var s=document.createElement('script');
-    s.src=lib[1]; // go straight to CDN — fastest on Railway
+    s.src=libs[i];
     s.crossOrigin='anonymous';
+    s.onload=function(){ loadNext(i+1); };
+    s.onerror=function(){ loadNext(i+1); }; // keep going even if one fails
     document.head.appendChild(s);
-  });
+  }
+  loadNext(0);
 })();
 </script>
 <style>
@@ -8425,12 +8429,21 @@ def find_free_port(preferred=5000):
 
 def download_js():
     os.makedirs(JS_DIR,exist_ok=True)
+    # Purge stale React 17 cache — createRoot is React 18 only
+    react_dom = os.path.join(JS_DIR,"react-dom.min.js")
+    if os.path.exists(react_dom):
+        try:
+            with open(react_dom,"rb") as f:
+                if b"createRoot" not in f.read(1024*512):
+                    print("  ⚠ Stale React 17 cache detected — purging pf_static for fresh download...")
+                    import shutil; shutil.rmtree(JS_DIR,ignore_errors=True); os.makedirs(JS_DIR,exist_ok=True)
+        except: pass
     libs=[
-        ("react.min.js",     "https://unpkg.com/react@18/umd/react.production.min.js"),
-        ("react-dom.min.js", "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"),
-        ("prop-types.min.js","https://unpkg.com/prop-types@15/prop-types.min.js"),
-        ("recharts.min.js",  "https://unpkg.com/recharts@2/umd/Recharts.js"),
-        ("htm.min.js",       "https://unpkg.com/htm@3/dist/htm.js"),
+        ("react.min.js",     "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"),
+        ("react-dom.min.js", "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"),
+        ("prop-types.min.js","https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"),
+        ("recharts.min.js",  "https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js"),
+        ("htm.min.js",       "https://unpkg.com/htm@3.1.1/dist/htm.js"),
     ]
     all_ok=True
     for fn,url in libs:
