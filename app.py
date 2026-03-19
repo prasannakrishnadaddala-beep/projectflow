@@ -656,6 +656,16 @@ def get_all_projects():
         rows=db.execute("SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
         return jsonify([dict(r) for r in rows])
 
+@app.route("/api/projects/last-messages")
+@login_required
+def get_projects_last_messages():
+    """Return the latest message timestamp per project — used to sort channels by activity."""
+    with get_db() as db:
+        rows=db.execute(
+            "SELECT project, MAX(ts) as last_ts FROM messages WHERE workspace_id=? GROUP BY project",
+            (wid(),)).fetchall()
+        return jsonify({r["project"]: r["last_ts"] for r in rows})
+
 @app.route("/api/projects")
 @login_required
 def get_projects():
@@ -3355,9 +3365,16 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
   const [color,setColor]=useState('#aaff00');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
   const [search,setSearch]=useState('');
   const [sortBy,setSortBy]=useState('newest'); // newest|oldest|name|progress|tasks
-  const [viewMode,setViewMode]=useState('grid'); // grid|compact
+  const [viewMode,setViewMode]=useState('grid'); // grid|compact|team
+  const [teams,setTeams]=useState([]);
 
   useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
+  // Load teams for Admin/Manager team view
+  useEffect(()=>{
+    if(cu&&(cu.role==='Admin'||cu.role==='Manager')){
+      api.get('/api/teams').then(d=>{if(Array.isArray(d))setTeams(d);});
+    }
+  },[cu]);
 
   const create=async()=>{
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
@@ -3417,6 +3434,9 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
             onClick=${()=>setViewMode('grid')} title="Card view">⊞</button>
           <button class=${'tb'+(viewMode==='compact'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
             onClick=${()=>setViewMode('compact')} title="Compact list">☰</button>
+          ${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`
+            <button class=${'tb'+(viewMode==='team'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
+              onClick=${()=>setViewMode('team')} title="Team view">👥</button>`:null}
         </div>
 
         ${search?html`<button class="btn bg" style=${{fontSize:11,padding:'3px 8px',flexShrink:0}}
@@ -3531,7 +3551,88 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
           </div>`:null}
       </div>
 
-      <!-- ── NEW PROJECT MODAL ── -->
+        <!-- TEAM VIEW — Admin/Manager only -->
+        ${viewMode==='team'&&cu&&(cu.role==='Admin'||cu.role==='Manager')?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:18}}>
+            ${(()=>{
+              // Build team groups: each team + its projects (projects where any member is in that team)
+              const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
+              const groups=[];
+              // Named teams first
+              safe(teams).forEach(team=>{
+                const teamMemberIds=JSON.parse(team.member_ids||'[]');
+                const teamProjs=filteredProjects.filter(p=>{
+                  const projMems=safe(p.members);
+                  return projMems.some(mid=>teamMemberIds.includes(mid));
+                });
+                if(teamProjs.length>0){
+                  const lead=umap[team.lead_id];
+                  groups.push({id:team.id,name:team.name,lead,members:teamMemberIds.map(id=>umap[id]).filter(Boolean),projects:teamProjs});
+                }
+              });
+              // "Unassigned" group: projects not belonging to any named team
+              const assignedIds=new Set(groups.flatMap(g=>g.projects.map(p=>p.id)));
+              const unassigned=filteredProjects.filter(p=>!assignedIds.has(p.id));
+              if(unassigned.length>0) groups.push({id:'__unassigned__',name:'Unassigned Projects',lead:null,members:[],projects:unassigned});
+              if(groups.length===0) return html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
+                <div style=${{fontSize:36,marginBottom:10}}>👥</div>
+                <div>No teams set up yet.</div>
+                <div style=${{fontSize:12,marginTop:6}}>Go to <b>Team</b> in the sidebar to create teams first.</div>
+              </div>`;
+              return groups.map(grp=>html`
+                <div key=${grp.id}>
+                  <!-- Team header -->
+                  <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:10,padding:'8px 12px',
+                    background:'var(--sf2)',borderRadius:10,border:'1px solid var(--bd)'}}>
+                    <span style=${{fontSize:14,fontWeight:800,color:'var(--tx)',flex:1}}>${grp.id==='__unassigned__'?'📂':''} ${grp.name}</span>
+                    ${grp.lead?html`<span style=${{fontSize:11,color:'var(--tx2)'}}>Lead: <b>${grp.lead.name}</b></span>`:null}
+                    <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${grp.projects.length} projects</span>
+                    <!-- Team member avatars -->
+                    <div style=${{display:'flex'}}>
+                      ${grp.members.slice(0,6).map((m,i)=>html`
+                        <div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf2)',borderRadius:'50%',zIndex:6-i}}>
+                          <${Av} u=${m} size=${22}/>
+                        </div>`)}
+                      ${grp.members.length>6?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:6,alignSelf:'center'}}>+${grp.members.length-6}</span>`:null}
+                    </div>
+                  </div>
+                  <!-- Team projects as compact rows -->
+                  <div style=${{display:'flex',flexDirection:'column',gap:3,marginLeft:4}}>
+                    ${grp.projects.map(p=>{
+                      const pt=safe(tasks).filter(t=>t.project===p.id);
+                      const done=pt.filter(t=>t.stage==='completed').length;
+                      const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
+                      return html`
+                        <div key=${p.id}
+                          style=${{display:'grid',gridTemplateColumns:'1fr 100px 48px 48px 48px 88px',gap:8,
+                            alignItems:'center',padding:'8px 12px',
+                            background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
+                            cursor:'pointer',transition:'background .1s',borderLeft:'3px solid '+p.color}}
+                          onClick=${()=>setDetail(p)}
+                          onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
+                          onMouseLeave=${e=>e.currentTarget.style.background='var(--sf)'}>
+                          <div style=${{minWidth:0}}>
+                            <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
+                            <div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginTop:1}}>${p.description||'—'}</div>
+                          </div>
+                          <div style=${{display:'flex',alignItems:'center',gap:5}}>
+                            <div style=${{flex:1,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                              <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
+                            </div>
+                            <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)',flexShrink:0}}>${pc}%</span>
+                          </div>
+                          <div style=${{textAlign:'center',fontSize:12,fontWeight:700,color:'var(--tx)'}}>${pt.length}</div>
+                          <div style=${{textAlign:'center',fontSize:12,fontWeight:700,color:'var(--gn)'}}>${done}</div>
+                          <div style=${{textAlign:'center',fontSize:12,fontWeight:700,color:'var(--am)'}}>${pt.length-done}</div>
+                          <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textAlign:'right'}}>
+                            ${p.target_date?new Date(p.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—'}
+                          </div>
+                        </div>`;
+                    })}
+                  </div>
+                </div>`);
+            })()}
+          </div>`:null}
       ${showNew?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
           <div class="mo fi" style=${{maxWidth:520}}>
@@ -4449,7 +4550,16 @@ function renderMd(text){
 }
 function MessagesView({projects,users,cu,tasks}){
   const [allProjects,setAllProjects]=useState(safe(projects));
+  const [lastMsgTs,setLastMsgTs]=useState({}); // projectId → last message ISO ts
   useEffect(()=>{api.get('/api/projects/all').then(d=>{if(Array.isArray(d)&&d.length)setAllProjects(d);});},[]);
+  // Load real last-message timestamps for all channels
+  useEffect(()=>{
+    const fetchTs=()=>api.get('/api/projects/last-messages').then(d=>{if(d&&typeof d==='object')setLastMsgTs(d);});
+    fetchTs();
+    const id=setInterval(fetchTs,8000); // refresh every 8s
+    return()=>clearInterval(id);
+  },[]);
+
   const [pid,setPid]=useState((safe(projects)[0]&&safe(projects)[0].id)||'');
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
   const [showInfo,setShowInfo]=useState(false);
@@ -4470,7 +4580,14 @@ function MessagesView({projects,users,cu,tasks}){
       api.get('/api/messages?project='+pid).then(d=>{
         if(Array.isArray(d)){
           setMsgs(prev=>{
-            if(d.length>prev.length) playSound('notif');
+            if(d.length>prev.length){
+              playSound('notif');
+              // Update last message timestamp for this project
+              if(d.length>0){
+                const latest=d.reduce((mx,m)=>m.ts>mx?m.ts:mx,'');
+                setLastMsgTs(prev=>({...prev,[pid]:latest}));
+              }
+            }
             return d;
           });
         }
@@ -4479,7 +4596,6 @@ function MessagesView({projects,users,cu,tasks}){
     return()=>clearInterval(id);
   },[pid]);
 
-  // Auto-scroll: only scroll to bottom when newest-first is OFF
   useEffect(()=>{
     if(ref.current&&!newestFirst) ref.current.scrollTop=ref.current.scrollHeight;
   },[msgs,newestFirst]);
@@ -4495,29 +4611,24 @@ function MessagesView({projects,users,cu,tasks}){
     if(!txt.trim())return;const c=txt.trim();setTxt('');
     const m=await api.post('/api/messages',{project:pid,content:c});
     setMsgs(prev=>[...prev,m]);
+    // Immediately update last message ts for this channel
+    setLastMsgTs(prev=>({...prev,[pid]:m.ts||new Date().toISOString()}));
   };
 
-  // Sort channels: most recently active first (by latest message ts), filtered by search
+  // Sort channels by REAL last message timestamp (most recent activity first)
   const sortedProjects=useMemo(()=>{
-    // Build a map of projectId → latest message timestamp from current msgs
-    // We use allProjects order as fallback
     let rows=[...allProjects];
     if(chanSearch.trim()){
       const q=chanSearch.toLowerCase();
       rows=rows.filter(p=>p.name.toLowerCase().includes(q));
     }
-    // Sort by most recent activity — use created date of project as proxy since
-    // we don't have per-project last-message in state, but we do have tasks
-    // Use most recently created/updated task per project as activity signal
     rows.sort((a,b)=>{
-      const aT=safe(tasks).filter(x=>x.project===a.id);
-      const bT=safe(tasks).filter(x=>x.project===b.id);
-      const aLast=aT.reduce((mx,x)=>Math.max(mx,new Date(x.created||0).getTime()),0);
-      const bLast=bT.reduce((mx,x)=>Math.max(mx,new Date(x.created||0).getTime()),0);
-      return bLast-aLast;
+      const aTs=lastMsgTs[a.id]||a.created||'';
+      const bTs=lastMsgTs[b.id]||b.created||'';
+      return bTs.localeCompare(aTs); // ISO strings sort correctly as strings
     });
     return rows;
-  },[allProjects,chanSearch,tasks]);
+  },[allProjects,chanSearch,lastMsgTs]);
 
   return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
 
@@ -4547,18 +4658,28 @@ function MessagesView({projects,users,cu,tasks}){
         ${sortedProjects.map(p=>{
           const pt=safe(tasks).filter(t=>t.project===p.id);
           const activeCnt=pt.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length;
-          const lastTask=pt.reduce((mx,x)=>Math.max(mx,new Date(x.created||0).getTime()),0);
-          const isRecent=lastTask>Date.now()-86400000; // active in last 24h
+          const lastMsg=lastMsgTs[p.id];
+          const hasRecentMsg=lastMsg&&(Date.now()-new Date(lastMsg).getTime())<3600000; // msg in last 1h
+          const fmtLastMsg=ts=>{
+            if(!ts)return '';
+            const d=new Date(ts);const now=new Date();
+            const diff=now-d;
+            if(diff<60000)return 'just now';
+            if(diff<3600000)return Math.floor(diff/60000)+'m ago';
+            if(diff<86400000)return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+            return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+          };
           return html`
             <button key=${p.id} class=${'nb'+(pid===p.id?' act':'')}
-              style=${{marginBottom:2,fontSize:12,flexDirection:'column',alignItems:'flex-start',height:'auto',padding:'8px 10px',width:'100%'}}
+              style=${{marginBottom:2,fontSize:12,flexDirection:'column',alignItems:'flex-start',height:'auto',padding:'7px 10px',width:'100%'}}
               onClick=${()=>setPid(p.id)}>
               <div style=${{display:'flex',alignItems:'center',gap:7,width:'100%'}}>
                 <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
                 <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,textAlign:'left'}}># ${p.name}</span>
-                ${isRecent?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0,boxShadow:'0 0 6px var(--ac)'}}></div>`:null}
+                ${hasRecentMsg?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0,boxShadow:'0 0 6px var(--ac)'}} title="Recent activity"></div>`:null}
                 ${activeCnt>0?html`<span style=${{fontSize:9,background:p.color+'33',color:p.color,borderRadius:5,padding:'1px 5px',fontWeight:700,flexShrink:0}}>${activeCnt}</span>`:null}
               </div>
+              ${lastMsg?html`<div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,marginLeft:14,textAlign:'left'}}>${fmtLastMsg(lastMsg)}</div>`:null}
             </button>`;
         })}
       </div>
