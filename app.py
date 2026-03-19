@@ -363,6 +363,11 @@ def init_db():
         # Add team_id to tasks if not exists (migration)
         try: db.execute("ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''")
         except: pass
+        # Add color + description to teams
+        try: db.execute("ALTER TABLE teams ADD COLUMN color TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE teams ADD COLUMN description TEXT DEFAULT ''")
+        except: pass
         # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
         except: pass
@@ -1216,8 +1221,9 @@ def create_team():
     if not d.get("name"): return jsonify({"error":"name required"}),400
     tid=f"tm{int(datetime.now().timestamp()*1000)}"
     with get_db() as db:
-        db.execute("INSERT INTO teams VALUES (?,?,?,?,?,?)",
-                   (tid,wid(),d["name"],d.get("lead_id",""),json.dumps(d.get("member_ids",[])),ts()))
+        db.execute("INSERT INTO teams (id,workspace_id,name,lead_id,member_ids,created,color,description) VALUES (?,?,?,?,?,?,?,?)",
+                   (tid,wid(),d["name"],d.get("lead_id",""),json.dumps(d.get("member_ids",[])),ts(),
+                    d.get("color",""),d.get("description","")))
         return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=?",(tid,)).fetchone()))
 
 @app.route("/api/teams/<tid>", methods=["PUT"])
@@ -1227,9 +1233,12 @@ def update_team(tid):
     with get_db() as db:
         t=db.execute("SELECT * FROM teams WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not t: return jsonify({"error":"not found"}),404
-        db.execute("UPDATE teams SET name=?,lead_id=?,member_ids=? WHERE id=?",
+        cur_color=t["color"] if "color" in t.keys() else ""
+        cur_desc=t["description"] if "description" in t.keys() else ""
+        db.execute("UPDATE teams SET name=?,lead_id=?,member_ids=?,color=?,description=? WHERE id=?",
                    (d.get("name",t["name"]),d.get("lead_id",t["lead_id"]),
-                    json.dumps(d.get("member_ids",json.loads(t["member_ids"] or "[]"))),tid))
+                    json.dumps(d.get("member_ids",json.loads(t["member_ids"] or "[]"))),
+                    d.get("color",cur_color),d.get("description",cur_desc),tid))
         return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=?",(tid,)).fetchone()))
 
 @app.route("/api/teams/<tid>", methods=["DELETE"])
@@ -3079,7 +3088,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 /* ─── TeamsLandingPage ──────────────────────────────────────────────────── */
-function TeamsLandingPage({cu,teams,projects,tasks,users,setTeamCtx,onLogout,dark,setDark,wsName}){
+function TeamsLandingPage({cu,teams,projects,tasks,users,setTeamCtx,onLogout,dark,setDark,wsName,dataReady}){
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const myTeams=useMemo(()=>{
     if(isAdminManager)return safe(teams);
@@ -3139,7 +3148,18 @@ function TeamsLandingPage({cu,teams,projects,tasks,users,setTeamCtx,onLogout,dar
           </p>
         </div>
 
-        ${myTeams.length===0?html`
+        ${!dataReady?html`
+          <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))',gap:18}}>
+            ${[1,2,3].map(i=>html`
+              <div key=${i} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'22px',height:180,animation:'pulse 1.5s ease-in-out infinite',opacity:.6}}>
+                <div style=${{height:18,width:'60%',background:'var(--bd)',borderRadius:6,marginBottom:12}}></div>
+                <div style=${{height:12,width:'40%',background:'var(--bd)',borderRadius:5,marginBottom:20}}></div>
+                <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                  ${[1,2,3].map(j=>html`<div key=${j} style=${{height:52,background:'var(--bd)',borderRadius:9}}></div>`)}
+                </div>
+              </div>`)}
+          </div>`:null}
+        ${dataReady&&myTeams.length===0?html`
           <div style=${{textAlign:'center',padding:'60px 24px',color:'var(--tx3)',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd)'}}>
             <div style=${{fontSize:38,marginBottom:12}}>🏗️</div>
             <div style=${{fontSize:15,fontWeight:700,color:'var(--tx)',marginBottom:8}}>${isAdminManager?'No teams created yet':'You\'re not assigned to any team'}</div>
@@ -3147,7 +3167,7 @@ function TeamsLandingPage({cu,teams,projects,tasks,users,setTeamCtx,onLogout,dar
           </div>`:null}
 
         <!-- Team cards grid -->
-        <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))',gap:18}}>
+        <div style=${{display:dataReady?'grid':'none',gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))',gap:18}}>
           ${myTeams.map(team=>{
             const s=teamStats[team.id]||{projects:0,members:0,activeTasks:0};
             const col=team.color||'#7c3aed';
@@ -5740,6 +5760,7 @@ function TeamView({users,cu,reload}){
   const [teams,setTeams]=useState([]);const [showNewTeam,setShowNewTeam]=useState(false);
   const [editTeam,setEditTeam]=useState(null);
   const [tName,setTName]=useState('');const [tLead,setTLead]=useState('');const [tMembers,setTMembers]=useState([]);
+  const [tColor,setTColor]=useState('#7c3aed');const [tDesc,setTDesc]=useState('');
   const [savingTeam,setSavingTeam]=useState(false);
 
   const loadTeams=useCallback(async()=>{const d=await api.get('/api/teams');setTeams(Array.isArray(d)?d:[]);},[]);
@@ -5747,12 +5768,13 @@ function TeamView({users,cu,reload}){
 
   const add=async()=>{if(!name||!email||!pw){setErr('All fields required.');return;}setErr('');const r=await api.post('/api/users',{name,email,password:pw,role});if(r.error)setErr(r.error);else{await reload();setShowNew(false);setName('');setEmail('');setPw('');}};
 
-  const openNewTeam=()=>{setEditTeam(null);setTName('');setTLead('');setTMembers([]);setShowNewTeam(true);};
-  const openEditTeam=t=>{setEditTeam(t);setTName(t.name);setTLead(t.lead_id||'');setTMembers(JSON.parse(t.member_ids||'[]'));setShowNewTeam(true);};
+  const TEAM_COLORS=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#aaff00','#f97316','#8b5cf6'];
+  const openNewTeam=()=>{setEditTeam(null);setTName('');setTLead('');setTMembers([]);setTColor('#7c3aed');setTDesc('');setShowNewTeam(true);};
+  const openEditTeam=t=>{setEditTeam(t);setTName(t.name);setTLead(t.lead_id||'');setTMembers(JSON.parse(t.member_ids||'[]'));setTColor(t.color||'#7c3aed');setTDesc(t.description||'');setShowNewTeam(true);};
   const saveTeam=async()=>{
     if(!tName.trim())return;
     setSavingTeam(true);
-    const payload={name:tName,lead_id:tLead,member_ids:tMembers};
+    const payload={name:tName,lead_id:tLead,member_ids:tMembers,color:tColor,description:tDesc};
     if(editTeam)await api.put('/api/teams/'+editTeam.id,payload);
     else await api.post('/api/teams',payload);
     setSavingTeam(false);setShowNewTeam(false);setEditTeam(null);
@@ -5815,13 +5837,15 @@ function TeamView({users,cu,reload}){
           const members=JSON.parse(t.member_ids||'[]').map(id=>umap[id]).filter(Boolean);
           const lead=t.lead_id?umap[t.lead_id]:null;
           return html`
-          <div key=${t.id} class="card" style=${{display:'flex',gap:14,alignItems:'flex-start'}}>
-            <div style=${{width:44,height:44,borderRadius:12,background:'var(--ac3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>🏷</div>
-            <div style=${{flex:1,minWidth:0}}>
-              <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+          <div key=${t.id} class="card" style=${{display:'flex',gap:14,alignItems:'flex-start',paddingLeft:0,overflow:'hidden'}}>
+            <div style=${{width:5,background:t.color||'var(--ac)',alignSelf:'stretch',borderRadius:'12px 0 0 12px',flexShrink:0,minHeight:60}}></div>
+            <div style=${{width:44,height:44,borderRadius:12,background:(t.color||'var(--ac)')+'22',border:'1.5px solid '+(t.color||'var(--ac)')+'55',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0,marginLeft:10,marginTop:16}}>🏷</div>
+            <div style=${{flex:1,minWidth:0,paddingTop:14,paddingBottom:14}}>
+              <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
                 <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${t.name}</span>
                 <span style=${{fontSize:11,color:'var(--tx3)'}}>${members.length} member${members.length!==1?'s':''}</span>
               </div>
+              ${t.description?html`<div style=${{fontSize:11,color:'var(--tx3)',marginBottom:6,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${t.description}</div>`:null}
               ${lead?html`<div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
                 <span style=${{fontSize:11,color:'var(--tx3)'}}>Lead:</span>
                 <${Av} u=${lead} size=${20}/>
@@ -5871,7 +5895,22 @@ function TeamView({users,cu,reload}){
         <div style=${{display:'flex',flexDirection:'column',gap:13}}>
           <div>
             <label class="lbl">Team Name *</label>
-            <input class="inp" value=${tName} onInput=${e=>setTName(e.target.value)} placeholder="e.g. Frontend, Backend, QA, Design…"/>
+            <input class="inp" value=${tName} onInput=${e=>setTName(e.target.value)} placeholder="e.g. MuleSoft, Backend, QA, Design…"/>
+          </div>
+          <div>
+            <label class="lbl">Description</label>
+            <input class="inp" value=${tDesc} onInput=${e=>setTDesc(e.target.value)} placeholder="Brief description of this team's focus…"/>
+          </div>
+          <div>
+            <label class="lbl">Team Color</label>
+            <div style=${{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
+              ${TEAM_COLORS.map(c=>html`
+                <button key=${c} onClick=${()=>setTColor(c)}
+                  style=${{width:30,height:30,borderRadius:8,background:c,border:tColor===c?'3px solid var(--tx)':'2px solid transparent',cursor:'pointer',transition:'all .12s',boxShadow:tColor===c?'0 0 0 2px '+c+'55':'none'}}>
+                </button>`)}
+              <input type="color" value=${tColor} onInput=${e=>setTColor(e.target.value)}
+                style=${{width:30,height:30,borderRadius:8,border:'2px solid var(--bd)',cursor:'pointer',padding:1,background:'transparent'}} title="Custom color"/>
+            </div>
           </div>
           <div>
             <label class="lbl">Team Lead</label>
@@ -7965,6 +8004,7 @@ function App(){
   const huddleCmdRef=useRef({});
 
   const [teamLoading,setTeamLoading]=useState(false);
+  const [dataReady,setDataReady]=useState(false);
 
   const load=useCallback(async(overrideTeamCtx)=>{
     if(!cu)return;
@@ -7984,6 +8024,7 @@ function App(){
       if(ws&&ws.name)setWsName(ws.name);
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
+      setDataReady(true);
     }catch(e){console.error(e);}
   },[cu]);
 
@@ -8223,7 +8264,7 @@ function App(){
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
   // ── Teams landing page — shown when no team is selected ─────────────────
-  if(!teamCtx) return html`<${TeamsLandingPage} cu=${cu} teams=${data.teams} projects=${data.projects} tasks=${data.tasks} users=${data.users} setTeamCtx=${setTeamCtx} onLogout=${logout} dark=${dark} setDark=${setDark} wsName=${wsName}/>`;
+  if(!teamCtx) return html`<${TeamsLandingPage} cu=${cu} teams=${data.teams} projects=${data.projects} tasks=${data.tasks} users=${data.users} setTeamCtx=${setTeamCtx} onLogout=${logout} dark=${dark} setDark=${setDark} wsName=${wsName} dataReady=${dataReady}/>`;
 
   const unread=safe(data.notifs).filter(n=>!n.read).length;
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
