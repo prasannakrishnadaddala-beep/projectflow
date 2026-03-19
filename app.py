@@ -1742,17 +1742,19 @@ def health():
 
 @app.route("/js/<path:fn>")
 def serve_js(fn):
+    # Try local file first (exists when running locally with download_js())
     path=os.path.join(JS_DIR,fn)
     if os.path.exists(path) and os.path.getsize(path)>1000:
         mime,_=mimetypes.guess_type(fn)
         return Response(open(path,"rb").read(),mimetype=mime or "application/javascript",
                         headers={"Cache-Control":"public,max-age=86400"})
+    # Map to stable CDN URLs — use cdnjs (more reliable on Railway/cloud)
     CDN={
-        "react.min.js":     "https://unpkg.com/react@18/umd/react.production.min.js",
-        "react-dom.min.js": "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
-        "prop-types.min.js":"https://unpkg.com/prop-types@15/prop-types.min.js",
-        "recharts.min.js":  "https://unpkg.com/recharts@2/umd/Recharts.js",
-        "htm.min.js":       "https://unpkg.com/htm@3/dist/htm.js",
+        "react.min.js":     "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",
+        "react-dom.min.js": "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js",
+        "prop-types.min.js":"https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js",
+        "recharts.min.js":  "https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js",
+        "htm.min.js":       "https://unpkg.com/htm@3.1.1/dist/htm.js",
     }
     if fn in CDN:
         from flask import redirect
@@ -2316,9 +2318,24 @@ window._pfPushUnsubscribe = async function(){
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="/js/react.min.js"></script><script src="/js/react-dom.min.js"></script>
-<script src="/js/prop-types.min.js"></script><script src="/js/recharts.min.js"></script>
-<script src="/js/htm.min.js"></script>
+<script>
+// Load JS libs: try local cache first, fall back to CDN
+(function(){
+  var libs=[
+    ['/js/react.min.js','https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js'],
+    ['/js/react-dom.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js'],
+    ['/js/prop-types.min.js','https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js'],
+    ['/js/recharts.min.js','https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js'],
+    ['/js/htm.min.js','https://unpkg.com/htm@3.1.1/dist/htm.js'],
+  ];
+  libs.forEach(function(lib){
+    var s=document.createElement('script');
+    s.src=lib[1]; // go straight to CDN — fastest on Railway
+    s.crossOrigin='anonymous';
+    document.head.appendChild(s);
+  });
+})();
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;width:100%;overflow:auto}
@@ -2544,13 +2561,22 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
 </script>
 <script>
+// Wait for all CDN libs to load before running app
 (function(){
 'use strict';
-if(typeof React==='undefined'||typeof Recharts==='undefined'){
-  var el=document.getElementById('LE');
-  if(el){el.style.display='block';el.innerHTML='<b>Missing libraries.</b> Delete the <b>pf_static\\</b> folder and restart.';}
-  return;
+function waitForLibs(cb, attempts){
+  attempts = attempts||0;
+  if(typeof React!=='undefined' && typeof ReactDOM!=='undefined' && typeof htm!=='undefined'){
+    cb(); return;
+  }
+  if(attempts > 150){ // 15 seconds timeout
+    var el=document.getElementById('LE');
+    if(el){el.style.display='block';el.innerHTML='<b>Failed to load libraries.</b> Check your internet connection and refresh.';}
+    return;
+  }
+  setTimeout(function(){waitForLibs(cb, attempts+1);}, 100);
 }
+window._pfStartApp = function(){
 const html=htm.bind(React.createElement);
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
 const RC=Recharts;
@@ -3115,7 +3141,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
         <!-- Team context pill -->
         ${safe(teams).length>0?html`
           <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'5px 10px 5px 12px',background:activeTeam?'rgba(170,255,0,.10)':'rgba(255,255,255,.04)',borderRadius:100,border:'1px solid '+(activeTeam?'rgba(170,255,0,.3)':'rgba(255,255,255,.08)'),cursor:'pointer',transition:'all .15s'}}
-            onClick=${()=>{/* trigger team panel via sidebar — just show visual */}}>
+            onClick=${()=>{}}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke=${activeTeam?'#aaff00':'rgba(255,255,255,.35)'} strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
             ${activeTeam?html`
               <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.2px',maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</span>
@@ -7877,6 +7903,9 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary}><${App}<//>`);
+};
+// Start app once libs are ready
+waitForLibs(window._pfStartApp);
 })();
 </script>
 </body>
