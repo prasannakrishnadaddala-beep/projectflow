@@ -2833,8 +2833,6 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
 /* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
 function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams,teamCtx,setTeamCtx,activeTeam}){
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
-  const filteredMembers=useMemo(()=>safe(users).filter(u=>!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase())),[users,memberSearch]);
-  const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const [search,setSearch]=useState('');
   const [dashboard,setDashboard]=useState(null); // loaded team dashboard data
   const [loadingDash,setLoadingDash]=useState(false);
@@ -4225,10 +4223,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
             ⚙ Filters${activeFilters>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,fontSize:9,padding:'1px 5px',marginLeft:3,fontFamily:'monospace'}}>${activeFilters}</span>`:''}
           </button>
           ${activeFilters>0?html`<button class="btn bam" style=${{padding:'7px 11px',fontSize:11}} onClick=${clearAll}>✕ Clear</button>`:null}
-          <button class=${'btn bg'+(showResolved?' act':'')} style=${{padding:'8px 13px',fontSize:12,borderColor:showResolved?'var(--gn)':'',color:showResolved?'var(--gn)':''}}
-            onClick=${()=>setShowResolved(!showResolved)} title="Toggle resolved/completed tasks">
-            ${showResolved?'✓ Resolved':'○ Resolved'}
-          </button>
+          <!-- Resolved toggle removed -->
           <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
             <button class=${'tb'+(mode==='kanban'?' act':'')} onClick=${()=>setMode('kanban')}>⊞ Board</button>
             <button class=${'tb'+(mode==='list'?' act':'')} onClick=${()=>setMode('list')}>☰ List</button>
@@ -5461,7 +5456,7 @@ function NotifsView({notifs,reload,onNavigate}){
     await api.put('/api/notifications/read-all',{});
     reload();
   };
-  return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
+  return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',boxSizing:'border-box'}}>
     <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
       <span style=${{fontSize:13,color:'var(--tx2)'}}>${unread>0?html`<b style=${{color:'var(--ac)'}}>${unread}</b> unread`:'All caught up!'}</span>
       <div style=${{display:'flex',gap:8}}>
@@ -5616,7 +5611,7 @@ function TeamView({users,cu,reload}){
   const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const ROLE_COLORS={Admin:'var(--ac)',Manager:'var(--gn)',TeamLead:'var(--cy)',Developer:'var(--pu)',Tester:'var(--am)',Viewer:'var(--tx3)'};
 
-  return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
+  return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',boxSizing:'border-box'}}>
     <!-- Tab switcher -->
     <div style=${{display:'flex',gap:4,marginBottom:18,background:'var(--sf2)',borderRadius:12,padding:4,width:'fit-content',border:'1px solid var(--bd)'}}>
       ${['members','teams'].map(t=>html`
@@ -5640,7 +5635,7 @@ function TeamView({users,cu,reload}){
         <span style=${{fontSize:12,color:'var(--tx3)',flexShrink:0}}>${filteredMembers.length} of ${safe(users).length}</span>
         <button class="btn bp" style=${{flexShrink:0}} onClick=${()=>setShowNew(true)}>+ Add Member</button>
       </div>
-      <div class="card" style=${{padding:0,overflow:'hidden',maxWidth:820}}>
+      <div class="card" style=${{padding:0,overflow:'auto'}}>
         <table style=${{width:'100%',borderCollapse:'collapse'}}>
           <thead><tr style=${{borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
             ${['Member','Email','Password','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
@@ -5891,8 +5886,6 @@ function TicketsView({cu,users,projects,onReload,activeTeam}){
   const statCounts=Object.keys(STATUS_CFG).reduce((a,s)=>{a[s]=tickets.filter(t=>t.status===s).length;return a;},{});
 
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
-  const filteredMembers=useMemo(()=>safe(users).filter(u=>!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase())),[users,memberSearch]);
-  const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
 
   const FORM=html`
     <div class="ov" onClick=${e=>e.target===e.currentTarget&&(setShowNew(false),setEditTicket(null))}>
@@ -6039,10 +6032,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam}){
           <option value="">All Types</option>
           ${Object.entries(TYPE_CFG).map(([v,c])=>html`<option key=${v} value=${v}>${c.icon} ${c.label}</option>`)}
         </select>
-        <button class=${'btn bg'+(showResolved?' act':'')} style=${{padding:'5px 11px',fontSize:11,height:30,borderColor:showResolved?'var(--gn)':'',color:showResolved?'var(--gn)':''}}
-          onClick=${()=>setShowResolved(!showResolved)}>
-          ${showResolved?'✓ Resolved':'○ Resolved'}
-        </button>
+        <!-- Resolved toggle removed -->
         <span style=${{fontSize:11,color:'var(--tx3)',alignSelf:'center',marginLeft:4}}>${visibleTickets.length} ticket${visibleTickets.length!==1?'s':''}</span>
       </div>
 
