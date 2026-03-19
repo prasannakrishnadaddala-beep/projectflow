@@ -3132,9 +3132,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
       width:W,minWidth:W,maxWidth:W,
       background:'#0f0f0f',
       display:'flex',flexDirection:'column',
-      height:'100vh',flexShrink:0,overflow:'hidden',
+      height:'100vh',flexShrink:0,overflow:'visible',
       borderRight:'1px solid rgba(255,255,255,.06)',
-      transition:'width .2s ease,min-width .2s ease,max-width .2s ease'
+      transition:'width .2s ease,min-width .2s ease,max-width .2s ease',
+      position:'relative'
     }}>
 
       <!-- ── Logo / workspace name ── -->
@@ -3235,15 +3236,37 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>↪</span>
           ${!col?html`<span style=${{fontSize:12}}>Sign out</span>`:null}
         </button>
-        <!-- Collapse / expand toggle -->
-        <button title=${col?'Expand sidebar':'Collapse sidebar'} onClick=${()=>setCol(c=>!c)}
-          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'1px solid rgba(255,255,255,.07)',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.25)',transition:'all .12s',justifyContent:col?'center':'flex-start',marginTop:2}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.65)';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.25)';}}>
-          <span style=${{fontSize:13,flexShrink:0,width:col?'auto':18,textAlign:'center',transform:col?'scaleX(-1)':'none',display:'inline-block'}}>‹</span>
-          ${!col?html`<span style=${{fontSize:11}}>Collapse</span>`:null}
-        </button>
       </div>
+      <!-- Edge collapse/expand tab — floats on the right edge of sidebar -->
+      <button title=${col?'Expand sidebar':'Collapse sidebar'} onClick=${()=>setCol(c=>!c)}
+        style=${{
+          position:'absolute',
+          left:col?64:200,
+          top:'50%',
+          transform:'translateY(-50%)',
+          zIndex:200,
+          width:14,
+          height:40,
+          background:'#0f0f0f',
+          border:'1px solid rgba(255,255,255,.1)',
+          borderLeft:'none',
+          borderRadius:'0 6px 6px 0',
+          cursor:'pointer',
+          display:'flex',
+          alignItems:'center',
+          justifyContent:'center',
+          color:'rgba(255,255,255,.35)',
+          transition:'left .2s ease, background .12s, color .12s',
+          padding:0,
+        }}
+        onMouseEnter=${e=>{e.currentTarget.style.background='#1a1a1a';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
+        onMouseLeave=${e=>{e.currentTarget.style.background='#0f0f0f';e.currentTarget.style.color='rgba(255,255,255,.35)';}}>
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          ${col
+            ?html`<polyline points="2 2 6 6 2 10"/>`
+            :html`<polyline points="6 2 2 6 6 10"/>`}
+        </svg>
+      </button>
     </aside>`;
 }
 
