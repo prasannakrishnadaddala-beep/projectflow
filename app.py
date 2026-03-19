@@ -683,13 +683,31 @@ def get_projects():
     team_id = request.args.get("team_id","")
     with get_db() as db:
         if team_id:
-            # Return projects directly assigned to this team
-            rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC",
-                (wid(), team_id)).fetchall()
+            # Get the team's member list
+            team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",
+                              (team_id, wid())).fetchone()
+            member_ids = json.loads(team["member_ids"] if team else "[]")
+            mem_set = set(member_ids)
+            # Fetch all projects then filter: team_id match OR any project member is in team
+            all_projects = db.execute(
+                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",
+                (wid(),)).fetchall()
+            rows = []
+            for p in all_projects:
+                # Match 1: project is explicitly assigned to this team
+                if p["team_id"] and p["team_id"] == team_id:
+                    rows.append(p); continue
+                # Match 2: at least one project member belongs to the team
+                try:
+                    proj_members = json.loads(p["members"] or "[]")
+                except:
+                    proj_members = []
+                if any(mid in mem_set for mid in proj_members):
+                    rows.append(p)
         else:
             rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
+                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",
+                (wid(),)).fetchall()
         return jsonify([dict(r) for r in rows])
 
 @app.route("/api/projects",methods=["POST"])
@@ -7715,8 +7733,8 @@ function App(){
     const tCtx=overrideTeamCtx!==undefined?overrideTeamCtx:teamCtx;
     try{
       // Build team-scoped API URLs when a team context is active
-      const projUrl=tCtx?'/api/projects?team_id='+tCtx:'/api/projects';
-      const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
+      const projUrl=tCtx?'/api/projects?team_id='+encodeURIComponent(tCtx):'/api/projects';
+      const taskUrl=tCtx?'/api/tasks?team_id='+encodeURIComponent(tCtx):'/api/tasks';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw]=await Promise.all([
         api.get('/api/users'),api.get(projUrl),api.get(taskUrl),
         api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'),
@@ -7751,8 +7769,8 @@ function App(){
     if(!cu)return;
     const id=setInterval(async()=>{
       try{
-        const projUrl=teamCtx?'/api/projects?team_id='+teamCtx:'/api/projects';
-        const taskUrl=teamCtx?'/api/tasks?team_id='+teamCtx:'/api/tasks';
+        const projUrl=teamCtx?'/api/projects?team_id='+encodeURIComponent(teamCtx):'/api/projects';
+        const taskUrl=teamCtx?'/api/tasks?team_id='+encodeURIComponent(teamCtx):'/api/tasks';
         const [projects,tasks]=await Promise.all([api.get(projUrl),api.get(taskUrl)]);
         if(Array.isArray(projects)&&Array.isArray(tasks)){
           setData(prev=>({...prev,projects,tasks}));
