@@ -4019,7 +4019,16 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
               const done=pt.filter(t=>t.stage==='completed').length;
               const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
               const mems=safe(p.members).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
-              const fmtShort=d=>d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'';
+              const fmtShort=d=>{if(!d)return '';const dt=new Date(d);return dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});};
+              const daysWorked=p=>{
+                const s=p.start_date?new Date(p.start_date):null;
+                const e=p.target_date?new Date(p.target_date):null;
+                if(!s||!e)return null;
+                const today=new Date();today.setHours(0,0,0,0);s.setHours(0,0,0,0);e.setHours(0,0,0,0);
+                const worked=Math.max(0,Math.round((Math.min(today,e)-s)/86400000));
+                const total=Math.max(1,Math.round((e-s)/86400000));
+                return {worked,total};
+              };
               return html`
                 <div key=${p.id} class="card"
                   style=${{cursor:'pointer',transition:'all .15s',borderTop:'3px solid '+p.color,padding:'14px'}}
@@ -4057,9 +4066,15 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
                           <option value="">+ Team</option>
                           ${safe(teams).map(t=>html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}
                         </select>`:null;})()}
-                      <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>
-                        ${p.start_date?fmtShort(p.start_date)+' → ':''}${fmtShort(p.target_date)||'No date'}
-                      </span>
+                      <div style=${{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:2}}>
+                        <span style=${{fontSize:9,color:'var(--tx3)'}}>
+                          ${p.start_date?fmtShort(p.start_date)+' – ':''}${fmtShort(p.target_date)||'No date'}
+                        </span>
+                        ${(()=>{const dw=daysWorked(p);return dw?html`
+                          <span style=${{fontSize:9,fontWeight:600,color:dw.worked>=dw.total?'var(--am)':'var(--cy)'}}>
+                            ${dw.worked} / ${dw.total} days
+                          </span>`:null;})()}
+                      </div>
                     </div>
                   </div>
                 </div>`;
