@@ -1273,8 +1273,23 @@ def team_dashboard(tid):
 @login_required
 def get_tickets():
     status=request.args.get("status","")
+    team_id=request.args.get("team_id","")
     with get_db() as db:
-        if status:
+        if team_id:
+            # Get team member ids for filtering by assignee
+            team=db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
+            member_ids=json.loads(team["member_ids"] if team else "[]")
+            # Get projects belonging to this team
+            team_projs=db.execute("SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
+            proj_ids=[p["id"] for p in team_projs]
+            all_rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+            mem_set=set(member_ids); proj_set=set(proj_ids)
+            rows=[r for r in all_rows if
+                (r["team_id"] if "team_id" in r.keys() else "")==team_id or
+                (r["assignee"] and r["assignee"] in mem_set) or
+                (r["project"] and r["project"] in proj_set)]
+            if status: rows=[r for r in rows if r["status"]==status]
+        elif status:
             rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? AND status=? ORDER BY created DESC",(wid(),status)).fetchall()
         else:
             rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
@@ -2563,6 +2578,10 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 @keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(110%)}}
 .toast{animation:toastIn .25s cubic-bezier(.34,1.56,.64,1) forwards}
 .toast.leaving{animation:toastOut .2s ease forwards}
+@keyframes pageEnter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.page-enter{animation:pageEnter .22s ease forwards}
+@keyframes teamSwitch{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+.team-switch-enter{animation:teamSwitch .25s ease forwards}
 </style></head><body>
 
 <div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
@@ -3082,12 +3101,13 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
   return html`
     <div style=${{display:'flex',height:'100vh',flexShrink:0}}>
+
+    <!-- ── Icon rail (always visible) ── -->
     <aside style=${{width:62,minWidth:62,background:'#0a0a0a',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:14,borderRight:'1px solid rgba(255,255,255,.05)'}}>
-      <!-- Team context dot indicator at very top -->
+      <!-- Team active indicator bar -->
       ${activeTeam?html`
         <div title=${'Team: '+activeTeam.name} style=${{width:36,height:5,borderRadius:3,background:'var(--ac)',margin:'6px 0 2px',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>`:
         html`<div style=${{width:36,height:5,margin:'6px 0 2px',flexShrink:0}}></div>`}
-      <!-- Nav items -->
       <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:3,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 8px'}}>
         ${items.map(it=>html`
           <button key=${it.id} title=${it.label} onClick=${()=>{setShowTeamPanel(false);setView(it.id);}}
@@ -3098,17 +3118,16 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             onMouseEnter=${e=>{if(!(baseView===it.id&&!showTeamPanel)){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
             onMouseLeave=${e=>{if(!(baseView===it.id&&!showTeamPanel)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
             ${it.icon}
-            ${it.badge>0?html`<div style=${{position:'absolute',top:6,right:6,width:6,height:6,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid #0a0a0a'}}></div>`:null}
           </button>`)}
+        <!-- Teams button -->
         ${safe(teams).length>0||isAdminManager?html`
-          <button title=${activeTeam?'Team: '+activeTeam.name+' — click to switch/manage':'Teams — click to view & switch'} onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
+          <button title=${activeTeam?activeTeam.name+' team active':'Switch team'}
+            onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
             style=${{width:40,height:40,borderRadius:12,border:activeTeam?'2px solid var(--ac)':'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
               background:showTeamPanel?'var(--ac)':activeTeam?'rgba(170,255,0,.12)':'transparent',
-              color:showTeamPanel?'var(--ac-tx)':activeTeam?'var(--ac)':'rgba(255,255,255,.32)',
-              position:'relative'
-            }}
+              color:showTeamPanel?'var(--ac-tx)':activeTeam?'var(--ac)':'rgba(255,255,255,.32)',position:'relative'}}
             onMouseEnter=${e=>{if(!showTeamPanel){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(!showTeamPanel){e.currentTarget.style.background=activeTeam?'rgba(170,255,0,.12)':'transparent';e.currentTarget.style.color=activeTeam?'var(--ac)':'rgba(255,255,255,.32)';}}}>
+            onMouseLeave=${e=>{if(!showTeamPanel){e.currentTarget.style.background=activeTeam?'rgba(170,255,0,.12)':'transparent';e.currentTarget.style.color=activeTeam?'var(--ac)':'rgba(255,255,255,.32)';}}}> 
             ${ICONS.team}
             ${activeTeam?html`<div style=${{position:'absolute',bottom:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--ac)',border:'1.5px solid #0a0a0a'}}></div>`:null}
           </button>`:null}
@@ -3135,6 +3154,77 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         </button>
       </div>
     </aside>
+
+    <!-- ── Jira-style expanded team nav (shown when team is active, no panel open) ── -->
+    ${activeTeam&&!showTeamPanel?html`
+      <div class="team-switch-enter" style=${{width:190,background:'#0f0f0f',borderRight:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden'}}>
+        <!-- Team header -->
+        <div style=${{padding:'12px 14px 10px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+          <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
+            <div style=${{width:8,height:8,borderRadius:2,background:'var(--ac)',flexShrink:0,boxShadow:'0 0 6px var(--ac)'}}></div>
+            <span style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.9)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${activeTeam.name}</span>
+            <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
+              style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.3)',fontSize:13,padding:'1px 4px',borderRadius:4,transition:'color .12s'}}
+              title="Clear team context"
+              onMouseEnter=${e=>e.currentTarget.style.color='rgba(255,80,80,.7)'}
+              onMouseLeave=${e=>e.currentTarget.style.color='rgba(255,255,255,.3)'}>×</button>
+          </div>
+          <div style=${{fontSize:10,color:'rgba(255,255,255,.3)',paddingLeft:16}}>Team workspace</div>
+        </div>
+        <!-- Jira-style nav menu -->
+        <div style=${{flex:1,overflowY:'auto',padding:'8px 8px'}}>
+          <div style=${{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.2)',textTransform:'uppercase',letterSpacing:1,padding:'8px 8px 4px'}}>Navigation</div>
+          ${[
+            {id:'dashboard',label:'Dashboard',icon:'⊞'},
+            {id:'projects', label:'Projects', icon:'◈'},
+            {id:'tasks',    label:'Task Board',icon:'☑'},
+            {id:'messages', label:'Channels', icon:'◎'},
+            {id:'tickets',  label:'Tickets',  icon:'◉'},
+            ...(isAdminManager?[
+              {id:'timeline',   label:'Timeline',    icon:'▦'},
+              {id:'productivity',label:'Productivity',icon:'▣'},
+            ]:[]),
+          ].map(it=>html`
+            <button key=${it.id}
+              onClick=${()=>{setShowTeamPanel(false);setView(it.id);}}
+              style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
+                background:baseView===it.id?'rgba(170,255,0,.12)':'transparent',
+                color:baseView===it.id?'var(--ac)':'rgba(255,255,255,.45)',
+                fontSize:12,fontWeight:baseView===it.id?700:500,
+                transition:'all .12s',marginBottom:1,textAlign:'left',
+                borderLeft:baseView===it.id?'2px solid var(--ac)':'2px solid transparent'}}
+              onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+              onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}> 
+              <span style=${{fontSize:13,lineHeight:1,flexShrink:0,width:16,textAlign:'center'}}>${it.icon}</span>
+              <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${it.label}</span>
+            </button>`)}
+          ${isAdminManager?html`
+            <div style=${{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.2)',textTransform:'uppercase',letterSpacing:1,padding:'12px 8px 4px'}}>Admin</div>
+            <button onClick=${()=>{setShowTeamPanel(false);setView('team');}}
+              style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
+                background:baseView==='team'?'rgba(170,255,0,.12)':'transparent',
+                color:baseView==='team'?'var(--ac)':'rgba(255,255,255,.35)',
+                fontSize:12,fontWeight:500,transition:'all .12s',marginBottom:1,textAlign:'left',
+                borderLeft:baseView==='team'?'2px solid var(--ac)':'2px solid transparent'}}
+              onMouseEnter=${e=>{if(baseView!=='team'){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+              onMouseLeave=${e=>{if(baseView!=='team'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}>
+              <span style=${{fontSize:13,lineHeight:1,flexShrink:0,width:16,textAlign:'center'}}>⚙</span>
+              <span>Manage Teams</span>
+            </button>`:null}
+        </div>
+        <!-- Team switch button at bottom -->
+        <div style=${{padding:'10px 10px',borderTop:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+          <button onClick=${()=>{setShowTeamPanel(true);setSelectedTeam(null);}}
+            style=${{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',background:'transparent',color:'rgba(255,255,255,.4)',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:7,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.7)';e.currentTarget.style.borderColor='rgba(255,255,255,.15)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.4)';e.currentTarget.style.borderColor='rgba(255,255,255,.08)';}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
+            Switch Team
+          </button>
+        </div>
+      </div>`:null}
+
+    <!-- ── Team panel (popup) ── -->
     ${showTeamPanel&&safe(teams).length>0?html`
       <${TeamSidePanel} cu=${cu} teams=${teams||[]} users=${users||[]} projects=${projects||[]} tasks=${tasks||[]}
         selectedTeam=${selectedTeam} onSelectTeam=${setSelectedTeam}
@@ -3142,6 +3232,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         onClose=${()=>{setShowTeamPanel(false);setSelectedTeam(null);}}
         onSetView=${v=>{setView(v);setShowTeamPanel(false);setSelectedTeam(null);}}
       />`:null}
+
     </div>`;
 }
 
@@ -4369,14 +4460,17 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 }
 
 /* ─── Dashboard ───────────────────────────────────────────────────────────── */
-function Dashboard({cu,tasks,projects,users,onNav}){
+function Dashboard({cu,tasks,projects,users,onNav,activeTeam}){
   const t=safe(tasks);const p=safe(projects);const u=safe(users);
   const myT=t.filter(x=>x.assignee===cu.id);
   const done=t.filter(x=>x.stage==='completed').length;
   const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
   const blocked=t.filter(x=>x.stage==='blocked').length;
   const [tickets,setTickets]=useState([]);
-  useEffect(()=>{api.get('/api/tickets').then(d=>setTickets(Array.isArray(d)?d:[]));},[]);
+  useEffect(()=>{
+    const url=activeTeam?'/api/tickets?team_id='+activeTeam.id:'/api/tickets';
+    api.get(url).then(d=>setTickets(Array.isArray(d)?d:[]));
+  },[activeTeam]);
   const openTickets=tickets.filter(x=>x.status==='open').length;
   const inProgressTickets=tickets.filter(x=>x.status==='in-progress').length;
   const myTickets=tickets.filter(x=>x.assignee===cu.id&&x.status!=='closed'&&x.status!=='resolved').length;
@@ -4401,12 +4495,22 @@ function Dashboard({cu,tasks,projects,users,onNav}){
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
+      <!-- Team context banner (shown when team active) -->
+      ${activeTeam?html`
+        <div style=${{padding:'10px 16px',background:'linear-gradient(135deg,rgba(170,255,0,.1),rgba(170,255,0,.04))',borderRadius:12,border:'1px solid rgba(170,255,0,.25)',display:'flex',alignItems:'center',gap:10}}>
+          <div style=${{width:9,height:9,borderRadius:2,background:'var(--ac)',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>
+          <div style=${{flex:1}}>
+            <span style=${{fontSize:13,fontWeight:700,color:'var(--ac)'}}>${activeTeam.name}</span>
+            <span style=${{fontSize:11,color:'rgba(170,255,0,.55)',marginLeft:8}}>Team Dashboard · ${p.length} projects · ${t.length} tasks</span>
+          </div>
+          <span style=${{fontSize:10,color:'rgba(170,255,0,.4)',fontFamily:'monospace',background:'rgba(170,255,0,.06)',padding:'2px 8px',borderRadius:4}}>${u.length} members</span>
+        </div>`:null}
       <!-- Greeting -->
       <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:13}}>
         <${Av} u=${cu} size=${40}/>
         <div style=${{flex:1}}>
           <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
-          <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
+          <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>${activeTeam?html`Viewing <b style=${{color:'var(--ac)'}}>${activeTeam.name}</b> team · `:null}You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
       </div>
       <!-- Stat cards -->
@@ -5547,7 +5651,7 @@ function TeamView({users,cu,reload}){
 
 
 /* ─── TicketsView ────────────────────────────────────────────────────────── */
-function TicketsView({cu,users,projects,onReload}){
+function TicketsView({cu,users,projects,onReload,activeTeam}){
   const [tickets,setTickets]=useState([]);
   const [busy,setBusy]=useState(true);
   const [filterStatus,setFilterStatus]=useState('');
@@ -5559,13 +5663,11 @@ function TicketsView({cu,users,projects,onReload}){
   const [comments,setComments]=useState([]);
   const [newComment,setNewComment]=useState('');
   const [savingComment,setSavingComment]=useState(false);
-  const [showResolved,setShowResolved]=useState(false); // #8: hide resolved by default
+  const [showResolved,setShowResolved]=useState(false);
 
-  // Role checks
   const canEdit=cu&&cu.role!=='Developer'&&cu.role!=='Viewer';
   const canDelete=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
 
-  // New ticket form state
   const [nTitle,setNTitle]=useState('');
   const [nDesc,setNDesc]=useState('');
   const [nType,setNType]=useState('bug');
@@ -5575,13 +5677,14 @@ function TicketsView({cu,users,projects,onReload}){
   const [nStatus,setNStatus]=useState('open');
   const [saving,setSaving]=useState(false);
 
-  // Always load ALL tickets – filter entirely client-side so counts stay accurate
+  // Load tickets — team-scoped when activeTeam is set
   const load=useCallback(async()=>{
     setBusy(true);
-    const d=await api.get('/api/tickets');
+    const url=activeTeam?'/api/tickets?team_id='+activeTeam.id:'/api/tickets';
+    const d=await api.get(url);
     setTickets(Array.isArray(d)?d:[]);
     setBusy(false);
-  },[]);
+  },[activeTeam]);
   useEffect(()=>{load();},[load]);
 
   // Client-side filtering (status chip + priority + type + resolved toggle)
@@ -7919,7 +8022,8 @@ function App(){
         />
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView}/>`:null}
+            <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}/>`:null}
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
@@ -7934,6 +8038,7 @@ function App(){
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
             ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
+            </div>
           <//>
         </div>
       </div>
