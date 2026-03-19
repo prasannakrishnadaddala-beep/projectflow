@@ -3362,9 +3362,13 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
   const create=async()=>{
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
     const mems=members.includes(cu.id)?members:[cu.id,...members];
-    await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems});
-    await reload();
+    const newProj=await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems});
     setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);
+    // Reload with small delay to ensure DB write is committed before read
+    await new Promise(r=>setTimeout(r,300));
+    await reload();
+    // If reload somehow missed it (race), do a second reload after 1s
+    setTimeout(()=>reload(),1000);
   };
 
   const filteredProjects=useMemo(()=>{
@@ -7092,6 +7096,22 @@ function App(){
 
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
+  // Auto-refresh projects+tasks every 30s to catch any changes from other users or race conditions
+  useEffect(()=>{
+    if(!cu)return;
+    const id=setInterval(async()=>{
+      try{
+        const [projects,tasks]=await Promise.all([api.get('/api/projects'),api.get('/api/tasks')]);
+        if(Array.isArray(projects)&&Array.isArray(tasks)){
+          setData(prev=>({...prev,
+            projects:projects,
+            tasks:tasks,
+          }));
+        }
+      }catch(e){}
+    },30000);
+    return()=>clearInterval(id);
+  },[cu]);
   useEffect(()=>{
     document.body.className=dark?'':'lm';
     try{
