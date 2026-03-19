@@ -2379,21 +2379,25 @@ window._pfPushUnsubscribe = async function(){
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script>
-// Load JS libs: try local cache first, fall back to CDN
+// Load JS libs sequentially: React must finish before ReactDOM loads
 (function(){
   var libs=[
-    ['/js/react.min.js','https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js'],
-    ['/js/react-dom.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js'],
-    ['/js/prop-types.min.js','https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js'],
-    ['/js/recharts.min.js','https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js'],
-    ['/js/htm.min.js','https://unpkg.com/htm@3.1.1/dist/htm.js'],
+    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js',
+    'https://unpkg.com/htm@3.1.1/dist/htm.js',
   ];
-  libs.forEach(function(lib){
+  function loadNext(i){
+    if(i>=libs.length)return;
     var s=document.createElement('script');
-    s.src=lib[1]; // go straight to CDN — fastest on Railway
+    s.src=libs[i];
     s.crossOrigin='anonymous';
+    s.onload=function(){loadNext(i+1);};
+    s.onerror=function(){loadNext(i+1);};
     document.head.appendChild(s);
-  });
+  }
+  loadNext(0);
 })();
 </script>
 <style>
