@@ -2821,7 +2821,8 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
           <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18,padding:'2px 6px',borderRadius:6,lineHeight:1}} title="Back">←</button>
           <div style=${{flex:1,minWidth:0}}>
             <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
-            ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
+            ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:
+              html`<div style=${{fontSize:10,color:'var(--tx3)'}}>${members.length} members</div>`}
           </div>
           ${teamCtx===team.id?html`
             <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
@@ -2833,6 +2834,27 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
               Switch →
             </button>`}
           <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
+        </div>
+        <!-- Quick nav row -->
+        <div style=${{display:'flex',gap:6,padding:'8px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('projects');onClose();}}
+            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
+            📁 Projects
+          </button>
+          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('tasks');onClose();}}
+            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
+            ☑ Tasks
+          </button>
+          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('productivity');onClose();}}
+            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
+            📊 Stats
+          </button>
         </div>
 
         <div style=${{flex:1,overflowY:'auto'}}>
@@ -2954,10 +2976,13 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
           const teamProjs=new Set(teamTasks.map(t=>t.project).filter(Boolean)).size;
           return html`
             <div key=${team.id}
-              style=${{padding:'10px 12px',borderRadius:10,border:'1px solid var(--bd)',marginBottom:7,background:'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
-              onClick=${()=>onSelectTeam(team.id)}
-              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)55';}}
-              onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd)';}}>
+              style=${{padding:'10px 12px',borderRadius:10,border:'2px solid '+(teamCtx===team.id?'var(--ac)':'var(--bd)'),marginBottom:7,background:teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
+              onClick=${()=>{
+                onSelectTeam(team.id);
+                setTeamCtx&&setTeamCtx(team.id);
+              }}
+              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)77';}}
+              onMouseLeave=${e=>{e.currentTarget.style.background=teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)';e.currentTarget.style.borderColor=teamCtx===team.id?'var(--ac)':'var(--bd)';}}>
               <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:7}}>
                 <div style=${{width:9,height:9,borderRadius:2,background:teamCtx===team.id?'var(--ac)':'var(--tx3)',flexShrink:0}}></div>
                 <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
@@ -3599,6 +3624,21 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
   const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#aaff00');
   const [members,setMembers]=useState(safe(project.members));const [saving,setSaving]=useState(false);
   const [showNew,setShowNew]=useState(false);const [editTask,setEditTask]=useState(null);
+  const [projTeamId,setProjTeamId]=useState((project.team_id)||'');
+
+  // When team changes, auto-add all team members to project members list
+  const handleTeamChange=useCallback((tid)=>{
+    setProjTeamId(tid);
+    if(!tid)return;
+    const team=safe(teams).find(t=>t.id===tid);
+    if(!team)return;
+    const teamMids=JSON.parse(team.member_ids||'[]');
+    setMembers(prev=>{
+      const merged=[...prev];
+      teamMids.forEach(mid=>{if(!merged.includes(mid))merged.push(mid);});
+      return merged;
+    });
+  },[teams]);
 
   const projTasks=useMemo(()=>safe(allTasks).filter(t=>t.project===project.id),[allTasks,project.id]);
   const projUsers=useMemo(()=>safe(members).map(id=>safe(allUsers).find(u=>u.id===id)).filter(Boolean),[members,allUsers]);
@@ -3606,7 +3646,11 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
   const pc=projTasks.length?Math.round(projTasks.reduce((a,t)=>a+(t.pct||0),0)/projTasks.length):(project.progress||0);
   const stageGroups=KCOLS.map(s=>({s,tasks:projTasks.filter(t=>t.stage===s)})).filter(g=>g.tasks.length>0);
 
-  const saveEdit=async()=>{setSaving(true);await api.put('/api/projects/'+project.id,{name,description:desc,target_date:tDate,color,members});await onReload();setSaving(false);setEdit(false);};
+  const saveEdit=async()=>{
+    setSaving(true);
+    await api.put('/api/projects/'+project.id,{name,description:desc,target_date:tDate,color,members,team_id:projTeamId});
+    await onReload();setSaving(false);setEdit(false);
+  };
   const delProject=async()=>{if(!window.confirm('Delete project and all its tasks? Cannot be undone.'))return;await api.del('/api/projects/'+project.id);await onReload();onClose();};
   const saveTask=async p=>{
     let r;
@@ -3646,6 +3690,14 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
                   </div>
                 </div>
               </div>
+              <!-- Team assignment -->
+              <div>
+                <label class="lbl">Assign to Team <span style=${{fontWeight:400,color:'var(--tx3)',fontSize:10}}>(auto-adds team members)</span></label>
+                <select class="sel" value=${projTeamId} onChange=${e=>handleTeamChange(e.target.value)}>
+                  <option value="">— No team —</option>
+                  ${safe(teams).map(t=>html`<option key=${t.id} value=${t.id}>${t.name} (${JSON.parse(t.member_ids||'[]').length} members)</option>`)}
+                </select>
+              </div>
               <div><label class="lbl">Members</label><${MemberPicker} allUsers=${allUsers} selected=${members} onChange=${setMembers}/></div>
             </div>
             <div style=${{height:1,background:'var(--bd)',marginBottom:12}}></div>`:html`
@@ -3657,8 +3709,11 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
             </div>
             <div style=${{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
               <span style=${{fontSize:12,color:'var(--tx2)'}}><b style=${{color:'var(--tx)'}}>${projTasks.length}</b> tasks · <b style=${{color:'var(--gn)'}}>${done}</b> done · <b style=${{color:'var(--am)'}}>${projTasks.length-done}</b> open</span>
-              <div style=${{display:'flex'}}>
-                ${projUsers.slice(0,7).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-8:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:7-i}}><${Av} u=${m} size=${24}/></div>`)}
+              <div style=${{display:'flex',alignItems:'center',gap:8}}>
+                ${(()=>{const pt=safe(teams).find(t=>t.id===(project.team_id||projTeamId));return pt?html`<span style=${{fontSize:10,color:'var(--ac)',background:'rgba(170,255,0,.1)',border:'1px solid rgba(170,255,0,.25)',padding:'2px 8px',borderRadius:5,fontWeight:600}}>👥 ${pt.name}</span>`:null;})()}
+                <div style=${{display:'flex'}}>
+                  ${projUsers.slice(0,7).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-8:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:7-i}}><${Av} u=${m} size=${24}/></div>`)}
+                </div>
               </div>
             </div>`}
           <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:10,padding:3,width:'fit-content',marginBottom:12}}>
