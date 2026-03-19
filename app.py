@@ -660,18 +660,18 @@ def get_all_projects():
 @login_required
 def get_projects():
     with get_db() as db:
-        # Admins and project creators see all their projects; others see only member projects
         user = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
-        is_admin = user and user["role"] == "Admin"
+        role = user["role"] if user else "Developer"
         uid = session["user_id"]
         all_rows = db.execute(
             "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
-        if is_admin:
+        # Admins, Managers and TeamLeads see all workspace projects
+        if role in ("Admin", "Manager", "TeamLead"):
             rows = all_rows
         else:
+            # Developers / QA etc: see projects they own or are a member of
             def can_see(r):
                 members = json.loads(r["members"] or "[]")
-                # Column is "owner" in schema (not created_by)
                 owner = r["owner"] if "owner" in r.keys() else None
                 return uid in members or owner == uid
             rows = [r for r in all_rows if can_see(r)]
@@ -3359,102 +3359,192 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
 /* ─── ProjectsView ────────────────────────────────────────────────────────── */
 function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
-  const [name,setName]=useState('');const [desc,setDesc]=useState('');const [tDate,setTDate]=useState('');
+  const [name,setName]=useState('');const [desc,setDesc]=useState('');
+  const [sDate,setSDate]=useState('');const [tDate,setTDate]=useState('');
   const [color,setColor]=useState('#aaff00');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
   const [search,setSearch]=useState('');
+  const [sortBy,setSortBy]=useState('recent'); // recent | name | progress | tasks
+  const [viewMode,setViewMode]=useState('grid'); // grid | compact
 
   useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
 
   const create=async()=>{
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
     const mems=members.includes(cu.id)?members:[cu.id,...members];
-    await api.post('/api/projects',{name:name.trim(),description:desc,targetDate:tDate,color,members:mems,startDate:new Date().toISOString().split('T')[0]});
-    await reload();setShowNew(false);setName('');setDesc('');setTDate('');setColor('#aaff00');setMembers([]);
+    await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems});
+    await reload();setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);
   };
 
   const filteredProjects=useMemo(()=>{
-    if(!search.trim())return safe(projects);
-    const q=search.toLowerCase();
-    return safe(projects).filter(p=>p.name.toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q));
-  },[projects,search]);
+    let rows=safe(projects);
+    if(search.trim()){const q=search.toLowerCase();rows=rows.filter(p=>p.name.toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q));}
+    rows=[...rows].sort((a,b)=>{
+      if(sortBy==='name')return a.name.localeCompare(b.name);
+      if(sortBy==='progress'){
+        const pa=safe(tasks).filter(t=>t.project===a.id);const pb=safe(tasks).filter(t=>t.project===b.id);
+        const pca=pa.length?Math.round(pa.reduce((s,t)=>s+(t.pct||0),0)/pa.length):(a.progress||0);
+        const pcb=pb.length?Math.round(pb.reduce((s,t)=>s+(t.pct||0),0)/pb.length):(b.progress||0);
+        return pcb-pca;
+      }
+      if(sortBy==='tasks'){return safe(tasks).filter(t=>t.project===b.id).length-safe(tasks).filter(t=>t.project===a.id).length;}
+      // recent (default) — already ORDER BY created DESC from API
+      return 0;
+    });
+    return rows;
+  },[projects,search,sortBy,tasks]);
 
   return html`
-    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
-      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,gap:10,flexWrap:'wrap'}}>
-        <div style=${{display:'flex',alignItems:'center',gap:9,flex:1,minWidth:200}}>
-          <div style=${{position:'relative',flex:1,maxWidth:300}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style=${{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input class="inp" style=${{paddingLeft:30,height:34,fontSize:12}} placeholder="Search projects..." value=${search} onInput=${e=>setSearch(e.target.value)}/>
-          </div>
-          <span style=${{fontSize:12,color:'var(--tx3)',whiteSpace:'nowrap'}}>${filteredProjects.length} of ${safe(projects).length}</span>
+    <div class="fi" style=${{height:'100%',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+      <!-- Header bar -->
+      <div style=${{flexShrink:0,padding:'12px 18px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',background:'var(--bg)'}}>
+        <!-- Search -->
+        <div style=${{position:'relative',flex:1,minWidth:160,maxWidth:300}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            style=${{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="inp" style=${{paddingLeft:28,height:30,fontSize:12}} placeholder="Search projects..."
+            value=${search} onInput=${e=>setSearch(e.target.value)}/>
         </div>
-        ${cu&&cu.role!=='Viewer'?html`<button class="btn bp" onClick=${()=>setShowNew(true)}>+ New Project</button>`:null}
-      </div>
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:15}}>
-        ${filteredProjects.length===0?html`
-          <div style=${{gridColumn:'1/-1',textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
-            <div style=${{fontSize:36,marginBottom:10}}>🔍</div>
-            <div style=${{fontSize:14,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>No projects match "${search}"</div>
-            <button class="btn bg" style=${{fontSize:12,marginTop:8}} onClick=${()=>setSearch('')}>Clear search</button>
-          </div>`:null}
-        ${filteredProjects.map(p=>{
-          const pt=safe(tasks).filter(t=>t.project===p.id);
-          const done=pt.filter(t=>t.stage==='completed').length;
-          const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
-          const mems=safe(p.members).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
-          return html`
-            <div key=${p.id} class="card" style=${{cursor:'pointer',transition:'all .16s',borderTop:'2px solid '+p.color,padding:'16px'}}
-              onClick=${()=>setDetail(p)}
-              onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderTopColor=p.color;e.currentTarget.style.boxShadow='var(--sh)';}}
-              onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
-              <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:9}}>
-                <h3 style=${{fontSize:14,fontWeight:700,color:'var(--tx)',flex:1,marginRight:6,lineHeight:1.3}}>${p.name}</h3>
-                <span class="badge" style=${{background:p.color+'18',color:p.color,flexShrink:0,fontSize:9}}>${pt.length} tasks</span>
-              </div>
-              <p style=${{fontSize:12,color:'var(--tx2)',lineHeight:1.5,marginBottom:11,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
-              <div style=${{marginBottom:11}}>
-                <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                  <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px'}}>Progress</span>
-                  <span style=${{fontSize:10,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
-                </div>
-                <${Prog} pct=${pc} color=${p.color}/>
-              </div>
-              <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:11}}>
-                ${[['Tasks',pt.length,'var(--tx)'],['Done',done,'var(--gn)'],['Open',pt.length-done,'var(--am)']].map(([l,v,c])=>html`
-                  <div key=${l} style=${{textAlign:'center',padding:'8px 4px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd2)'}}>
-                    <div style=${{fontSize:16,fontWeight:700,color:c,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-0.5px'}}>${v}</div>
-                    <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:'.5px'}}>${l}</div>
-                  </div>`)}
-              </div>
-              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div style=${{display:'flex'}}>
-                  ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${22}/></div>`)}
-                </div>
-                <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>Due ${fmtD(p.target_date)}</span>
-              </div>
-            </div>`;
-        })}
+        <span style=${{fontSize:12,color:'var(--tx3)',whiteSpace:'nowrap'}}>${filteredProjects.length} of ${safe(projects).length}</span>
+        <!-- Sort -->
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1}}>
+          ${[['recent','🕐 Recent'],['name','🔤 Name'],['progress','📊 Progress'],['tasks','📋 Tasks']].map(([k,lbl])=>html`
+            <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
+        </div>
+        <!-- View toggle -->
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1}}>
+          <button class=${'tb'+(viewMode==='grid'?' act':'')} style=${{fontSize:11,padding:'2px 8px'}} onClick=${()=>setViewMode('grid')} title="Card view">⊞</button>
+          <button class=${'tb'+(viewMode==='compact'?' act':'')} style=${{fontSize:11,padding:'2px 8px'}} onClick=${()=>setViewMode('compact')} title="Compact list">☰</button>
+        </div>
+        ${search?html`<button class="btn bg" style=${{fontSize:11,padding:'3px 9px'}} onClick=${()=>setSearch('')}>✕ Clear</button>`:null}
+        ${cu&&cu.role!=='Viewer'?html`<button class="btn bp" style=${{marginLeft:'auto',whiteSpace:'nowrap'}} onClick=${()=>setShowNew(true)}>+ New Project</button>`:null}
       </div>
 
+      <!-- Project list/grid — scrollable -->
+      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'14px 18px'}}>
+        ${filteredProjects.length===0?html`
+          <div style=${{textAlign:'center',padding:'60px 0',color:'var(--tx3)'}}>
+            <div style=${{fontSize:40,marginBottom:12}}>🔍</div>
+            <div style=${{fontSize:14,fontWeight:600,color:'var(--tx2)',marginBottom:6}}>${search?`No projects match "${search}"`:'No projects yet'}</div>
+            ${search?html`<button class="btn bg" style=${{fontSize:12,marginTop:4}} onClick=${()=>setSearch('')}>Clear search</button>`:null}
+          </div>`:null}
+
+        <!-- GRID VIEW -->
+        ${viewMode==='grid'?html`
+          <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:13}}>
+            ${filteredProjects.map(p=>{
+              const pt=safe(tasks).filter(t=>t.project===p.id);
+              const done=pt.filter(t=>t.stage==='completed').length;
+              const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
+              const mems=safe(p.members).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
+              return html`
+                <div key=${p.id} class="card" style=${{cursor:'pointer',transition:'all .15s',borderTop:'3px solid '+p.color,padding:'14px'}}
+                  onClick=${()=>setDetail(p)}
+                  onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='var(--sh)';}}
+                  onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
+                  <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:7}}>
+                    <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',flex:1,marginRight:6,lineHeight:1.3}}>${p.name}</h3>
+                    <span class="badge" style=${{background:p.color+'18',color:p.color,flexShrink:0,fontSize:9}}>${pt.length} tasks</span>
+                  </div>
+                  <p style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.5,marginBottom:9,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
+                  <div style=${{marginBottom:9}}>
+                    <div style=${{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                      <span style=${{fontSize:9,color:'var(--tx3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px'}}>Progress</span>
+                      <span style=${{fontSize:9,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
+                    </div>
+                    <${Prog} pct=${pc} color=${p.color}/>
+                  </div>
+                  <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:5,marginBottom:9}}>
+                    ${[['Tasks',pt.length,'var(--tx)'],['Done',done,'var(--gn)'],['Open',pt.length-done,'var(--am)']].map(([l,v,c])=>html`
+                      <div key=${l} style=${{textAlign:'center',padding:'6px 4px',background:'var(--sf2)',borderRadius:7,border:'1px solid var(--bd2)'}}>
+                        <div style=${{fontSize:15,fontWeight:700,color:c}}>${v}</div>
+                        <div style=${{fontSize:8,color:'var(--tx3)',marginTop:1,textTransform:'uppercase',letterSpacing:'.5px'}}>${l}</div>
+                      </div>`)}
+                  </div>
+                  <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div style=${{display:'flex'}}>
+                      ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${20}/></div>`)}
+                    </div>
+                    <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>
+                      ${p.start_date?new Date(p.start_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'→':''}
+                      ${p.target_date?new Date(p.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'No date'}
+                    </span>
+                  </div>
+                </div>`;
+            })}
+          </div>`:null}
+
+        <!-- COMPACT LIST VIEW — perfect for 100-200 projects -->
+        ${viewMode==='compact'?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:4}}>
+            ${filteredProjects.map(p=>{
+              const pt=safe(tasks).filter(t=>t.project===p.id);
+              const done=pt.filter(t=>t.stage==='completed').length;
+              const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
+              return html`
+                <div key=${p.id}
+                  style=${{display:'flex',alignItems:'center',gap:10,padding:'9px 14px',
+                    background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,
+                    cursor:'pointer',transition:'all .12s',borderLeft:'3px solid '+p.color}}
+                  onClick=${()=>setDetail(p)}
+                  onMouseEnter=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd2)';}}
+                  onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf)';e.currentTarget.style.borderColor='var(--bd)';}}>
+                  <!-- Name -->
+                  <div style=${{flex:1,minWidth:0}}>
+                    <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
+                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.description||'—'}</div>
+                  </div>
+                  <!-- Progress bar -->
+                  <div style=${{width:80,flexShrink:0}}>
+                    <div style=${{display:'flex',alignItems:'center',gap:5}}>
+                      <div style=${{flex:1,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                        <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
+                      </div>
+                      <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)',flexShrink:0}}>${pc}%</span>
+                    </div>
+                  </div>
+                  <!-- Stats -->
+                  ${[['Tasks',pt.length,'var(--tx)'],['Done',done,'var(--gn)'],['Open',pt.length-done,'var(--am)']].map(([l,v,c])=>html`
+                    <div key=${l} style=${{textAlign:'center',minWidth:36,flexShrink:0}}>
+                      <div style=${{fontSize:13,fontWeight:700,color:c,lineHeight:1}}>${v}</div>
+                      <div style=${{fontSize:8,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.4}}>${l}</div>
+                    </div>`)}
+                  <!-- Date -->
+                  <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',flexShrink:0,minWidth:70,textAlign:'right'}}>
+                    ${p.target_date?new Date(p.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—'}
+                  </div>
+                </div>`;
+            })}
+          </div>`:null}
+      </div>
+
+      <!-- New Project Modal -->
       ${showNew?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
-          <div class="mo fi" style=${{maxWidth:500}}>
+          <div class="mo fi" style=${{maxWidth:520}}>
             <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}>
               <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>New Project</h2>
               <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowNew(false)}>✕</button>
             </div>
             <div style=${{display:'flex',flexDirection:'column',gap:12}}>
-              <div><label class="lbl">Project Name *</label><input class="inp" placeholder="E.g. Mobile App Redesign" value=${name} onInput=${e=>setName(e.target.value)}/></div>
-              <div><label class="lbl">Description</label><textarea class="inp" rows="3" placeholder="What is this project about?" onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
+              <div><label class="lbl">Project Name *</label>
+                <input class="inp" placeholder="E.g. Mobile App Redesign" value=${name} onInput=${e=>setName(e.target.value)}/></div>
+              <div><label class="lbl">Description</label>
+                <textarea class="inp" rows="3" placeholder="What is this project about?" onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-                <div><label class="lbl">Target Date</label><input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)}/></div>
-                <div><label class="lbl">Color</label>
-                  <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
-                    ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)} style=${{width:26,height:26,borderRadius:6,background:c,border:'3px solid '+(color===c?'#fff':'transparent'),cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
-                  </div>
+                <div><label class="lbl">Start Date</label>
+                  <input class="inp" type="date" value=${sDate} onChange=${e=>setSDate(e.target.value)}/></div>
+                <div><label class="lbl">End Date</label>
+                  <input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)}/></div>
+              </div>
+              <div><label class="lbl">Color</label>
+                <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
+                  ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)} style=${{width:26,height:26,borderRadius:6,background:c,border:'3px solid '+(color===c?'#fff':'transparent'),cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
                 </div>
               </div>
-              <div><label class="lbl">Add Members</label><${MemberPicker} allUsers=${users} selected=${members} onChange=${setMembers}/></div>
+              <div><label class="lbl">Add Members</label>
+                <${MemberPicker} allUsers=${users} selected=${members} onChange=${setMembers}/></div>
               ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
               <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4}}>
                 <button class="btn bg" onClick=${()=>setShowNew(false)}>Cancel</button>
