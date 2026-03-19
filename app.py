@@ -4108,13 +4108,13 @@ const STAGE_DAYS={backlog:0,planning:7,development:21,code_review:28,testing:35,
 const STAGE_PCT={backlog:0,planning:10,development:35,code_review:55,testing:70,uat:80,release:90,production:95,completed:100,blocked:null};
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
 
-function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,initialPriority,teams}){
+function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,initialPriority,initialAssignee,teams}){
   const [mode,setMode]=useState('kanban');
   const [pid,setPid]=useState('all');
   const [teamF,setTeamF]=useState('all');
   const [priF,setPriF]=useState(initialPriority||'all');
   const [stageF,setStageF]=useState(initialStage||'all');
-  const [assF,setAssF]=useState('all');
+  const [assF,setAssF]=useState(initialAssignee==='me'?(cu&&cu.id)||'all':'all');
   const [dueF,setDueF]=useState('all');
   const [search,setSearch]=useState('');
   const [showFilters,setShowFilters]=useState(!!(initialStage||initialPriority));
@@ -4129,7 +4129,8 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
   useEffect(()=>{
     if(initialStage){setStageF(initialStage);setShowFilters(true);}
     if(initialPriority){setPriF(initialPriority);setShowFilters(true);}
-  },[initialStage,initialPriority]);
+    if(initialAssignee==='me'&&cu){setAssF(cu.id);setShowFilters(true);}
+  },[initialStage,initialPriority,initialAssignee,cu]);
 
   const RESOLVED_STAGES=new Set(['completed']);
 
@@ -4222,6 +4223,13 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
             onClick=${()=>setShowFilters(!showFilters)}>
             ⚙ Filters${activeFilters>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,fontSize:9,padding:'1px 5px',marginLeft:3,fontFamily:'monospace'}}>${activeFilters}</span>`:''}
           </button>
+          ${assF!=='all'&&assF===cu.id?html`
+            <div style=${{display:'flex',alignItems:'center',gap:6,padding:'5px 10px 5px 8px',background:'var(--ac3)',border:'1px solid var(--ac)',borderRadius:20,flexShrink:0}}>
+              <div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>
+              <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)'}}>My Tasks</span>
+              <button onClick=${()=>setAssF('all')}
+                style=${{background:'none',border:'none',cursor:'pointer',color:'var(--ac)',fontSize:14,lineHeight:1,padding:'0 2px'}}>×</button>
+            </div>`:null}
           ${activeFilters>0?html`<button class="btn bam" style=${{padding:'7px 11px',fontSize:11}} onClick=${clearAll}>✕ Clear</button>`:null}
           <!-- Resolved toggle removed -->
           <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
@@ -4448,11 +4456,11 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     {label:'Active Tasks',val:active,color:'var(--cy)',bg:'rgba(34,211,238,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
     {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(62,207,110,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks'},
     {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(255,68,68,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks'},
-    {label:'My Tasks',val:myT.length,color:'var(--am)',bg:'rgba(245,158,11,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks'},
+    {label:'My Tasks',val:myT.length,color:'var(--am)',bg:'rgba(245,158,11,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'},
     {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(167,139,250,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:'team'},
     {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(34,211,238,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets'},
     {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(245,158,11,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:'tickets'},
-    {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(251,146,60,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets'},
+    {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(251,146,60,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'},
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
@@ -5768,12 +5776,13 @@ function TeamView({users,cu,reload}){
 
 
 /* ─── TicketsView ────────────────────────────────────────────────────────── */
-function TicketsView({cu,users,projects,onReload,activeTeam}){
+function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee}){
   const [tickets,setTickets]=useState([]);
   const [busy,setBusy]=useState(true);
   const [filterStatus,setFilterStatus]=useState('');
   const [filterPriority,setFilterPriority]=useState('');
   const [filterType,setFilterType]=useState('');
+  const [filterAssignee,setFilterAssignee]=useState(()=>initialAssignee==='me'&&cu?cu.id:'');
   const [showNew,setShowNew]=useState(false);
   const [editTicket,setEditTicket]=useState(null);
   const [detailTicket,setDetailTicket]=useState(null);
@@ -5813,9 +5822,10 @@ function TicketsView({cu,users,projects,onReload,activeTeam}){
       if(filterStatus&&t.status!==filterStatus)return false;
       if(filterPriority&&t.priority!==filterPriority)return false;
       if(filterType&&t.type!==filterType)return false;
+      if(filterAssignee&&t.assignee!==filterAssignee)return false;
       return true;
     });
-  },[tickets,showResolved,filterStatus,filterPriority,filterType]);
+  },[tickets,showResolved,filterStatus,filterPriority,filterType,filterAssignee]);
 
   const saveTicket=async()=>{
     if(!nTitle.trim())return;
@@ -5884,6 +5894,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam}){
   };
 
   const statCounts=Object.keys(STATUS_CFG).reduce((a,s)=>{a[s]=tickets.filter(t=>t.status===s).length;return a;},{});
+  const myTicketsCount=tickets.filter(t=>t.assignee===cu.id&&t.status!=='closed'&&t.status!=='resolved').length;
 
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
 
@@ -6024,6 +6035,18 @@ function TicketsView({cu,users,projects,onReload,activeTeam}){
 
       <!-- Filter bar -->
       <div style=${{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+        ${filterAssignee?html`
+          <div style=${{display:'flex',alignItems:'center',gap:6,padding:'4px 10px 4px 8px',background:'var(--ac3)',border:'1px solid var(--ac)',borderRadius:20,flexShrink:0}}>
+            <div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>
+            <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)'}}>Assigned to me</span>
+            <button onClick=${()=>setFilterAssignee('')}
+              style=${{background:'none',border:'none',cursor:'pointer',color:'var(--ac)',fontSize:13,lineHeight:1,padding:'0 2px',marginLeft:2}}
+              title="Clear filter">×</button>
+          </div>`:null}
+        <button class=${'chip'+(filterAssignee===cu.id?' on':'')} style=${{fontSize:11,flexShrink:0}}
+          onClick=${()=>setFilterAssignee(filterAssignee===cu.id?'':cu.id)}>
+          👤 My Tickets ${myTicketsCount>0?html`<span style=${{fontWeight:700,marginLeft:3}}>(${myTicketsCount})</span>`:null}
+        </button>
         <select class="sel" style=${{fontSize:11,padding:'5px 10px',height:30}} value=${filterPriority} onChange=${e=>setFilterPriority(e.target.value)}>
           <option value="">All Priorities</option>
           ${Object.entries(PRIORITY_CFG).map(([v,c])=>html`<option key=${v} value=${v}>${c.icon} ${c.label}</option>`)}
@@ -6032,7 +6055,6 @@ function TicketsView({cu,users,projects,onReload,activeTeam}){
           <option value="">All Types</option>
           ${Object.entries(TYPE_CFG).map(([v,c])=>html`<option key=${v} value=${v}>${c.icon} ${c.label}</option>`)}
         </select>
-        <!-- Resolved toggle removed -->
         <span style=${{fontSize:11,color:'var(--tx3)',alignSelf:'center',marginLeft:4}}>${visibleTickets.length} ticket${visibleTickets.length!==1?'s':''}</span>
       </div>
 
@@ -8113,6 +8135,8 @@ function App(){
   const viewParts=view.split(':');
   const taskFilterType=viewParts[1]||null;
   const taskFilterValue=viewParts[2]||null;
+  const ticketFilterType=baseView==='tickets'?(viewParts[1]||null):null;
+  const ticketFilterValue=baseView==='tickets'?(viewParts[2]||null):null;
   const info=TITLES[baseView]||{title:baseView,sub:''};
   const extra=null;
 
@@ -8155,12 +8179,13 @@ function App(){
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
+              initialAssignee=${taskFilterType==='assignee'?taskFilterValue:null}
             />`:null}
             ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks}/>`:null}
             ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
             ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
-            ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam}/>`:null}
+            ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam} initialAssignee=${ticketFilterType==='assignee'?ticketFilterValue:null}/>`:null}
             ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
             ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
