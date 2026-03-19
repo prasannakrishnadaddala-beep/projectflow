@@ -2680,11 +2680,133 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
   </div>`;
 }
 
+/* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
+function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView}){
+  const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
+  const [search,setSearch]=useState('');
+  const filtered=safe(teams).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
+
+  if(selectedTeam){
+    // Show this team's projects
+    const team=teams.find(t=>t.id===selectedTeam);
+    if(!team)return null;
+    const memberIds=JSON.parse(team.member_ids||'[]');
+    const lead=umap[team.lead_id];
+    const members=memberIds.map(id=>umap[id]).filter(Boolean);
+    const teamProjs=safe(projects).filter(p=>{
+      const pm=safe(p.members);
+      return pm.some(mid=>memberIds.includes(mid));
+    });
+    return html`
+      <div style=${{width:280,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
+        <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8}}>
+          <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px',borderRadius:6}} title="Back">←</button>
+          <div style=${{flex:1,minWidth:0}}>
+            <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
+            ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: ${lead.name}</div>`:null}
+          </div>
+          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14,padding:'2px 6px'}} title="Close">✕</button>
+        </div>
+        <!-- Members strip -->
+        <div style=${{padding:'8px 14px',borderBottom:'1px solid var(--bd)',display:'flex',gap:6,flexWrap:'wrap'}}>
+          ${members.slice(0,8).map(m=>html`
+            <div key=${m.id} title=${m.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+              <${Av} u=${m} size=${26}/>
+              <span style=${{fontSize:8,color:'var(--tx3)',maxWidth:32,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${m.name.split(' ')[0]}</span>
+            </div>`)}
+          ${members.length>8?html`<span style=${{fontSize:10,color:'var(--tx3)',alignSelf:'center'}}>+${members.length-8}</span>`:null}
+        </div>
+        <!-- Projects list -->
+        <div style=${{flex:1,overflowY:'auto',padding:'8px'}}>
+          <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,padding:'4px 6px',marginBottom:4}}>Projects (${teamProjs.length})</div>
+          ${teamProjs.length===0?html`<div style=${{textAlign:'center',padding:'20px 8px',color:'var(--tx3)',fontSize:12}}>No projects assigned to this team yet.</div>`:null}
+          ${teamProjs.map(p=>{
+            const pt=safe(tasks).filter(t=>t.project===p.id);
+            const done=pt.filter(t=>t.stage==='completed').length;
+            const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
+            return html`
+              <div key=${p.id} style=${{padding:'9px 10px',borderRadius:8,border:'1px solid var(--bd)',marginBottom:5,background:'var(--sf2)',cursor:'pointer',borderLeft:'3px solid '+p.color,transition:'background .1s'}}
+                onClick=${()=>{onSetView('projects');onClose();}}
+                onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.06)'}
+                onMouseLeave=${e=>e.currentTarget.style.background='var(--sf2)'}>
+                <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
+                <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                  <div style=${{flex:1,height:3,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                    <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
+                  </div>
+                  <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)'}}>${pc}%</span>
+                </div>
+                <div style=${{display:'flex',gap:8,fontSize:10}}>
+                  <span style=${{color:'var(--tx3)'}}>${pt.length} tasks</span>
+                  <span style=${{color:'var(--gn)'}}>${done} done</span>
+                  <span style=${{color:'var(--am)'}}>${pt.length-done} open</span>
+                </div>
+              </div>`;
+          })}
+        </div>
+      </div>`;
+  }
+
+  return html`
+    <div style=${{width:220,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
+      <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>👥 Teams</span>
+        <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14,padding:'2px 6px'}} title="Close">✕</button>
+      </div>
+      <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)'}}>
+        <input class="inp" placeholder="Search teams..." value=${search}
+          style=${{height:26,fontSize:11,width:'100%'}}
+          onInput=${e=>setSearch(e.target.value)}/>
+      </div>
+      <div style=${{flex:1,overflowY:'auto',padding:'6px'}}>
+        ${filtered.length===0?html`
+          <div style=${{textAlign:'center',padding:'24px 8px',color:'var(--tx3)',fontSize:12}}>
+            ${safe(teams).length===0?'No teams yet. Go to Team settings to create teams.':'No teams match your search.'}
+          </div>`:null}
+        ${filtered.map(team=>{
+          const memberIds=JSON.parse(team.member_ids||'[]');
+          const lead=umap[team.lead_id];
+          const members=memberIds.map(id=>umap[id]).filter(Boolean);
+          const teamProjs=safe(projects).filter(p=>{
+            const pm=safe(p.members);
+            return pm.some(mid=>memberIds.includes(mid));
+          });
+          return html`
+            <div key=${team.id}
+              style=${{padding:'10px 12px',borderRadius:10,border:'1px solid var(--bd)',marginBottom:6,background:'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
+              onClick=${()=>onSelectTeam(team.id)}
+              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)33';}}
+              onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd)';}}>
+              <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
+                <div style=${{width:8,height:8,borderRadius:2,background:'var(--ac)',flexShrink:0}}></div>
+                <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+              ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:5}}>Lead: <b style=${{color:'var(--tx2)'}}>${lead.name}</b></div>`:null}
+              <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div style=${{display:'flex'}}>
+                  ${members.slice(0,5).map((m,i)=>html`
+                    <div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-5:0,border:'1.5px solid var(--sf2)',borderRadius:'50%',zIndex:5-i}}>
+                      <${Av} u=${m} size=${20}/>
+                    </div>`)}
+                  ${members.length>5?html`<span style=${{fontSize:9,color:'var(--tx3)',marginLeft:5,alignSelf:'center'}}>+${members.length-5}</span>`:null}
+                </div>
+                <span style=${{fontSize:10,color:'var(--ac)',fontWeight:700}}>${teamProjs.length} project${teamProjs.length!==1?'s':''}</span>
+              </div>
+            </div>`;
+        })}
+      </div>
+    </div>`;
+}
+
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark}){
+function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
+  const [showTeamPanel,setShowTeamPanel]=useState(false);
+  const [selectedTeam,setSelectedTeam]=useState(null);
+  const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const ICONS={
     dashboard:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
     projects:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
@@ -2707,8 +2829,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     {id:'messages', icon:ICONS.messages, label:'Channels'},
     {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
     {id:'tickets',icon:ICONS.tickets,label:'Tickets'},
-    ...(cu&&MGMT_ROLES.includes(cu.role)?[{id:'team',icon:ICONS.team,label:'Team'}]:[]),
-    ...(cu&&(cu.role==='Admin'||cu.role==='Manager')?[
+    ...(isAdminManager?[
       {id:'timeline',icon:ICONS.timeline,label:'Timeline Tracker'},
       {id:'productivity',icon:ICONS.productivity,label:'Dev Productivity'},
     ]:[]),
@@ -2719,20 +2840,29 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
     :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
   return html`
+    <div style=${{display:'flex',height:'100vh',flexShrink:0}}>
     <aside style=${{width:62,minWidth:62,background:'#0a0a0a',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:14,borderRight:'1px solid rgba(255,255,255,.05)'}}>
       <!-- Nav items -->
       <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:3,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 8px'}}>
         ${items.map(it=>html`
-          <button key=${it.id} title=${it.label} onClick=${()=>setView(it.id)}
+          <button key=${it.id} title=${it.label} onClick=${()=>{setShowTeamPanel(false);setView(it.id);}}
             style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',flexShrink:0,transition:'all .14s',
-              background:baseView===it.id?'var(--ac)':'transparent',
-              color:baseView===it.id?'var(--ac-tx)':'rgba(255,255,255,.32)'
+              background:baseView===it.id&&!showTeamPanel?'var(--ac)':'transparent',
+              color:baseView===it.id&&!showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)'
             }}
-            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
+            onMouseEnter=${e=>{if(!(baseView===it.id&&!showTeamPanel)){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+            onMouseLeave=${e=>{if(!(baseView===it.id&&!showTeamPanel)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
             ${it.icon}
             ${it.badge>0?html`<div style=${{position:'absolute',top:6,right:6,width:6,height:6,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid #0a0a0a'}}></div>`:null}
           </button>`)}
+        ${isAdminManager?html`
+          <button title="Teams" onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
+            style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
+              background:showTeamPanel?'var(--ac)':'transparent',
+              color:showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)'
+            }}
+            onMouseEnter=${e=>{if(!showTeamPanel){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+            onMouseLeave=${e=>{if(!showTeamPanel){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>${ICONS.team}</button>`:null}
       </nav>
       <!-- Bottom actions -->
       <div style=${{display:'flex',flexDirection:'column',gap:4,alignItems:'center',padding:'0 8px'}}>
@@ -2742,10 +2872,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
             <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
           </button>`:null}
-        <button title="Settings" onClick=${()=>setView('settings')}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:baseView==='settings'?'var(--ac)':'transparent',color:baseView==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-          onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
+        <button title="Settings" onClick=${()=>{setShowTeamPanel(false);setView('settings');}}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:baseView==='settings'&&!showTeamPanel?'var(--ac)':'transparent',color:baseView==='settings'&&!showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
+          onMouseEnter=${e=>{if(!(baseView==='settings'&&!showTeamPanel)){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+          onMouseLeave=${e=>{if(!(baseView==='settings'&&!showTeamPanel)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
         <button title="Sign Out" onClick=${onLogout}
@@ -2755,7 +2885,14 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
-    </aside>`;
+    </aside>
+    ${showTeamPanel&&isAdminManager?html`
+      <${TeamSidePanel} cu=${cu} teams=${teams||[]} users=${users||[]} projects=${projects||[]} tasks=${tasks||[]}
+        selectedTeam=${selectedTeam} onSelectTeam=${setSelectedTeam}
+        onClose=${()=>{setShowTeamPanel(false);setSelectedTeam(null);}}
+        onSetView=${v=>{setView(v);setShowTeamPanel(false);setSelectedTeam(null);}}
+      />`:null}
+    </div>`;
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
@@ -3367,6 +3504,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
   const [sortBy,setSortBy]=useState('newest'); // newest|oldest|name|progress|tasks
   const [viewMode,setViewMode]=useState('grid'); // grid|compact|team
   const [teams,setTeams]=useState([]);
+  const [projTeam,setProjTeam]=useState(''); // for new project modal
 
   useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
   // Load teams for Admin/Manager team view
@@ -3378,14 +3516,26 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
 
   const create=async()=>{
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
-    const mems=members.includes(cu.id)?members:[cu.id,...members];
-    const newProj=await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems});
-    setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);
-    // Reload with small delay to ensure DB write is committed before read
-    await new Promise(r=>setTimeout(r,300));
-    await reload();
-    // If reload somehow missed it (race), do a second reload after 1s
-    setTimeout(()=>reload(),1000);
+    try{
+      let mems=members.includes(cu.id)?members:[cu.id,...members];
+      // If a team is selected, add all team members
+      if(projTeam){
+        const team=teams.find(t=>t.id===projTeam);
+        if(team){
+          const teamMids=JSON.parse(team.member_ids||'[]');
+          teamMids.forEach(mid=>{if(!mems.includes(mid))mems.push(mid);});
+        }
+      }
+      const newProj=await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems});
+      if(newProj&&newProj.error){setErr(newProj.error);return;}
+      if(!newProj||!newProj.id){setErr('Failed to create project. Please try again.');return;}
+      setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);setProjTeam('');
+      // Reload with small delay to ensure DB write is committed before read
+      await new Promise(r=>setTimeout(r,300));
+      await reload();
+      // If reload somehow missed it (race), do a second reload after 1s
+      setTimeout(()=>reload(),1000);
+    }catch(e){setErr('Error creating project: '+(e.message||'Unknown error'));}
   };
 
   const filteredProjects=useMemo(()=>{
@@ -3661,6 +3811,16 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
               </div>
               <div><label class="lbl">Add Members</label>
                 <${MemberPicker} allUsers=${users} selected=${members} onChange=${setMembers}/></div>
+              ${cu&&(cu.role==='Admin'||cu.role==='Manager')&&teams.length>0?html`
+              <div><label class="lbl">Assign to Team <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:400}}>(optional — adds all team members)</span></label>
+                <select class="sel" value=${projTeam} onChange=${e=>setProjTeam(e.target.value)}>
+                  <option value="">— No team —</option>
+                  ${teams.map(t=>{
+                    const mids=JSON.parse(t.member_ids||'[]');
+                    return html`<option key=${t.id} value=${t.id}>${t.name} (${mids.length} member${mids.length!==1?'s':''})</option>`;
+                  })}
+                </select>
+              </div>`:null}
               ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'7px 11px',background:'rgba(248,113,113,.07)',borderRadius:7}}>${err}</div>`:null}
               <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:4}}>
                 <button class="btn bg" onClick=${()=>setShowNew(false)}>Cancel</button>
@@ -4671,7 +4831,7 @@ function MessagesView({projects,users,cu,tasks}){
           };
           return html`
             <button key=${p.id} class=${'nb'+(pid===p.id?' act':'')}
-              style=${{marginBottom:2,fontSize:12,flexDirection:'column',alignItems:'flex-start',height:'auto',padding:'7px 10px',width:'100%'}}
+              style=${{marginBottom:2,fontSize:12,alignItems:'center',height:'auto',padding:'7px 10px',width:'100%',display:'flex'}}
               onClick=${()=>setPid(p.id)}>
               <div style=${{display:'flex',alignItems:'center',gap:7,width:'100%'}}>
                 <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
@@ -4679,7 +4839,6 @@ function MessagesView({projects,users,cu,tasks}){
                 ${hasRecentMsg?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0,boxShadow:'0 0 6px var(--ac)'}} title="Recent activity"></div>`:null}
                 ${activeCnt>0?html`<span style=${{fontSize:9,background:p.color+'33',color:p.color,borderRadius:5,padding:'1px 5px',fontWeight:700,flexShrink:0}}>${activeCnt}</span>`:null}
               </div>
-              ${lastMsg?html`<div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,marginLeft:14,textAlign:'left'}}>${fmtLastMsg(lastMsg)}</div>`:null}
             </button>`;
         })}
       </div>
@@ -7147,7 +7306,7 @@ function App(){
       }
     }catch(e){}
   },[]);
-  const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[]});
+  const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[],teams:[]});
   const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
@@ -7207,7 +7366,12 @@ function App(){
         api.get('/api/users'),api.get('/api/projects'),api.get('/api/tasks'),
         api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'),
       ]);
-      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[]});
+      let teams=[];
+      if(cu.role==='Admin'||cu.role==='Manager'){
+        const t=await api.get('/api/teams');
+        if(Array.isArray(t))teams=t;
+      }
+      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
       if(ws&&ws.name)setWsName(ws.name);
       const rems=await api.get('/api/reminders');
@@ -7453,6 +7617,7 @@ function App(){
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${baseView} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${setCol} wsName=${wsName}
         dark=${dark} setDark=${setDark}
+        teams=${data.teams} users=${data.users} projects=${data.projects} tasks=${data.tasks}
         callState=${{...callState,allUsers:data.users}}
         onCallAction=${async cmd=>{
           const h=huddleCmdRef.current;
@@ -7491,7 +7656,7 @@ function App(){
             ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${data.tasks} projects=${data.projects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${data.users} projects=${data.projects} onReload=${load}/>`:null}
-            ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
             ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${data.tasks} projects=${data.projects}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users}/>`:null}
