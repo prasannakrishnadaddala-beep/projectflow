@@ -3064,15 +3064,14 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
-  const [showTeamPanel,setShowTeamPanel]=useState(false);
-  const [selectedTeam,setSelectedTeam]=useState(null);
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
+  const isDeveloper=cu&&!isAdminManager;
+
   const ICONS={
     dashboard:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
     projects:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
     tasks:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
     messages:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-    dm:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>`,
     notifs:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
     reminders:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     team:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>`,
@@ -3081,56 +3080,55 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     timeline:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/><line x1="8" y1="18" x2="11" y2="18"/></svg>`,
     productivity:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><polyline points="2 20 22 20"/></svg>`,
   };
-  const MGMT_ROLES=['Admin','Manager','TeamLead'];
-  const items=[
+
+  // Role-based nav items for icon rail
+  const adminItems=[
     {id:'dashboard',icon:ICONS.dashboard,label:'Dashboard'},
     {id:'projects', icon:ICONS.projects, label:'Projects'},
-    {id:'tasks',    icon:ICONS.tasks,    label:'Tasks'},
+    {id:'tasks',    icon:ICONS.tasks,    label:'Task Board'},
     {id:'messages', icon:ICONS.messages, label:'Channels'},
-    {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
-    {id:'tickets',icon:ICONS.tickets,label:'Tickets'},
-    ...(isAdminManager?[
-      {id:'timeline',icon:ICONS.timeline,label:'Timeline Tracker'},
-      {id:'productivity',icon:ICONS.productivity,label:'Dev Productivity'},
-    ]:[]),
+    {id:'tickets',  icon:ICONS.tickets,  label:'Tickets'},
+    {id:'timeline', icon:ICONS.timeline, label:'Timeline Tracker'},
+    {id:'productivity',icon:ICONS.productivity,label:'Dev Productivity'},
+    {id:'team',     icon:ICONS.team,     label:'Team Management'},
   ];
-  // base view strips filter params (e.g. 'tasks:stage:dev' → 'tasks')
+  const devItems=[
+    {id:'dashboard',icon:ICONS.dashboard,label:'Dashboard'},
+    {id:'projects', icon:ICONS.projects, label:'Projects'},
+    {id:'tasks',    icon:ICONS.tasks,    label:'Task Board'},
+    {id:'messages', icon:ICONS.messages, label:'Channels'},
+    {id:'tickets',  icon:ICONS.tickets,  label:'Tickets'},
+    {id:'timeline', icon:ICONS.timeline, label:'Timeline'},
+    {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
+  ];
+  const iconItems=isAdminManager?adminItems:devItems;
+
   const baseView=view.split(':')[0];
   const themeIcon=dark
     ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
     :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+
   return html`
     <div style=${{display:'flex',height:'100vh',flexShrink:0}}>
 
     <!-- ── Icon rail (always visible) ── -->
     <aside style=${{width:62,minWidth:62,background:'#0a0a0a',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:14,borderRight:'1px solid rgba(255,255,255,.05)'}}>
-      <!-- Team active indicator bar -->
+      <!-- Active team indicator bar -->
       ${activeTeam?html`
         <div title=${'Team: '+activeTeam.name} style=${{width:36,height:5,borderRadius:3,background:'var(--ac)',margin:'6px 0 2px',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>`:
         html`<div style=${{width:36,height:5,margin:'6px 0 2px',flexShrink:0}}></div>`}
       <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:3,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 8px'}}>
-        ${items.map(it=>html`
-          <button key=${it.id} title=${it.label} onClick=${()=>{setShowTeamPanel(false);setView(it.id);}}
+        ${iconItems.map(it=>html`
+          <button key=${it.id} title=${it.label} onClick=${()=>setView(it.id)}
             style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',flexShrink:0,transition:'all .14s',
-              background:baseView===it.id&&!showTeamPanel?'var(--ac)':'transparent',
-              color:baseView===it.id&&!showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)'
+              background:baseView===it.id?'var(--ac)':'transparent',
+              color:baseView===it.id?'var(--ac-tx)':'rgba(255,255,255,.32)'
             }}
-            onMouseEnter=${e=>{if(!(baseView===it.id&&!showTeamPanel)){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(!(baseView===it.id&&!showTeamPanel)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
+            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
             ${it.icon}
+            ${it.id==='notifs'&&unread>0?html`<span style=${{position:'absolute',top:4,right:4,width:8,height:8,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid #0a0a0a'}}></span>`:null}
           </button>`)}
-        <!-- Teams button -->
-        ${safe(teams).length>0||isAdminManager?html`
-          <button title=${activeTeam?activeTeam.name+' team active':'Switch team'}
-            onClick=${()=>{setShowTeamPanel(v=>!v);setSelectedTeam(null);}}
-            style=${{width:40,height:40,borderRadius:12,border:activeTeam?'2px solid var(--ac)':'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .14s',
-              background:showTeamPanel?'var(--ac)':activeTeam?'rgba(170,255,0,.12)':'transparent',
-              color:showTeamPanel?'var(--ac-tx)':activeTeam?'var(--ac)':'rgba(255,255,255,.32)',position:'relative'}}
-            onMouseEnter=${e=>{if(!showTeamPanel){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(!showTeamPanel){e.currentTarget.style.background=activeTeam?'rgba(170,255,0,.12)':'transparent';e.currentTarget.style.color=activeTeam?'var(--ac)':'rgba(255,255,255,.32)';}}}> 
-            ${ICONS.team}
-            ${activeTeam?html`<div style=${{position:'absolute',bottom:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--ac)',border:'1.5px solid #0a0a0a'}}></div>`:null}
-          </button>`:null}
       </nav>
       <!-- Bottom actions -->
       <div style=${{display:'flex',flexDirection:'column',gap:4,alignItems:'center',padding:'0 8px'}}>
@@ -3140,40 +3138,42 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
             <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
           </button>`:null}
-        <button title="Settings" onClick=${()=>{setShowTeamPanel(false);setView('settings');}}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:baseView==='settings'&&!showTeamPanel?'var(--ac)':'transparent',color:baseView==='settings'&&!showTeamPanel?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{if(!(baseView==='settings'&&!showTeamPanel)){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-          onMouseLeave=${e=>{if(!(baseView==='settings'&&!showTeamPanel)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <button title=${dark?'Light mode':'Dark mode'} onClick=${()=>setDark(d=>!d)}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}>
+          ${themeIcon}
         </button>
-        <button title="Sign Out" onClick=${onLogout}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,80,80,.45)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s',marginTop:2}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(239,68,68,.15)';e.currentTarget.style.color='#f87171';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,80,80,.45)';}}>
+        <button title="Settings" onClick=${()=>setView('settings')}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:baseView==='settings'?'var(--ac)':'transparent',color:baseView==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
+          onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+          onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
+          ${ICONS.settings}
+        </button>
+        <button title="Logout" onClick=${onLogout}
+          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(239,68,68,.12)';e.currentTarget.style.color='var(--rd2)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
     </aside>
 
-    <!-- ── Jira-style expanded team nav (shown when team is active, no panel open) ── -->
-    ${activeTeam&&!showTeamPanel?html`
-      <div class="team-switch-enter" style=${{width:190,background:'#0f0f0f',borderRight:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden'}}>
-        <!-- Team header -->
-        <div style=${{padding:'12px 14px 10px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
-          <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
-            <div style=${{width:8,height:8,borderRadius:2,background:'var(--ac)',flexShrink:0,boxShadow:'0 0 6px var(--ac)'}}></div>
-            <span style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.9)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${activeTeam.name}</span>
-            <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
-              style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.3)',fontSize:13,padding:'1px 4px',borderRadius:4,transition:'color .12s'}}
-              title="Clear team context"
-              onMouseEnter=${e=>e.currentTarget.style.color='rgba(255,80,80,.7)'}
-              onMouseLeave=${e=>e.currentTarget.style.color='rgba(255,255,255,.3)'}>×</button>
-          </div>
-          <div style=${{fontSize:10,color:'rgba(255,255,255,.3)',paddingLeft:16}}>Team workspace</div>
+    <!-- ── Expanded label panel (shown when col=false) ── -->
+    ${!col?html`
+      <div style=${{width:190,minWidth:190,background:'#111',display:'flex',flexDirection:'column',height:'100vh',borderRight:'1px solid rgba(255,255,255,.05)',overflow:'hidden'}}>
+        <!-- Workspace header -->
+        <div style=${{padding:'10px 12px 8px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+          <div style=${{fontSize:11,fontWeight:700,color:'rgba(255,255,255,.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlow'}</div>
+          ${activeTeam?html`
+            <div style=${{display:'flex',alignItems:'center',gap:5,marginTop:4}}>
+              <div style=${{width:6,height:6,borderRadius:2,background:'var(--ac)',flexShrink:0}}></div>
+              <span style=${{fontSize:10,color:'var(--ac)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</span>
+            </div>`:null}
         </div>
-        <!-- Jira-style nav menu -->
+        <!-- Nav items -->
         <div style=${{flex:1,overflowY:'auto',padding:'8px 8px'}}>
-          <div style=${{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.2)',textTransform:'uppercase',letterSpacing:1,padding:'8px 8px 4px'}}>Navigation</div>
+          ${isAdminManager?html`<div style=${{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.2)',textTransform:'uppercase',letterSpacing:1,padding:'6px 8px 4px'}}>Workspace</div>`:null}
           ${[
             {id:'dashboard',label:'Dashboard',icon:'⊞'},
             {id:'projects', label:'Projects', icon:'◈'},
@@ -3181,12 +3181,14 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             {id:'messages', label:'Channels', icon:'◎'},
             {id:'tickets',  label:'Tickets',  icon:'◉'},
             ...(isAdminManager?[
-              {id:'timeline',   label:'Timeline',    icon:'▦'},
-              {id:'productivity',label:'Productivity',icon:'▣'},
-            ]:[]),
+              {id:'timeline',    label:'Timeline Tracker', icon:'▦'},
+              {id:'productivity',label:'Dev Productivity', icon:'▣'},
+            ]:[
+              {id:'timeline',    label:'Timeline',  icon:'▦'},
+              {id:'reminders',   label:'Reminders', icon:'⏰'},
+            ]),
           ].map(it=>html`
-            <button key=${it.id}
-              onClick=${()=>{setShowTeamPanel(false);setView(it.id);}}
+            <button key=${it.id} onClick=${()=>setView(it.id)}
               style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
                 background:baseView===it.id?'rgba(170,255,0,.12)':'transparent',
                 color:baseView===it.id?'var(--ac)':'rgba(255,255,255,.45)',
@@ -3200,38 +3202,47 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             </button>`)}
           ${isAdminManager?html`
             <div style=${{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.2)',textTransform:'uppercase',letterSpacing:1,padding:'12px 8px 4px'}}>Admin</div>
-            <button onClick=${()=>{setShowTeamPanel(false);setView('team');}}
+            <button onClick=${()=>setView('team')}
               style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
                 background:baseView==='team'?'rgba(170,255,0,.12)':'transparent',
                 color:baseView==='team'?'var(--ac)':'rgba(255,255,255,.35)',
-                fontSize:12,fontWeight:500,transition:'all .12s',marginBottom:1,textAlign:'left',
+                fontSize:12,fontWeight:baseView==='team'?700:500,transition:'all .12s',marginBottom:1,textAlign:'left',
                 borderLeft:baseView==='team'?'2px solid var(--ac)':'2px solid transparent'}}
               onMouseEnter=${e=>{if(baseView!=='team'){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
               onMouseLeave=${e=>{if(baseView!=='team'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}>
               <span style=${{fontSize:13,lineHeight:1,flexShrink:0,width:16,textAlign:'center'}}>⚙</span>
-              <span>Manage Teams</span>
+              <span>Team Management</span>
+            </button>
+            <button onClick=${()=>setView('settings')}
+              style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
+                background:baseView==='settings'?'rgba(170,255,0,.12)':'transparent',
+                color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)',
+                fontSize:12,fontWeight:500,transition:'all .12s',marginBottom:1,textAlign:'left',
+                borderLeft:baseView==='settings'?'2px solid var(--ac)':'2px solid transparent'}}
+              onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+              onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}>
+              <span style=${{fontSize:13,lineHeight:1,flexShrink:0,width:16,textAlign:'center'}}>⚙️</span>
+              <span>Settings</span>
             </button>`:null}
         </div>
-        <!-- Team switch button at bottom -->
-        <div style=${{padding:'10px 10px',borderTop:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
-          <button onClick=${()=>{setShowTeamPanel(true);setSelectedTeam(null);}}
-            style=${{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',background:'transparent',color:'rgba(255,255,255,.4)',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:7,transition:'all .12s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.7)';e.currentTarget.style.borderColor='rgba(255,255,255,.15)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.4)';e.currentTarget.style.borderColor='rgba(255,255,255,.08)';}}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
-            Switch Team
+        <!-- Collapse toggle -->
+        <div style=${{padding:'8px 10px',borderTop:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+          <button onClick=${()=>setCol(true)}
+            style=${{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid rgba(255,255,255,.07)',background:'transparent',color:'rgba(255,255,255,.3)',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:6,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.6)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.3)';}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Collapse
           </button>
         </div>
-      </div>`:null}
-
-    <!-- ── Team panel (popup) ── -->
-    ${showTeamPanel&&safe(teams).length>0?html`
-      <${TeamSidePanel} cu=${cu} teams=${teams||[]} users=${users||[]} projects=${projects||[]} tasks=${tasks||[]}
-        selectedTeam=${selectedTeam} onSelectTeam=${setSelectedTeam}
-        teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
-        onClose=${()=>{setShowTeamPanel(false);setSelectedTeam(null);}}
-        onSetView=${v=>{setView(v);setShowTeamPanel(false);setSelectedTeam(null);}}
-      />`:null}
+      </div>`:
+      <!-- Expand button when collapsed -->
+      html`<div style=${{width:0}}><button onClick=${()=>setCol(false)} title="Expand sidebar"
+        style=${{position:'absolute',left:62,top:'50%',transform:'translateY(-50%)',zIndex:50,width:16,height:32,background:'rgba(255,255,255,.07)',border:'none',borderRadius:'0 6px 6px 0',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.4)',transition:'all .12s'}}
+        onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.15)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
+        onMouseLeave=${e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.4)';}}>
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="9 18 15 12 9 6"/></svg>
+      </button></div>`}
 
     </div>`;
 }
@@ -4460,8 +4471,19 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 }
 
 /* ─── Dashboard ───────────────────────────────────────────────────────────── */
-function Dashboard({cu,tasks,projects,users,onNav,activeTeam}){
+function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
   const t=safe(tasks);const p=safe(projects);const u=safe(users);
+  const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
+  const [teamSearch,setTeamSearch]=useState('');
+  const [teamDropOpen,setTeamDropOpen]=useState(false);
+  const teamDropRef=useRef(null);
+  useEffect(()=>{
+    if(!teamDropOpen)return;
+    const h=e=>{if(teamDropRef.current&&!teamDropRef.current.contains(e.target))setTeamDropOpen(false);};
+    document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[teamDropOpen]);
+  const filteredTeams=useMemo(()=>safe(teams).filter(t=>t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const myT=t.filter(x=>x.assignee===cu.id);
   const done=t.filter(x=>x.stage==='completed').length;
   const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
@@ -4495,15 +4517,56 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam}){
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
-      <!-- Team context banner (shown when team active) -->
-      ${activeTeam?html`
-        <div style=${{padding:'10px 16px',background:'linear-gradient(135deg,rgba(170,255,0,.1),rgba(170,255,0,.04))',borderRadius:12,border:'1px solid rgba(170,255,0,.25)',display:'flex',alignItems:'center',gap:10}}>
-          <div style=${{width:9,height:9,borderRadius:2,background:'var(--ac)',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>
-          <div style=${{flex:1}}>
-            <span style=${{fontSize:13,fontWeight:700,color:'var(--ac)'}}>${activeTeam.name}</span>
-            <span style=${{fontSize:11,color:'rgba(170,255,0,.55)',marginLeft:8}}>Team Dashboard · ${p.length} projects · ${t.length} tasks</span>
+      <!-- Team selector bar — Admin/Manager only -->
+      ${isAdminManager?html`
+        <div style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 16px',background:'var(--sf)',borderRadius:14,border:'1px solid var(--bd2)'}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style=${{color:'var(--tx3)',flexShrink:0}}><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
+          <span style=${{fontSize:12,color:'var(--tx3)',flexShrink:0}}>Team view:</span>
+          <!-- Dropdown -->
+          <div ref=${teamDropRef} style=${{position:'relative',flex:1,maxWidth:300}}>
+            <button onClick=${()=>setTeamDropOpen(v=>!v)}
+              style=${{width:'100%',padding:'7px 12px',borderRadius:9,border:'1px solid '+(teamDropOpen?'var(--ac)':'var(--bd)'),background:'var(--sf2)',color:'var(--tx)',fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,transition:'border-color .15s'}}>
+              <div style=${{display:'flex',alignItems:'center',gap:7,minWidth:0}}>
+                ${activeTeam?html`<div style=${{width:8,height:8,borderRadius:2,background:activeTeam.color||'var(--ac)',flexShrink:0}}></div>`:null}
+                <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam?activeTeam.name:'All Teams'}</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style=${{transform:teamDropOpen?'rotate(180deg)':'none',transition:'transform .15s',flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            ${teamDropOpen?html`
+              <div style=${{position:'absolute',top:'calc(100% + 6px)',left:0,right:0,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,boxShadow:'0 8px 32px rgba(0,0,0,.4)',zIndex:200,overflow:'hidden',minWidth:220}}>
+                <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)'}}>
+                  <input class="inp" placeholder="Search teams…" value=${teamSearch} autoFocus
+                    style=${{height:30,fontSize:12}} onInput=${e=>setTeamSearch(e.target.value)}/>
+                </div>
+                <div style=${{maxHeight:220,overflowY:'auto',padding:'4px 6px'}}>
+                  <button onClick=${()=>{setTeamCtx&&setTeamCtx('');setTeamDropOpen(false);setTeamSearch('');}}
+                    style=${{width:'100%',padding:'8px 10px',borderRadius:8,border:'none',background:!activeTeam?'rgba(170,255,0,.1)':'transparent',color:!activeTeam?'var(--ac)':'var(--tx2)',fontSize:12,fontWeight:!activeTeam?700:500,cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
+                    onMouseEnter=${e=>{if(activeTeam)e.currentTarget.style.background='rgba(255,255,255,.05)';}}
+                    onMouseLeave=${e=>{if(activeTeam)e.currentTarget.style.background='transparent';}}>
+                    <span style=${{fontSize:14}}>🌐</span> All Teams
+                  </button>
+                  ${filteredTeams.map(team=>html`
+                    <button key=${team.id} onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);setTeamDropOpen(false);setTeamSearch('');}}
+                      style=${{width:'100%',padding:'8px 10px',borderRadius:8,border:'none',
+                        background:activeTeam&&activeTeam.id===team.id?'rgba(170,255,0,.1)':'transparent',
+                        color:activeTeam&&activeTeam.id===team.id?'var(--ac)':'var(--tx2)',
+                        fontSize:12,fontWeight:activeTeam&&activeTeam.id===team.id?700:500,
+                        cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
+                      onMouseEnter=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='rgba(255,255,255,.05)';}}
+                      onMouseLeave=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='transparent';}}>
+                      <div style=${{width:8,height:8,borderRadius:2,background:team.color||'var(--ac)',flexShrink:0}}></div>
+                      <span style=${{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
+                      ${activeTeam&&activeTeam.id===team.id?html`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>`:null}
+                    </button>`)}
+                  ${filteredTeams.length===0?html`<div style=${{padding:'12px 10px',fontSize:11,color:'var(--tx3)',textAlign:'center'}}>No teams match</div>`:null}
+                </div>
+              </div>`:null}
           </div>
-          <span style=${{fontSize:10,color:'rgba(170,255,0,.4)',fontFamily:'monospace',background:'rgba(170,255,0,.06)',padding:'2px 8px',borderRadius:4}}>${u.length} members</span>
+          ${activeTeam?html`
+            <div style=${{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',background:'rgba(170,255,0,.07)',borderRadius:8,border:'1px solid rgba(170,255,0,.2)',flexShrink:0}}>
+              <div style=${{width:6,height:6,borderRadius:2,background:'var(--ac)'}}></div>
+              <span style=${{fontSize:11,color:'var(--ac)',fontWeight:600}}>${p.length} projects · ${t.length} tasks</span>
+            </div>`:null}
         </div>`:null}
       <!-- Greeting -->
       <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:13}}>
@@ -8023,7 +8086,7 @@ function App(){
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam}/>`:null}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}/>`:null}
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
@@ -8036,7 +8099,7 @@ function App(){
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam}/>`:null}
             ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
-            ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
+            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             </div>
           <//>
