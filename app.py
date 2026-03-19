@@ -3254,6 +3254,108 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     </div>`;
 }
 
+/* ─── TeamDropdown ────────────────────────────────────────────────────────── */
+function TeamDropdown({teams,activeTeam,setTeamCtx}){
+  const [open,setOpen]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[open]);
+
+  const select=(id)=>{setTeamCtx&&setTeamCtx(id);setOpen(false);};
+
+  return html`
+    <div ref=${ref} style=${{position:'relative',flexShrink:0}}>
+      <!-- Trigger button -->
+      <button onClick=${()=>setOpen(v=>!v)}
+        style=${{display:'flex',alignItems:'center',gap:7,padding:'5px 10px 5px 12px',
+          background:activeTeam?'rgba(170,255,0,.10)':open?'rgba(255,255,255,.08)':'rgba(255,255,255,.04)',
+          borderRadius:100,border:'1px solid '+(activeTeam?'rgba(170,255,0,.3)':open?'rgba(255,255,255,.2)':'rgba(255,255,255,.08)'),
+          cursor:'pointer',transition:'all .15s',color:'inherit',fontFamily:'inherit'}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke=${activeTeam?'#aaff00':'rgba(255,255,255,.4)'} strokeWidth="2.5" strokeLinecap="round">
+          <circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/>
+          <path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/>
+        </svg>
+        <span style=${{fontSize:11,fontWeight:activeTeam?700:400,
+          color:activeTeam?'var(--ac)':'rgba(255,255,255,.4)',
+          letterSpacing:'.2px',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          ${activeTeam?activeTeam.name:'Select Team'}
+        </span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+          stroke=${activeTeam?'rgba(170,255,0,.5)':'rgba(255,255,255,.25)'} strokeWidth="2.5" strokeLinecap="round">
+          <polyline points=${open?'18 15 12 9 6 15':'6 9 12 15 18 9'}/>
+        </svg>
+      </button>
+
+      <!-- Dropdown menu -->
+      ${open?html`
+        <div style=${{position:'absolute',top:'calc(100% + 8px)',left:0,zIndex:9000,
+          background:'var(--sf)',borderRadius:14,border:'1px solid var(--bd)',
+          boxShadow:'0 8px 32px rgba(0,0,0,.6)',minWidth:200,overflow:'hidden',
+          animation:'pageEnter .15s ease'}}>
+          <!-- Header -->
+          <div style=${{padding:'10px 14px 8px',borderBottom:'1px solid var(--bd)'}}>
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1}}>Switch Team</div>
+          </div>
+          <!-- All workspace option -->
+          <button onClick=${()=>select('')}
+            style=${{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'9px 14px',
+              background:!activeTeam?'var(--ac3)':'transparent',border:'none',cursor:'pointer',
+              color:!activeTeam?'var(--ac)':'var(--tx2)',fontSize:12,fontWeight:!activeTeam?700:400,
+              textAlign:'left',transition:'all .1s',fontFamily:'inherit',
+              borderLeft:!activeTeam?'2px solid var(--ac)':'2px solid transparent'}}
+            onMouseEnter=${e=>{if(activeTeam){e.currentTarget.style.background='var(--sf2)';}}}
+            onMouseLeave=${e=>{if(activeTeam){e.currentTarget.style.background='transparent';}}}>
+            <div style=${{width:24,height:24,borderRadius:6,background:!activeTeam?'var(--ac3)':'var(--sf2)',
+              display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke=${!activeTeam?'var(--ac)':'var(--tx3)'} strokeWidth="2" strokeLinecap="round">
+                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </div>
+            <div>
+              <div style=${{fontSize:12,fontWeight:!activeTeam?700:500}}>All Workspace</div>
+              <div style=${{fontSize:10,color:'var(--tx3)',marginTop:1}}>Show all teams' data</div>
+            </div>
+            ${!activeTeam?html`<div style=${{marginLeft:'auto',width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
+          </button>
+          <!-- Team options -->
+          <div style=${{borderTop:'1px solid var(--bd)',padding:'4px 0'}}>
+            ${safe(teams).map(t=>{
+              const isActive=activeTeam&&activeTeam.id===t.id;
+              const memberCount=JSON.parse(t.member_ids||'[]').length;
+              return html`
+                <button key=${t.id} onClick=${()=>select(t.id)}
+                  style=${{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'9px 14px',
+                    background:isActive?'var(--ac3)':'transparent',border:'none',cursor:'pointer',
+                    color:isActive?'var(--ac)':'var(--tx2)',fontSize:12,fontWeight:isActive?700:400,
+                    textAlign:'left',transition:'all .1s',fontFamily:'inherit',
+                    borderLeft:isActive?'2px solid var(--ac)':'2px solid transparent'}}
+                  onMouseEnter=${e=>{if(!isActive){e.currentTarget.style.background='var(--sf2)';}}}
+                  onMouseLeave=${e=>{if(!isActive){e.currentTarget.style.background='transparent';}}}>
+                  <div style=${{width:24,height:24,borderRadius:6,
+                    background:isActive?'var(--ac3)':'rgba(255,255,255,.06)',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    fontSize:10,fontWeight:700,color:isActive?'var(--ac)':'var(--tx3)',flexShrink:0}}>
+                    ${t.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div style=${{flex:1,minWidth:0}}>
+                    <div style=${{fontSize:12,fontWeight:isActive?700:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${t.name}</div>
+                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:1}}>${memberCount} member${memberCount!==1?'s':''}</div>
+                  </div>
+                  ${isActive?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
+                </button>`;
+            })}
+          </div>
+        </div>`:null}
+    </div>`;
+}
+
 /* ─── Header ──────────────────────────────────────────────────────────────── */
 function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewReminders,notifs,onNotifClick,onMarkAllRead,onClearAll,activeTeam,teams,setTeamCtx}){
   const [showNP,setShowNP]=useState(false);
@@ -3289,17 +3391,8 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
-        <!-- Team context pill -->
-        ${safe(teams).length>0?html`
-          <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'5px 10px 5px 12px',background:activeTeam?'rgba(170,255,0,.10)':'rgba(255,255,255,.04)',borderRadius:100,border:'1px solid '+(activeTeam?'rgba(170,255,0,.3)':'rgba(255,255,255,.08)'),cursor:'pointer',transition:'all .15s'}}
-            onClick=${()=>{}}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke=${activeTeam?'#aaff00':'rgba(255,255,255,.35)'} strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
-            ${activeTeam?html`
-              <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.2px',maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</span>
-              <button onClick=${e=>{e.stopPropagation();setTeamCtx&&setTeamCtx('');}}
-                style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(170,255,0,.6)',fontSize:14,lineHeight:1,padding:'0 2px',flexShrink:0}} title="Clear team filter">×</button>`:html`
-              <span style=${{fontSize:11,color:'rgba(255,255,255,.35)',letterSpacing:'.2px'}}>All Teams</span>`}
-          </div>`:null}
+        <!-- Team context dropdown selector -->
+        ${safe(teams).length>0?html`<${TeamDropdown} teams=${teams} activeTeam=${activeTeam} setTeamCtx=${setTeamCtx}/>`:null}
         <!-- Schedule timeline -->
         <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none'}}>
           <div style=${{height:40,background:'#111111',borderRadius:100,display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden',border:'1px solid rgba(255,255,255,.05)'}}>
