@@ -369,6 +369,8 @@ def init_db():
         # Add avatar_data column for profile photos
         try: db.execute("ALTER TABLE users ADD COLUMN avatar_data TEXT")
         except: pass
+        try: db.execute("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''")
+        except: pass
         # Fix corrupted avatar column: if avatar contains base64 image data, move it to avatar_data and reset avatar to initials
         try:
             corrupted = db.execute("SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%' OR (length(avatar) > 10 AND avatar NOT GLOB '[A-Z][A-Z]*')").fetchall()
@@ -628,9 +630,9 @@ def add_user():
     c=random.choice(CLRS)
     try:
         with get_db() as db:
-            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",
+            db.execute("INSERT INTO users (id,workspace_id,name,email,password,role,avatar,color,created,avatar_data,plain_password) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                        (uid,wid(),d["name"],d["email"],hash_pw(d["password"]),
-                        d.get("role","Developer"),av,c,ts(),None))
+                        d.get("role","Developer"),av,c,ts(),None,d["password"]))
             return jsonify({"id":uid,"workspace_id":wid(),"name":d["name"],
                             "email":d["email"],"role":d.get("role","Developer"),"avatar":av,"color":c})
     except Exception as e:
@@ -647,6 +649,7 @@ def update_user(uid):
             av="".join(w[0] for w in d["name"].split())[:2].upper()
             db.execute("UPDATE users SET name=?,avatar=? WHERE id=? AND workspace_id=?",(d["name"],av,uid,wid()))
         if "email" in d: db.execute("UPDATE users SET email=? WHERE id=? AND workspace_id=?",(d["email"],uid,wid()))
+        if "password" in d: db.execute("UPDATE users SET password=?,plain_password=? WHERE id=? AND workspace_id=?",(hash_pw(d["password"]),d["password"],uid,wid()))
         if "avatar_data" in d: db.execute("UPDATE users SET avatar_data=? WHERE id=? AND workspace_id=?",(d["avatar_data"],uid,wid()))
         u=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
         return jsonify(dict(u) if u else {})
@@ -3061,190 +3064,146 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam}){
-  const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
-  const isDeveloper=cu&&!isAdminManager;
-
-  const ICONS={
-    dashboard:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
-    projects:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>`,
-    tasks:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-    messages:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-    notifs:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
-    reminders:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-    team:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>`,
-    tickets:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,
-    settings:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>`,
-    timeline:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/><line x1="8" y1="18" x2="11" y2="18"/></svg>`,
-    productivity:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><polyline points="2 20 22 20"/></svg>`,
-  };
-
-  // Role-based nav items for icon rail
-  const adminItems=[
-    {id:'dashboard',icon:ICONS.dashboard,label:'Dashboard'},
-    {id:'projects', icon:ICONS.projects, label:'Projects'},
-    {id:'tasks',    icon:ICONS.tasks,    label:'Task Board'},
-    {id:'messages', icon:ICONS.messages, label:'Channels'},
-    {id:'tickets',  icon:ICONS.tickets,  label:'Tickets'},
-    {id:'timeline', icon:ICONS.timeline, label:'Timeline Tracker'},
-    {id:'productivity',icon:ICONS.productivity,label:'Dev Productivity'},
-    {id:'team',     icon:ICONS.team,     label:'Team Management'},
-  ];
-  const devItems=[
-    {id:'dashboard',icon:ICONS.dashboard,label:'Dashboard'},
-    {id:'projects', icon:ICONS.projects, label:'Projects'},
-    {id:'tasks',    icon:ICONS.tasks,    label:'Task Board'},
-    {id:'messages', icon:ICONS.messages, label:'Channels'},
-    {id:'tickets',  icon:ICONS.tickets,  label:'Tickets'},
-    {id:'timeline', icon:ICONS.timeline, label:'Timeline'},
-    {id:'reminders',icon:ICONS.reminders,label:'Reminders'},
-  ];
-  const iconItems=isAdminManager?adminItems:devItems;
-
   const baseView=view.split(':')[0];
+
+  // Nav items per role
+  const adminNav=[
+    {id:'dashboard', icon:'⊞', label:'Dashboard'},
+    {id:'projects',  icon:'◈', label:'Projects'},
+    {id:'tasks',     icon:'☑', label:'Task Board'},
+    {id:'messages',  icon:'◎', label:'Channels'},
+    {id:'tickets',   icon:'◉', label:'Tickets'},
+    {id:'timeline',  icon:'▦', label:'Timeline Tracker'},
+    {id:'productivity',icon:'▣',label:'Dev Productivity'},
+    {id:'team',      icon:'⚙', label:'Team Management'},
+  ];
+  const devNav=[
+    {id:'dashboard', icon:'⊞', label:'Dashboard'},
+    {id:'projects',  icon:'◈', label:'Projects'},
+    {id:'tasks',     icon:'☑', label:'Task Board'},
+    {id:'messages',  icon:'◎', label:'Channels'},
+    {id:'tickets',   icon:'◉', label:'Tickets'},
+    {id:'timeline',  icon:'▦', label:'Timeline'},
+    {id:'reminders', icon:'⏰', label:'Reminders'},
+  ];
+  const navItems=isAdminManager?adminNav:devNav;
+
   const themeIcon=dark
-    ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-    :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+    ?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+    :html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+
+  const W=col?64:200; // collapsed=64px, expanded=200px
 
   return html`
-    <div style=${{display:'flex',height:'100vh',flexShrink:0}}>
+    <aside style=${{
+      width:W,minWidth:W,maxWidth:W,
+      background:'#0f0f0f',
+      display:'flex',flexDirection:'column',
+      height:'100vh',flexShrink:0,overflow:'hidden',
+      borderRight:'1px solid rgba(255,255,255,.07)',
+      transition:'width .2s ease,min-width .2s ease,max-width .2s ease'
+    }}>
 
-    <!-- ── Icon rail (always visible) ── -->
-    <aside style=${{width:62,minWidth:62,background:'#0a0a0a',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden',alignItems:'center',paddingBottom:14,borderRight:'1px solid rgba(255,255,255,.05)'}}>
-      <!-- Active team indicator bar -->
-      ${activeTeam?html`
-        <div title=${'Team: '+activeTeam.name} style=${{width:36,height:5,borderRadius:3,background:'var(--ac)',margin:'6px 0 2px',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>`:
-        html`<div style=${{width:36,height:5,margin:'6px 0 2px',flexShrink:0}}></div>`}
-      <nav style=${{flex:1,display:'flex',flexDirection:'column',gap:3,alignItems:'center',width:'100%',overflowY:'auto',padding:'4px 8px'}}>
-        ${iconItems.map(it=>html`
-          <button key=${it.id} title=${it.label} onClick=${()=>setView(it.id)}
-            style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',flexShrink:0,transition:'all .14s',
-              background:baseView===it.id?'var(--ac)':'transparent',
-              color:baseView===it.id?'var(--ac-tx)':'rgba(255,255,255,.32)'
+      <!-- ── Logo / workspace name ── -->
+      <div style=${{
+        padding:col?'14px 0':'12px 14px',
+        display:'flex',alignItems:'center',
+        gap:8,flexShrink:0,
+        borderBottom:'1px solid rgba(255,255,255,.06)',
+        justifyContent:col?'center':'flex-start',
+        minHeight:52
+      }}>
+        <div style=${{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity=".9"/><circle cx="51" cy="43" r="6" fill="white" opacity=".9"/><circle cx="13" cy="43" r="6" fill="white" opacity=".9"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
+        </div>
+        ${!col?html`<div style=${{flex:1,minWidth:0}}>
+          <div style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.85)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlow'}</div>
+          ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</div>`
+          :html`<div style=${{fontSize:10,color:'rgba(255,255,255,.3)'}}>Workspace</div>`}
+        </div>`:null}
+      </div>
+
+      <!-- ── Nav items ── -->
+      <nav style=${{flex:1,overflowY:'auto',padding:'8px 6px',display:'flex',flexDirection:'column',gap:2}}>
+        ${navItems.map(it=>html`
+          <button key=${it.id}
+            title=${col?it.label:''}
+            onClick=${()=>setView(it.id)}
+            style=${{
+              display:'flex',alignItems:'center',
+              gap:col?0:10,
+              width:'100%',
+              padding:col?'10px 0':'9px 10px',
+              borderRadius:9,border:'none',cursor:'pointer',
+              background:baseView===it.id?'rgba(170,255,0,.12)':'transparent',
+              color:baseView===it.id?'var(--ac)':'rgba(255,255,255,.45)',
+              fontSize:12,fontWeight:baseView===it.id?700:500,
+              transition:'all .12s',textAlign:'left',
+              borderLeft:baseView===it.id&&!col?'2px solid var(--ac)':'2px solid transparent',
+              justifyContent:col?'center':'flex-start',
+              position:'relative'
             }}
-            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
-            ${it.icon}
-            ${it.id==='notifs'&&unread>0?html`<span style=${{position:'absolute',top:4,right:4,width:8,height:8,borderRadius:'50%',background:'var(--rd)',border:'1.5px solid #0a0a0a'}}></span>`:null}
+            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}}
+            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}> 
+            <span style=${{fontSize:15,lineHeight:1,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>${it.icon}</span>
+            ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12}}>${it.label}</span>`:null}
+            ${it.id==='notifs'&&unread>0?html`<span style=${{
+              position:'absolute',top:6,right:col?6:10,
+              minWidth:16,height:16,borderRadius:8,
+              background:'var(--rd)',color:'#fff',
+              fontSize:9,fontWeight:700,
+              display:'flex',alignItems:'center',justifyContent:'center',
+              padding:'0 4px'
+            }}>${unread>9?'9+':unread}</span>`:null}
           </button>`)}
       </nav>
-      <!-- Bottom actions -->
-      <div style=${{display:'flex',flexDirection:'column',gap:4,alignItems:'center',padding:'0 8px'}}>
+
+      <!-- ── Bottom actions ── -->
+      <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
         ${inCall?html`
           <button title="In Huddle" onClick=${()=>onCallAction&&onCallAction('show')}
-            style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'rgba(34,197,94,.1)',color:'#22c55e',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:1}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-            <span style=${{fontSize:7,fontWeight:700,lineHeight:1}}>${fmtTime(callState.elapsed||0)}</span>
+            style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'rgba(34,197,94,.1)',color:'#22c55e',justifyContent:col?'center':'flex-start'}}>
+            <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>📞</span>
+            ${!col?html`<span style=${{fontSize:11,fontWeight:700}}>${fmtTime(callState.elapsed||0)}</span>`:null}
           </button>`:null}
-        <button title=${dark?'Light mode':'Dark mode'} onClick=${()=>setDark(d=>!d)}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}>
-          ${themeIcon}
+        <button title=${col?'Toggle theme':''} onClick=${()=>setDark(d=>!d)}
+          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.35)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}>
+          <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}}>${themeIcon}</span>
+          ${!col?html`<span style=${{fontSize:12}}>Theme</span>`:null}
         </button>
-        <button title="Settings" onClick=${()=>setView('settings')}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:baseView==='settings'?'var(--ac)':'transparent',color:baseView==='settings'?'var(--ac-tx)':'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-          onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}}>
-          ${ICONS.settings}
+        ${(cu&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead'))?html`
+          <button title=${col?'Settings':''} onClick=${()=>setView('settings')}
+            style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',
+              background:baseView==='settings'?'rgba(170,255,0,.12)':'transparent',
+              color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)',
+              transition:'all .12s',justifyContent:col?'center':'flex-start'}}
+            onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}}
+            onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}> 
+            <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>⚙️</span>
+            ${!col?html`<span style=${{fontSize:12}}>Settings</span>`:null}
+          </button>`:null}
+        <button title=${col?'Sign out':''} onClick=${onLogout}
+          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.3)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(239,68,68,.1)';e.currentTarget.style.color='#f87171';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.3)';}}>
+          <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>↪</span>
+          ${!col?html`<span style=${{fontSize:12}}>Sign out</span>`:null}
         </button>
-        <button title="Logout" onClick=${onLogout}
-          style=${{width:40,height:40,borderRadius:12,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.32)',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s'}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(239,68,68,.12)';e.currentTarget.style.color='var(--rd2)';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.32)';}}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <!-- Collapse / expand toggle -->
+        <button title=${col?'Expand sidebar':'Collapse sidebar'} onClick=${()=>setCol(c=>!c)}
+          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'1px solid rgba(255,255,255,.07)',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.25)',transition:'all .12s',justifyContent:col?'center':'flex-start',marginTop:2}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.65)';}}
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.25)';}}>
+          <span style=${{fontSize:13,flexShrink:0,width:col?'auto':18,textAlign:'center',transform:col?'scaleX(-1)':'none',display:'inline-block'}}>‹</span>
+          ${!col?html`<span style=${{fontSize:11}}>Collapse</span>`:null}
         </button>
       </div>
-    </aside>
-
-    <!-- ── Expanded label panel (shown when col=false) ── -->
-    ${!col?html`
-      <div style=${{width:190,minWidth:190,background:'#111',display:'flex',flexDirection:'column',height:'100vh',borderRight:'1px solid rgba(255,255,255,.05)',overflow:'hidden'}}>
-        <!-- Workspace header -->
-        <div style=${{padding:'10px 12px 8px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
-          <div style=${{fontSize:11,fontWeight:700,color:'rgba(255,255,255,.7)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlow'}</div>
-          ${activeTeam?html`
-            <div style=${{display:'flex',alignItems:'center',gap:5,marginTop:4}}>
-              <div style=${{width:6,height:6,borderRadius:2,background:'var(--ac)',flexShrink:0}}></div>
-              <span style=${{fontSize:10,color:'var(--ac)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</span>
-            </div>`:null}
-        </div>
-        <!-- Nav items -->
-        <div style=${{flex:1,overflowY:'auto',padding:'8px 8px'}}>
-          ${isAdminManager?html`<div style=${{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.2)',textTransform:'uppercase',letterSpacing:1,padding:'6px 8px 4px'}}>Workspace</div>`:null}
-          ${[
-            {id:'dashboard',label:'Dashboard',icon:'⊞'},
-            {id:'projects', label:'Projects', icon:'◈'},
-            {id:'tasks',    label:'Task Board',icon:'☑'},
-            {id:'messages', label:'Channels', icon:'◎'},
-            {id:'tickets',  label:'Tickets',  icon:'◉'},
-            ...(isAdminManager?[
-              {id:'timeline',    label:'Timeline Tracker', icon:'▦'},
-              {id:'productivity',label:'Dev Productivity', icon:'▣'},
-            ]:[
-              {id:'timeline',    label:'Timeline',  icon:'▦'},
-              {id:'reminders',   label:'Reminders', icon:'⏰'},
-            ]),
-          ].map(it=>html`
-            <button key=${it.id} onClick=${()=>setView(it.id)}
-              style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
-                background:baseView===it.id?'rgba(170,255,0,.12)':'transparent',
-                color:baseView===it.id?'var(--ac)':'rgba(255,255,255,.45)',
-                fontSize:12,fontWeight:baseView===it.id?700:500,
-                transition:'all .12s',marginBottom:1,textAlign:'left',
-                borderLeft:baseView===it.id?'2px solid var(--ac)':'2px solid transparent'}}
-              onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-              onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}> 
-              <span style=${{fontSize:13,lineHeight:1,flexShrink:0,width:16,textAlign:'center'}}>${it.icon}</span>
-              <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${it.label}</span>
-            </button>`)}
-          ${isAdminManager?html`
-            <div style=${{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.2)',textTransform:'uppercase',letterSpacing:1,padding:'12px 8px 4px'}}>Admin</div>
-            <button onClick=${()=>setView('team')}
-              style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
-                background:baseView==='team'?'rgba(170,255,0,.12)':'transparent',
-                color:baseView==='team'?'var(--ac)':'rgba(255,255,255,.35)',
-                fontSize:12,fontWeight:baseView==='team'?700:500,transition:'all .12s',marginBottom:1,textAlign:'left',
-                borderLeft:baseView==='team'?'2px solid var(--ac)':'2px solid transparent'}}
-              onMouseEnter=${e=>{if(baseView!=='team'){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-              onMouseLeave=${e=>{if(baseView!=='team'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}>
-              <span style=${{fontSize:13,lineHeight:1,flexShrink:0,width:16,textAlign:'center'}}>⚙</span>
-              <span>Team Management</span>
-            </button>
-            <button onClick=${()=>setView('settings')}
-              style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',
-                background:baseView==='settings'?'rgba(170,255,0,.12)':'transparent',
-                color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)',
-                fontSize:12,fontWeight:500,transition:'all .12s',marginBottom:1,textAlign:'left',
-                borderLeft:baseView==='settings'?'2px solid var(--ac)':'2px solid transparent'}}
-              onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-              onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}>
-              <span style=${{fontSize:13,lineHeight:1,flexShrink:0,width:16,textAlign:'center'}}>⚙️</span>
-              <span>Settings</span>
-            </button>`:null}
-        </div>
-        <!-- Collapse toggle -->
-        <div style=${{padding:'8px 10px',borderTop:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
-          <button onClick=${()=>setCol(true)}
-            style=${{width:'100%',padding:'6px 8px',borderRadius:8,border:'1px solid rgba(255,255,255,.07)',background:'transparent',color:'rgba(255,255,255,.3)',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:6,transition:'all .12s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.6)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.3)';}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Collapse
-          </button>
-        </div>
-      </div>`:
-      <!-- Expand button when collapsed -->
-      html`<div style=${{width:0}}><button onClick=${()=>setCol(false)} title="Expand sidebar"
-        style=${{position:'absolute',left:62,top:'50%',transform:'translateY(-50%)',zIndex:50,width:16,height:32,background:'rgba(255,255,255,.07)',border:'none',borderRadius:'0 6px 6px 0',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.4)',transition:'all .12s'}}
-        onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.15)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
-        onMouseLeave=${e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.4)';}}>
-        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="9 18 15 12 9 6"/></svg>
-      </button></div>`}
-
-    </div>`;
+    </aside>`;
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
@@ -4471,19 +4430,8 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 }
 
 /* ─── Dashboard ───────────────────────────────────────────────────────────── */
-function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
+function Dashboard({cu,tasks,projects,users,onNav,activeTeam}){
   const t=safe(tasks);const p=safe(projects);const u=safe(users);
-  const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
-  const [teamSearch,setTeamSearch]=useState('');
-  const [teamDropOpen,setTeamDropOpen]=useState(false);
-  const teamDropRef=useRef(null);
-  useEffect(()=>{
-    if(!teamDropOpen)return;
-    const h=e=>{if(teamDropRef.current&&!teamDropRef.current.contains(e.target))setTeamDropOpen(false);};
-    document.addEventListener('mousedown',h);
-    return()=>document.removeEventListener('mousedown',h);
-  },[teamDropOpen]);
-  const filteredTeams=useMemo(()=>safe(teams).filter(t=>t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const myT=t.filter(x=>x.assignee===cu.id);
   const done=t.filter(x=>x.stage==='completed').length;
   const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
@@ -4517,56 +4465,15 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
-      <!-- Team selector bar — Admin/Manager only -->
-      ${isAdminManager?html`
-        <div style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 16px',background:'var(--sf)',borderRadius:14,border:'1px solid var(--bd2)'}}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style=${{color:'var(--tx3)',flexShrink:0}}><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
-          <span style=${{fontSize:12,color:'var(--tx3)',flexShrink:0}}>Team view:</span>
-          <!-- Dropdown -->
-          <div ref=${teamDropRef} style=${{position:'relative',flex:1,maxWidth:300}}>
-            <button onClick=${()=>setTeamDropOpen(v=>!v)}
-              style=${{width:'100%',padding:'7px 12px',borderRadius:9,border:'1px solid '+(teamDropOpen?'var(--ac)':'var(--bd)'),background:'var(--sf2)',color:'var(--tx)',fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,transition:'border-color .15s'}}>
-              <div style=${{display:'flex',alignItems:'center',gap:7,minWidth:0}}>
-                ${activeTeam?html`<div style=${{width:8,height:8,borderRadius:2,background:activeTeam.color||'var(--ac)',flexShrink:0}}></div>`:null}
-                <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam?activeTeam.name:'All Teams'}</span>
-              </div>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style=${{transform:teamDropOpen?'rotate(180deg)':'none',transition:'transform .15s',flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            ${teamDropOpen?html`
-              <div style=${{position:'absolute',top:'calc(100% + 6px)',left:0,right:0,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,boxShadow:'0 8px 32px rgba(0,0,0,.4)',zIndex:200,overflow:'hidden',minWidth:220}}>
-                <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)'}}>
-                  <input class="inp" placeholder="Search teams…" value=${teamSearch} autoFocus
-                    style=${{height:30,fontSize:12}} onInput=${e=>setTeamSearch(e.target.value)}/>
-                </div>
-                <div style=${{maxHeight:220,overflowY:'auto',padding:'4px 6px'}}>
-                  <button onClick=${()=>{setTeamCtx&&setTeamCtx('');setTeamDropOpen(false);setTeamSearch('');}}
-                    style=${{width:'100%',padding:'8px 10px',borderRadius:8,border:'none',background:!activeTeam?'rgba(170,255,0,.1)':'transparent',color:!activeTeam?'var(--ac)':'var(--tx2)',fontSize:12,fontWeight:!activeTeam?700:500,cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
-                    onMouseEnter=${e=>{if(activeTeam)e.currentTarget.style.background='rgba(255,255,255,.05)';}}
-                    onMouseLeave=${e=>{if(activeTeam)e.currentTarget.style.background='transparent';}}>
-                    <span style=${{fontSize:14}}>🌐</span> All Teams
-                  </button>
-                  ${filteredTeams.map(team=>html`
-                    <button key=${team.id} onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);setTeamDropOpen(false);setTeamSearch('');}}
-                      style=${{width:'100%',padding:'8px 10px',borderRadius:8,border:'none',
-                        background:activeTeam&&activeTeam.id===team.id?'rgba(170,255,0,.1)':'transparent',
-                        color:activeTeam&&activeTeam.id===team.id?'var(--ac)':'var(--tx2)',
-                        fontSize:12,fontWeight:activeTeam&&activeTeam.id===team.id?700:500,
-                        cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
-                      onMouseEnter=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='rgba(255,255,255,.05)';}}
-                      onMouseLeave=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='transparent';}}>
-                      <div style=${{width:8,height:8,borderRadius:2,background:team.color||'var(--ac)',flexShrink:0}}></div>
-                      <span style=${{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
-                      ${activeTeam&&activeTeam.id===team.id?html`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>`:null}
-                    </button>`)}
-                  ${filteredTeams.length===0?html`<div style=${{padding:'12px 10px',fontSize:11,color:'var(--tx3)',textAlign:'center'}}>No teams match</div>`:null}
-                </div>
-              </div>`:null}
+      <!-- Team context banner (shown when team active) -->
+      ${activeTeam?html`
+        <div style=${{padding:'10px 16px',background:'linear-gradient(135deg,rgba(170,255,0,.1),rgba(170,255,0,.04))',borderRadius:12,border:'1px solid rgba(170,255,0,.25)',display:'flex',alignItems:'center',gap:10}}>
+          <div style=${{width:9,height:9,borderRadius:2,background:'var(--ac)',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>
+          <div style=${{flex:1}}>
+            <span style=${{fontSize:13,fontWeight:700,color:'var(--ac)'}}>${activeTeam.name}</span>
+            <span style=${{fontSize:11,color:'rgba(170,255,0,.55)',marginLeft:8}}>Team Dashboard · ${p.length} projects · ${t.length} tasks</span>
           </div>
-          ${activeTeam?html`
-            <div style=${{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',background:'rgba(170,255,0,.07)',borderRadius:8,border:'1px solid rgba(170,255,0,.2)',flexShrink:0}}>
-              <div style=${{width:6,height:6,borderRadius:2,background:'var(--ac)'}}></div>
-              <span style=${{fontSize:11,color:'var(--ac)',fontWeight:600}}>${p.length} projects · ${t.length} tasks</span>
-            </div>`:null}
+          <span style=${{fontSize:10,color:'rgba(170,255,0,.4)',fontFamily:'monospace',background:'rgba(170,255,0,.06)',padding:'2px 8px',borderRadius:4}}>${u.length} members</span>
         </div>`:null}
       <!-- Greeting -->
       <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:13}}>
@@ -5536,8 +5443,95 @@ function NotifsView({notifs,reload,onNavigate}){
 }
 
 /* ─── TeamView ────────────────────────────────────────────────────────────── */
+/* ─── MemberRow (used inside TeamView members table) ───────────────────── */
+function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
+  const [showPw,setShowPw]=useState(false);
+  const [editPw,setEditPw]=useState(false);
+  const [newPw,setNewPw]=useState('');
+  const [saving,setSaving]=useState(false);
+  const resetPw=async()=>{
+    if(!newPw.trim())return;
+    setSaving(true);
+    await api.put('/api/users/'+u.id,{password:newPw.trim()});
+    setSaving(false);setEditPw(false);setNewPw('');
+    // reload to get fresh plain_password
+    reload&&reload();
+  };
+  return html`
+    <tr style=${{borderBottom:i<total-1?'1px solid var(--bd)':'none'}}>
+      <td style=${{padding:'11px 15px'}}>
+        <div style=${{display:'flex',alignItems:'center',gap:10}}>
+          <${Av} u=${u} size=${32}/>
+          <div>
+            <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>
+              ${u.name}
+              ${u.id===cu.id?html`<span style=${{fontSize:9,color:'var(--ac)',background:'rgba(99,102,241,.14)',padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>YOU</span>`:null}
+            </div>
+            <div style=${{fontSize:10,color:ROLE_COLORS[u.role]||'var(--tx3)',marginTop:2}}>${u.role}</div>
+          </div>
+        </div>
+      </td>
+      <td style=${{padding:'11px 15px'}}>
+        <span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${u.email}</span>
+      </td>
+      <!-- Password cell -->
+      <td style=${{padding:'11px 15px',minWidth:180}}>
+        ${editPw?html`
+          <div style=${{display:'flex',gap:5,alignItems:'center'}}>
+            <input class="inp" type="text" placeholder="New password" value=${newPw}
+              style=${{height:28,fontSize:12,flex:1,minWidth:0}}
+              onInput=${e=>setNewPw(e.target.value)}
+              onKeyDown=${e=>{if(e.key==='Enter')resetPw();if(e.key==='Escape'){setEditPw(false);setNewPw('');}}}/>
+            <button class="btn bp" style=${{padding:'4px 9px',fontSize:11,flexShrink:0}} onClick=${resetPw} disabled=${saving||!newPw.trim()}>
+              ${saving?'…':'Save'}
+            </button>
+            <button class="btn bg" style=${{padding:'4px 8px',fontSize:11,flexShrink:0}} onClick=${()=>{setEditPw(false);setNewPw('');}}>✕</button>
+          </div>`:html`
+          <div style=${{display:'flex',alignItems:'center',gap:6}}>
+            ${u.plain_password?html`
+              <span style=${{
+                fontFamily:'monospace',fontSize:12,
+                color:showPw?'var(--tx2)':'transparent',
+                background:showPw?'transparent':'var(--bd)',
+                borderRadius:4,padding:'2px 6px',
+                letterSpacing:showPw?'.5px':'.1px',
+                userSelect:showPw?'text':'none',
+                transition:'all .15s',
+                minWidth:70,display:'inline-block'
+              }}>${showPw?u.plain_password:'••••••••'}</span>
+              <button title=${showPw?'Hide password':'Show password'}
+                style=${{background:'none',border:'none',cursor:'pointer',padding:'2px 4px',color:'var(--tx3)',fontSize:12,transition:'color .1s'}}
+                onClick=${()=>setShowPw(v=>!v)}
+                onMouseEnter=${e=>e.currentTarget.style.color='var(--tx)'}
+                onMouseLeave=${e=>e.currentTarget.style.color='var(--tx3)'}>
+                ${showPw?'🙈':'👁'}
+              </button>`:html`
+              <span style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>not recorded</span>`}
+            <button title="Reset password"
+              style=${{background:'none',border:'none',cursor:'pointer',padding:'2px 5px',color:'var(--tx3)',fontSize:11,borderRadius:5,transition:'all .1s',flexShrink:0}}
+              onClick=${()=>setEditPw(true)}
+              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='var(--ac)';}}
+              onMouseLeave=${e=>{e.currentTarget.style.background='none';e.currentTarget.style.color='var(--tx3)';}}>
+              ✏️ Reset
+            </button>
+          </div>`}
+      </td>
+      <td style=${{padding:'11px 15px'}}>
+        <select class="sel" style=${{width:130,padding:'6px 28px 6px 10px'}} value=${u.role}
+          onChange=${e=>api.put('/api/users/'+u.id,{role:e.target.value}).then(()=>reload&&reload())}
+          disabled=${u.id===cu.id&&cu.role==='Admin'}>
+          ${ROLES.map(r=>html`<option key=${r}>${r}</option>`)}
+        </select>
+      </td>
+      <td style=${{padding:'11px 15px'}}>
+        ${u.id!==cu.id?html`<button class="btn brd" style=${{padding:'5px 11px',fontSize:12}}
+          onClick=${()=>window.confirm('Remove '+u.name+'?')&&api.del('/api/users/'+u.id).then(()=>reload&&reload())}>🗑</button>`:null}
+      </td>
+    </tr>`;
+}
+
 function TeamView({users,cu,reload}){
-  const [tab,setTab]=useState('members');
+  const [tab,setTab]=useState('teams');
   // Members tab state
   const [showNew,setShowNew]=useState(false);const [name,setName]=useState('');const [email,setEmail]=useState('');const [pw,setPw]=useState('');const [role,setRole]=useState('Developer');const [err,setErr]=useState('');
   // Teams tab state
@@ -5575,7 +5569,7 @@ function TeamView({users,cu,reload}){
         <button key=${t} class="btn" onClick=${()=>setTab(t)}
           style=${{padding:'6px 18px',borderRadius:9,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
             background:tab===t?'var(--ac)':'transparent',color:tab===t?'var(--ac-tx)':'var(--tx2)',transition:'all .14s'}}>
-          ${t==='members'?'👥 Members':'🏷 Sub-Teams'}
+          ${t==='members'?'👥 Members':'🏷 Teams'}
         </button>`)}
     </div>
 
@@ -5587,15 +5581,10 @@ function TeamView({users,cu,reload}){
       <div class="card" style=${{padding:0,overflow:'hidden',maxWidth:820}}>
         <table style=${{width:'100%',borderCollapse:'collapse'}}>
           <thead><tr style=${{borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
-            ${['Member','Email','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
+            ${['Member','Email','Password','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
           </tr></thead>
           <tbody>
-            ${safe(users).map((u,i)=>html`<tr key=${u.id} style=${{borderBottom:i<safe(users).length-1?'1px solid var(--bd)':'none'}}>
-              <td style=${{padding:'11px 15px'}}><div style=${{display:'flex',alignItems:'center',gap:10}}><${Av} u=${u} size=${32}/><div><div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>${u.name}${u.id===cu.id?html`<span style=${{fontSize:9,color:'var(--ac)',background:'rgba(99,102,241,.14)',padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>YOU</span>`:null}</div><div style=${{fontSize:10,color:ROLE_COLORS[u.role]||'var(--tx3)',marginTop:2}}>${u.role}</div></div></div></td>
-              <td style=${{padding:'11px 15px'}}><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${u.email}</span></td>
-              <td style=${{padding:'11px 15px'}}><select class="sel" style=${{width:130,padding:'6px 28px 6px 10px'}} value=${u.role} onChange=${e=>api.put('/api/users/'+u.id,{role:e.target.value}).then(reload)} disabled=${u.id===cu.id&&cu.role==='Admin'}>${ROLES.map(r=>html`<option key=${r}>${r}</option>`)}</select></td>
-              <td style=${{padding:'11px 15px'}}>${u.id!==cu.id?html`<button class="btn brd" style=${{padding:'5px 11px',fontSize:12}} onClick=${()=>window.confirm('Remove '+u.name+'?')&&api.del('/api/users/'+u.id).then(reload)}>🗑 Remove</button>`:null}</td>
-            </tr>`)}
+            ${safe(users).map((u,i)=>html`<${MemberRow} key=${u.id} u=${u} cu=${cu} i=${i} total=${safe(users).length} reload=${reload} ROLE_COLORS=${ROLE_COLORS}/>`)}
           </tbody>
         </table>
       </div>`:null}
@@ -5633,9 +5622,12 @@ function TeamView({users,cu,reload}){
               </div>`:null}
               <div style=${{display:'flex',gap:6,flexWrap:'wrap'}}>
                 ${members.map(m=>html`
-                  <div key=${m.id} style=${{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',background:'var(--sf2)',borderRadius:20,border:'1px solid var(--bd)'}}>
+                  <div key=${m.id} style=${{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',background:'var(--sf2)',borderRadius:20,border:'1px solid var(--bd)'}}>
                     <${Av} u=${m} size=${18}/>
-                    <span style=${{fontSize:11,color:'var(--tx2)'}}>${m.name}</span>
+                    <div>
+                      <div style=${{fontSize:11,color:'var(--tx2)',fontWeight:500}}>${m.name}</div>
+                      ${m.plain_password?html`<div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',letterSpacing:.3}}>pw: ${m.plain_password}</div>`:null}
+                    </div>
                   </div>`)}
               </div>
             </div>
@@ -8003,6 +7995,19 @@ function App(){
   },[cu,addToast]);
 
   // ── Team Context ─────────────────────────────────────────────────────────────
+  // Auto-scope developer to their first assigned team on data load
+  const isDevRole=cu&&cu.role!=='Admin'&&cu.role!=='Manager';
+  useEffect(()=>{
+    if(!isDevRole||!cu||safe(data.teams).length===0)return;
+    // If no team context set, find first team where this dev is a member
+    if(!teamCtx){
+      const myTeam=safe(data.teams).find(t=>{
+        try{return JSON.parse(t.member_ids||'[]').includes(cu.id);}catch{return false;}
+      });
+      if(myTeam)setTeamCtx(myTeam.id);
+    }
+  },[cu,isDevRole,data.teams,teamCtx,setTeamCtx]);
+
   // activeTeam: the currently selected team object (or null = all workspace)
   const activeTeam=useMemo(()=>teamCtx?safe(data.teams).find(t=>t.id===teamCtx)||null:null,[teamCtx,data.teams]);
   const teamMemberIds=useMemo(()=>activeTeam?new Set(JSON.parse(activeTeam.member_ids||'[]')):new Set(),[activeTeam]);
@@ -8086,7 +8091,7 @@ function App(){
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}/>`:null}
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
@@ -8099,7 +8104,7 @@ function App(){
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam}/>`:null}
             ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
-            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
+            ${baseView==='timeline'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             </div>
           <//>
