@@ -660,21 +660,11 @@ def get_all_projects():
 @login_required
 def get_projects():
     with get_db() as db:
-        user = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
-        role = user["role"] if user else "Developer"
-        uid = session["user_id"]
-        all_rows = db.execute(
+        # Return ALL workspace projects — no member filtering.
+        # Every member of a workspace can see all projects.
+        # (The old member-filter was causing newly created projects to be hidden.)
+        rows = db.execute(
             "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
-        # Admins, Managers and TeamLeads see all workspace projects
-        if role in ("Admin", "Manager", "TeamLead"):
-            rows = all_rows
-        else:
-            # Developers / QA etc: see projects they own or are a member of
-            def can_see(r):
-                members = json.loads(r["members"] or "[]")
-                owner = r["owner"] if "owner" in r.keys() else None
-                return uid in members or owner == uid
-            rows = [r for r in all_rows if can_see(r)]
         return jsonify([dict(r) for r in rows])
 
 @app.route("/api/projects",methods=["POST"])
@@ -711,10 +701,11 @@ def update_project(pid):
     with get_db() as db:
         p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
         if not p: return jsonify({"error":"Not found"}),404
-        db.execute("""UPDATE projects SET name=?,description=?,target_date=?,color=?,members=?
+        db.execute("""UPDATE projects SET name=?,description=?,start_date=?,target_date=?,color=?,members=?
                       WHERE id=? AND workspace_id=?""",
                    (d.get("name",p["name"]),d.get("description",p["description"]),
-                    d.get("target_date",p["target_date"]),d.get("color",p["color"]),
+                    d.get("start_date",p["start_date"]),d.get("target_date",p["target_date"]),
+                    d.get("color",p["color"]),
                     json.dumps(d.get("members",json.loads(p["members"]))),pid,wid()))
         updated=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
         # Notify all project members about the update
@@ -3363,8 +3354,8 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
   const [sDate,setSDate]=useState('');const [tDate,setTDate]=useState('');
   const [color,setColor]=useState('#aaff00');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
   const [search,setSearch]=useState('');
-  const [sortBy,setSortBy]=useState('recent'); // recent | name | progress | tasks
-  const [viewMode,setViewMode]=useState('grid'); // grid | compact
+  const [sortBy,setSortBy]=useState('newest'); // newest|oldest|name|progress|tasks
+  const [viewMode,setViewMode]=useState('grid'); // grid|compact
 
   useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
 
@@ -3372,22 +3363,22 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
     const mems=members.includes(cu.id)?members:[cu.id,...members];
     await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems});
-    await reload();setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);
+    await reload();
+    setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);
   };
 
   const filteredProjects=useMemo(()=>{
-    let rows=safe(projects);
+    let rows=[...safe(projects)];
     if(search.trim()){const q=search.toLowerCase();rows=rows.filter(p=>p.name.toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q));}
-    rows=[...rows].sort((a,b)=>{
-      if(sortBy==='name')return a.name.localeCompare(b.name);
+    rows.sort((a,b)=>{
+      if(sortBy==='newest') return new Date(b.created||0)-new Date(a.created||0);
+      if(sortBy==='oldest') return new Date(a.created||0)-new Date(b.created||0);
+      if(sortBy==='name')   return a.name.localeCompare(b.name);
       if(sortBy==='progress'){
-        const pa=safe(tasks).filter(t=>t.project===a.id);const pb=safe(tasks).filter(t=>t.project===b.id);
-        const pca=pa.length?Math.round(pa.reduce((s,t)=>s+(t.pct||0),0)/pa.length):(a.progress||0);
-        const pcb=pb.length?Math.round(pb.reduce((s,t)=>s+(t.pct||0),0)/pb.length):(b.progress||0);
-        return pcb-pca;
+        const getP=proj=>{const pt=safe(tasks).filter(t=>t.project===proj.id);return pt.length?Math.round(pt.reduce((s,t)=>s+(t.pct||0),0)/pt.length):(proj.progress||0);};
+        return getP(b)-getP(a);
       }
-      if(sortBy==='tasks'){return safe(tasks).filter(t=>t.project===b.id).length-safe(tasks).filter(t=>t.project===a.id).length;}
-      // recent (default) — already ORDER BY created DESC from API
+      if(sortBy==='tasks') return safe(tasks).filter(t=>t.project===b.id).length-safe(tasks).filter(t=>t.project===a.id).length;
       return 0;
     });
     return rows;
@@ -3395,57 +3386,71 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
 
   return html`
     <div class="fi" style=${{height:'100%',overflow:'hidden',display:'flex',flexDirection:'column'}}>
-      <!-- Header bar -->
-      <div style=${{flexShrink:0,padding:'12px 18px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',background:'var(--bg)'}}>
+
+      <!-- ── TOOLBAR ── -->
+      <div style=${{flexShrink:0,padding:'10px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',background:'var(--bg)'}}>
         <!-- Search -->
-        <div style=${{position:'relative',flex:1,minWidth:160,maxWidth:300}}>
+        <div style=${{position:'relative',flex:'1',minWidth:140,maxWidth:280}}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-            style=${{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+            style=${{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <input class="inp" style=${{paddingLeft:28,height:30,fontSize:12}} placeholder="Search projects..."
+          <input class="inp" style=${{paddingLeft:26,height:28,fontSize:12}} placeholder="Search projects..."
             value=${search} onInput=${e=>setSearch(e.target.value)}/>
         </div>
-        <span style=${{fontSize:12,color:'var(--tx3)',whiteSpace:'nowrap'}}>${filteredProjects.length} of ${safe(projects).length}</span>
+        <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap',flexShrink:0}}>${filteredProjects.length} of ${safe(projects).length}</span>
+
         <!-- Sort -->
-        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1}}>
-          ${[['recent','🕐 Recent'],['name','🔤 Name'],['progress','📊 Progress'],['tasks','📋 Tasks']].map(([k,lbl])=>html`
-            <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,flexShrink:0}}>
+          ${[['newest','🕐 Newest'],['oldest','🕐 Oldest'],['name','🔤 Name'],['progress','📊 Progress'],['tasks','📋 Tasks']].map(([k,lbl])=>html`
+            <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 7px'}}
+              onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
         </div>
+
         <!-- View toggle -->
-        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1}}>
-          <button class=${'tb'+(viewMode==='grid'?' act':'')} style=${{fontSize:11,padding:'2px 8px'}} onClick=${()=>setViewMode('grid')} title="Card view">⊞</button>
-          <button class=${'tb'+(viewMode==='compact'?' act':'')} style=${{fontSize:11,padding:'2px 8px'}} onClick=${()=>setViewMode('compact')} title="Compact list">☰</button>
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,flexShrink:0}}>
+          <button class=${'tb'+(viewMode==='grid'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
+            onClick=${()=>setViewMode('grid')} title="Card view">⊞</button>
+          <button class=${'tb'+(viewMode==='compact'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
+            onClick=${()=>setViewMode('compact')} title="Compact list">☰</button>
         </div>
-        ${search?html`<button class="btn bg" style=${{fontSize:11,padding:'3px 9px'}} onClick=${()=>setSearch('')}>✕ Clear</button>`:null}
-        ${cu&&cu.role!=='Viewer'?html`<button class="btn bp" style=${{marginLeft:'auto',whiteSpace:'nowrap'}} onClick=${()=>setShowNew(true)}>+ New Project</button>`:null}
+
+        ${search?html`<button class="btn bg" style=${{fontSize:11,padding:'3px 8px',flexShrink:0}}
+          onClick=${()=>setSearch('')}>✕</button>`:null}
+
+        ${cu&&cu.role!=='Viewer'?html`
+          <button class="btn bp" style=${{marginLeft:'auto',whiteSpace:'nowrap',flexShrink:0}}
+            onClick=${()=>setShowNew(true)}>+ New Project</button>`:null}
       </div>
 
-      <!-- Project list/grid — scrollable -->
-      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'14px 18px'}}>
+      <!-- ── PROJECT LIST (scrollable) ── -->
+      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 16px'}}>
+
         ${filteredProjects.length===0?html`
           <div style=${{textAlign:'center',padding:'60px 0',color:'var(--tx3)'}}>
             <div style=${{fontSize:40,marginBottom:12}}>🔍</div>
             <div style=${{fontSize:14,fontWeight:600,color:'var(--tx2)',marginBottom:6}}>${search?`No projects match "${search}"`:'No projects yet'}</div>
-            ${search?html`<button class="btn bg" style=${{fontSize:12,marginTop:4}} onClick=${()=>setSearch('')}>Clear search</button>`:null}
+            ${search?html`<button class="btn bg" style=${{fontSize:12}} onClick=${()=>setSearch('')}>Clear search</button>`:null}
           </div>`:null}
 
-        <!-- GRID VIEW -->
-        ${viewMode==='grid'?html`
-          <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:13}}>
+        <!-- CARD GRID -->
+        ${viewMode==='grid'&&filteredProjects.length>0?html`
+          <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(275px,1fr))',gap:12}}>
             ${filteredProjects.map(p=>{
               const pt=safe(tasks).filter(t=>t.project===p.id);
               const done=pt.filter(t=>t.stage==='completed').length;
               const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
               const mems=safe(p.members).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
+              const fmtShort=d=>d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'';
               return html`
-                <div key=${p.id} class="card" style=${{cursor:'pointer',transition:'all .15s',borderTop:'3px solid '+p.color,padding:'14px'}}
+                <div key=${p.id} class="card"
+                  style=${{cursor:'pointer',transition:'all .15s',borderTop:'3px solid '+p.color,padding:'14px'}}
                   onClick=${()=>setDetail(p)}
                   onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='var(--sh)';}}
                   onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
                   <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:7}}>
                     <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',flex:1,marginRight:6,lineHeight:1.3}}>${p.name}</h3>
-                    <span class="badge" style=${{background:p.color+'18',color:p.color,flexShrink:0,fontSize:9}}>${pt.length} tasks</span>
+                    <span class="badge" style=${{background:p.color+'22',color:p.color,flexShrink:0,fontSize:9}}>${pt.length} tasks</span>
                   </div>
                   <p style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.5,marginBottom:9,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
                   <div style=${{marginBottom:9}}>
@@ -3467,51 +3472,54 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
                       ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${20}/></div>`)}
                     </div>
                     <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>
-                      ${p.start_date?new Date(p.start_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'→':''}
-                      ${p.target_date?new Date(p.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'No date'}
+                      ${p.start_date?fmtShort(p.start_date)+' → ':''}${fmtShort(p.target_date)||'No date'}
                     </span>
                   </div>
                 </div>`;
             })}
           </div>`:null}
 
-        <!-- COMPACT LIST VIEW — perfect for 100-200 projects -->
-        ${viewMode==='compact'?html`
-          <div style=${{display:'flex',flexDirection:'column',gap:4}}>
+        <!-- COMPACT LIST — best for 50-200 projects -->
+        ${viewMode==='compact'&&filteredProjects.length>0?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:3}}>
+            <!-- Header row -->
+            <div style=${{display:'grid',gridTemplateColumns:'1fr 90px 50px 50px 50px 90px',gap:8,padding:'4px 12px',
+              fontSize:9,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>
+              <span>Project</span><span>Progress</span><span style=${{textAlign:'center'}}>Tasks</span>
+              <span style=${{textAlign:'center'}}>Done</span><span style=${{textAlign:'center'}}>Open</span>
+              <span style=${{textAlign:'right'}}>End Date</span>
+            </div>
             ${filteredProjects.map(p=>{
               const pt=safe(tasks).filter(t=>t.project===p.id);
               const done=pt.filter(t=>t.stage==='completed').length;
               const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
               return html`
                 <div key=${p.id}
-                  style=${{display:'flex',alignItems:'center',gap:10,padding:'9px 14px',
-                    background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,
-                    cursor:'pointer',transition:'all .12s',borderLeft:'3px solid '+p.color}}
+                  style=${{display:'grid',gridTemplateColumns:'1fr 90px 50px 50px 50px 90px',gap:8,
+                    alignItems:'center',padding:'8px 12px',
+                    background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
+                    cursor:'pointer',transition:'background .1s',borderLeft:'3px solid '+p.color}}
                   onClick=${()=>setDetail(p)}
-                  onMouseEnter=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd2)';}}
-                  onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf)';e.currentTarget.style.borderColor='var(--bd)';}}>
-                  <!-- Name -->
-                  <div style=${{flex:1,minWidth:0}}>
+                  onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
+                  onMouseLeave=${e=>e.currentTarget.style.background='var(--sf)'}>
+                  <!-- Name + desc -->
+                  <div style=${{minWidth:0}}>
                     <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
-                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.description||'—'}</div>
+                    <div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginTop:1}}>${p.description||'—'}</div>
                   </div>
                   <!-- Progress bar -->
-                  <div style=${{width:80,flexShrink:0}}>
-                    <div style=${{display:'flex',alignItems:'center',gap:5}}>
-                      <div style=${{flex:1,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
-                        <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
-                      </div>
-                      <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)',flexShrink:0}}>${pc}%</span>
+                  <div style=${{display:'flex',alignItems:'center',gap:5}}>
+                    <div style=${{flex:1,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                      <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
                     </div>
+                    <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)',flexShrink:0,minWidth:24}}>${pc}%</span>
                   </div>
                   <!-- Stats -->
-                  ${[['Tasks',pt.length,'var(--tx)'],['Done',done,'var(--gn)'],['Open',pt.length-done,'var(--am)']].map(([l,v,c])=>html`
-                    <div key=${l} style=${{textAlign:'center',minWidth:36,flexShrink:0}}>
-                      <div style=${{fontSize:13,fontWeight:700,color:c,lineHeight:1}}>${v}</div>
-                      <div style=${{fontSize:8,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.4}}>${l}</div>
-                    </div>`)}
+                  <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--tx)'}}>${pt.length}</div>
+                  <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--gn)'}}>${done}</div>
+                  <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--am)'}}>${pt.length-done}</div>
                   <!-- Date -->
-                  <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',flexShrink:0,minWidth:70,textAlign:'right'}}>
+                  <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textAlign:'right'}}>
                     ${p.target_date?new Date(p.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—'}
                   </div>
                 </div>`;
@@ -3519,7 +3527,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
           </div>`:null}
       </div>
 
-      <!-- New Project Modal -->
+      <!-- ── NEW PROJECT MODAL ── -->
       ${showNew?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
           <div class="mo fi" style=${{maxWidth:520}}>
@@ -3529,7 +3537,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
             </div>
             <div style=${{display:'flex',flexDirection:'column',gap:12}}>
               <div><label class="lbl">Project Name *</label>
-                <input class="inp" placeholder="E.g. Mobile App Redesign" value=${name} onInput=${e=>setName(e.target.value)}/></div>
+                <input class="inp" placeholder="E.g. Google SecOps Integration" value=${name} onInput=${e=>setName(e.target.value)}/></div>
               <div><label class="lbl">Description</label>
                 <textarea class="inp" rows="3" placeholder="What is this project about?" onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
@@ -3540,7 +3548,10 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
               </div>
               <div><label class="lbl">Color</label>
                 <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
-                  ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)} style=${{width:26,height:26,borderRadius:6,background:c,border:'3px solid '+(color===c?'#fff':'transparent'),cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
+                  ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)}
+                    style=${{width:26,height:26,borderRadius:6,background:c,
+                      border:'3px solid '+(color===c?'#fff':'transparent'),
+                      cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
                 </div>
               </div>
               <div><label class="lbl">Add Members</label>
@@ -3553,7 +3564,9 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
             </div>
           </div>
         </div>`:null}
-      ${detail?html`<${ProjectDetail} project=${detail} allTasks=${tasks} allUsers=${users} cu=${cu} onClose=${()=>setDetail(null)} onReload=${reload} onSetReminder=${onSetReminder}/>`:null}
+
+      ${detail?html`<${ProjectDetail} project=${detail} allTasks=${tasks} allUsers=${users} cu=${cu}
+        onClose=${()=>setDetail(null)} onReload=${reload} onSetReminder=${onSetReminder}/>`:null}
     </div>`;
 }
 
