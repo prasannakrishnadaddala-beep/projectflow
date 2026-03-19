@@ -363,11 +363,6 @@ def init_db():
         # Add team_id to tasks if not exists (migration)
         try: db.execute("ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''")
         except: pass
-        # Add color + description to teams
-        try: db.execute("ALTER TABLE teams ADD COLUMN color TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE teams ADD COLUMN description TEXT DEFAULT ''")
-        except: pass
         # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
         except: pass
@@ -688,31 +683,13 @@ def get_projects():
     team_id = request.args.get("team_id","")
     with get_db() as db:
         if team_id:
-            # Get the team's member list
-            team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",
-                              (team_id, wid())).fetchone()
-            member_ids = json.loads(team["member_ids"] if team else "[]")
-            mem_set = set(member_ids)
-            # Fetch all projects then filter: team_id match OR any project member is in team
-            all_projects = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",
-                (wid(),)).fetchall()
-            rows = []
-            for p in all_projects:
-                # Match 1: project is explicitly assigned to this team
-                if p["team_id"] and p["team_id"] == team_id:
-                    rows.append(p); continue
-                # Match 2: at least one project member belongs to the team
-                try:
-                    proj_members = json.loads(p["members"] or "[]")
-                except:
-                    proj_members = []
-                if any(mid in mem_set for mid in proj_members):
-                    rows.append(p)
+            # Return projects directly assigned to this team
+            rows = db.execute(
+                "SELECT * FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC",
+                (wid(), team_id)).fetchall()
         else:
             rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC",
-                (wid(),)).fetchall()
+                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
         return jsonify([dict(r) for r in rows])
 
 @app.route("/api/projects",methods=["POST"])
@@ -1221,9 +1198,8 @@ def create_team():
     if not d.get("name"): return jsonify({"error":"name required"}),400
     tid=f"tm{int(datetime.now().timestamp()*1000)}"
     with get_db() as db:
-        db.execute("INSERT INTO teams (id,workspace_id,name,lead_id,member_ids,created,color,description) VALUES (?,?,?,?,?,?,?,?)",
-                   (tid,wid(),d["name"],d.get("lead_id",""),json.dumps(d.get("member_ids",[])),ts(),
-                    d.get("color",""),d.get("description","")))
+        db.execute("INSERT INTO teams VALUES (?,?,?,?,?,?)",
+                   (tid,wid(),d["name"],d.get("lead_id",""),json.dumps(d.get("member_ids",[])),ts()))
         return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=?",(tid,)).fetchone()))
 
 @app.route("/api/teams/<tid>", methods=["PUT"])
@@ -1233,12 +1209,9 @@ def update_team(tid):
     with get_db() as db:
         t=db.execute("SELECT * FROM teams WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not t: return jsonify({"error":"not found"}),404
-        cur_color=t["color"] if "color" in t.keys() else ""
-        cur_desc=t["description"] if "description" in t.keys() else ""
-        db.execute("UPDATE teams SET name=?,lead_id=?,member_ids=?,color=?,description=? WHERE id=?",
+        db.execute("UPDATE teams SET name=?,lead_id=?,member_ids=? WHERE id=?",
                    (d.get("name",t["name"]),d.get("lead_id",t["lead_id"]),
-                    json.dumps(d.get("member_ids",json.loads(t["member_ids"] or "[]"))),
-                    d.get("color",cur_color),d.get("description",cur_desc),tid))
+                    json.dumps(d.get("member_ids",json.loads(t["member_ids"] or "[]"))),tid))
         return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=?",(tid,)).fetchone()))
 
 @app.route("/api/teams/<tid>", methods=["DELETE"])
@@ -2384,25 +2357,21 @@ window._pfPushUnsubscribe = async function(){
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script>
-// Load JS libs sequentially so React is ready before ReactDOM, ReactDOM before Recharts/htm
+// Load JS libs: try local cache first, fall back to CDN
 (function(){
   var libs=[
-    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js',
-    'https://unpkg.com/htm@3.1.1/dist/htm.js',
+    ['/js/react.min.js','https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js'],
+    ['/js/react-dom.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js'],
+    ['/js/prop-types.min.js','https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js'],
+    ['/js/recharts.min.js','https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js'],
+    ['/js/htm.min.js','https://unpkg.com/htm@3.1.1/dist/htm.js'],
   ];
-  function loadNext(i){
-    if(i>=libs.length) return;
+  libs.forEach(function(lib){
     var s=document.createElement('script');
-    s.src=libs[i];
+    s.src=lib[1]; // go straight to CDN — fastest on Railway
     s.crossOrigin='anonymous';
-    s.onload=function(){ loadNext(i+1); };
-    s.onerror=function(){ loadNext(i+1); }; // keep going even if one fails
     document.head.appendChild(s);
-  }
-  loadNext(0);
+  });
 })();
 </script>
 <style>
@@ -3091,154 +3060,6 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-/* ─── TeamsLandingPage ──────────────────────────────────────────────────── */
-function TeamsLandingPage({cu,teams,projects,tasks,users,setTeamCtx,onLogout,dark,setDark,wsName,dataReady}){
-  const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
-  const myTeams=useMemo(()=>{
-    if(isAdminManager)return safe(teams);
-    return safe(teams).filter(t=>{try{return JSON.parse(t.member_ids||'[]').includes(cu.id);}catch{return false;}});
-  },[teams,cu,isAdminManager]);
-  const teamStats=useMemo(()=>{
-    const stats={};
-    myTeams.forEach(t=>{
-      const tProjects=safe(projects).filter(p=>String(p.team_id)===String(t.id));
-      const projIds=new Set(tProjects.map(p=>p.id));
-      const tTasks=safe(tasks).filter(tk=>projIds.has(tk.project));
-      let memberIds=[];try{memberIds=JSON.parse(t.member_ids||'[]');}catch{}
-      stats[t.id]={projects:tProjects.length,members:memberIds.length,activeTasks:tTasks.filter(tk=>tk.stage!=='completed').length};
-    });
-    return stats;
-  },[myTeams,projects,tasks]);
-  const themeIcon=dark
-    ?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-    :html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-  return html`
-    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',flexDirection:'column'}}>
-      <!-- Top bar -->
-      <div style=${{padding:'14px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--bd)',background:'var(--sf)',flexShrink:0}}>
-        <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <div style=${{width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <svg width="18" height="18" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
-          </div>
-          <div>
-            <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)'}}>${wsName||'ProjectFlow'}</div>
-            <div style=${{fontSize:11,color:'var(--tx3)'}}>Select your team workspace</div>
-          </div>
-        </div>
-        <div style=${{display:'flex',alignItems:'center',gap:8}}>
-          <button class="btn bg" style=${{padding:'7px 9px'}} title=${dark?'Light mode':'Dark mode'} onClick=${()=>setDark&&setDark(d=>!d)}>${themeIcon}</button>
-          <div style=${{display:'flex',alignItems:'center',gap:8,padding:'6px 12px',borderRadius:10,background:'var(--sf2)',border:'1px solid var(--bd)'}}>
-            <${Av} u=${cu} size=${24}/>
-            <div>
-              <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)'}}>${cu.name}</div>
-              <div style=${{fontSize:10,color:'var(--tx3)',background:'rgba(170,255,0,.1)',borderRadius:4,padding:'0 5px',display:'inline-block',marginTop:1}}>${cu.role}</div>
-            </div>
-          </div>
-          <button class="btn bg" style=${{fontSize:12,padding:'7px 12px'}} onClick=${onLogout}>Sign out</button>
-        </div>
-      </div>
-
-      <!-- Page body -->
-      <div style=${{flex:1,padding:'36px 32px',maxWidth:1120,width:'100%',margin:'0 auto',boxSizing:'border-box'}}>
-        <div style=${{marginBottom:28}}>
-          <h1 style=${{fontSize:24,fontWeight:900,color:'var(--tx)',marginBottom:6,display:'flex',alignItems:'center',gap:10}}>
-            <span style=${{fontSize:26}}>👥</span>
-            ${isAdminManager?'All Team Workspaces':'Your Teams'}
-          </h1>
-          <p style=${{fontSize:13,color:'var(--tx3)',maxWidth:520}}>
-            ${isAdminManager
-              ?'Click any team card to enter its workspace. All projects, tasks and analytics are team-scoped inside.'
-              :'Click your team card to open your workspace. Everything inside is scoped to your team.'}
-          </p>
-        </div>
-
-        ${!dataReady?html`
-          <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))',gap:18}}>
-            ${[1,2,3].map(i=>html`
-              <div key=${i} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'22px',height:180,animation:'pulse 1.5s ease-in-out infinite',opacity:.6}}>
-                <div style=${{height:18,width:'60%',background:'var(--bd)',borderRadius:6,marginBottom:12}}></div>
-                <div style=${{height:12,width:'40%',background:'var(--bd)',borderRadius:5,marginBottom:20}}></div>
-                <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
-                  ${[1,2,3].map(j=>html`<div key=${j} style=${{height:52,background:'var(--bd)',borderRadius:9}}></div>`)}
-                </div>
-              </div>`)}
-          </div>`:null}
-        ${dataReady&&myTeams.length===0?html`
-          <div style=${{textAlign:'center',padding:'60px 24px',color:'var(--tx3)',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd)'}}>
-            <div style=${{fontSize:38,marginBottom:12}}>🏗️</div>
-            <div style=${{fontSize:15,fontWeight:700,color:'var(--tx)',marginBottom:8}}>${isAdminManager?'No teams created yet':'You\'re not assigned to any team'}</div>
-            <div style=${{fontSize:13}}>${isAdminManager?'Go to Team Management to create your first team.':'Ask your Admin to add you to a team.'}</div>
-          </div>`:null}
-
-        <!-- Team cards grid -->
-        <div style=${{display:dataReady?'grid':'none',gridTemplateColumns:'repeat(auto-fill,minmax(290px,1fr))',gap:18}}>
-          ${myTeams.map(team=>{
-            const s=teamStats[team.id]||{projects:0,members:0,activeTasks:0};
-            const col=team.color||'#7c3aed';
-            let memberIds=[];try{memberIds=JSON.parse(team.member_ids||'[]');}catch{}
-            const memberUsers=memberIds.slice(0,5).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
-            return html`
-              <div key=${team.id}
-                onClick=${()=>setTeamCtx(team.id)}
-                style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'20px 22px',cursor:'pointer',transition:'all .18s',position:'relative',overflow:'hidden',display:'flex',flexDirection:'column',gap:0}}
-                onMouseEnter=${e=>{e.currentTarget.style.borderColor=col;e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 8px 28px rgba(0,0,0,.25)';}}
-                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='none';}}>
-                <!-- Color accent top bar -->
-                <div style=${{position:'absolute',top:0,left:0,right:0,height:4,background:col,borderRadius:'16px 16px 0 0'}}></div>
-                <!-- Header -->
-                <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginTop:10,marginBottom:14}}>
-                  <div style=${{flex:1,minWidth:0}}>
-                    <div style=${{fontSize:17,fontWeight:800,color:'var(--tx)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
-                    ${team.description?html`<div style=${{fontSize:11,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.description}</div>`:
-                    html`<div style=${{fontSize:11,color:'var(--tx3)'}}>${s.members} member${s.members!==1?'s':''} · ${cu.role==='Developer'?'Your team':'Team workspace'}</div>`}
-                  </div>
-                  <div style=${{width:38,height:38,borderRadius:10,background:col+'22',border:'1.5px solid '+col+'55',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:10}}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${col}" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
-                  </div>
-                </div>
-                <!-- Stats row -->
-                <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
-                  ${[
-                    {label:'Projects',val:s.projects,icon:'◈',c:'var(--cy)'},
-                    {label:'Active Tasks',val:s.activeTasks,icon:'☑',c:'var(--gn)'},
-                    {label:'Members',val:s.members,icon:'👤',c:'var(--ac)'},
-                  ].map(st=>html`
-                    <div key=${st.label} style=${{background:'var(--sf2)',borderRadius:9,padding:'9px 10px',textAlign:'center'}}>
-                      <div style=${{fontSize:18,fontWeight:900,color:st.c,lineHeight:1}}>${st.val}</div>
-                      <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:600,textTransform:'uppercase',letterSpacing:.5,marginTop:2}}>${st.label}</div>
-                    </div>`)}
-                </div>
-                <!-- Members + Enter -->
-                <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:'auto'}}>
-                  <div style=${{display:'flex',alignItems:'center'}}>
-                    ${memberUsers.map((u,i)=>html`
-                      <div key=${u.id} title=${u.name} style=${{marginLeft:i>0?-7:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i,flexShrink:0}}>
-                        <${Av} u=${u} size=${27}/>
-                      </div>`)}
-                    ${s.members>5?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:8,fontWeight:600}}>+${s.members-5}</span>`:null}
-                  </div>
-                  <div style=${{fontSize:12,fontWeight:700,color:col,display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
-                    Open workspace
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                  </div>
-                </div>
-              </div>`;
-          })}
-
-          <!-- Create team card (Admin/Manager only) -->
-          ${isAdminManager?html`
-            <div style=${{background:'transparent',border:'2px dashed var(--bd)',borderRadius:16,padding:'20px 22px',cursor:'pointer',transition:'all .18s',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,minHeight:180,color:'var(--tx3)'}}
-              onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='rgba(170,255,0,.04)';}}
-              onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx3)';e.currentTarget.style.background='transparent';}}
-              onClick=${()=>{/* could open team management */ window._pfToast&&window._pfToast('info','Create a team','Go to Team Management → create a new team');}}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-              <div style=${{fontSize:13,fontWeight:600}}>Create New Team</div>
-            </div>`:null}
-        </div>
-      </div>
-    </div>`;
-}
-
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam}){
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
   const inCall=callState&&callState.status==='in-call';
@@ -3400,14 +3221,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
             Switch Team
           </button>
-          <!-- Back to Teams landing -->
-          <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
-            style=${{width:'100%',padding:'6px 10px',borderRadius:8,border:'none',background:'transparent',color:'rgba(255,255,255,.28)',fontSize:10,cursor:'pointer',display:'flex',alignItems:'center',gap:6,transition:'all .12s',marginTop:3}}
-            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.6)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.28)';}}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-            All Teams
-          </button>
         </div>
       </div>`:null}
 
@@ -3420,108 +3233,6 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         onSetView=${v=>{setView(v);setShowTeamPanel(false);setSelectedTeam(null);}}
       />`:null}
 
-    </div>`;
-}
-
-/* ─── TeamDropdown ────────────────────────────────────────────────────────── */
-function TeamDropdown({teams,activeTeam,setTeamCtx}){
-  const [open,setOpen]=useState(false);
-  const ref=useRef(null);
-  useEffect(()=>{
-    if(!open)return;
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
-    document.addEventListener('mousedown',h);
-    return()=>document.removeEventListener('mousedown',h);
-  },[open]);
-
-  const select=(id)=>{setTeamCtx&&setTeamCtx(id);setOpen(false);};
-
-  return html`
-    <div ref=${ref} style=${{position:'relative',flexShrink:0}}>
-      <!-- Trigger button -->
-      <button onClick=${()=>setOpen(v=>!v)}
-        style=${{display:'flex',alignItems:'center',gap:7,padding:'5px 10px 5px 12px',
-          background:activeTeam?'rgba(170,255,0,.10)':open?'rgba(255,255,255,.08)':'rgba(255,255,255,.04)',
-          borderRadius:100,border:'1px solid '+(activeTeam?'rgba(170,255,0,.3)':open?'rgba(255,255,255,.2)':'rgba(255,255,255,.08)'),
-          cursor:'pointer',transition:'all .15s',color:'inherit',fontFamily:'inherit'}}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-          stroke=${activeTeam?'#aaff00':'rgba(255,255,255,.4)'} strokeWidth="2.5" strokeLinecap="round">
-          <circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/>
-          <path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/>
-        </svg>
-        <span style=${{fontSize:11,fontWeight:activeTeam?700:400,
-          color:activeTeam?'var(--ac)':'rgba(255,255,255,.4)',
-          letterSpacing:'.2px',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-          ${activeTeam?activeTeam.name:'Select Team'}
-        </span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-          stroke=${activeTeam?'rgba(170,255,0,.5)':'rgba(255,255,255,.25)'} strokeWidth="2.5" strokeLinecap="round">
-          <polyline points=${open?'18 15 12 9 6 15':'6 9 12 15 18 9'}/>
-        </svg>
-      </button>
-
-      <!-- Dropdown menu -->
-      ${open?html`
-        <div style=${{position:'absolute',top:'calc(100% + 8px)',left:0,zIndex:9000,
-          background:'var(--sf)',borderRadius:14,border:'1px solid var(--bd)',
-          boxShadow:'0 8px 32px rgba(0,0,0,.6)',minWidth:200,overflow:'hidden',
-          animation:'pageEnter .15s ease'}}>
-          <!-- Header -->
-          <div style=${{padding:'10px 14px 8px',borderBottom:'1px solid var(--bd)'}}>
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:1}}>Switch Team</div>
-          </div>
-          <!-- All workspace option -->
-          <button onClick=${()=>select('')}
-            style=${{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'9px 14px',
-              background:!activeTeam?'var(--ac3)':'transparent',border:'none',cursor:'pointer',
-              color:!activeTeam?'var(--ac)':'var(--tx2)',fontSize:12,fontWeight:!activeTeam?700:400,
-              textAlign:'left',transition:'all .1s',fontFamily:'inherit',
-              borderLeft:!activeTeam?'2px solid var(--ac)':'2px solid transparent'}}
-            onMouseEnter=${e=>{if(activeTeam){e.currentTarget.style.background='var(--sf2)';}}}
-            onMouseLeave=${e=>{if(activeTeam){e.currentTarget.style.background='transparent';}}}>
-            <div style=${{width:24,height:24,borderRadius:6,background:!activeTeam?'var(--ac3)':'var(--sf2)',
-              display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                stroke=${!activeTeam?'var(--ac)':'var(--tx3)'} strokeWidth="2" strokeLinecap="round">
-                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-            </div>
-            <div>
-              <div style=${{fontSize:12,fontWeight:!activeTeam?700:500}}>All Workspace</div>
-              <div style=${{fontSize:10,color:'var(--tx3)',marginTop:1}}>Show all teams' data</div>
-            </div>
-            ${!activeTeam?html`<div style=${{marginLeft:'auto',width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
-          </button>
-          <!-- Team options -->
-          <div style=${{borderTop:'1px solid var(--bd)',padding:'4px 0'}}>
-            ${safe(teams).map(t=>{
-              const isActive=activeTeam&&activeTeam.id===t.id;
-              const memberCount=JSON.parse(t.member_ids||'[]').length;
-              return html`
-                <button key=${t.id} onClick=${()=>select(t.id)}
-                  style=${{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'9px 14px',
-                    background:isActive?'var(--ac3)':'transparent',border:'none',cursor:'pointer',
-                    color:isActive?'var(--ac)':'var(--tx2)',fontSize:12,fontWeight:isActive?700:400,
-                    textAlign:'left',transition:'all .1s',fontFamily:'inherit',
-                    borderLeft:isActive?'2px solid var(--ac)':'2px solid transparent'}}
-                  onMouseEnter=${e=>{if(!isActive){e.currentTarget.style.background='var(--sf2)';}}}
-                  onMouseLeave=${e=>{if(!isActive){e.currentTarget.style.background='transparent';}}}>
-                  <div style=${{width:24,height:24,borderRadius:6,
-                    background:isActive?'var(--ac3)':'rgba(255,255,255,.06)',
-                    display:'flex',alignItems:'center',justifyContent:'center',
-                    fontSize:10,fontWeight:700,color:isActive?'var(--ac)':'var(--tx3)',flexShrink:0}}>
-                    ${t.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div style=${{flex:1,minWidth:0}}>
-                    <div style=${{fontSize:12,fontWeight:isActive?700:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${t.name}</div>
-                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:1}}>${memberCount} member${memberCount!==1?'s':''}</div>
-                  </div>
-                  ${isActive?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>`:null}
-                </button>`;
-            })}
-          </div>
-        </div>`:null}
     </div>`;
 }
 
@@ -3560,8 +3271,17 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
-        <!-- Team context dropdown selector -->
-        ${safe(teams).length>0?html`<${TeamDropdown} teams=${teams} activeTeam=${activeTeam} setTeamCtx=${setTeamCtx}/>`:null}
+        <!-- Team context pill -->
+        ${safe(teams).length>0?html`
+          <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'5px 10px 5px 12px',background:activeTeam?'rgba(170,255,0,.10)':'rgba(255,255,255,.04)',borderRadius:100,border:'1px solid '+(activeTeam?'rgba(170,255,0,.3)':'rgba(255,255,255,.08)'),cursor:'pointer',transition:'all .15s'}}
+            onClick=${()=>{}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke=${activeTeam?'#aaff00':'rgba(255,255,255,.35)'} strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
+            ${activeTeam?html`
+              <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.2px',maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</span>
+              <button onClick=${e=>{e.stopPropagation();setTeamCtx&&setTeamCtx('');}}
+                style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(170,255,0,.6)',fontSize:14,lineHeight:1,padding:'0 2px',flexShrink:0}} title="Clear team filter">×</button>`:html`
+              <span style=${{fontSize:11,color:'rgba(255,255,255,.35)',letterSpacing:'.2px'}}>All Teams</span>`}
+          </div>`:null}
         <!-- Schedule timeline -->
         <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none'}}>
           <div style=${{height:40,background:'#111111',borderRadius:100,display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden',border:'1px solid rgba(255,255,255,.05)'}}>
@@ -4763,18 +4483,15 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam}){
     {name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)',priKey:'low'}
   ];
   const stats=[
-    {label:'Total Projects',val:p.length,color:'var(--ac)',bg:'var(--ac3)',
-      icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
-    {label:'Active Tasks',val:active,color:'var(--cy)',bg:'rgba(34,211,238,.08)',
-      icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
-    {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(62,207,110,.08)',
-      icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks'},
-    {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(255,68,68,.08)',
-      icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks'},
-    {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(245,158,11,.08)',
-      icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks'},
-    {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(167,139,250,.08)',
-      icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:'team'},
+    {label:'Total Projects',val:p.length,color:'var(--ac)',bg:'var(--ac3)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
+    {label:'Active Tasks',val:active,color:'var(--cy)',bg:'rgba(34,211,238,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
+    {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(62,207,110,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks'},
+    {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(255,68,68,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks'},
+    {label:'My Tasks',val:myT.length,color:'var(--am)',bg:'rgba(245,158,11,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks'},
+    {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(167,139,250,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:'team'},
+    {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(34,211,238,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets'},
+    {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(245,158,11,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:'tickets'},
+    {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(251,146,60,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets'},
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
@@ -5764,7 +5481,6 @@ function TeamView({users,cu,reload}){
   const [teams,setTeams]=useState([]);const [showNewTeam,setShowNewTeam]=useState(false);
   const [editTeam,setEditTeam]=useState(null);
   const [tName,setTName]=useState('');const [tLead,setTLead]=useState('');const [tMembers,setTMembers]=useState([]);
-  const [tColor,setTColor]=useState('#7c3aed');const [tDesc,setTDesc]=useState('');
   const [savingTeam,setSavingTeam]=useState(false);
 
   const loadTeams=useCallback(async()=>{const d=await api.get('/api/teams');setTeams(Array.isArray(d)?d:[]);},[]);
@@ -5772,13 +5488,12 @@ function TeamView({users,cu,reload}){
 
   const add=async()=>{if(!name||!email||!pw){setErr('All fields required.');return;}setErr('');const r=await api.post('/api/users',{name,email,password:pw,role});if(r.error)setErr(r.error);else{await reload();setShowNew(false);setName('');setEmail('');setPw('');}};
 
-  const TEAM_COLORS=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#aaff00','#f97316','#8b5cf6'];
-  const openNewTeam=()=>{setEditTeam(null);setTName('');setTLead('');setTMembers([]);setTColor('#7c3aed');setTDesc('');setShowNewTeam(true);};
-  const openEditTeam=t=>{setEditTeam(t);setTName(t.name);setTLead(t.lead_id||'');setTMembers(JSON.parse(t.member_ids||'[]'));setTColor(t.color||'#7c3aed');setTDesc(t.description||'');setShowNewTeam(true);};
+  const openNewTeam=()=>{setEditTeam(null);setTName('');setTLead('');setTMembers([]);setShowNewTeam(true);};
+  const openEditTeam=t=>{setEditTeam(t);setTName(t.name);setTLead(t.lead_id||'');setTMembers(JSON.parse(t.member_ids||'[]'));setShowNewTeam(true);};
   const saveTeam=async()=>{
     if(!tName.trim())return;
     setSavingTeam(true);
-    const payload={name:tName,lead_id:tLead,member_ids:tMembers,color:tColor,description:tDesc};
+    const payload={name:tName,lead_id:tLead,member_ids:tMembers};
     if(editTeam)await api.put('/api/teams/'+editTeam.id,payload);
     else await api.post('/api/teams',payload);
     setSavingTeam(false);setShowNewTeam(false);setEditTeam(null);
@@ -5841,15 +5556,13 @@ function TeamView({users,cu,reload}){
           const members=JSON.parse(t.member_ids||'[]').map(id=>umap[id]).filter(Boolean);
           const lead=t.lead_id?umap[t.lead_id]:null;
           return html`
-          <div key=${t.id} class="card" style=${{display:'flex',gap:14,alignItems:'flex-start',paddingLeft:0,overflow:'hidden'}}>
-            <div style=${{width:5,background:t.color||'var(--ac)',alignSelf:'stretch',borderRadius:'12px 0 0 12px',flexShrink:0,minHeight:60}}></div>
-            <div style=${{width:44,height:44,borderRadius:12,background:(t.color||'var(--ac)')+'22',border:'1.5px solid '+(t.color||'var(--ac)')+'55',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0,marginLeft:10,marginTop:16}}>🏷</div>
-            <div style=${{flex:1,minWidth:0,paddingTop:14,paddingBottom:14}}>
-              <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+          <div key=${t.id} class="card" style=${{display:'flex',gap:14,alignItems:'flex-start'}}>
+            <div style=${{width:44,height:44,borderRadius:12,background:'var(--ac3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>🏷</div>
+            <div style=${{flex:1,minWidth:0}}>
+              <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                 <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${t.name}</span>
                 <span style=${{fontSize:11,color:'var(--tx3)'}}>${members.length} member${members.length!==1?'s':''}</span>
               </div>
-              ${t.description?html`<div style=${{fontSize:11,color:'var(--tx3)',marginBottom:6,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${t.description}</div>`:null}
               ${lead?html`<div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
                 <span style=${{fontSize:11,color:'var(--tx3)'}}>Lead:</span>
                 <${Av} u=${lead} size=${20}/>
@@ -5899,22 +5612,7 @@ function TeamView({users,cu,reload}){
         <div style=${{display:'flex',flexDirection:'column',gap:13}}>
           <div>
             <label class="lbl">Team Name *</label>
-            <input class="inp" value=${tName} onInput=${e=>setTName(e.target.value)} placeholder="e.g. MuleSoft, Backend, QA, Design…"/>
-          </div>
-          <div>
-            <label class="lbl">Description</label>
-            <input class="inp" value=${tDesc} onInput=${e=>setTDesc(e.target.value)} placeholder="Brief description of this team's focus…"/>
-          </div>
-          <div>
-            <label class="lbl">Team Color</label>
-            <div style=${{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
-              ${TEAM_COLORS.map(c=>html`
-                <button key=${c} onClick=${()=>setTColor(c)}
-                  style=${{width:30,height:30,borderRadius:8,background:c,border:tColor===c?'3px solid var(--tx)':'2px solid transparent',cursor:'pointer',transition:'all .12s',boxShadow:tColor===c?'0 0 0 2px '+c+'55':'none'}}>
-                </button>`)}
-              <input type="color" value=${tColor} onInput=${e=>setTColor(e.target.value)}
-                style=${{width:30,height:30,borderRadius:8,border:'2px solid var(--bd)',cursor:'pointer',padding:1,background:'transparent'}} title="Custom color"/>
-            </div>
+            <input class="inp" value=${tName} onInput=${e=>setTName(e.target.value)} placeholder="e.g. Frontend, Backend, QA, Design…"/>
           </div>
           <div>
             <label class="lbl">Team Lead</label>
@@ -8008,15 +7706,14 @@ function App(){
   const huddleCmdRef=useRef({});
 
   const [teamLoading,setTeamLoading]=useState(false);
-  const [dataReady,setDataReady]=useState(false);
 
   const load=useCallback(async(overrideTeamCtx)=>{
     if(!cu)return;
     const tCtx=overrideTeamCtx!==undefined?overrideTeamCtx:teamCtx;
     try{
       // Build team-scoped API URLs when a team context is active
-      const projUrl=tCtx?'/api/projects?team_id='+encodeURIComponent(tCtx):'/api/projects';
-      const taskUrl=tCtx?'/api/tasks?team_id='+encodeURIComponent(tCtx):'/api/tasks';
+      const projUrl=tCtx?'/api/projects?team_id='+tCtx:'/api/projects';
+      const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw]=await Promise.all([
         api.get('/api/users'),api.get(projUrl),api.get(taskUrl),
         api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'),
@@ -8028,7 +7725,6 @@ function App(){
       if(ws&&ws.name)setWsName(ws.name);
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
-      setDataReady(true);
     }catch(e){console.error(e);}
   },[cu]);
 
@@ -8052,8 +7748,8 @@ function App(){
     if(!cu)return;
     const id=setInterval(async()=>{
       try{
-        const projUrl=teamCtx?'/api/projects?team_id='+encodeURIComponent(teamCtx):'/api/projects';
-        const taskUrl=teamCtx?'/api/tasks?team_id='+encodeURIComponent(teamCtx):'/api/tasks';
+        const projUrl=teamCtx?'/api/projects?team_id='+teamCtx:'/api/projects';
+        const taskUrl=teamCtx?'/api/tasks?team_id='+teamCtx:'/api/tasks';
         const [projects,tasks]=await Promise.all([api.get(projUrl),api.get(taskUrl)]);
         if(Array.isArray(projects)&&Array.isArray(tasks)){
           setData(prev=>({...prev,projects,tasks}));
@@ -8267,9 +7963,6 @@ function App(){
   </div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
-  // ── Teams landing page — shown when no team is selected ─────────────────
-  if(!teamCtx) return html`<${TeamsLandingPage} cu=${cu} teams=${data.teams} projects=${data.projects} tasks=${data.tasks} users=${data.users} setTeamCtx=${setTeamCtx} onLogout=${logout} dark=${dark} setDark=${setDark} wsName=${wsName} dataReady=${dataReady}/>`;
-
   const unread=safe(data.notifs).filter(n=>!n.read).length;
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
 
@@ -8429,21 +8122,12 @@ def find_free_port(preferred=5000):
 
 def download_js():
     os.makedirs(JS_DIR,exist_ok=True)
-    # Purge stale React 17 cache — createRoot is React 18 only
-    react_dom = os.path.join(JS_DIR,"react-dom.min.js")
-    if os.path.exists(react_dom):
-        try:
-            with open(react_dom,"rb") as f:
-                if b"createRoot" not in f.read(1024*512):
-                    print("  ⚠ Stale React 17 cache detected — purging pf_static for fresh download...")
-                    import shutil; shutil.rmtree(JS_DIR,ignore_errors=True); os.makedirs(JS_DIR,exist_ok=True)
-        except: pass
     libs=[
-        ("react.min.js",     "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"),
-        ("react-dom.min.js", "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"),
-        ("prop-types.min.js","https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"),
-        ("recharts.min.js",  "https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js"),
-        ("htm.min.js",       "https://unpkg.com/htm@3.1.1/dist/htm.js"),
+        ("react.min.js",     "https://unpkg.com/react@18/umd/react.production.min.js"),
+        ("react-dom.min.js", "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"),
+        ("prop-types.min.js","https://unpkg.com/prop-types@15/prop-types.min.js"),
+        ("recharts.min.js",  "https://unpkg.com/recharts@2/umd/Recharts.js"),
+        ("htm.min.js",       "https://unpkg.com/htm@3/dist/htm.js"),
     ]
     all_ok=True
     for fn,url in libs:
