@@ -4520,23 +4520,23 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(251,146,60,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'},
   ];
   return html`
-    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
-      <!-- Team context banner (shown when team active) -->
-      ${activeTeam?html`
-        <div style=${{padding:'10px 16px',background:'var(--ac3)',borderRadius:12,border:'1px solid var(--ac)',display:'flex',alignItems:'center',gap:10}}>
-          <div style=${{width:9,height:9,borderRadius:2,background:'var(--ac)',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>
-          <div style=${{flex:1}}>
-            <span style=${{fontSize:13,fontWeight:700,color:'var(--ac)'}}>${activeTeam.name}</span>
-            <span style=${{fontSize:11,color:'var(--tx2)',marginLeft:8}}>Team Dashboard · ${p.length} projects · ${t.length} tasks</span>
-          </div>
-          <span style=${{fontSize:10,color:'var(--tx2)',fontFamily:'monospace',background:'var(--sf2)',padding:'2px 8px',borderRadius:4,border:'1px solid var(--bd)'}}>${u.length} members</span>
-        </div>`:null}
-      <!-- Greeting + Team Dropdown for Admin/Manager -->
-      <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:13}}>
-        <${Av} u=${cu} size=${40}/>
+    <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
+      <!-- Compact unified header: greeting + team info + dropdown -->
+      <div style=${{padding:'10px 14px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:10}}>
+        <${Av} u=${cu} size=${32}/>
         <div style=${{flex:1,minWidth:0}}>
-          <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
-          <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>${activeTeam&&!isAdminManager?html`<b style=${{color:'var(--ac)'}}>${activeTeam.name}</b> · `:null}You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
+          <div style=${{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</span>
+            ${activeTeam?html`
+              <span style=${{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 8px',background:'var(--ac3)',border:'1px solid var(--ac)',borderRadius:20,fontSize:10,fontWeight:600,color:'var(--ac)',flexShrink:0}}>
+                <div style=${{width:5,height:5,borderRadius:1,background:'var(--ac)'}}></div>
+                ${activeTeam.name}
+              </span>`:null}
+          </div>
+          <p style=${{color:'var(--tx3)',fontSize:11,marginTop:1}}>
+            ${activeTeam?html`${p.length} projects · ${t.length} tasks · ${u.length} members · `:null}
+            <b style=${{color:'var(--tx2)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active task${myT.filter(x=>x.stage!=='completed').length!==1?'s':''} assigned to you
+          </p>
         </div>
         ${isAdminManager&&safe(teams).length>0?html`
           <div ref=${teamDropRef} style=${{position:'relative',flexShrink:0}}>
@@ -4594,15 +4594,15 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
           </div>`:null}
       </div>
       <!-- Stat cards -->
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:10}}>
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:8}}>
         ${stats.map((s,i)=>html`
           <div key=${i} onClick=${()=>onNav(s.nav)}
-            style=${{background:'var(--sf)',borderRadius:16,padding:'14px 16px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .16s',border:'1px solid var(--bd2)'}}
+            style=${{background:'var(--sf)',borderRadius:14,padding:'12px 14px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .16s',border:'1px solid var(--bd2)'}}
             onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color;e.currentTarget.style.transform='translateY(-2px)';}}
             onMouseLeave=${e=>{e.currentTarget.style.borderColor='';e.currentTarget.style.transform='';}}>
             <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:s.color,borderRadius:'16px 16px 0 0'}}></div>
-            <div style=${{width:30,height:30,borderRadius:8,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color,marginBottom:10}}>${s.icon}</div>
-            <div style=${{fontSize:28,fontWeight:700,color:'var(--tx)',lineHeight:1,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:-1.5}}>${s.val}</div>
+            <div style=${{width:26,height:26,borderRadius:7,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color,marginBottom:8}}>${s.icon}</div>
+            <div style=${{fontSize:24,fontWeight:700,color:'var(--tx)',lineHeight:1,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:-1}}>${s.val}</div>
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:5,fontWeight:500}}>${s.label}</div>
           </div>`)}
       </div>
