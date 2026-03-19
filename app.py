@@ -7746,19 +7746,6 @@ function App(){
     return()=>clearInterval(id);
   },[cu,addToast]);
 
-  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
-    <div style=${{position:'relative',width:100,height:100,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style=${{width:88,height:88,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(170,255,0,.45)',animation:'sp .9s linear infinite'}}>
-        <svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
-      </div>
-    </div>
-    <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlow...</p>
-  </div>`;
-  if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
-
-  const unread=safe(data.notifs).filter(n=>!n.read).length;
-  const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
-
   // ── Team Context filtering ──────────────────────────────────────────────────
   // Compute which team is active; validate it still exists
   const activeTeam=useMemo(()=>teamCtx?safe(data.teams).find(t=>t.id===teamCtx)||null:null,[teamCtx,data.teams]);
@@ -7787,6 +7774,19 @@ function App(){
     if(!activeTeam)return data.users;
     return safe(data.users).filter(u=>teamMemberIds.has(u.id));
   },[data.users,activeTeam,teamMemberIds]);
+
+  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
+    <div style=${{position:'relative',width:100,height:100,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style=${{width:88,height:88,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(170,255,0,.45)',animation:'sp .9s linear infinite'}}>
+        <svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
+      </div>
+    </div>
+    <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlow...</p>
+  </div>`;
+  if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
+
+  const unread=safe(data.notifs).filter(n=>!n.read).length;
+  const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
