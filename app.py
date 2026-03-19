@@ -2444,8 +2444,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --bd:#dedede;
   --bd2:#e8e8e8;
   --tx:#111111;
-  --tx2:#666666;
-  --tx3:#b0b0b0;
+  --tx2:#444444;
+  --tx3:#666666;
   --sb:#111111;
   --sb2:#1a1a1a;
   --sb3:#222222;
@@ -3403,12 +3403,12 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>`:null}
         </div>
       </div>
-      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 20px',height:48,borderTop:'1px solid var(--bd2)'}}>
-        <div>
-          <h1 style=${{fontSize:15,fontWeight:700,color:'var(--tx)',letterSpacing:'-.2px',fontFamily:"'Space Grotesk',sans-serif"}}>${title}</h1>
-          ${sub?html`<p style=${{color:'var(--tx3)',fontSize:11,marginTop:1,fontWeight:500,letterSpacing:'.1px'}}>${sub}</p>`:null}
+      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 20px',height:42,borderTop:'1px solid var(--bd2)'}}>
+        <div style=${{display:'flex',alignItems:'baseline',gap:10,minWidth:0}}>
+          <h1 style=${{fontSize:15,fontWeight:700,color:'var(--tx)',letterSpacing:'-.2px',fontFamily:"'Space Grotesk',sans-serif",whiteSpace:'nowrap',flexShrink:0}}>${title}</h1>
+          ${sub?html`<span style=${{color:'var(--tx2)',fontSize:11,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${sub}</span>`:null}
         </div>
-        <div style=${{display:'flex',alignItems:'center',gap:7}}>${extra||null}</div>
+        <div style=${{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>${extra||null}</div>
       </div>
     </div>`;
 }
@@ -6805,7 +6805,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',background:'var(--bg)'}}>
 
       <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <div style=${{fontSize:13,color:'var(--tx3)'}}>Set reminders for your tasks — get notified with sound before they're due.</div>
+        <div style=${{fontSize:13,color:'var(--tx2)'}}>Set reminders for your tasks — get notified with sound before they're due.</div>
         <div style=${{display:'flex',gap:8}}>
           <button class=${'btn '+(showCompleted?'bp':'bg')} style=${{fontSize:12}} onClick=${()=>setShowCompleted(p=>!p)}>
             ${showCompleted?'Hide Completed':'Show Completed ('+completed.length+')'}
@@ -8234,7 +8234,7 @@ function App(){
   const TITLES={
     dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'},
     projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')},
-    tasks:{title:'Task Board',sub:scopedTasks.length+' tasks'+(activeTeamName?' · '+activeTeamName:'')},
+    tasks:{title:'Task Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')},
     messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'},
     dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'},
     reminders:{title:'Reminders',sub:'Upcoming task reminders'},
