@@ -2833,6 +2833,8 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
 /* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
 function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams,teamCtx,setTeamCtx,activeTeam}){
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
+  const filteredMembers=useMemo(()=>safe(users).filter(u=>!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase())),[users,memberSearch]);
+  const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const [search,setSearch]=useState('');
   const [dashboard,setDashboard]=useState(null); // loaded team dashboard data
   const [loadingDash,setLoadingDash]=useState(false);
@@ -3241,17 +3243,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
-        <!-- Team context pill -->
-        ${safe(teams).length>0?html`
-          <div style=${{display:'flex',alignItems:'center',gap:6,flexShrink:0,padding:'5px 10px 5px 12px',background:activeTeam?'rgba(170,255,0,.10)':'rgba(255,255,255,.04)',borderRadius:100,border:'1px solid '+(activeTeam?'rgba(170,255,0,.3)':'rgba(255,255,255,.08)'),cursor:'pointer',transition:'all .15s'}}
-            onClick=${()=>{}}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke=${activeTeam?'#aaff00':'rgba(255,255,255,.35)'} strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
-            ${activeTeam?html`
-              <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.2px',maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${activeTeam.name}</span>
-              <button onClick=${e=>{e.stopPropagation();setTeamCtx&&setTeamCtx('');}}
-                style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(170,255,0,.6)',fontSize:14,lineHeight:1,padding:'0 2px',flexShrink:0}} title="Clear team filter">×</button>`:html`
-              <span style=${{fontSize:11,color:'rgba(255,255,255,.35)',letterSpacing:'.2px'}}>All Teams</span>`}
-          </div>`:null}
+        <!-- team pill removed -->
         <!-- Schedule timeline -->
         <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none'}}>
           <div style=${{height:40,background:'#111111',borderRadius:100,display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden',border:'1px solid rgba(255,255,255,.05)'}}>
@@ -3289,14 +3281,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          <button title=${dark?'Switch to Light':'Switch to Dark'} onClick=${()=>setDark&&setDark(!dark)}
-            style=${{width:34,height:34,borderRadius:'50%',border:'none',background:'var(--sf)',boxShadow:'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='var(--sf2)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.color='var(--tx2)';e.currentTarget.style.background='var(--sf)';}}>
-            ${dark
-              ?html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-              :html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`}
-          </button>
+          <!-- theme toggle moved to sidebar -->
           <div style=${{position:'relative'}} ref=${npRef}>
             <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
@@ -4099,7 +4084,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
               <div><label class="lbl">Assign to Team <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:400}}>(optional — adds all team members)</span></label>
                 <select class="sel" value=${projTeam} onChange=${e=>setProjTeam(e.target.value)}>
                   <option value="">— No team —</option>
-                  ${teams.map(t=>{
+                  ${filteredTeams.map(t=>{
                     const mids=JSON.parse(t.member_ids||'[]');
                     return html`<option key=${t.id} value=${t.id}>${t.name} (${mids.length} member${mids.length!==1?'s':''})</option>`;
                   })}
@@ -4430,8 +4415,19 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 }
 
 /* ─── Dashboard ───────────────────────────────────────────────────────────── */
-function Dashboard({cu,tasks,projects,users,onNav,activeTeam}){
+function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
   const t=safe(tasks);const p=safe(projects);const u=safe(users);
+  const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
+  const [teamDropOpen,setTeamDropOpen]=useState(false);
+  const [teamSearch,setTeamSearch]=useState('');
+  const teamDropRef=useRef(null);
+  useEffect(()=>{
+    if(!teamDropOpen)return;
+    const h=e=>{if(teamDropRef.current&&!teamDropRef.current.contains(e.target))setTeamDropOpen(false);};
+    document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[teamDropOpen]);
+  const filteredTeams=useMemo(()=>safe(teams).filter(t2=>t2.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const myT=t.filter(x=>x.assignee===cu.id);
   const done=t.filter(x=>x.stage==='completed').length;
   const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
@@ -4467,21 +4463,75 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam}){
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
       <!-- Team context banner (shown when team active) -->
       ${activeTeam?html`
-        <div style=${{padding:'10px 16px',background:'linear-gradient(135deg,rgba(170,255,0,.1),rgba(170,255,0,.04))',borderRadius:12,border:'1px solid rgba(170,255,0,.25)',display:'flex',alignItems:'center',gap:10}}>
+        <div style=${{padding:'10px 16px',background:'var(--ac3)',borderRadius:12,border:'1px solid var(--ac)',display:'flex',alignItems:'center',gap:10}}>
           <div style=${{width:9,height:9,borderRadius:2,background:'var(--ac)',flexShrink:0,boxShadow:'0 0 8px var(--ac)'}}></div>
           <div style=${{flex:1}}>
             <span style=${{fontSize:13,fontWeight:700,color:'var(--ac)'}}>${activeTeam.name}</span>
-            <span style=${{fontSize:11,color:'rgba(170,255,0,.55)',marginLeft:8}}>Team Dashboard · ${p.length} projects · ${t.length} tasks</span>
+            <span style=${{fontSize:11,color:'var(--tx2)',marginLeft:8}}>Team Dashboard · ${p.length} projects · ${t.length} tasks</span>
           </div>
-          <span style=${{fontSize:10,color:'rgba(170,255,0,.4)',fontFamily:'monospace',background:'rgba(170,255,0,.06)',padding:'2px 8px',borderRadius:4}}>${u.length} members</span>
+          <span style=${{fontSize:10,color:'var(--tx2)',fontFamily:'monospace',background:'var(--sf2)',padding:'2px 8px',borderRadius:4,border:'1px solid var(--bd)'}}>${u.length} members</span>
         </div>`:null}
-      <!-- Greeting -->
+      <!-- Greeting + Team Dropdown for Admin/Manager -->
       <div style=${{padding:'14px 18px',background:'var(--sf)',borderRadius:16,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:13}}>
         <${Av} u=${cu} size=${40}/>
-        <div style=${{flex:1}}>
+        <div style=${{flex:1,minWidth:0}}>
           <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',fontFamily:"'Space Grotesk',sans-serif",letterSpacing:'-.3px'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</h2>
           <p style=${{color:'var(--tx2)',fontSize:12,marginTop:2}}>${activeTeam?html`Viewing <b style=${{color:'var(--ac)'}}>${activeTeam.name}</b> team · `:null}You have <b style=${{color:'var(--ac)'}}>${myT.filter(x=>x.stage!=='completed').length}</b> active tasks across <b style=${{color:'var(--ac)'}}>${new Set(myT.map(x=>x.project)).size}</b> projects.</p>
         </div>
+        ${isAdminManager&&safe(teams).length>0?html`
+          <div ref=${teamDropRef} style=${{position:'relative',flexShrink:0}}>
+            <button onClick=${()=>setTeamDropOpen(v=>!v)}
+              style=${{display:'flex',alignItems:'center',gap:7,padding:'7px 12px 7px 10px',borderRadius:10,
+                border:'1px solid '+(teamDropOpen?'var(--ac)':'var(--bd)'),
+                background:activeTeam?'var(--ac3)':'var(--sf2)',
+                color:activeTeam?'var(--ac)':'var(--tx2)',
+                cursor:'pointer',fontSize:12,fontWeight:600,transition:'all .15s',whiteSpace:'nowrap'}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
+              ${activeTeam?html`<div style=${{width:7,height:7,borderRadius:2,background:activeTeam.color||'var(--ac)',flexShrink:0}}></div>`:null}
+              <span style=${{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis'}}>${activeTeam?activeTeam.name:'All Teams'}</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                style=${{transform:teamDropOpen?'rotate(180deg)':'none',transition:'transform .15s',flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            ${teamDropOpen?html`
+              <div style=${{position:'absolute',top:'calc(100% + 6px)',right:0,width:240,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,boxShadow:'0 8px 32px rgba(0,0,0,.25)',zIndex:500,overflow:'hidden'}}>
+                <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)'}}>
+                  <div style=${{position:'relative'}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                      style=${{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input class="inp" placeholder="Search teams…" value=${teamSearch} autoFocus
+                      style=${{height:28,fontSize:11,paddingLeft:26}} onInput=${e=>setTeamSearch(e.target.value)}/>
+                  </div>
+                </div>
+                <div style=${{maxHeight:200,overflowY:'auto',padding:'4px 6px'}}>
+                  <button onClick=${()=>{setTeamCtx&&setTeamCtx('');setTeamDropOpen(false);setTeamSearch('');}}
+                    style=${{width:'100%',padding:'7px 10px',borderRadius:7,border:'none',
+                      background:!activeTeam?'var(--ac3)':'transparent',
+                      color:!activeTeam?'var(--ac)':'var(--tx2)',
+                      fontSize:12,fontWeight:!activeTeam?700:400,
+                      cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
+                    onMouseEnter=${e=>{if(activeTeam)e.currentTarget.style.background='var(--sf2)';}}
+                    onMouseLeave=${e=>{if(activeTeam)e.currentTarget.style.background='transparent';}}>
+                    🌐 All Teams
+                  </button>
+                  ${filteredTeams.map(team=>html`
+                    <button key=${team.id} onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);setTeamDropOpen(false);setTeamSearch('');}}
+                      style=${{width:'100%',padding:'7px 10px',borderRadius:7,border:'none',
+                        background:activeTeam&&activeTeam.id===team.id?'var(--ac3)':'transparent',
+                        color:activeTeam&&activeTeam.id===team.id?'var(--ac)':'var(--tx2)',
+                        fontSize:12,fontWeight:activeTeam&&activeTeam.id===team.id?700:400,
+                        cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
+                      onMouseEnter=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='var(--sf2)';}}
+                      onMouseLeave=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='transparent';}}>
+                      <div style=${{width:8,height:8,borderRadius:2,background:team.color||'var(--ac)',flexShrink:0}}></div>
+                      <span style=${{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
+                      ${activeTeam&&activeTeam.id===team.id?html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>`:null}
+                    </button>`)}
+                  ${filteredTeams.length===0?html`<div style=${{padding:'10px',fontSize:11,color:'var(--tx3)',textAlign:'center'}}>No teams found</div>`:null}
+                </div>
+              </div>`:null}
+          </div>`:null}
       </div>
       <!-- Stat cards -->
       <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:10}}>
@@ -5539,6 +5589,8 @@ function TeamView({users,cu,reload}){
   const [editTeam,setEditTeam]=useState(null);
   const [tName,setTName]=useState('');const [tLead,setTLead]=useState('');const [tMembers,setTMembers]=useState([]);
   const [savingTeam,setSavingTeam]=useState(false);
+  const [memberSearch,setMemberSearch]=useState('');
+  const [teamSearch,setTeamSearch]=useState('');
 
   const loadTeams=useCallback(async()=>{const d=await api.get('/api/teams');setTeams(Array.isArray(d)?d:[]);},[]);
   useEffect(()=>{loadTeams();},[loadTeams]);
@@ -5560,6 +5612,8 @@ function TeamView({users,cu,reload}){
   const toggleMember=id=>{setTMembers(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);};
 
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
+  const filteredMembers=useMemo(()=>safe(users).filter(u=>!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase())),[users,memberSearch]);
+  const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const ROLE_COLORS={Admin:'var(--ac)',Manager:'var(--gn)',TeamLead:'var(--cy)',Developer:'var(--pu)',Tester:'var(--am)',Viewer:'var(--tx3)'};
 
   return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px'}}>
@@ -5574,9 +5628,17 @@ function TeamView({users,cu,reload}){
     </div>
 
     ${tab==='members'?html`
-      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <span style=${{fontSize:13,color:'var(--tx2)'}}>${safe(users).length} members in workspace</span>
-        <button class="btn bp" onClick=${()=>setShowNew(true)}>+ Add Member</button>
+      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+        <div style=${{position:'relative',flex:1,maxWidth:300}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+            style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="inp" placeholder="Search members by name or email…" value=${memberSearch}
+            style=${{paddingLeft:30,height:34,fontSize:12}} onInput=${e=>setMemberSearch(e.target.value)}/>
+        </div>
+        <span style=${{fontSize:12,color:'var(--tx3)',flexShrink:0}}>${filteredMembers.length} of ${safe(users).length}</span>
+        <button class="btn bp" style=${{flexShrink:0}} onClick=${()=>setShowNew(true)}>+ Add Member</button>
       </div>
       <div class="card" style=${{padding:0,overflow:'hidden',maxWidth:820}}>
         <table style=${{width:'100%',borderCollapse:'collapse'}}>
@@ -5584,18 +5646,23 @@ function TeamView({users,cu,reload}){
             ${['Member','Email','Password','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
           </tr></thead>
           <tbody>
-            ${safe(users).map((u,i)=>html`<${MemberRow} key=${u.id} u=${u} cu=${cu} i=${i} total=${safe(users).length} reload=${reload} ROLE_COLORS=${ROLE_COLORS}/>`)}
+            ${filteredMembers.map((u,i)=>html`<${MemberRow} key=${u.id} u=${u} cu=${cu} i=${i} total=${filteredMembers.length} reload=${reload} ROLE_COLORS=${ROLE_COLORS}/>`)}
           </tbody>
         </table>
       </div>`:null}
 
     ${tab==='teams'?html`
-      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <div>
-          <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>Sub-Teams</div>
-          <div style=${{fontSize:12,color:'var(--tx2)',marginTop:2}}>Group members into teams. Each team can have a lead and assigned members.</div>
+      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+        <div style=${{position:'relative',flex:1,maxWidth:300}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+            style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input class="inp" placeholder="Search teams…" value=${teamSearch}
+            style=${{paddingLeft:30,height:34,fontSize:12}} onInput=${e=>setTeamSearch(e.target.value)}/>
         </div>
-        <button class="btn bp" onClick=${openNewTeam}>+ New Team</button>
+        <span style=${{fontSize:12,color:'var(--tx3)',flexShrink:0}}>${filteredTeams.length} of ${teams.length}</span>
+        <button class="btn bp" style=${{flexShrink:0}} onClick=${openNewTeam}>+ New Team</button>
       </div>
       ${teams.length===0?html`
         <div style=${{textAlign:'center',padding:'40px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px dashed var(--bd)'}}>
@@ -5824,6 +5891,8 @@ function TicketsView({cu,users,projects,onReload,activeTeam}){
   const statCounts=Object.keys(STATUS_CFG).reduce((a,s)=>{a[s]=tickets.filter(t=>t.status===s).length;return a;},{});
 
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
+  const filteredMembers=useMemo(()=>safe(users).filter(u=>!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase())),[users,memberSearch]);
+  const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
 
   const FORM=html`
     <div class="ov" onClick=${e=>e.target===e.currentTarget&&(setShowNew(false),setEditTicket(null))}>
@@ -8091,7 +8160,7 @@ function App(){
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam}/>`:null}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}/>`:null}
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
