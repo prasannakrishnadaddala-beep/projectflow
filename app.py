@@ -680,12 +680,16 @@ def get_projects_last_messages():
 @app.route("/api/projects")
 @login_required
 def get_projects():
+    team_id = request.args.get("team_id","")
     with get_db() as db:
-        # Return ALL workspace projects — no member filtering.
-        # Every member of a workspace can see all projects.
-        # (The old member-filter was causing newly created projects to be hidden.)
-        rows = db.execute(
-            "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
+        if team_id:
+            # Return projects directly assigned to this team
+            rows = db.execute(
+                "SELECT * FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC",
+                (wid(), team_id)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
         return jsonify([dict(r) for r in rows])
 
 @app.route("/api/projects",methods=["POST"])
@@ -780,7 +784,26 @@ def bulk_assign_team():
 @app.route("/api/tasks")
 @login_required
 def get_tasks():
+    team_id = request.args.get("team_id","")
     with get_db() as db:
+        if team_id:
+            # Get the team's member list to find tasks by member assignment too
+            team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
+            member_ids = json.loads(team["member_ids"] if team else "[]")
+            # Get projects belonging to this team
+            team_projects = db.execute(
+                "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
+            proj_ids = [p["id"] for p in team_projects]
+            # Build query: tasks with team_id match OR assignee in team OR project in team
+            all_tasks = db.execute(
+                "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+            proj_set = set(proj_ids)
+            mem_set = set(member_ids)
+            filtered = [t for t in all_tasks if
+                (t["team_id"] and t["team_id"]==team_id) or
+                (t["assignee"] and t["assignee"] in mem_set) or
+                (t["project"] and t["project"] in proj_set)]
+            return jsonify([dict(r) for r in filtered])
         return jsonify([dict(r) for r in db.execute(
             "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
 
@@ -7579,11 +7602,17 @@ function App(){
   const [callState,setCallState]=useState({status:'idle',roomId:null,roomName:'',participants:[],elapsed:0,muted:false,incomingCall:null,allUsers:[]});
   const huddleCmdRef=useRef({});
 
-  const load=useCallback(async()=>{
+  const [teamLoading,setTeamLoading]=useState(false);
+
+  const load=useCallback(async(overrideTeamCtx)=>{
     if(!cu)return;
+    const tCtx=overrideTeamCtx!==undefined?overrideTeamCtx:teamCtx;
     try{
+      // Build team-scoped API URLs when a team context is active
+      const projUrl=tCtx?'/api/projects?team_id='+tCtx:'/api/projects';
+      const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw]=await Promise.all([
-        api.get('/api/users'),api.get('/api/projects'),api.get('/api/tasks'),
+        api.get('/api/users'),api.get(projUrl),api.get(taskUrl),
         api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'),
         api.get('/api/teams'),
       ]);
@@ -7594,26 +7623,38 @@ function App(){
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
     }catch(e){console.error(e);}
-  },[cu]);
+  },[cu,teamCtx]);
 
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
-  // Auto-refresh projects+tasks every 30s to catch any changes from other users or race conditions
+
+  // ── Reload all data when team context switches ──────────────────────────────
+  const prevTeamCtxRef=useRef(teamCtx);
+  useEffect(()=>{
+    if(!cu)return;
+    if(prevTeamCtxRef.current===teamCtx)return; // skip initial mount
+    prevTeamCtxRef.current=teamCtx;
+    setTeamLoading(true);
+    setView('dashboard'); // always go to dashboard on team switch
+    // Clear stale data immediately so old data doesn't flash
+    setData(prev=>({...prev,projects:[],tasks:[]}));
+    load(teamCtx).finally(()=>setTeamLoading(false));
+  },[teamCtx,cu]);
+  // Auto-refresh projects+tasks every 30s — team-scoped
   useEffect(()=>{
     if(!cu)return;
     const id=setInterval(async()=>{
       try{
-        const [projects,tasks]=await Promise.all([api.get('/api/projects'),api.get('/api/tasks')]);
+        const projUrl=teamCtx?'/api/projects?team_id='+teamCtx:'/api/projects';
+        const taskUrl=teamCtx?'/api/tasks?team_id='+teamCtx:'/api/tasks';
+        const [projects,tasks]=await Promise.all([api.get(projUrl),api.get(taskUrl)]);
         if(Array.isArray(projects)&&Array.isArray(tasks)){
-          setData(prev=>({...prev,
-            projects:projects,
-            tasks:tasks,
-          }));
+          setData(prev=>({...prev,projects,tasks}));
         }
       }catch(e){}
     },30000);
     return()=>clearInterval(id);
-  },[cu]);
+  },[cu,teamCtx]);
   useEffect(()=>{
     document.body.className=dark?'':'lm';
     try{
@@ -7798,27 +7839,20 @@ function App(){
   // ── Team Context filtering ──────────────────────────────────────────────────
   // Compute which team is active; validate it still exists
   const activeTeam=useMemo(()=>teamCtx?safe(data.teams).find(t=>t.id===teamCtx)||null:null,[teamCtx,data.teams]);
-  // Member ids belonging to the active team
   const teamMemberIds=useMemo(()=>activeTeam?new Set(JSON.parse(activeTeam.member_ids||'[]')):null,[activeTeam]);
-  // Scoped data: when a team is active filter all collections; otherwise show everything
+  // When teamCtx is set, data.projects/tasks are ALREADY server-filtered via API ?team_id=
+  // The useMemo below is a client-side safety net for projects that don't have team_id yet
   const scopedProjects=useMemo(()=>{
     if(!activeTeam)return data.projects;
-    return safe(data.projects).filter(p=>{
-      if(p.team_id&&p.team_id===activeTeam.id)return true;
-      const pm=safe(p.members);
-      return pm.some(mid=>teamMemberIds.has(mid));
-    });
-  },[data.projects,activeTeam,teamMemberIds]);
+    // Data was server-filtered; return as-is (server already handles the logic)
+    return data.projects;
+  },[data.projects,activeTeam]);
   const scopedProjectIds=useMemo(()=>new Set(scopedProjects.map(p=>p.id)),[scopedProjects]);
   const scopedTasks=useMemo(()=>{
     if(!activeTeam)return data.tasks;
-    return safe(data.tasks).filter(t=>{
-      if(t.team_id&&t.team_id===activeTeam.id)return true;
-      if(t.assignee&&teamMemberIds.has(t.assignee))return true;
-      if(t.project&&scopedProjectIds.has(t.project))return true;
-      return false;
-    });
-  },[data.tasks,activeTeam,teamMemberIds,scopedProjectIds]);
+    // Data was server-filtered; return as-is
+    return data.tasks;
+  },[data.tasks,activeTeam]);
   const scopedUsers=useMemo(()=>{
     if(!activeTeam)return data.users;
     return safe(data.users).filter(u=>teamMemberIds.has(u.id));
@@ -7914,6 +7948,18 @@ function App(){
     </div>
     <${AIAssistant} cu=${cu} projects=${data.projects} tasks=${data.tasks} users=${data.users}/>
     <${HuddleCall} cu=${cu} users=${data.users} onStateChange=${s=>setCallState(prev=>({...prev,...s}))} cmdRef=${huddleCmdRef}/>
+
+    <!-- Team switch loading overlay -->
+    ${teamLoading?html`
+      <div style=${{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,
+        background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center',
+        backdropFilter:'blur(2px)'}}>
+        <div style=${{background:'var(--sf)',borderRadius:16,padding:'24px 32px',display:'flex',flexDirection:'column',alignItems:'center',gap:12,border:'1px solid var(--bd)',boxShadow:'0 8px 40px rgba(0,0,0,.5)'}}>
+          <div style=${{width:40,height:40,border:'3px solid var(--bd)',borderTop:'3px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite'}}></div>
+          <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)'}}>Switching to ${activeTeam?activeTeam.name:'workspace'}...</div>
+          <div style=${{fontSize:11,color:'var(--tx3)'}}>Loading team data</div>
+        </div>
+      </div>`:null}
 
     <!-- ★ In-app toast stack — always visible, no OS permission needed -->
     <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${setView}/>
