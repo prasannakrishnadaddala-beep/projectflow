@@ -291,7 +291,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
                 project TEXT, assignee TEXT, priority TEXT, stage TEXT,
-                created TEXT, due TEXT, pct INTEGER DEFAULT 0, comments TEXT DEFAULT '[]');
+                created TEXT, due TEXT, pct INTEGER DEFAULT 0, comments TEXT DEFAULT '[]',
+                team_id TEXT DEFAULT '');
             CREATE TABLE IF NOT EXISTS files (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, size INTEGER,
                 mime TEXT, task_id TEXT, project_id TEXT, uploaded_by TEXT, ts TEXT);
@@ -351,6 +352,9 @@ def init_db():
                 id TEXT PRIMARY KEY, workspace_id TEXT, ticket_id TEXT,
                 user_id TEXT, content TEXT, created TEXT);
         ''')
+        except: pass
+        # Add team_id to tasks if not exists (migration)
+        try: db.execute("ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''")
         except: pass
         # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
@@ -770,10 +774,11 @@ def create_task():
     if not d.get("title"): return jsonify({"error":"Title required"}),400
     with get_db() as db:
         tid=next_task_id(db,wid())
-        db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                    (tid,wid(),d["title"],d.get("description",""),d.get("project",""),
                     d.get("assignee",""),d.get("priority","medium"),d.get("stage","backlog"),
-                    ts(),d.get("due",""),d.get("pct",0),json.dumps(d.get("comments",[]))))
+                    ts(),d.get("due",""),d.get("pct",0),json.dumps(d.get("comments",[])),
+                    d.get("team_id","")))
         creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cname=creator["name"] if creator else "Someone"
         base_ts=int(datetime.now().timestamp()*1000)
@@ -857,12 +862,14 @@ def update_task(tid):
         old_stage=t["stage"]
         old_stage=t["stage"]
         db.execute("""UPDATE tasks SET title=?,description=?,project=?,assignee=?,
-                      priority=?,stage=?,due=?,pct=?,comments=? WHERE id=? AND workspace_id=?""",
+                      priority=?,stage=?,due=?,pct=?,comments=?,team_id=? WHERE id=? AND workspace_id=?""",
                    (d.get("title",t["title"]),d.get("description",t["description"]),
                     d.get("project",t["project"]),d.get("assignee",t["assignee"]),
                     d.get("priority",t["priority"]),d.get("stage",t["stage"]),
                     d.get("due",t["due"]),d.get("pct",t["pct"]),
-                    json.dumps(d.get("comments",json.loads(t["comments"]))),tid,wid()))
+                    json.dumps(d.get("comments",json.loads(t["comments"]))),
+                    d.get("team_id",t["team_id"] if "team_id" in t.keys() else ""),
+                    tid,wid()))
         if d.get("stage") and d["stage"]!=old_stage:
             base_ts2=int(datetime.now().timestamp()*1000)
             # Notify assignee
@@ -1165,6 +1172,53 @@ def delete_team(tid):
     with get_db() as db:
         db.execute("DELETE FROM teams WHERE id=? AND workspace_id=?",(tid,wid()))
         return jsonify({"ok":True})
+
+@app.route("/api/teams/<tid>/dashboard")
+@login_required
+def team_dashboard(tid):
+    """Return rich stats for a single team: projects, tasks, member workloads."""
+    with get_db() as db:
+        team=db.execute("SELECT * FROM teams WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
+        if not team: return jsonify({"error":"Not found"}),404
+        member_ids=json.loads(team["member_ids"] or "[]")
+        # All tasks assigned to any team member OR tagged with this team
+        all_tasks=db.execute("SELECT * FROM tasks WHERE workspace_id=?",(wid(),)).fetchall()
+        team_tasks=[t for t in all_tasks if t["assignee"] in member_ids or (t["team_id"] if "team_id" in t.keys() else "")==tid]
+        # Projects touched by this team
+        proj_ids=list({t["project"] for t in team_tasks if t["project"]})
+        projects=[]
+        for pid in proj_ids:
+            p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
+            if p: projects.append(dict(p))
+        # Per-member stats
+        member_stats=[]
+        for uid in member_ids:
+            u=db.execute("SELECT id,name,email,role,avatar,color FROM users WHERE id=?",(uid,)).fetchone()
+            if not u: continue
+            mtasks=[t for t in team_tasks if t["assignee"]==uid]
+            member_stats.append({
+                "id":uid,"name":u["name"],"role":u["role"],"avatar":u["avatar"],"color":u["color"],
+                "total":len(mtasks),
+                "completed":len([t for t in mtasks if t["stage"]=="completed"]),
+                "in_progress":len([t for t in mtasks if t["stage"] in ("development","in-progress","code_review","testing","uat")]),
+                "blocked":len([t for t in mtasks if t["stage"]=="blocked"]),
+                "overdue":len([t for t in mtasks if t["due"] and t["due"]<datetime.utcnow().isoformat() and t["stage"]!="completed"]),
+            })
+        total=len(team_tasks)
+        return jsonify({
+            "team":dict(team),
+            "projects":projects,
+            "tasks":[dict(t) for t in team_tasks],
+            "member_stats":member_stats,
+            "summary":{
+                "total_projects":len(projects),
+                "total_tasks":total,
+                "completed":len([t for t in team_tasks if t["stage"]=="completed"]),
+                "in_progress":len([t for t in team_tasks if t["stage"] in ("development","in-progress","code_review","testing","uat")]),
+                "blocked":len([t for t in team_tasks if t["stage"]=="blocked"]),
+                "pending":len([t for t in team_tasks if t["stage"] in ("backlog","planning")]),
+            }
+        })
 
 # ── Tickets ───────────────────────────────────────────────────────────────────
 @app.route("/api/tickets", methods=["GET"])
@@ -2681,79 +2735,131 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
 }
 
 /* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
-function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView}){
+function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams}){
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
   const [search,setSearch]=useState('');
+  const [dashboard,setDashboard]=useState(null); // loaded team dashboard data
+  const [loadingDash,setLoadingDash]=useState(false);
+
+  useEffect(()=>{
+    if(!selectedTeam){setDashboard(null);return;}
+    setLoadingDash(true);
+    api.get('/api/teams/'+selectedTeam+'/dashboard').then(d=>{
+      setDashboard(d&&!d.error?d:null);
+      setLoadingDash(false);
+    }).catch(()=>setLoadingDash(false));
+  },[selectedTeam]);
+
   const filtered=safe(teams).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
 
+  /* ── Team drill-down dashboard ── */
   if(selectedTeam){
-    // Show this team's projects
     const team=teams.find(t=>t.id===selectedTeam);
     if(!team)return null;
     const memberIds=JSON.parse(team.member_ids||'[]');
     const lead=umap[team.lead_id];
     const members=memberIds.map(id=>umap[id]).filter(Boolean);
-    const teamProjs=safe(projects).filter(p=>{
-      const pm=safe(p.members);
-      return pm.some(mid=>memberIds.includes(mid));
-    });
+    const sum=dashboard&&dashboard.summary;
+    const memberStats=dashboard&&dashboard.member_stats||[];
+    const teamProjects=dashboard&&dashboard.projects||[];
+
     return html`
-      <div style=${{width:280,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
-        <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8}}>
-          <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px',borderRadius:6}} title="Back">←</button>
+      <div style=${{width:310,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden'}}>
+        <!-- Header -->
+        <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+          <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18,padding:'2px 6px',borderRadius:6,lineHeight:1}} title="Back">←</button>
           <div style=${{flex:1,minWidth:0}}>
             <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
-            ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: ${lead.name}</div>`:null}
+            ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
           </div>
-          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14,padding:'2px 6px'}} title="Close">✕</button>
+          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
         </div>
-        <!-- Members strip -->
-        <div style=${{padding:'8px 14px',borderBottom:'1px solid var(--bd)',display:'flex',gap:6,flexWrap:'wrap'}}>
-          ${members.slice(0,8).map(m=>html`
-            <div key=${m.id} title=${m.name} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
-              <${Av} u=${m} size=${26}/>
-              <span style=${{fontSize:8,color:'var(--tx3)',maxWidth:32,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${m.name.split(' ')[0]}</span>
-            </div>`)}
-          ${members.length>8?html`<span style=${{fontSize:10,color:'var(--tx3)',alignSelf:'center'}}>+${members.length-8}</span>`:null}
-        </div>
-        <!-- Projects list -->
-        <div style=${{flex:1,overflowY:'auto',padding:'8px'}}>
-          <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,padding:'4px 6px',marginBottom:4}}>Projects (${teamProjs.length})</div>
-          ${teamProjs.length===0?html`<div style=${{textAlign:'center',padding:'20px 8px',color:'var(--tx3)',fontSize:12}}>No projects assigned to this team yet.</div>`:null}
-          ${teamProjs.map(p=>{
-            const pt=safe(tasks).filter(t=>t.project===p.id);
-            const done=pt.filter(t=>t.stage==='completed').length;
-            const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
-            return html`
-              <div key=${p.id} style=${{padding:'9px 10px',borderRadius:8,border:'1px solid var(--bd)',marginBottom:5,background:'var(--sf2)',cursor:'pointer',borderLeft:'3px solid '+p.color,transition:'background .1s'}}
-                onClick=${()=>{onSetView('projects');onClose();}}
-                onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.06)'}
-                onMouseLeave=${e=>e.currentTarget.style.background='var(--sf2)'}>
-                <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
-                <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                  <div style=${{flex:1,height:3,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
-                    <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
+
+        <div style=${{flex:1,overflowY:'auto'}}>
+          ${loadingDash?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)',fontSize:12}}>Loading...</div>`:null}
+
+          ${!loadingDash&&sum?html`
+          <!-- Summary KPI strip -->
+          <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',borderBottom:'1px solid var(--bd)'}}>
+            ${[
+              {l:'Projects',v:sum.total_projects,c:'var(--ac)'},
+              {l:'Tasks',v:sum.total_tasks,c:'var(--tx)'},
+              {l:'Done',v:sum.completed,c:'var(--gn)'},
+              {l:'In Prog',v:sum.in_progress,c:'var(--cy)'},
+              {l:'Blocked',v:sum.blocked,c:'var(--rd)'},
+              {l:'Pending',v:sum.pending,c:'var(--am)'},
+            ].map((s,i)=>html`
+              <div key=${i} style=${{textAlign:'center',padding:'10px 4px',borderRight:i%3<2?'1px solid var(--bd)':'none',borderBottom:i<3?'1px solid var(--bd)':'none'}}>
+                <div style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.v}</div>
+                <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:.4}}>${s.l}</div>
+              </div>`)}
+          </div>
+
+          <!-- Member workload -->
+          <div style=${{padding:'10px 12px',borderBottom:'1px solid var(--bd)'}}>
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>👥 Member Workload</div>
+            ${memberStats.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No tasks assigned yet</div>`:null}
+            ${memberStats.map(m=>html`
+              <div key=${m.id} style=${{display:'flex',alignItems:'center',gap:8,marginBottom:8,padding:'7px 8px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)'}}>
+                <${Av} u=${m} size=${28}/>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:11,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${m.name}</div>
+                  <div style=${{fontSize:9,color:'var(--tx3)'}}>${m.role}</div>
+                </div>
+                <div style=${{display:'flex',gap:5,fontSize:10,fontFamily:'monospace'}}>
+                  <span style=${{color:'var(--gn)',fontWeight:700}} title="Completed">${m.completed}✓</span>
+                  <span style=${{color:'var(--cy)'}} title="In Progress">${m.in_progress}⟳</span>
+                  ${m.blocked>0?html`<span style=${{color:'var(--rd)',fontWeight:700}} title="Blocked">${m.blocked}✗</span>`:null}
+                  ${m.overdue>0?html`<span style=${{color:'var(--am)',fontWeight:700}} title="Overdue">${m.overdue}!</span>`:null}
+                </div>
+              </div>`)}
+          </div>
+
+          <!-- Projects list -->
+          <div style=${{padding:'10px 12px'}}>
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>📁 Projects (${teamProjects.length})</div>
+            ${teamProjects.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No projects yet</div>`:null}
+            ${teamProjects.map(p=>{
+              const pt=safe(tasks).filter(t=>t.project===p.id);
+              const done=pt.filter(t=>t.stage==='completed').length;
+              const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
+              return html`
+                <div key=${p.id} style=${{padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',marginBottom:6,background:'var(--sf2)',cursor:'pointer',borderLeft:'3px solid '+p.color,transition:'background .1s'}}
+                  onClick=${()=>{onSetView('projects');onClose();}}
+                  onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.06)'}
+                  onMouseLeave=${e=>e.currentTarget.style.background='var(--sf2)'}>
+                  <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
+                  <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                    <div style=${{flex:1,height:3,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                      <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
+                    </div>
+                    <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)'}}>${pc}%</span>
                   </div>
-                  <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)'}}>${pc}%</span>
-                </div>
-                <div style=${{display:'flex',gap:8,fontSize:10}}>
-                  <span style=${{color:'var(--tx3)'}}>${pt.length} tasks</span>
-                  <span style=${{color:'var(--gn)'}}>${done} done</span>
-                  <span style=${{color:'var(--am)'}}>${pt.length-done} open</span>
-                </div>
-              </div>`;
-          })}
+                  <div style=${{display:'flex',gap:8,fontSize:10}}>
+                    <span style=${{color:'var(--tx3)'}}>${pt.length} tasks</span>
+                    <span style=${{color:'var(--gn)'}}>${done} done</span>
+                    <span style=${{color:'var(--am)'}}>${pt.length-done} open</span>
+                  </div>
+                </div>`;
+            })}
+          </div>`:null}
+
+          ${!loadingDash&&!sum?html`<div style=${{textAlign:'center',padding:'40px 12px',color:'var(--tx3)',fontSize:12}}>
+            <div style=${{fontSize:28,marginBottom:8}}>📊</div>
+            No task data found for this team yet.<br/>Assign tasks to team members to see stats here.
+          </div>`:null}
         </div>
       </div>`;
   }
 
+  /* ── Team list cards ── */
   return html`
-    <div style=${{width:220,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
-      <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+    <div style=${{width:240,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
+      <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
         <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>👥 Teams</span>
-        <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14,padding:'2px 6px'}} title="Close">✕</button>
+        <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
       </div>
-      <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)'}}>
+      <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
         <input class="inp" placeholder="Search teams..." value=${search}
           style=${{height:26,fontSize:11,width:'100%'}}
           onInput=${e=>setSearch(e.target.value)}/>
@@ -2761,28 +2867,42 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
       <div style=${{flex:1,overflowY:'auto',padding:'6px'}}>
         ${filtered.length===0?html`
           <div style=${{textAlign:'center',padding:'24px 8px',color:'var(--tx3)',fontSize:12}}>
-            ${safe(teams).length===0?'No teams yet. Go to Team settings to create teams.':'No teams match your search.'}
+            ${safe(teams).length===0?html`<div><div style=${{fontSize:28,marginBottom:6}}>🏷</div>No teams yet.<br/>Go to <b>Team</b> settings to create teams.</div>`:'No teams match your search.'}
           </div>`:null}
         ${filtered.map(team=>{
           const memberIds=JSON.parse(team.member_ids||'[]');
           const lead=umap[team.lead_id];
           const members=memberIds.map(id=>umap[id]).filter(Boolean);
-          const teamProjs=safe(projects).filter(p=>{
-            const pm=safe(p.members);
-            return pm.some(mid=>memberIds.includes(mid));
+          const teamTasks=safe(tasks).filter(t=>{
+            const byTeam=t.team_id===team.id;
+            const byMember=t.assignee&&memberIds.includes(t.assignee);
+            return byTeam||byMember;
           });
+          const done=teamTasks.filter(t=>t.stage==='completed').length;
+          const blocked=teamTasks.filter(t=>t.stage==='blocked').length;
+          const teamProjs=new Set(teamTasks.map(t=>t.project).filter(Boolean)).size;
           return html`
             <div key=${team.id}
-              style=${{padding:'10px 12px',borderRadius:10,border:'1px solid var(--bd)',marginBottom:6,background:'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
+              style=${{padding:'10px 12px',borderRadius:10,border:'1px solid var(--bd)',marginBottom:7,background:'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
               onClick=${()=>onSelectTeam(team.id)}
-              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)33';}}
+              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)55';}}
               onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.borderColor='var(--bd)';}}>
-              <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
-                <div style=${{width:8,height:8,borderRadius:2,background:'var(--ac)',flexShrink:0}}></div>
+              <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:7}}>
+                <div style=${{width:9,height:9,borderRadius:2,background:'var(--ac)',flexShrink:0}}></div>
                 <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
-              ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:5}}>Lead: <b style=${{color:'var(--tx2)'}}>${lead.name}</b></div>`:null}
+              ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
+              <!-- Mini KPIs -->
+              <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginBottom:7}}>
+                ${[['Tasks',teamTasks.length,'var(--tx)'],['Done',done,'var(--gn)'],['Proj',teamProjs,'var(--ac)']].map(([l,v,c])=>html`
+                  <div key=${l} style=${{textAlign:'center',padding:'4px 2px',background:'var(--sf)',borderRadius:5,border:'1px solid var(--bd)'}}>
+                    <div style=${{fontSize:13,fontWeight:700,color:c,fontFamily:'monospace',lineHeight:1}}>${v}</div>
+                    <div style=${{fontSize:8,color:'var(--tx3)',marginTop:1,textTransform:'uppercase'}}>${l}</div>
+                  </div>`)}
+              </div>
+              ${blocked>0?html`<div style=${{fontSize:10,color:'var(--rd)',fontWeight:600,marginBottom:6}}>⚠ ${blocked} blocked task${blocked!==1?'s':''}</div>`:null}
+              <!-- Member avatars -->
               <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style=${{display:'flex'}}>
                   ${members.slice(0,5).map((m,i)=>html`
@@ -2791,7 +2911,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
                     </div>`)}
                   ${members.length>5?html`<span style=${{fontSize:9,color:'var(--tx3)',marginLeft:5,alignSelf:'center'}}>+${members.length-5}</span>`:null}
                 </div>
-                <span style=${{fontSize:10,color:'var(--ac)',fontWeight:700}}>${teamProjs.length} project${teamProjs.length!==1?'s':''}</span>
+                <span style=${{fontSize:9,color:'var(--tx3)'}}>${members.length} member${members.length!==1?'s':''}</span>
               </div>
             </div>`;
         })}
@@ -3117,10 +3237,11 @@ function FileAttachments({taskId,projectId,readOnly}){
 }
 
 /* ─── TaskModal ───────────────────────────────────────────────────────────── */
-function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSetReminder}){
+function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSetReminder,teams}){
   const [title,setTitle]=useState((task&&task.title)||'');
   const [desc,setDesc]=useState((task&&task.description)||'');
   const [pid,setPid]=useState((task&&task.project)||defaultPid||(projects[0]&&projects[0].id)||'');
+  const [teamId,setTeamId]=useState((task&&task.team_id)||'');
   const [ass,setAss]=useState((task&&task.assignee)||'');
   const [pri,setPri]=useState((task&&task.priority)||'medium');
   const [stage,setStage]=useState((task&&task.stage)||'backlog');
@@ -3132,6 +3253,13 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
   const isEdit=!!(task&&task.id);
+  // When team changes, reset assignee if they're not in that team
+  const selectedTeam=safe(teams).find(t=>t.id===teamId);
+  const teamMemberIds=selectedTeam?JSON.parse(selectedTeam.member_ids||'[]'):null;
+  // Assignee options: if a team is selected, filter to team members; otherwise show all
+  const assigneeOptions=teamMemberIds
+    ? safe(users).filter(u=>teamMemberIds.includes(u.id))
+    : safe(users);
   // Role-based + ownership permission checks
   const FULL_EDIT_ROLES=['Admin','Manager','TeamLead'];
   const isAdminManagerTeamLead=cu&&FULL_EDIT_ROLES.includes(cu.role);
@@ -3175,7 +3303,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
       // Assignee-only: send only stage + pct
       payload={stage,pct};
     } else {
-      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts};
+      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId};
     }
     if(task&&task.id)payload.id=task.id;
     const result=await onSave(payload);
@@ -3259,12 +3387,17 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                   <select class="sel" value=${pid} onChange=${e=>setPid(e.target.value)}>
                     ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
                   </select></div>
-                <div><label class="lbl">Assignee</label>
-                  <select class="sel" value=${ass} onChange=${e=>setAss(e.target.value)}>
-                    <option value="">Unassigned</option>
-                    ${safe(users).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
+                <div><label class="lbl">Team <span style=${{fontWeight:400,color:'var(--tx3)',fontSize:10}}>(optional)</span></label>
+                  <select class="sel" value=${teamId} onChange=${e=>{setTeamId(e.target.value);setAss('');}}>
+                    <option value="">— No team —</option>
+                    ${safe(teams).map(t=>html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}
                   </select></div>
               </div>
+              <div><label class="lbl">Assignee${teamId?html` <span style=${{fontWeight:400,color:'var(--ac)',fontSize:10}}>(from ${selectedTeam&&selectedTeam.name})</span>`:''}</label>
+                  <select class="sel" value=${ass} onChange=${e=>setAss(e.target.value)}>
+                    <option value="">Unassigned</option>
+                    ${assigneeOptions.map(u=>html`<option key=${u.id} value=${u.id}>${u.name} (${u.role})</option>`)}
+                  </select></div>
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:11}}>
                 <div><label class="lbl">Priority</label>
                   <select class="sel" value=${pri} onChange=${e=>setPri(e.target.value)}>
@@ -3367,7 +3500,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
 }
 
 /* ─── ProjectDetail ───────────────────────────────────────────────────────── */
-function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetReminder}){
+function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetReminder,teams}){
   const [tab,setTab]=useState('tasks');const [edit,setEdit]=useState(false);
   const [name,setName]=useState(project.name||'');const [desc,setDesc]=useState(project.description||'');
   const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#aaff00');
@@ -3489,8 +3622,8 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
         </div>
       </div>
 
-      ${showNew?html`<${TaskModal} task=${null} onClose=${()=>setShowNew(false)} onSave=${saveTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id} onSetReminder=${onSetReminder}/>`:null}
-      ${editTask?html`<${TaskModal} task=${editTask} onClose=${()=>setEditTask(null)} onSave=${saveTask} onDel=${delTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id} onSetReminder=${onSetReminder}/>`:null}
+      ${showNew?html`<${TaskModal} task=${null} onClose=${()=>setShowNew(false)} onSave=${saveTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id} onSetReminder=${onSetReminder} teams=${teams||[]}/>`:null}
+      ${editTask?html`<${TaskModal} task=${editTask} onClose=${()=>setEditTask(null)} onSave=${saveTask} onDel=${delTask} projects=${[project]} users=${projUsers.length?projUsers:allUsers} cu=${cu} defaultPid=${project.id} onSetReminder=${onSetReminder} teams=${teams||[]}/>`:null}
     </div>`;
 }
 
@@ -3584,9 +3717,6 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
             onClick=${()=>setViewMode('grid')} title="Card view">⊞</button>
           <button class=${'tb'+(viewMode==='compact'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
             onClick=${()=>setViewMode('compact')} title="Compact list">☰</button>
-          ${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`
-            <button class=${'tb'+(viewMode==='team'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
-              onClick=${()=>setViewMode('team')} title="Team view">👥</button>`:null}
         </div>
 
         ${search?html`<button class="btn bg" style=${{fontSize:11,padding:'3px 8px',flexShrink:0}}
@@ -3701,88 +3831,6 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
           </div>`:null}
       </div>
 
-        <!-- TEAM VIEW — Admin/Manager only -->
-        ${viewMode==='team'&&cu&&(cu.role==='Admin'||cu.role==='Manager')?html`
-          <div style=${{display:'flex',flexDirection:'column',gap:18}}>
-            ${(()=>{
-              // Build team groups: each team + its projects (projects where any member is in that team)
-              const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
-              const groups=[];
-              // Named teams first
-              safe(teams).forEach(team=>{
-                const teamMemberIds=JSON.parse(team.member_ids||'[]');
-                const teamProjs=filteredProjects.filter(p=>{
-                  const projMems=safe(p.members);
-                  return projMems.some(mid=>teamMemberIds.includes(mid));
-                });
-                if(teamProjs.length>0){
-                  const lead=umap[team.lead_id];
-                  groups.push({id:team.id,name:team.name,lead,members:teamMemberIds.map(id=>umap[id]).filter(Boolean),projects:teamProjs});
-                }
-              });
-              // "Unassigned" group: projects not belonging to any named team
-              const assignedIds=new Set(groups.flatMap(g=>g.projects.map(p=>p.id)));
-              const unassigned=filteredProjects.filter(p=>!assignedIds.has(p.id));
-              if(unassigned.length>0) groups.push({id:'__unassigned__',name:'Unassigned Projects',lead:null,members:[],projects:unassigned});
-              if(groups.length===0) return html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
-                <div style=${{fontSize:36,marginBottom:10}}>👥</div>
-                <div>No teams set up yet.</div>
-                <div style=${{fontSize:12,marginTop:6}}>Go to <b>Team</b> in the sidebar to create teams first.</div>
-              </div>`;
-              return groups.map(grp=>html`
-                <div key=${grp.id}>
-                  <!-- Team header -->
-                  <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:10,padding:'8px 12px',
-                    background:'var(--sf2)',borderRadius:10,border:'1px solid var(--bd)'}}>
-                    <span style=${{fontSize:14,fontWeight:800,color:'var(--tx)',flex:1}}>${grp.id==='__unassigned__'?'📂':''} ${grp.name}</span>
-                    ${grp.lead?html`<span style=${{fontSize:11,color:'var(--tx2)'}}>Lead: <b>${grp.lead.name}</b></span>`:null}
-                    <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${grp.projects.length} projects</span>
-                    <!-- Team member avatars -->
-                    <div style=${{display:'flex'}}>
-                      ${grp.members.slice(0,6).map((m,i)=>html`
-                        <div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf2)',borderRadius:'50%',zIndex:6-i}}>
-                          <${Av} u=${m} size=${22}/>
-                        </div>`)}
-                      ${grp.members.length>6?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:6,alignSelf:'center'}}>+${grp.members.length-6}</span>`:null}
-                    </div>
-                  </div>
-                  <!-- Team projects as compact rows -->
-                  <div style=${{display:'flex',flexDirection:'column',gap:3,marginLeft:4}}>
-                    ${grp.projects.map(p=>{
-                      const pt=safe(tasks).filter(t=>t.project===p.id);
-                      const done=pt.filter(t=>t.stage==='completed').length;
-                      const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
-                      return html`
-                        <div key=${p.id}
-                          style=${{display:'grid',gridTemplateColumns:'1fr 100px 48px 48px 48px 88px',gap:8,
-                            alignItems:'center',padding:'8px 12px',
-                            background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
-                            cursor:'pointer',transition:'background .1s',borderLeft:'3px solid '+p.color}}
-                          onClick=${()=>setDetail(p)}
-                          onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
-                          onMouseLeave=${e=>e.currentTarget.style.background='var(--sf)'}>
-                          <div style=${{minWidth:0}}>
-                            <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
-                            <div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginTop:1}}>${p.description||'—'}</div>
-                          </div>
-                          <div style=${{display:'flex',alignItems:'center',gap:5}}>
-                            <div style=${{flex:1,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
-                              <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
-                            </div>
-                            <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)',flexShrink:0}}>${pc}%</span>
-                          </div>
-                          <div style=${{textAlign:'center',fontSize:12,fontWeight:700,color:'var(--tx)'}}>${pt.length}</div>
-                          <div style=${{textAlign:'center',fontSize:12,fontWeight:700,color:'var(--gn)'}}>${done}</div>
-                          <div style=${{textAlign:'center',fontSize:12,fontWeight:700,color:'var(--am)'}}>${pt.length-done}</div>
-                          <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textAlign:'right'}}>
-                            ${p.target_date?new Date(p.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—'}
-                          </div>
-                        </div>`;
-                    })}
-                  </div>
-                </div>`);
-            })()}
-          </div>`:null}
       ${showNew?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
           <div class="mo fi" style=${{maxWidth:520}}>
@@ -3831,7 +3879,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder}){
         </div>`:null}
 
       ${detail?html`<${ProjectDetail} project=${detail} allTasks=${tasks} allUsers=${users} cu=${cu}
-        onClose=${()=>setDetail(null)} onReload=${reload} onSetReminder=${onSetReminder}/>`:null}
+        onClose=${()=>setDetail(null)} onReload=${reload} onSetReminder=${onSetReminder} teams=${teams}/>`:null}
     </div>`;
 }
 
@@ -3841,25 +3889,24 @@ const STAGE_DAYS={backlog:0,planning:7,development:21,code_review:28,testing:35,
 const STAGE_PCT={backlog:0,planning:10,development:35,code_review:55,testing:70,uat:80,release:90,production:95,completed:100,blocked:null};
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
 
-function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,initialPriority}){
+function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,initialPriority,teams}){
   const [mode,setMode]=useState('kanban');
   const [pid,setPid]=useState('all');
+  const [teamF,setTeamF]=useState('all');
   const [priF,setPriF]=useState(initialPriority||'all');
   const [stageF,setStageF]=useState(initialStage||'all');
   const [assF,setAssF]=useState('all');
-  const [dueF,setDueF]=useState('all'); // 'all','overdue','today','week','month'
+  const [dueF,setDueF]=useState('all');
   const [search,setSearch]=useState('');
   const [showFilters,setShowFilters]=useState(!!(initialStage||initialPriority));
-  const [showResolved,setShowResolved]=useState(false); // #8: hide resolved by default
-  const [sortCol,setSortCol]=useState(null);  // 'assignee'|'priority'|'stage'|'due'|'pct'
-  const [sortDir,setSortDir]=useState('asc'); // 'asc'|'desc'
+  const [showResolved,setShowResolved]=useState(false);
+  const [sortCol,setSortCol]=useState(null);
+  const [sortDir,setSortDir]=useState('asc');
   const [editT,setEditT]=useState(null);const [newT,setNewT]=useState(false);
-  // CSV import state
   const [csvImporting,setCsvImporting]=useState(false);
   const [csvResult,setCsvResult]=useState(null);
   const csvRef=useRef(null);
 
-  // Apply initial filters when props change (navigating from Dashboard)
   useEffect(()=>{
     if(initialStage){setStageF(initialStage);setShowFilters(true);}
     if(initialPriority){setPriF(initialPriority);setShowFilters(true);}
@@ -3867,20 +3914,32 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 
   const RESOLVED_STAGES=new Set(['completed']);
 
-  const activeFilters=[pid,priF,stageF,assF,dueF].filter(v=>v!=='all').length;
-  const clearAll=()=>{setPid('all');setPriF('all');setStageF('all');setAssF('all');setDueF('all');setSearch('');};
+  const activeFilters=[pid,teamF,priF,stageF,assF,dueF].filter(v=>v!=='all').length;
+  const clearAll=()=>{setPid('all');setTeamF('all');setPriF('all');setStageF('all');setAssF('all');setDueF('all');setSearch('');};
+
+  // Build team member id set for filter
+  const teamFilterMemberIds=useMemo(()=>{
+    if(teamF==='all')return null;
+    const team=safe(teams).find(t=>t.id===teamF);
+    return team?new Set(JSON.parse(team.member_ids||'[]')):null;
+  },[teamF,teams]);
 
   const filtered=useMemo(()=>{
     const today=new Date();today.setHours(0,0,0,0);
     const endOfWeek=new Date(today);endOfWeek.setDate(today.getDate()+7);
     const endOfMonth=new Date(today);endOfMonth.setDate(today.getDate()+30);
     return safe(tasks).filter(t=>{
-      // #8: Hide resolved/completed tasks unless showResolved is true or filter explicitly set to completed
       if(!showResolved && RESOLVED_STAGES.has(t.stage) && stageF!=='completed') return false;
       if(pid!=='all'&&t.project!==pid)return false;
       if(priF!=='all'&&t.priority!==priF)return false;
       if(stageF!=='all'&&t.stage!==stageF)return false;
       if(assF!=='all'&&t.assignee!==assF)return false;
+      // Team filter: match by team_id OR assignee in team
+      if(teamF!=='all'){
+        const byTeamId=t.team_id&&t.team_id===teamF;
+        const byAssignee=teamFilterMemberIds&&t.assignee&&teamFilterMemberIds.has(t.assignee);
+        if(!byTeamId&&!byAssignee)return false;
+      }
       if(search&&!t.title.toLowerCase().includes(search.toLowerCase()))return false;
       if(dueF!=='all'&&t.due){
         const d=new Date(t.due);d.setHours(0,0,0,0);
@@ -3891,7 +3950,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
       } else if(dueF!=='all'&&!t.due) return false;
       return true;
     });
-  },[tasks,pid,priF,stageF,assF,dueF,search,showResolved]);
+  },[tasks,pid,teamF,teamFilterMemberIds,priF,stageF,assF,dueF,search,showResolved]);
 
   const toggleSort=col=>{if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}};
 
@@ -3976,6 +4035,13 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
         </div>`:null}
         ${showFilters?html`
           <div style=${{display:'flex',gap:8,flexWrap:'wrap',marginTop:9,paddingTop:9,borderTop:'1px solid var(--bd)'}}>
+            <div style=${{display:'flex',flexDirection:'column',gap:3}}>
+              <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Team</label>
+              <select class="sel" style=${{width:140,fontSize:12}} value=${teamF} onChange=${e=>setTeamF(e.target.value)}>
+                <option value="all">All Teams</option>
+                ${safe(teams).map(t=>html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}
+              </select>
+            </div>
             <div style=${{display:'flex',flexDirection:'column',gap:3}}>
               <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Project</label>
               <select class="sel" style=${{width:155,fontSize:12}} value=${pid} onChange=${e=>setPid(e.target.value)}>
@@ -4122,8 +4188,8 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
           </div>
         </div>`:null}
 
-      ${editT?html`<${TaskModal} task=${editT} onClose=${()=>setEditT(null)} onSave=${saveT} onDel=${delT} projects=${projects} users=${users} cu=${cu} onSetReminder=${onSetReminder}/>`:null}
-      ${newT?html`<${TaskModal} task=${null} onClose=${()=>setNewT(false)} onSave=${saveT} projects=${projects} users=${users} cu=${cu} onSetReminder=${onSetReminder}/>`:null}
+      ${editT?html`<${TaskModal} task=${editT} onClose=${()=>setEditT(null)} onSave=${saveT} onDel=${delT} projects=${projects} users=${users} cu=${cu} onSetReminder=${onSetReminder} teams=${teams||[]}/>`:null}
+      ${newT?html`<${TaskModal} task=${null} onClose=${()=>setNewT(false)} onSave=${saveT} projects=${projects} users=${users} cu=${cu} onSetReminder=${onSetReminder} teams=${teams||[]}/>`:null}
     </div>`;
 }
 
@@ -7647,7 +7713,7 @@ function App(){
           <${ErrorBoundary}>
             ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${data.tasks} projects=${data.projects} users=${data.users} onNav=${setView}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${data.projects} tasks=${data.tasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}/>`:null}
-            ${baseView==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}}
+            ${baseView==='tasks'?html`<${TasksView} tasks=${data.tasks} projects=${data.projects} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
             />`:null}
