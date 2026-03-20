@@ -3536,6 +3536,7 @@ function AuthScreen({onLogin}){
   const [otpCode,setOtpCode]=useState('');
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+  const canvasRef=useRef(null);
 
   useEffect(()=>{
     if(otpResendCd<=0)return;
@@ -3544,18 +3545,157 @@ function AuthScreen({onLogin}){
   },[otpResendCd]);
 
   useEffect(()=>{
-    if(otpStep && otpRefs[0].current) otpRefs[0].current.focus();
+    if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
   },[otpStep]);
+
+  // Canvas animation for right panel
+  useEffect(()=>{
+    const canvas=canvasRef.current;
+    if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    let animId,frame=0;
+    const setSize=()=>{canvas.width=canvas.offsetWidth||700;canvas.height=canvas.offsetHeight||900;};
+    setSize();
+    const ro=new ResizeObserver(setSize);ro.observe(canvas);
+
+    const N=38;
+    const pts=Array.from({length:N},()=>({
+      x:Math.random(),y:Math.random(),
+      vx:(Math.random()-.5)*0.00025,vy:(Math.random()-.5)*0.00025,
+      r:Math.random()*2.2+1,phase:Math.random()*Math.PI*2,
+      sp:0.018+Math.random()*0.012,
+      col:Math.random()>.55?'99,91,255':Math.random()>.4?'170,255,0':'59,130,246',
+    }));
+
+    const orbs=[
+      {x:.15,y:.20,r:110,vx:.00010,vy:.00008,col:'rgba(170,255,0,0.045)'},
+      {x:.80,y:.60,r:145,vx:-.00009,vy:.00011,col:'rgba(99,91,255,0.050)'},
+      {x:.50,y:.05,r:85,vx:.00013,vy:-.00007,col:'rgba(59,130,246,0.045)'},
+      {x:.90,y:.25,r:70,vx:-.00011,vy:.00014,col:'rgba(170,255,0,0.035)'},
+      {x:.08,y:.75,r:95,vx:.00008,vy:-.00010,col:'rgba(139,92,246,0.040)'},
+    ];
+
+    // 3 floating "task cards" that drift slowly
+    const cards=[
+      {x:.78,y:.18,w:130,h:52,vx:-.00006,vy:.00004,title:'Auth flow redesign',tag:'HIGH',tagC:'#f87171'},
+      {x:.82,y:.72,w:145,h:52,vx:.00005,vy:-.00007,title:'Deploy to Railway',tag:'DONE',tagC:'#4ade80'},
+      {x:.68,y:.45,w:120,h:52,vx:-.00008,vy:.00005,title:'AI integration',tag:'MED',tagC:'#fbbf24'},
+    ];
+
+    const draw=()=>{
+      const W=canvas.width,H=canvas.height;
+      frame++;
+      const t=frame*0.016;
+      ctx.clearRect(0,0,W,H);
+
+      // Background
+      const bg=ctx.createLinearGradient(0,0,W,H);
+      bg.addColorStop(0,'#eef0f7');bg.addColorStop(.5,'#f2f0fa');bg.addColorStop(1,'#edf2f7');
+      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+      // Dot grid
+      for(let gx=24;gx<W;gx+=40){
+        for(let gy=24;gy<H;gy+=40){
+          ctx.beginPath();ctx.arc(gx,gy,1,0,Math.PI*2);
+          ctx.fillStyle='rgba(130,120,200,0.10)';ctx.fill();
+        }
+      }
+
+      // Orbs
+      orbs.forEach(o=>{
+        o.x+=o.vx;o.y+=o.vy;
+        if(o.x<-.2||o.x>1.2)o.vx*=-1;
+        if(o.y<-.2||o.y>1.2)o.vy*=-1;
+        const g=ctx.createRadialGradient(o.x*W,o.y*H,0,o.x*W,o.y*H,o.r*2.2);
+        g.addColorStop(0,o.col);g.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(o.x*W,o.y*H,o.r*2.2,0,Math.PI*2);ctx.fill();
+      });
+
+      // Particles + connections
+      pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.phase+=p.sp;
+        if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=1;if(p.y>1)p.y=0;
+      });
+      for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){
+        const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<100){ctx.strokeStyle='rgba(100,90,220,'+(0.10*(1-d/100))+')';ctx.lineWidth=.6;
+          ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.stroke();}
+      }
+      pts.forEach(p=>{
+        const a=.18+Math.sin(p.phase)*.12,r=p.r+Math.sin(p.phase)*.7;
+        ctx.beginPath();ctx.arc(p.x*W,p.y*H,r,0,Math.PI*2);
+        ctx.fillStyle='rgba('+p.col+','+a+')';ctx.fill();
+      });
+
+      // Pulsing rings
+      [{cx:.12,cy:.15,br:22,sp:.7},{cx:.88,cy:.48,br:18,sp:.9},{cx:.40,cy:.90,br:15,sp:.8},{cx:.72,cy:.10,br:20,sp:1.0}]
+      .forEach((ring,i)=>{
+        [1,1.7].forEach((scale,ri)=>{
+          const pulse=Math.sin(t*ring.sp+i*1.3)*8;
+          ctx.beginPath();ctx.arc(ring.cx*W,ring.cy*H,(ring.br+pulse)*scale,0,Math.PI*2);
+          ctx.strokeStyle='rgba(170,255,0,'+(ri===0?.18:.07)+')';ctx.lineWidth=1.2;ctx.stroke();
+        });
+      });
+
+      // Rotating hexagons
+      [{cx:.92,cy:.85,s:20,rs:.0016},{cx:.05,cy:.42,s:14,rs:-.0013},{cx:.60,cy:.94,s:17,rs:.0019}]
+      .forEach((h,i)=>{
+        ctx.save();ctx.translate(h.cx*W,h.cy*H);ctx.rotate(t*h.rs+i*2.1);
+        ctx.beginPath();
+        for(let k=0;k<6;k++){const a=k*Math.PI/3;k===0?ctx.moveTo(Math.cos(a)*h.s,Math.sin(a)*h.s):ctx.lineTo(Math.cos(a)*h.s,Math.sin(a)*h.s);}
+        ctx.closePath();ctx.strokeStyle='rgba(99,91,255,0.20)';ctx.lineWidth=1.2;ctx.stroke();
+        ctx.restore();
+      });
+
+      // Floating task cards
+      cards.forEach(c=>{
+        c.x+=c.vx;c.y+=c.vy;
+        if(c.x<-.3||c.x>1.1)c.vx*=-1;if(c.y<-.3||c.y>1.1)c.vy*=-1;
+        const cx=c.x*W,cy=c.y*H,w=c.w,h=c.h,r=10;
+        ctx.save();ctx.globalAlpha=.55;
+        // card shadow
+        ctx.shadowColor='rgba(99,91,255,0.12)';ctx.shadowBlur=16;ctx.shadowOffsetY=4;
+        // card bg
+        ctx.fillStyle='rgba(255,255,255,0.82)';
+        ctx.beginPath();ctx.moveTo(cx+r,cy);ctx.lineTo(cx+w-r,cy);ctx.arcTo(cx+w,cy,cx+w,cy+r,r);
+        ctx.lineTo(cx+w,cy+h-r);ctx.arcTo(cx+w,cy+h,cx+w-r,cy+h,r);
+        ctx.lineTo(cx+r,cy+h);ctx.arcTo(cx,cy+h,cx,cy+h-r,r);
+        ctx.lineTo(cx,cy+r);ctx.arcTo(cx,cy,cx+r,cy,r);ctx.closePath();ctx.fill();
+        ctx.shadowBlur=0;
+        // top color bar
+        ctx.fillStyle=c.tagC;ctx.beginPath();ctx.moveTo(cx+r,cy);ctx.lineTo(cx+w-r,cy);
+        ctx.arcTo(cx+w,cy,cx+w,cy+r,r);ctx.lineTo(cx+w,cy+4);ctx.lineTo(cx,cy+4);
+        ctx.lineTo(cx,cy+r);ctx.arcTo(cx,cy,cx+r,cy,r);ctx.closePath();ctx.fill();
+        // title text
+        ctx.globalAlpha=.8;ctx.fillStyle='#1a1a2e';ctx.font='600 11px system-ui,sans-serif';
+        ctx.fillText(c.title,cx+10,cy+22);
+        // tag pill
+        ctx.fillStyle=c.tagC+'33';ctx.beginPath();
+        const tw=ctx.measureText(c.tag).width+14;
+        ctx.roundRect(cx+10,cy+30,tw,14,4);ctx.fill();
+        ctx.fillStyle=c.tagC;ctx.font='700 9px system-ui,sans-serif';
+        ctx.fillText(c.tag,cx+17,cy+41);
+        ctx.restore();
+      });
+
+      // Subtle diagonal lines (top-left corner decoration)
+      ctx.save();ctx.globalAlpha=.04;ctx.strokeStyle='#6366f1';ctx.lineWidth=1;
+      for(let d=-100;d<300;d+=18){ctx.beginPath();ctx.moveTo(d,0);ctx.lineTo(d+300,300);ctx.stroke();}
+      ctx.restore();
+
+      animId=requestAnimationFrame(draw);
+    };
+    draw();
+    return()=>{ro.disconnect();cancelAnimationFrame(animId);};
+  },[]);
 
   const go=async()=>{
     setErr('');setBusy(true);
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
-      if(r.error){setErr(r.error);}
-      else if(r.otp_required){
-        setOtpEmail(r.email);setOtpName(r.name);
-        setOtpStep(true);setOtpResendCd(60);
-      } else {onLogin(r);}
+      if(r.error)setErr(r.error);
+      else if(r.otp_required){setOtpEmail(r.email);setOtpName(r.name);setOtpStep(true);setOtpResendCd(60);}
+      else onLogin(r);
     } else {
       if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
       if(regMode==='create'&&!wsName){setErr('Workspace name required.');setBusy(false);return;}
@@ -3576,330 +3716,187 @@ function AuthScreen({onLogin}){
   };
 
   const resendOtp=async()=>{
-    if(otpResendCd>0)return;
-    setErr('');
+    if(otpResendCd>0)return;setErr('');
     const r=await api.post('/api/auth/resend-otp',{email:otpEmail});
-    if(r.error)setErr(r.error);
-    else{setOtpResendCd(60);setOtpCode('');}
+    if(r.error)setErr(r.error);else{setOtpResendCd(60);setOtpCode('');}
   };
 
   const handleOtpInput=(i,val)=>{
-    const digits=otpCode.split('');
-    digits[i]=val.slice(-1);
-    const newCode=digits.join('');
-    setOtpCode(newCode);
+    const digits=otpCode.split('');digits[i]=val.slice(-1);
+    const newCode=digits.join('');setOtpCode(newCode);
     if(val&&i<5&&otpRefs[i+1].current)otpRefs[i+1].current.focus();
     if(newCode.length===6&&digits.every(d=>d))setTimeout(submitOtp,80);
   };
-
   const handleOtpKey=(i,e)=>{
     if(e.key==='Backspace'&&!otpCode[i]&&i>0)otpRefs[i-1].current.focus();
     if(e.key==='Enter')submitOtp();
   };
-
   const handleOtpPaste=(e)=>{
-    const pasted=e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
-    if(pasted.length===6){setOtpCode(pasted);setTimeout(submitOtp,80);}
+    const p=e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+    if(p.length===6){setOtpCode(p);setTimeout(submitOtp,80);}
   };
-
-  // Animated canvas background for right panel
-  const canvasRef=useRef(null);
-  useEffect(()=>{
-    const canvas=canvasRef.current;
-    if(!canvas)return;
-    const ctx=canvas.getContext('2d');
-    let animId;
-    const resize=()=>{canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;};
-    resize();
-    window.addEventListener('resize',resize);
-
-    // Floating orbs
-    const orbs=[
-      {x:0.2,y:0.3,r:120,vx:0.00018,vy:0.00012,color:'rgba(170,255,0,0.06)'},
-      {x:0.7,y:0.6,r:160,vx:-0.00014,vy:0.00016,color:'rgba(99,102,241,0.07)'},
-      {x:0.5,y:0.1,r:90,vx:0.00022,vy:-0.00010,color:'rgba(59,130,246,0.06)'},
-      {x:0.85,y:0.2,r:70,vx:-0.00016,vy:0.00020,color:'rgba(170,255,0,0.04)'},
-      {x:0.1,y:0.8,r:110,vx:0.00012,vy:-0.00014,color:'rgba(139,92,246,0.05)'},
-    ];
-
-    // Floating particles
-    const particles=Array.from({length:28},()=>({
-      x:Math.random(),y:Math.random(),
-      vx:(Math.random()-0.5)*0.00015,
-      vy:(Math.random()-0.5)*0.00015,
-      r:Math.random()*2+0.8,
-      alpha:Math.random()*0.4+0.1,
-      color:Math.random()>0.5?'170,255,0':'99,102,241',
-    }));
-
-    // Grid lines
-    const drawGrid=(w,h)=>{
-      ctx.strokeStyle='rgba(170,255,0,0.03)';
-      ctx.lineWidth=1;
-      const spacing=60;
-      for(let x=0;x<w;x+=spacing){
-        ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();
-      }
-      for(let y=0;y<h;y+=spacing){
-        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
-      }
-    };
-
-    let t=0;
-    const draw=()=>{
-      const w=canvas.width,h=canvas.height;
-      ctx.clearRect(0,0,w,h);
-
-      // Background
-      ctx.fillStyle='#f8f9fc';
-      ctx.fillRect(0,0,w,h);
-
-      // Grid
-      drawGrid(w,h);
-
-      // Orbs
-      orbs.forEach(o=>{
-        o.x+=o.vx;o.y+=o.vy;
-        if(o.x<-0.1||o.x>1.1)o.vx*=-1;
-        if(o.y<-0.1||o.y>1.1)o.vy*=-1;
-        const grd=ctx.createRadialGradient(o.x*w,o.y*h,0,o.x*w,o.y*h,o.r*1.5);
-        grd.addColorStop(0,o.color);
-        grd.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=grd;
-        ctx.beginPath();ctx.arc(o.x*w,o.y*h,o.r*1.5,0,Math.PI*2);ctx.fill();
-      });
-
-      // Particles
-      particles.forEach(p=>{
-        p.x+=p.vx;p.y+=p.vy;
-        if(p.x<0)p.x=1;if(p.x>1)p.x=0;
-        if(p.y<0)p.y=1;if(p.y>1)p.y=0;
-        ctx.beginPath();
-        ctx.arc(p.x*w,p.y*h,p.r,0,Math.PI*2);
-        ctx.fillStyle='rgba('+p.color+','+p.alpha+')';
-        ctx.fill();
-      });
-
-      // Floating rings
-      const rings=[
-        {cx:0.15,cy:0.25,baseR:30,speed:0.0008},
-        {cx:0.82,cy:0.55,baseR:22,speed:0.0012},
-        {cx:0.45,cy:0.85,baseR:18,speed:0.0010},
-        {cx:0.68,cy:0.15,baseR:25,speed:0.0007},
-      ];
-      rings.forEach(ring=>{
-        const pulse=Math.sin(t*ring.speed*1000)*8;
-        ctx.beginPath();
-        ctx.arc(ring.cx*w,ring.cy*h,ring.baseR+pulse,0,Math.PI*2);
-        ctx.strokeStyle='rgba(170,255,0,0.12)';
-        ctx.lineWidth=1;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(ring.cx*w,ring.cy*h,(ring.baseR+pulse)*1.5,0,Math.PI*2);
-        ctx.strokeStyle='rgba(170,255,0,0.05)';
-        ctx.lineWidth=1;
-        ctx.stroke();
-      });
-
-      // Connecting lines between nearby particles
-      ctx.lineWidth=0.5;
-      for(let i=0;i<particles.length;i++){
-        for(let j=i+1;j<particles.length;j++){
-          const dx=(particles[i].x-particles[j].x)*w;
-          const dy=(particles[i].y-particles[j].y)*h;
-          const dist=Math.sqrt(dx*dx+dy*dy);
-          if(dist<100){
-            ctx.strokeStyle='rgba(170,255,0,'+(0.08*(1-dist/100))+')';
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x*w,particles[i].y*h);
-            ctx.lineTo(particles[j].x*w,particles[j].y*h);
-            ctx.stroke();
-          }
-        }
-      }
-
-      t=Date.now();
-      animId=requestAnimationFrame(draw);
-    };
-    draw();
-    return()=>{window.removeEventListener('resize',resize);cancelAnimationFrame(animId);};
-  },[]);
 
   const leftPanel=html`
     <div style=${{
-      flex:'0 0 42%',background:'linear-gradient(150deg,#0a1220 0%,#0d1f00 45%,#0a1220 100%)',
+      width:'400px',flexShrink:0,minHeight:'100vh',
+      background:'linear-gradient(150deg,#0a1220 0%,#0d1f00 45%,#0a1220 100%)',
       display:'flex',flexDirection:'column',justifyContent:'space-between',
-      padding:'48px 44px',position:'relative',overflow:'hidden',
+      padding:'48px 40px',position:'relative',overflow:'hidden',
       borderRight:'1px solid rgba(170,255,0,0.10)'
     }}>
       <div style=${{position:'absolute',width:500,height:500,borderRadius:'50%',background:'rgba(170,255,0,0.07)',filter:'blur(100px)',top:-160,left:-120,pointerEvents:'none'}}></div>
       <div style=${{position:'absolute',width:350,height:350,borderRadius:'50%',background:'rgba(59,130,246,0.08)',filter:'blur(80px)',bottom:20,right:-80,pointerEvents:'none'}}></div>
       <div style=${{position:'absolute',width:200,height:200,borderRadius:'50%',background:'rgba(139,92,246,0.07)',filter:'blur(60px)',top:'40%',left:'30%',pointerEvents:'none'}}></div>
-
       <div style=${{position:'relative',zIndex:1}}>
         <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:48}}>
-          <div style=${{width:36,height:36,borderRadius:10,background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 20px rgba(170,255,0,0.4)'}}>
+          <div style=${{width:36,height:36,borderRadius:10,background:'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 20px rgba(170,255,0,0.4)'}}>
             <svg width="19" height="19" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
           <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:17,color:'#ffffff',letterSpacing:-0.4}}>ProjectFlow</span>
         </div>
-
-        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.6rem,2.9vw,2.2rem)',fontWeight:800,color:'#ffffff',lineHeight:1.18,marginBottom:14,letterSpacing:-0.5,textShadow:'0 2px 20px rgba(0,0,0,0.5)'}}>
-          The workspace<br/>your team<br/><span style=${{color:'var(--ac)',textShadow:'0 0 20px rgba(170,255,0,0.4)'}}>actually uses.</span>
+        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.6rem,2.4vw,2.1rem)',fontWeight:800,color:'#ffffff',lineHeight:1.18,marginBottom:14,letterSpacing:-0.5}}>
+          The workspace<br/>your team<br/><span style=${{color:'#aaff00',textShadow:'0 0 24px rgba(170,255,0,0.5)'}}>actually uses.</span>
         </h2>
-        <p style=${{fontSize:13,color:'rgba(255,255,255,0.65)',lineHeight:1.75,maxWidth:300,marginBottom:36}}>
+        <p style=${{fontSize:13,color:'rgba(255,255,255,0.60)',lineHeight:1.75,maxWidth:290,marginBottom:36}}>
           Tasks, AI assistant, huddle calls, tickets, and timeline tracking — all in one place.
         </p>
-
         <div style=${{display:'flex',flexDirection:'column',gap:9}}>
-          ${[
-            ['📋','Smart task boards with custom stages'],
-            ['🤖','AI assistant with workspace context'],
-            ['📅','Timeline tracker and health badges'],
-            ['💬','Real-time messaging and direct DMs'],
-            ['📞','Instant voice huddle calls'],
-            ['🎫','Support tickets and bug tracking'],
-          ].map(([ico,txt])=>html`
+          ${[['📋','Smart task boards with custom stages'],['🤖','AI assistant with workspace context'],['📅','Timeline tracker and health badges'],['💬','Real-time messaging and direct DMs'],['📞','Instant voice huddle calls'],['🎫','Support tickets and bug tracking']].map(([ico,txt])=>html`
             <div key=${txt} style=${{display:'flex',alignItems:'center',gap:10}}>
               <div style=${{width:26,height:26,borderRadius:7,background:'rgba(170,255,0,0.10)',border:'1px solid rgba(170,255,0,0.18)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>${ico}</div>
-              <span style=${{fontSize:12,color:'rgba(255,255,255,0.75)',fontWeight:400}}>${txt}</span>
-            </div>
-          `)}
+              <span style=${{fontSize:12,color:'rgba(255,255,255,0.72)'}}>${txt}</span>
+            </div>`)}
         </div>
       </div>
-
       <div style=${{position:'relative',zIndex:1,marginTop:36}}>
         <div style=${{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(170,255,0,0.08)',border:'1px solid rgba(170,255,0,0.18)',padding:'6px 13px',borderRadius:100}}>
-          <div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',boxShadow:'0 0 8px var(--ac)',animation:'pulse 2s ease-in-out infinite'}}></div>
+          <div style=${{width:6,height:6,borderRadius:'50%',background:'#aaff00',boxShadow:'0 0 8px #aaff00'}}></div>
           <span style=${{fontSize:10,color:'#aaff00',fontWeight:600,letterSpacing:.04}}>v4.0 · Railway · PostgreSQL · bcrypt</span>
         </div>
       </div>
     </div>`;
 
-  if(otpStep) return html`
-    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex'}}>
-      ${leftPanel}
-      <div style=${{flex:1,position:'relative',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
-        <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',zIndex:0}}></canvas>
-        <div style=${{position:'relative',zIndex:1,width:'100%',maxWidth:400}}>
-          <div style=${{textAlign:'center',marginBottom:28}}>
-            <div style=${{width:58,height:58,borderRadius:16,background:'rgba(170,255,0,0.1)',border:'1px solid rgba(170,255,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:26}}>🔐</div>
-            <h2 style=${{fontSize:20,fontWeight:700,color:'var(--tx)',marginBottom:6}}>Check your email</h2>
-            <p style=${{fontSize:13,color:'var(--tx2)',marginBottom:2}}>We sent a 6-digit code to</p>
-            <p style=${{fontSize:14,fontWeight:700,color:'var(--ac)'}}>${otpEmail}</p>
-          </div>
-          <div class="card" style=${{padding:28}}>
-            <div style=${{display:'flex',gap:10,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
-              ${[0,1,2,3,4,5].map(i=>html`
-                <input key=${i} ref=${otpRefs[i]}
-                  style=${{width:50,height:58,borderRadius:12,border:'2px solid '+(otpCode[i]?'var(--ac)':'var(--bd)'),background:'var(--sf2)',color:'var(--tx)',fontSize:24,fontWeight:700,textAlign:'center',fontFamily:'monospace',outline:'none',transition:'border-color .15s',boxShadow:otpCode[i]?'0 0 12px rgba(170,255,0,0.15)':'none'}}
-                  maxLength=1 value=${otpCode[i]||''}
-                  onInput=${e=>handleOtpInput(i,e.target.value)}
-                  onKeyDown=${e=>handleOtpKey(i,e)}
-                  onFocus=${e=>e.target.select()}
-                />`)}
-            </div>
-            ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'8px 12px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)',marginBottom:12,textAlign:'center'}}>${err}</div>`:null}
-            <button class="btn bp" style=${{justifyContent:'center',height:44,width:'100%',marginBottom:14,fontSize:14}} onClick=${submitOtp} disabled=${busy||otpCode.length!==6}>
-              ${busy?html`<span class="spin"></span>`:'Verify and Sign In'}
-            </button>
-            <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:10}}>
-              <span style=${{fontSize:12,color:'var(--tx3)'}}>Didn't receive it?</span>
-              <button onClick=${resendOtp} disabled=${otpResendCd>0}
-                style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'var(--tx3)':'var(--ac)',fontSize:12,fontWeight:600,padding:0}}>
-                ${otpResendCd>0?'Resend in '+otpResendCd+'s':'Resend code'}
-              </button>
-            </div>
-            <div style=${{textAlign:'center'}}>
-              <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
-                style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:12}}>
-                Back to login
-              </button>
-            </div>
-          </div>
-          <p style=${{textAlign:'center',fontSize:11,color:'var(--tx3)',marginTop:12}}>Expires in 10 minutes. Do not share this code.</p>
-        </div>
+  const rightPanel=(child)=>html`
+    <div style=${{flex:1,minHeight:'100vh',position:'relative',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 32px',overflowY:'auto'}}>
+      <canvas ref=${canvasRef} style=${{position:'absolute',top:0,left:0,right:0,bottom:0,width:'100%',height:'100%',display:'block',zIndex:0,pointerEvents:'none'}}></canvas>
+      <div style=${{position:'relative',zIndex:2,width:'100%',maxWidth:480}}>
+        ${child}
       </div>
     </div>`;
 
-  return html`
-    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex'}}>
+  if(otpStep) return html`
+    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
-      <div style=${{flex:1,position:'relative',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
-        <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',zIndex:0}}></canvas>
-        <div style=${{position:'relative',zIndex:1,width:'100%',maxWidth:460}}>
-          <div style=${{marginBottom:24}}>
-            <h2 style=${{fontSize:22,fontWeight:700,color:'var(--tx)',marginBottom:5,letterSpacing:-0.3}}>
-              ${tab==='login'?'Welcome back':'Create your account'}
-            </h2>
-            <p style=${{fontSize:13,color:'var(--tx2)'}}>
-              ${tab==='login'?'Sign in to your ProjectFlow workspace':'Set up your workspace and start shipping'}
-            </p>
+      ${rightPanel(html`
+        <div style=${{textAlign:'center',marginBottom:28}}>
+          <div style=${{width:58,height:58,borderRadius:16,background:'rgba(99,91,255,0.10)',border:'1px solid rgba(99,91,255,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:28}}>🔐</div>
+          <h2 style=${{fontSize:20,fontWeight:700,color:'#1a1a2e',marginBottom:6}}>Check your email</h2>
+          <p style=${{fontSize:13,color:'#666',marginBottom:2}}>We sent a 6-digit code to</p>
+          <p style=${{fontSize:14,fontWeight:700,color:'#6363ff'}}>${otpEmail}</p>
+        </div>
+        <div class="card" style=${{padding:28,background:'rgba(255,255,255,0.92)',backdropFilter:'blur(16px)',border:'1px solid rgba(255,255,255,0.8)',boxShadow:'0 8px 40px rgba(100,90,200,0.12)'}}>
+          <div style=${{display:'flex',gap:10,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
+            ${[0,1,2,3,4,5].map(i=>html`
+              <input key=${i} ref=${otpRefs[i]}
+                style=${{width:50,height:58,borderRadius:12,border:'2px solid '+(otpCode[i]?'#6363ff':'rgba(0,0,0,0.12)'),background:'#fff',color:'#1a1a2e',fontSize:24,fontWeight:700,textAlign:'center',fontFamily:'monospace',outline:'none',transition:'border-color .15s',boxShadow:otpCode[i]?'0 0 12px rgba(99,91,255,0.2)':'none'}}
+                maxLength=1 value=${otpCode[i]||''}
+                onInput=${e=>handleOtpInput(i,e.target.value)}
+                onKeyDown=${e=>handleOtpKey(i,e)}
+                onFocus=${e=>e.target.select()}
+              />`)}
           </div>
-
-          <div class="card" style=${{padding:28}}>
-            <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:10,padding:4,marginBottom:22}}>
-              ${['login','register'].map(t=>html`
-                <button key=${t} class=${'tb'+(tab===t?' act':'')} style=${{flex:1,padding:'8px 0',fontSize:13}}
-                  onClick=${()=>{setTab(t);setErr('');}}>
-                  ${t==='login'?'Sign In':'Create Account'}
-                </button>`)}
-            </div>
-
-            ${tab==='register'?html`
-              <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:16}}>
-                ${[['create','New Workspace'],['join','Join Workspace']].map(([m,lbl])=>html`
-                  <button key=${m} class=${'tb'+(regMode===m?' act':'')} style=${{flex:1,padding:'6px 0',fontSize:11}}
-                    onClick=${()=>setRegMode(m)}>${lbl}</button>`)}
-              </div>
-              ${regMode==='create'?html`
-                <div style=${{marginBottom:14}}><label class="lbl">Workspace Name</label>
-                  <input class="inp" placeholder="e.g. Acme Corp, My Startup" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
-              ${regMode==='join'?html`
-                <div style=${{marginBottom:14,padding:'12px 14px',background:'rgba(99,102,241,.06)',borderRadius:10,border:'1px solid rgba(170,255,0,.15)'}}>
-                  <label class="lbl">Invite Code</label>
-                  <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode}
-                    onInput=${e=>setInviteCode(e.target.value.toUpperCase())}
-                    style=${{fontFamily:'monospace',letterSpacing:3,fontSize:16,textAlign:'center'}}/>
-                  <p style=${{fontSize:11,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Get this code from your workspace admin</p>
-                </div>`:null}`:null}
-
-            <div style=${{display:'flex',flexDirection:'column',gap:14}}>
-              ${tab==='register'?html`
-                <div><label class="lbl">Full Name</label>
-                  <input class="inp" placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
-              <div><label class="lbl">Email Address</label>
-                <input class="inp" type="email" placeholder="you@company.com" value=${email}
-                  onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}
-                  style=${{fontSize:14}}/></div>
-              <div><label class="lbl">Password</label>
-                <div style=${{position:'relative'}}>
-                  <input class="inp" style=${{paddingRight:44,fontSize:14}} type=${showPw?'text':'password'}
-                    placeholder="Enter your password" value=${pw}
-                    onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
-                  <button onClick=${()=>setShowPw(!showPw)}
-                    style=${{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:15,padding:0}}>
-                    ${showPw?'🙈':'👁'}
-                  </button>
-                </div>
-              </div>
-              ${tab==='register'?html`
-                <div><label class="lbl">Role</label>
-                  <select class="sel" value=${role} onChange=${e=>setRole(e.target.value)}>
-                    ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
-                  </select></div>`:null}
-              ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'9px 13px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)',display:'flex',alignItems:'center',gap:7}}>⚠️ ${err}</div>`:null}
-              <button class="btn bp" style=${{justifyContent:'center',height:46,fontSize:14,marginTop:2}} onClick=${go} disabled=${busy}>
-                ${busy?html`<span class="spin"></span>`:(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace and Account →':'Join Workspace →')}
-              </button>
-            </div>
+          ${err?html`<div style=${{color:'#dc2626',fontSize:12,padding:'8px 12px',background:'rgba(220,38,38,.07)',borderRadius:8,border:'1px solid rgba(220,38,38,.2)',marginBottom:12,textAlign:'center'}}>${err}</div>`:null}
+          <button class="btn bp" style=${{justifyContent:'center',height:44,width:'100%',marginBottom:14,fontSize:14}} onClick=${submitOtp} disabled=${busy||otpCode.length!==6}>
+            ${busy?html`<span class="spin"></span>`:'✓ Verify and Sign In'}
+          </button>
+          <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:10}}>
+            <span style=${{fontSize:12,color:'#999'}}>Didn't receive it?</span>
+            <button onClick=${resendOtp} disabled=${otpResendCd>0}
+              style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'#bbb':'#6363ff',fontSize:12,fontWeight:600,padding:0}}>
+              ${otpResendCd>0?'Resend in '+otpResendCd+'s':'Resend code'}
+            </button>
           </div>
+          <div style=${{textAlign:'center'}}>
+            <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
+              style=${{background:'none',border:'none',cursor:'pointer',color:'#999',fontSize:12}}>
+              ← Back to login
+            </button>
+          </div>
+        </div>
+        <p style=${{textAlign:'center',fontSize:11,color:'#aaa',marginTop:12}}>Expires in 10 minutes. Do not share this code.</p>
+      `)}
+    </div>`;
 
-          <p style=${{textAlign:'center',fontSize:11,color:'var(--tx3)',marginTop:14}}>
-            ${tab==='login'?html`Don't have an account? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'var(--ac)',cursor:'pointer',fontSize:11,fontWeight:600,padding:0}}>Create one</button>`:html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'var(--ac)',cursor:'pointer',fontSize:11,fontWeight:600,padding:0}}>Sign in</button>`}
+  return html`
+    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
+      ${leftPanel}
+      ${rightPanel(html`
+        <div style=${{marginBottom:24}}>
+          <h2 style=${{fontSize:22,fontWeight:700,color:'#1a1a2e',marginBottom:5,letterSpacing:-0.3}}>
+            ${tab==='login'?'Welcome back 👋':'Create your account'}
+          </h2>
+          <p style=${{fontSize:13,color:'#666'}}>
+            ${tab==='login'?'Sign in to your ProjectFlow workspace':'Set up your workspace and start shipping'}
           </p>
         </div>
-      </div>
+        <div class="card" style=${{padding:28,background:'rgba(255,255,255,0.92)',backdropFilter:'blur(16px)',border:'1px solid rgba(255,255,255,0.8)',boxShadow:'0 8px 40px rgba(100,90,200,0.12)'}}>
+          <div style=${{display:'flex',gap:4,background:'rgba(0,0,0,0.05)',borderRadius:10,padding:4,marginBottom:22}}>
+            ${['login','register'].map(t=>html`
+              <button key=${t} class=${'tb'+(tab===t?' act':'')} style=${{flex:1,padding:'8px 0',fontSize:13}}
+                onClick=${()=>{setTab(t);setErr('');}}>
+                ${t==='login'?'Sign In':'Create Account'}
+              </button>`)}
+          </div>
+          ${tab==='register'?html`
+            <div style=${{display:'flex',gap:4,background:'rgba(0,0,0,0.04)',borderRadius:9,padding:3,marginBottom:16}}>
+              ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
+                <button key=${m} class=${'tb'+(regMode===m?' act':'')} style=${{flex:1,padding:'6px 0',fontSize:11}}
+                  onClick=${()=>setRegMode(m)}>${lbl}</button>`)}
+            </div>
+            ${regMode==='create'?html`
+              <div style=${{marginBottom:14}}><label class="lbl">Workspace Name</label>
+                <input class="inp" placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
+            ${regMode==='join'?html`
+              <div style=${{marginBottom:14,padding:'12px 14px',background:'rgba(99,91,255,0.05)',borderRadius:10,border:'1px solid rgba(99,91,255,0.15)'}}>
+                <label class="lbl">Invite Code</label>
+                <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode}
+                  onInput=${e=>setInviteCode(e.target.value.toUpperCase())}
+                  style=${{fontFamily:'monospace',letterSpacing:3,fontSize:16,textAlign:'center'}}/>
+                <p style=${{fontSize:11,color:'#999',marginTop:6,textAlign:'center'}}>Get this code from your workspace admin</p>
+              </div>`:null}`:null}
+          <div style=${{display:'flex',flexDirection:'column',gap:14}}>
+            ${tab==='register'?html`
+              <div><label class="lbl">Full Name</label>
+                <input class="inp" placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
+            <div><label class="lbl">Email Address</label>
+              <input class="inp" type="email" placeholder="you@company.com" value=${email}
+                onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()} style=${{fontSize:14}}/></div>
+            <div><label class="lbl">Password</label>
+              <div style=${{position:'relative'}}>
+                <input class="inp" style=${{paddingRight:44,fontSize:14}} type=${showPw?'text':'password'}
+                  placeholder="Enter your password" value=${pw}
+                  onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
+                <button onClick=${()=>setShowPw(!showPw)}
+                  style=${{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#aaa',fontSize:15,padding:0}}>
+                  ${showPw?'🙈':'👁'}
+                </button>
+              </div>
+            </div>
+            ${tab==='register'?html`
+              <div><label class="lbl">Role</label>
+                <select class="sel" value=${role} onChange=${e=>setRole(e.target.value)}>
+                  ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
+                </select></div>`:null}
+            ${err?html`<div style=${{color:'#dc2626',fontSize:12,padding:'9px 13px',background:'rgba(220,38,38,.06)',borderRadius:8,border:'1px solid rgba(220,38,38,.18)',display:'flex',alignItems:'center',gap:7}}>⚠️ ${err}</div>`:null}
+            <button class="btn bp" style=${{justifyContent:'center',height:46,fontSize:14,marginTop:2}} onClick=${go} disabled=${busy}>
+              ${busy?html`<span class="spin"></span>`:(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
+            </button>
+          </div>
+        </div>
+        <p style=${{textAlign:'center',fontSize:11,color:'#aaa',marginTop:14}}>
+          ${tab==='login'?html`Don't have an account? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#6363ff',cursor:'pointer',fontSize:11,fontWeight:600,padding:0}}>Create one</button>`:html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#6363ff',cursor:'pointer',fontSize:11,fontWeight:600,padding:0}}>Sign in</button>`}
+        </p>
+      `)}
     </div>`;
 }
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
