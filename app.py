@@ -603,6 +603,78 @@ def login():
 @app.route("/api/auth/logout",methods=["POST"])
 def logout(): session.clear(); return jsonify({"ok":True})
 
+# ── ONE-TIME SQLite → PostgreSQL Migration Route ──────────────────────────────
+# Visit /migrate-sqlite-to-pg-xk29 once to migrate data, then remove this route
+@app.route("/migrate-sqlite-to-pg-xk29")
+def migrate_sqlite_to_pg():
+    import sqlite3, ssl as _ssl2, urllib.parse as _up2
+    results = []
+
+    # Find SQLite file on the volume
+    sqlite_path = None
+    for candidate in ["/data/projectflow.db", "/data/pf.db", "/data/app.db", "/data/database.db"]:
+        if os.path.exists(candidate):
+            sqlite_path = candidate
+            break
+
+    if not sqlite_path:
+        files = os.listdir("/data") if os.path.isdir("/data") else ["no /data dir"]
+        return jsonify({"error": "No SQLite file found in /data/", "files_in_data": files})
+
+    results.append(f"Found SQLite: {sqlite_path}")
+
+    try:
+        src = sqlite3.connect(sqlite_path)
+        src.row_factory = sqlite3.Row
+
+        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        p = _up2.urlparse(url)
+        ssl_ctx = _ssl2.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = _ssl2.CERT_NONE
+        dst = pg8000.native.Connection(
+            host=p.hostname, port=p.port or 5432,
+            user=p.username, password=p.password,
+            database=p.path.lstrip("/"), ssl_context=ssl_ctx
+        )
+
+        TABLES = ["workspaces","users","projects","tasks","files",
+                  "messages","direct_messages","notifications","reminders",
+                  "call_rooms","teams","tickets","ticket_comments",
+                  "call_signals","push_subscriptions"]
+
+        for table in TABLES:
+            try:
+                rows = src.execute(f"SELECT * FROM {table}").fetchall()
+                if not rows:
+                    results.append(f"  {table}: empty, skipped")
+                    continue
+                cols = list(rows[0].keys())
+                placeholders = ", ".join(f"${i+1}" for i in range(len(cols)))
+                col_names = ", ".join(cols)
+                sql = f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+                count = 0
+                errors = 0
+                for row in rows:
+                    try:
+                        dst.run(sql, parameters=list(row))
+                        count += 1
+                    except Exception as re:
+                        errors += 1
+                dst.run("COMMIT")
+                results.append(f"✅ {table}: {count} rows migrated, {errors} skipped")
+            except Exception as e:
+                results.append(f"❌ {table}: {str(e)}")
+
+        src.close()
+        dst.close()
+        results.append("🎉 Migration complete! Remove this route and redeploy.")
+        return jsonify({"status": "done", "results": results})
+
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e), "results": results})
+# ── End Migration Route ───────────────────────────────────────────────────────
+
 @app.route("/api/auth/register",methods=["POST"])
 def register():
     d=request.json or {}
