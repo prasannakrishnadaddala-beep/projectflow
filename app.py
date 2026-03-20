@@ -42,18 +42,15 @@ def _sql_compat(sql, params=()):
     """Convert SQLite SQL + params to PostgreSQL named-param style for pg8000.
     Returns (pg_sql, params_dict) — pg8000 run() accepts **kwargs for params.
     """
-    # INSERT OR IGNORE → ON CONFLICT DO NOTHING
     if "INSERT OR IGNORE INTO" in sql:
         sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO").rstrip()
         sql += " ON CONFLICT DO NOTHING"
-    # INSERT OR REPLACE for push_subscriptions
     if "INSERT OR REPLACE INTO push_subscriptions" in sql:
         sql = sql.replace("INSERT OR REPLACE INTO push_subscriptions",
                           "INSERT INTO push_subscriptions").rstrip()
         sql += (" ON CONFLICT (endpoint) DO UPDATE SET "
                 "p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, "
                 "created=EXCLUDED.created")
-    # Convert ? → :p0, :p1, ... and build named params dict
     params_dict = {}
     idx = [0]
     def _rep(m):
@@ -84,7 +81,6 @@ class _Cursor:
         self.rowcount = 0
     def execute(self, sql, params=()):
         pg_sql, params_dict = _sql_compat(sql, params)
-        # pg8000 native: pass named params as **kwargs (:p0, :p1, ...)
         if params_dict:
             result = self._conn.run(pg_sql, **params_dict)
         else:
@@ -138,7 +134,6 @@ class _DB:
         return False
 
 def get_secret_key():
-    # Prefer env var (Railway sets this); fall back to file for local dev
     env_key = os.environ.get("SECRET_KEY","")
     if len(env_key) >= 32: return env_key
     if os.path.exists(KEY_FILE):
@@ -181,7 +176,6 @@ def verify_pw(plain, hashed):
         import bcrypt
         if hashed.startswith("$2b$") or hashed.startswith("$2a$"):
             return bcrypt.checkpw(plain.encode(), hashed.encode())
-        # Legacy sha256 hash — verify then silently upgrade to bcrypt
         return hashed == hashlib.sha256(plain.encode()).hexdigest()
     except ImportError:
         return hashed == hashlib.sha256(plain.encode()).hexdigest()
@@ -235,7 +229,6 @@ def send_otp_email(to_email, otp_code, user_name):
     </body>
     </html>
     """
-    # Try workspace SMTP first, then fallback to global
     try:
         send_email(to_email, subject, body)
         return True
@@ -245,7 +238,6 @@ def send_otp_email(to_email, otp_code, user_name):
 def ts(): return datetime.utcnow().isoformat() + 'Z'
 
 # ── Email Configuration & Function ────────────────────────────────────────────
-# Configure these environment variables or modify directly:
 EMAIL_ENABLED = os.environ.get('EMAIL_ENABLED', 'true').lower() == 'true'
 SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
 SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
@@ -256,13 +248,12 @@ APP_URL = os.environ.get('APP_URL', 'http://localhost:5000')
 
 def send_email(to_email, subject, body_html, workspace_id=None):
     """Send an email notification using workspace-specific SMTP settings"""
-    # Get workspace email settings from database
     smtp_config = None
     if workspace_id:
         try:
             with get_db() as db:
-                ws = db.execute("""SELECT smtp_server, smtp_port, smtp_username, smtp_password, 
-                                   from_email, email_enabled FROM workspaces WHERE id=?""", 
+                ws = db.execute("""SELECT smtp_server, smtp_port, smtp_username, smtp_password,
+                                   from_email, email_enabled FROM workspaces WHERE id=?""",
                                 (workspace_id,)).fetchone()
                 if ws and ws['email_enabled']:
                     smtp_config = {
@@ -274,8 +265,7 @@ def send_email(to_email, subject, body_html, workspace_id=None):
                     }
         except Exception as e:
             print(f"[Email] Error loading config: {e}")
-    
-    # Fall back to environment variables if no workspace config
+
     if not smtp_config or not smtp_config.get('username') or not smtp_config.get('password'):
         if not SMTP_USERNAME or not SMTP_PASSWORD:
             print(f"[Email] Skipped (not configured): {subject} -> {to_email}")
@@ -287,21 +277,21 @@ def send_email(to_email, subject, body_html, workspace_id=None):
             'password': SMTP_PASSWORD,
             'from_email': FROM_EMAIL or SMTP_USERNAME
         }
-    
+
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = smtp_config['from_email']
         msg['To'] = to_email
-        
+
         html_part = MIMEText(body_html, 'html')
         msg.attach(html_part)
-        
+
         with smtplib.SMTP(smtp_config['server'], smtp_config['port'], timeout=30) as server:
             server.starttls()
             server.login(smtp_config['username'], smtp_config['password'])
             server.send_message(msg)
-        
+
         print(f"[Email] Sent: {subject} -> {to_email}")
         return True
     except socket.timeout:
@@ -393,16 +383,11 @@ def get_vapid_keys():
                 if d.get("private") and d.get("public"):
                     return d
         except: pass
-    # Generate new P-256 key pair using pure Python (no pywebpush required)
     try:
         import struct
-        # Use os.urandom for the private key scalar (32 bytes)
         priv_bytes = os.urandom(32)
         priv_hex = priv_bytes.hex()
-        # For VAPID public key we use a placeholder — real ECDH done by pywebpush if available
-        # Store both; real push requires pywebpush or similar
         keys = {"private": priv_hex, "public": "", "generated": ts()}
-        # Try to derive real public key using cryptography library
         try:
             from cryptography.hazmat.primitives.asymmetric.ec import (
                 generate_private_key, SECP256R1, EllipticCurvePublicKey)
@@ -466,7 +451,6 @@ def push_notification_to_user(db_ignored, user_id, title, body, nav_url="/", tag
         }
         ok = send_web_push(sub_info, payload)
         if not ok and sub["endpoint"]:
-            # If push fails (e.g. subscription expired), mark for cleanup
             dead_ids.append(sub["id"])
     if dead_ids:
         db.execute(f"DELETE FROM push_subscriptions WHERE id IN ({','.join('?'*len(dead_ids))})", dead_ids)
@@ -536,12 +520,10 @@ def init_db():
                 id TEXT PRIMARY KEY, user_id TEXT, workspace_id TEXT,
                 endpoint TEXT UNIQUE, p256dh TEXT, auth TEXT, created TEXT);
         """)
-        # Add teams table if not exists (migration)
         try: db.execute('''CREATE TABLE IF NOT EXISTS teams (
             id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
             lead_id TEXT, member_ids TEXT DEFAULT '[]', created TEXT)''')
         except: pass
-        # Add tickets tables if not exists (migration)
         try: db.executescript('''
             CREATE TABLE IF NOT EXISTS teams (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
@@ -556,23 +538,18 @@ def init_db():
                 user_id TEXT, content TEXT, created TEXT);
         ''')
         except: pass
-        # Add team_id to projects/tasks/tickets if not exists (migration)
         try: db.execute("ALTER TABLE projects ADD COLUMN team_id TEXT DEFAULT ''")
         except: pass
         try: db.execute("ALTER TABLE tickets ADD COLUMN team_id TEXT DEFAULT ''")
         except: pass
-        # Add team_id to tasks if not exists (migration)
         try: db.execute("ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''")
         except: pass
-        # Add is_system column to messages if not exists (migration)
         try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
         except: pass
-        # Add avatar_data column for profile photos
         try: db.execute("ALTER TABLE users ADD COLUMN avatar_data TEXT")
         except: pass
         try: db.execute("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''")
         except: pass
-        # Fix corrupted avatar column: if avatar contains base64 image data, move it to avatar_data and reset avatar to initials
         try:
             corrupted = db.execute("SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%%' OR (length(avatar) > 10 AND avatar !~ '^[A-Z]{1,2}$')").fetchall()
             for row in corrupted:
@@ -584,12 +561,11 @@ def init_db():
                     db.execute("UPDATE users SET avatar=? WHERE id=?", (initials, uid))
         except Exception as e:
             print(f"Avatar cleanup migration error: {e}")
-        # Add email configuration columns to workspaces (migration)
         try: db.execute("ALTER TABLE workspaces ADD COLUMN otp_enabled INTEGER DEFAULT 0")
         except: pass
         try: db.execute("ALTER TABLE workspaces ADD COLUMN dm_enabled INTEGER DEFAULT 1")
         except: pass
-        try: 
+        try:
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_server TEXT")
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_port INTEGER DEFAULT 587")
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_username TEXT")
@@ -597,10 +573,8 @@ def init_db():
             db.execute("ALTER TABLE workspaces ADD COLUMN from_email TEXT")
             db.execute("ALTER TABLE workspaces ADD COLUMN email_enabled INTEGER DEFAULT 1")
         except: pass
-        # Migrate legacy data (no workspace_id)
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
-            # Check if legacy users exist (without workspace_id)
             legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
             ws_id = f"ws{int(datetime.now().timestamp()*1000)}"
             invite = secrets.token_hex(4).upper()
@@ -683,17 +657,14 @@ def login():
         if not u: return jsonify({"error":"Invalid email or password"}),401
         if not verify_pw(password, u["password"]):
             return jsonify({"error":"Invalid email or password"}),401
-        # If password was legacy sha256, silently upgrade to bcrypt
         if not (u["password"].startswith("$2b$") or u["password"].startswith("$2a$")):
             try:
                 new_hash = hash_pw(password)
                 db.execute("UPDATE users SET password=? WHERE id=?",(new_hash, u["id"]))
             except Exception: pass
-        # Check if OTP is enabled for this workspace
         ws = db.execute("SELECT * FROM workspaces WHERE id=?",(u["workspace_id"],)).fetchone()
         otp_enabled = ws and ws.get("otp_enabled", 0)
         if otp_enabled:
-            # Check if SMTP is configured
             smtp_ok = ws.get("smtp_username") and ws.get("smtp_password")
             if smtp_ok:
                 import time as _time
@@ -709,8 +680,6 @@ def login():
                 sent = send_otp_email(email, code, u["name"])
                 if sent:
                     return jsonify({"otp_required": True, "email": email, "name": u["name"]}), 200
-                # If email fails, fall through to direct login
-        # No OTP — log in directly
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
@@ -731,7 +700,6 @@ def verify_otp():
             return jsonify({"error":"OTP has expired. Please log in again."}),400
         if entry["code"] != code:
             return jsonify({"error":"Invalid OTP code. Please try again."}),401
-        # Valid — clear OTP and create session
         del _otp_store[email]
     with get_db() as db:
         u=db.execute("SELECT * FROM users WHERE id=?",(entry["user_id"],)).fetchone()
@@ -750,7 +718,6 @@ def resend_otp():
         entry = _otp_store.get(email)
         if not entry:
             return jsonify({"error":"Session expired. Please log in again."}),400
-        # Rate limit — don't resend if < 60 seconds since last
         last_sent = entry.get("last_sent", 0)
         if _time.time() - last_sent < 60:
             wait = int(60 - (_time.time() - last_sent))
@@ -832,7 +799,6 @@ def update_workspace():
     with get_db() as db:
         if "name" in d: db.execute("UPDATE workspaces SET name=? WHERE id=?",(d["name"],wid()))
         if "ai_api_key" in d: db.execute("UPDATE workspaces SET ai_api_key=? WHERE id=?",(d["ai_api_key"],wid()))
-        # Email settings
         if "smtp_server" in d: db.execute("UPDATE workspaces SET smtp_server=? WHERE id=?",(d["smtp_server"],wid()))
         if "smtp_port" in d: db.execute("UPDATE workspaces SET smtp_port=? WHERE id=?",(d["smtp_port"],wid()))
         if "smtp_username" in d: db.execute("UPDATE workspaces SET smtp_username=? WHERE id=?",(d["smtp_username"],wid()))
@@ -860,7 +826,7 @@ def test_email():
     test_to=d.get("test_email")
     if not test_to:
         return jsonify({"error":"test_email required"}),400
-    
+
     subject="ProjectFlow Email Test"
     body="""
     <html>
@@ -883,7 +849,7 @@ def test_email():
     </body>
     </html>
     """
-    
+
     success=send_email(test_to,subject,body,wid())
     if success:
         return jsonify({"success":True,"message":"Test email sent successfully!"})
@@ -896,7 +862,6 @@ def test_email():
 def get_users():
     with get_db() as db:
         rows = db.execute("SELECT * FROM users WHERE workspace_id=? ORDER BY name",(wid(),)).fetchall()
-        # Determine caller role for field visibility
         caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
         caller_role = caller["role"] if caller else "Developer"
         can_see_passwords = caller_role in ("Admin", "Manager")
@@ -985,7 +950,6 @@ def get_projects():
     team_id = request.args.get("team_id","")
     with get_db() as db:
         if team_id:
-            # Return projects directly assigned to this team
             rows = db.execute(
                 "SELECT * FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC",
                 (wid(), team_id)).fetchall()
@@ -1008,7 +972,6 @@ def create_project():
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
                     d.get("color","#aaff00"),ts(),d.get("team_id","")))
         p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
-        # Notify all members except creator — DB notif + Web Push
         creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cname=creator["name"] if creator else "Someone"
         for uid in members:
@@ -1037,7 +1000,6 @@ def update_project(pid):
                     json.dumps(d.get("members",json.loads(p["members"]))),
                     d.get("team_id",p_team),pid,wid()))
         updated=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
-        # Notify all project members about the update
         actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         aname=actor["name"] if actor else "Someone"
         try: mems=json.loads(updated["members"] or "[]")
@@ -1089,14 +1051,11 @@ def get_tasks():
     team_id = request.args.get("team_id","")
     with get_db() as db:
         if team_id:
-            # Get the team's member list to find tasks by member assignment too
             team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
             member_ids = json.loads(team["member_ids"] if team else "[]")
-            # Get projects belonging to this team
             team_projects = db.execute(
                 "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
             proj_ids = [p["id"] for p in team_projects]
-            # Build query: tasks with team_id match OR assignee in team OR project in team
             all_tasks = db.execute(
                 "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
             proj_set = set(proj_ids)
@@ -1110,10 +1069,8 @@ def get_tasks():
             "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
 
 def next_task_id(db, ws):
-    # Use timestamp-based ID to prevent collisions between gunicorn workers
     import time
     base = int(time.time() * 1000)
-    # Also embed a sequential number for readability
     row=db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=?",(ws,)).fetchone()
     count=row['cnt'] if row else 0
     return f"T-{count+1:03d}-{base % 10000}"
@@ -1133,23 +1090,19 @@ def create_task():
         creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cname=creator["name"] if creator else "Someone"
         base_ts=int(datetime.now().timestamp()*1000)
-        # Notify assignee (if different from creator)
         if d.get("assignee") and d["assignee"]!=session["user_id"]:
             nid=f"n{base_ts}"
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                        (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts()))
-            # Send email notification
             assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(d["assignee"],)).fetchone()
             if assignee_user and assignee_user["email"]:
                 threading.Thread(target=send_task_assigned_email,
                     args=(assignee_user["email"],assignee_user["name"],d["title"],cname,tid,wid()),
                     daemon=True).start()
-            # Web Push — assignee
             threading.Thread(target=push_notification_to_user,
                 args=(db, d["assignee"], f"✅ New task assigned: {d['title']}",
                       f"{cname} assigned you this task [{d.get('priority','medium')}]", "/"),
                 daemon=True).start()
-        # Notify all other project members about the new task
         if d.get("project"):
             proj=db.execute("SELECT name,members FROM projects WHERE id=? AND workspace_id=?",(d["project"],wid())).fetchone()
             if proj:
@@ -1157,7 +1110,6 @@ def create_task():
                     members=json.loads(proj["members"] or "[]")
                 except: members=[]
                 for i,uid in enumerate(members):
-                    # Skip creator and assignee (already notified above)
                     if uid==session["user_id"] or uid==d.get("assignee"): continue
                     nid2=f"n{base_ts+10+i}"
                     db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
@@ -1167,7 +1119,6 @@ def create_task():
                               f"{cname} created '{d['title']}'", "/"),
                         daemon=True).start()
         t=db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()
-        # Auto-post system message to project channel
         if d.get("project"):
             assignee_name=""
             if d.get("assignee"):
@@ -1189,12 +1140,6 @@ def update_task(tid):
         t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not t: return jsonify({"error":"Not found"}),404
 
-        # Permission check:
-        # - Admin and Manager: full access always
-        # - TeamLead: can fully edit any task in the workspace
-        # - Assignee of the task: can update stage/pct only
-        # - Project owner: full edit access for tasks in their project
-        # - Everyone else: no access
         is_admin_manager = cu_role in ("Admin","Manager")
         is_teamlead = cu_role == "TeamLead"
         is_assignee = t["assignee"] == session["user_id"]
@@ -1203,7 +1148,6 @@ def update_task(tid):
 
         if not (is_admin_manager or is_teamlead or is_proj_owner):
             if is_assignee:
-                # Assignee can update stage, pct, and comments
                 allowed={"stage","pct","comments"}
                 if any(k not in allowed for k in d.keys()):
                     return jsonify({"error":"You can only update stage, progress, and comments on tasks assigned to you."}),403
@@ -1223,13 +1167,11 @@ def update_task(tid):
                     tid,wid()))
         if d.get("stage") and d["stage"]!=old_stage:
             base_ts2=int(datetime.now().timestamp()*1000)
-            # Notify assignee
             if t["assignee"] and t["assignee"]!=session["user_id"]:
                 nid=f"n{base_ts2}"
                 db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                            (nid,wid(),"status_change",f"Task '{t['title']}' moved to {d['stage']}",
                             t["assignee"],0,ts()))
-                # Send email notification
                 assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(t["assignee"],)).fetchone()
                 changer_user=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
                 changer_name=changer_user["name"] if changer_user else "Someone"
@@ -1237,12 +1179,10 @@ def update_task(tid):
                     threading.Thread(target=send_status_change_email,
                         args=(assignee_user["email"],assignee_user["name"],t["title"],d["stage"],changer_name,wid()),
                         daemon=True).start()
-                # Web Push — assignee
                 threading.Thread(target=push_notification_to_user,
                     args=(db, t["assignee"], f"🔄 Task updated: {t['title']}",
                           f"{changer_name} moved it to {d['stage']}", "/"),
                     daemon=True).start()
-            # Also notify project members (owner/creator etc)
             if t["project"]:
                 proj=db.execute("SELECT members FROM projects WHERE id=? AND workspace_id=?",(t["project"],wid())).fetchone()
                 if proj:
@@ -1263,7 +1203,6 @@ def update_task(tid):
                 db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                            (sysmid,wid(),"system",t["project"],
                             f"⚡ **{aname}** moved **{t['title']}** → {d['stage'].title()}",ts(),1))
-        # Post new comments to channel
         new_comments=d.get("comments",[])
         old_comments=json.loads(t["comments"] or "[]")
         if len(new_comments)>len(old_comments) and t["project"]:
@@ -1274,19 +1213,16 @@ def update_task(tid):
             db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                        (sysmid,wid(),"system",t["project"],
                         f"💬 **{cname}** commented on **{t['title']}**: {latest.get('text','')}",ts(),1))
-            # Notify assignee about comment
             if t["assignee"] and t["assignee"]!=session["user_id"]:
                 nid2=f"n{int(datetime.now().timestamp()*1000)+4}"
                 db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                            (nid2,wid(),"comment",f"{cname} commented on '{t['title']}': {latest.get('text','')}",
                             t["assignee"],0,ts()))
-                # Send email notification
                 assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(t["assignee"],)).fetchone()
                 if assignee_user and assignee_user["email"]:
                     threading.Thread(target=send_comment_email,
                         args=(assignee_user["email"],assignee_user["name"],t["title"],cname,latest.get('text',''),wid()),
                         daemon=True).start()
-                # Web Push — comment
                 threading.Thread(target=push_notification_to_user,
                     args=(db, t["assignee"], f"💬 Comment on: {t['title']}",
                           f"{cname}: {latest.get('text','')[:80]}", "/"),
@@ -1372,13 +1308,11 @@ def send_message():
     with get_db() as db:
         db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                    (mid,wid(),session["user_id"],d.get("project",""),d.get("content",""),ts(),0))
-        # Notify all OTHER workspace members about new channel message
         sender=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         sender_name=sender["name"] if sender else "Someone"
         project_row=db.execute("SELECT name FROM projects WHERE id=? AND workspace_id=?",(d.get("project",""),wid())).fetchone()
         proj_name=project_row["name"] if project_row else "a project"
         preview=d.get("content","")[:60]+("..." if len(d.get("content",""))>60 else "")
-        # Get all workspace members except sender
         members=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
         base_ts=int(datetime.now().timestamp()*1000)
         for i,m in enumerate(members):
@@ -1409,7 +1343,6 @@ def send_dm():
     with get_db() as db:
         db.execute("INSERT INTO direct_messages VALUES (?,?,?,?,?,?,?)",
                    (mid,wid(),session["user_id"],d["recipient"],d["content"],0,ts()))
-        # Also push a notification to the recipient
         sender=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         sender_name=sender["name"] if sender else "Someone"
         nid=f"n{int(datetime.now().timestamp()*1000)}"
@@ -1452,7 +1385,6 @@ def create_reminder():
                    (rid,wid(),session["user_id"],d.get("task_id",""),d.get("task_title","Reminder"),
                     d["remind_at"],d.get("minutes_before",10),0,ts()))
         row=db.execute("SELECT * FROM reminders WHERE id=?",(rid,)).fetchone()
-        # Confirm push to the user who set the reminder
         threading.Thread(target=push_notification_to_user,
             args=(db, session["user_id"], "⏰ Reminder set",
                   f"'{d.get('task_title','Reminder')}' — you'll be notified before the time.", "/"),
@@ -1472,7 +1404,6 @@ def update_reminder(rid):
         db.execute("UPDATE reminders SET remind_at=?,minutes_before=?,task_title=?,fired=0 WHERE id=? AND user_id=?",
                    (remind_at,minutes_before,task_title,rid,session["user_id"]))
         row=db.execute("SELECT * FROM reminders WHERE id=?",(rid,)).fetchone()
-        # Confirm push — reminder rescheduled
         threading.Thread(target=push_notification_to_user,
             args=(db, session["user_id"], "⏰ Reminder updated",
                   f"'{task_title}' has been rescheduled.", "/"),
@@ -1532,16 +1463,13 @@ def team_dashboard(tid):
         team=db.execute("SELECT * FROM teams WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if not team: return jsonify({"error":"Not found"}),404
         member_ids=json.loads(team["member_ids"] or "[]")
-        # All tasks assigned to any team member OR tagged with this team
         all_tasks=db.execute("SELECT * FROM tasks WHERE workspace_id=?",(wid(),)).fetchall()
         team_tasks=[t for t in all_tasks if t["assignee"] in member_ids or (t["team_id"] if "team_id" in t.keys() else "")==tid]
-        # Projects touched by this team
         proj_ids=list({t["project"] for t in team_tasks if t["project"]})
         projects=[]
         for pid in proj_ids:
             p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
             if p: projects.append(dict(p))
-        # Per-member stats
         member_stats=[]
         for uid in member_ids:
             u=db.execute("SELECT id,name,email,role,avatar,color FROM users WHERE id=?",(uid,)).fetchone()
@@ -1579,10 +1507,8 @@ def get_tickets():
     team_id=request.args.get("team_id","")
     with get_db() as db:
         if team_id:
-            # Get team member ids for filtering by assignee
             team=db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
             member_ids=json.loads(team["member_ids"] if team else "[]")
-            # Get projects belonging to this team
             team_projs=db.execute("SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
             proj_ids=[p["id"] for p in team_projs]
             all_rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
@@ -1611,7 +1537,6 @@ def create_ticket():
                     d.get("priority","medium"),d.get("status","open"),d.get("assignee",""),
                     session["user_id"],d.get("project",""),json.dumps(d.get("tags",[])),now,now,
                     d.get("team_id","")))
-        # Notify assignee
         if d.get("assignee") and d["assignee"]!=session["user_id"]:
             nid=f"n{int(datetime.now().timestamp()*1000)}"
             reporter=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
@@ -1627,7 +1552,6 @@ def update_ticket(tid):
     with get_db() as db:
         cu=db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cu_role=cu["role"] if cu else "Viewer"
-        # Developers can only update status (move ticket along workflow)
         if cu_role=="Developer":
             allowed_fields = {"status"}
             if not set(d.keys()).issubset(allowed_fields):
@@ -1756,7 +1680,6 @@ def send_signal(room_id):
         db.execute("INSERT INTO call_signals VALUES (?,?,?,?,?,?,?,?,?)",
                    (sid,wid(),room_id,session["user_id"],d.get("to_user",""),
                     d.get("type",""),json.dumps(d.get("data",{})),0,ts()))
-        # Clean up old consumed signals (keep last 200 per room)
         old=db.execute("SELECT id FROM call_signals WHERE room_id=? AND consumed=1 ORDER BY created DESC LIMIT -1 OFFSET 200",(room_id,)).fetchall()
         if old: db.execute(f"DELETE FROM call_signals WHERE id IN ({','.join('?'*len(old))})",[r['id'] for r in old])
         return jsonify({"ok":True,"id":sid})
@@ -1892,7 +1815,6 @@ def ai_chat():
         if not api_key:
             return jsonify({"error":"NO_KEY","message":"Please configure your Anthropic API key in Workspace Settings (⚙) to enable AI features."}),400
 
-        # Build context
         projects=db.execute("SELECT id,name,description,target_date,color FROM projects WHERE workspace_id=?",(wid(),)).fetchall()
         tasks=db.execute("SELECT id,title,stage,priority,assignee,project,due,pct FROM tasks WHERE workspace_id=?",(wid(),)).fetchall()
         users=db.execute("SELECT id,name,role FROM users WHERE workspace_id=?",(wid(),)).fetchall()
@@ -1941,7 +1863,6 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
     except Exception as e:
         return jsonify({"error":"NETWORK_ERROR","message":f"Could not reach AI: {str(e)}"}),500
 
-    # Parse and execute actions
     import re
     actions_raw=re.findall(r'<action>(.*?)</action>',ai_text,re.DOTALL)
     action_results=[]
@@ -2022,9 +1943,7 @@ def import_csv():
     with get_db() as db:
         for i, row in enumerate(reader):
             try:
-                # Normalize keys (strip whitespace)
                 row = {k.strip().lower(): (v or "").strip() for k, v in row.items()}
-                # --- Project auto-creation ---
                 proj_id = row.get("project_id", "").strip()
                 proj_name = row.get("project", row.get("project_name", "")).strip()
                 if proj_name and not proj_id:
@@ -2041,7 +1960,6 @@ def import_csv():
                              json.dumps([session["user_id"]]), "", "", 0, "#aaff00", ts())
                         )
                         created_projects += 1
-                # --- Task creation ---
                 title = row.get("title", row.get("task", row.get("task_title", ""))).strip()
                 if not title:
                     errors.append(f"Row {i+2}: missing title, skipped")
@@ -2056,10 +1974,8 @@ def import_csv():
                 pct_raw = row.get("pct", row.get("progress", row.get("completion", "0"))).strip().replace("%","")
                 try: pct = int(float(pct_raw))
                 except: pct = 0
-                # Resolve assignee by name if given
                 assignee_id = row.get("assignee_id", row.get("assignee", "")).strip()
                 if assignee_id and not assignee_id.startswith("u"):
-                    # Try to match by name
                     u = db.execute("SELECT id FROM users WHERE workspace_id=? AND name=?", (wid(), assignee_id)).fetchone()
                     if u: assignee_id = u["id"]
                     else: assignee_id = ""
@@ -2089,13 +2005,11 @@ def health():
 
 @app.route("/js/<path:fn>")
 def serve_js(fn):
-    # Try local file first (exists when running locally with download_js())
     path=os.path.join(JS_DIR,fn)
     if os.path.exists(path) and os.path.getsize(path)>1000:
         mime,_=mimetypes.guess_type(fn)
         return Response(open(path,"rb").read(),mimetype=mime or "application/javascript",
                         headers={"Cache-Control":"public,max-age=86400"})
-    # Map to stable CDN URLs — use cdnjs (more reliable on Railway/cloud)
     CDN={
         "react.min.js":     "https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",
         "react-dom.min.js": "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js",
@@ -2253,10 +2167,8 @@ def icon_512():
 @app.route("/<path:p>")
 def root(p):
     action=request.args.get("action","")
-    # Serve React app for app actions or any sub-path
     if action in ("login","register") or p!="":
         return HTML
-    # Serve landing page at bare /
     return LANDING_HTML
 
 LANDING_HTML = """<!DOCTYPE html>
@@ -2299,7 +2211,6 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:56px;display:flex;ali
 
 /* HERO */
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 28px 0;position:relative;overflow:hidden;}
-#hero-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0;}
 .hero-content{position:relative;z-index:2;text-align:center;max-width:760px;margin:0 auto;}
 .hero-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);padding:5px 14px;border-radius:100px;font-size:.75rem;font-weight:700;color:var(--ac);margin-bottom:24px;letter-spacing:.05em;text-transform:uppercase;}
 .hero-badge-dot{width:5px;height:5px;background:var(--ac);border-radius:50%;}
@@ -2448,7 +2359,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
       <li><a href="#features">Features</a></li>
       <li><a href="#modules">Modules</a></li>
       <li><a href="#how">How it works</a></li>
-      
+
     </ul>
     <div class="nav-cta">
       <a href="/?action=login" class="btn btn-outline">Sign In</a>
@@ -2457,7 +2368,6 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
   </div>
 </nav>
 
-<!-- HERO with ocean canvas -->
 <section class="hero">
   <canvas id="hero-canvas"></canvas>
   <div class="hero-content">
@@ -2470,10 +2380,8 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
     </div>
     <p class="hero-note a4">✓ Free to start &nbsp;·&nbsp; <span>No credit card</span> &nbsp;·&nbsp; Up in 2 minutes</p>
   </div>
-  <!-- App mockup -->
-  <div class="hero-mockup a5">
-    <!-- Tab switcher above mockup -->
-    <div style="display:flex;justify-content:center;gap:6px;margin-bottom:12px;">
+    <div class="hero-mockup a5">
+        <div style="display:flex;justify-content:center;gap:6px;margin-bottom:12px;">
       <button onclick="showTab('dash')" id="tab-dash" style="padding:6px 16px;border-radius:8px;border:1.5px solid #2563eb;background:#2563eb;color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;">Dashboard</button>
       <button onclick="showTab('proj')" id="tab-proj" style="padding:6px 16px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;">Projects</button>
     </div>
@@ -2485,8 +2393,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
         <div class="m-dot" style="background:#28c840"></div>
         <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app</span></div>
       </div>
-      <!-- Top bar -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
           <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
@@ -2511,12 +2418,10 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
           <div class="m-nav">👩‍💻 Analytics</div>
         </div>
         <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
-          <!-- Page header -->
-          <div style="padding:10px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;">
+                    <div style="padding:10px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;">
             <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Dashboard <span style="font-size:.68rem;font-weight:400;color:#94a3b8;margin-left:4px;">Acme Corp Team Dashboard</span></div>
           </div>
-          <!-- Greeting -->
-          <div style="margin:8px 10px;padding:8px 12px;background:#fff;border-radius:10px;border:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+                    <div style="margin:8px 10px;padding:8px 12px;background:#fff;border-radius:10px;border:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
             <div style="display:flex;align-items:center;gap:8px;">
               <div style="width:24px;height:24px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;">P</div>
               <div>
@@ -2525,26 +2430,22 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
               </div>
             </div>
           </div>
-          <!-- Stats row -->
-          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:0 10px 8px;">
+                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:0 10px 8px;">
             <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #2563eb;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">8</div><div style="font-size:.58rem;color:#64748b;">Total Projects</div></div>
             <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #059669;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">24</div><div style="font-size:.58rem;color:#64748b;">Active Tasks</div></div>
             <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #7c3aed;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">11</div><div style="font-size:.58rem;color:#64748b;">Completed</div></div>
             <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #dc2626;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">0</div><div style="font-size:.58rem;color:#64748b;">Blocked</div></div>
             <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #d97706;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">5</div><div style="font-size:.58rem;color:#64748b;">My Tasks</div></div>
           </div>
-          <!-- Bottom panels -->
-          <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;margin:0 10px;">
-            <!-- Priority split -->
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+                    <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;margin:0 10px;">
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
               <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Priority Split</div>
               <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Critical</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">3</div></div>
               <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#f97316;"></div><div style="font-size:.6rem;color:#334155;flex:1;">High</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">9</div></div>
               <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#7c3aed;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Medium</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">8</div></div>
               <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#2563eb;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Low</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">4</div></div>
             </div>
-            <!-- Project progress -->
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
               <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Project Progress</div>
               <div style="display:flex;flex-direction:column;gap:5px;">
                 <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">E-commerce Platform</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">72%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:72%;background:#059669;border-radius:2px;"></div></div></div>
@@ -2554,8 +2455,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
                 <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Analytics Dashboard</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">55%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:55%;background:#7c3aed;border-radius:2px;"></div></div></div>
               </div>
             </div>
-            <!-- Active tasks -->
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;">My Active Tasks</div><div style="font-size:.58rem;color:#ef4444;font-weight:600;">⚠ 1 overdue</div></div>
               <div style="display:flex;flex-direction:column;gap:5px;">
                 <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #2563eb;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Review Q2 sprint plan</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">PLANNING</span><span style="font-size:.55rem;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;">HIGH</span></div></div>
@@ -2575,8 +2475,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
         <div class="m-dot" style="background:#28c840"></div>
         <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app/projects</span></div>
       </div>
-      <!-- Top bar -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
           <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
@@ -2666,7 +2565,6 @@ function showTab(t){
 }
 </script>
 
-<!-- TICKER -->
 <div class="ticker-wrap">
   <div class="ticker">
     <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
@@ -2692,7 +2590,6 @@ function showTab(t){
   </div>
 </div>
 
-<!-- STATS -->
 <div class="stats-bar">
   <div class="stats-grid">
     <div class="stat-item"><div class="stat-num">∞</div><div class="stat-lbl">Multi-tenant workspaces</div></div>
@@ -2702,7 +2599,6 @@ function showTab(t){
   </div>
 </div>
 
-<!-- FEATURES -->
 <section id="features">
   <div class="wrap">
     <div class="centered">
@@ -2724,7 +2620,6 @@ function showTab(t){
   </div>
 </section>
 
-<!-- MODULES -->
 <section id="modules" style="padding-top:0;background:#f8fafc;">
   <div class="wrap centered" style="padding-top:60px;padding-bottom:60px;">
     <div class="sec-tag">All Modules</div>
@@ -2747,7 +2642,6 @@ function showTab(t){
   </div>
 </section>
 
-<!-- HOW IT WORKS -->
 <section id="how">
   <div class="wrap centered">
     <div class="sec-tag">How it works</div>
@@ -2762,7 +2656,6 @@ function showTab(t){
   </div>
 </section>
 
-<!-- CTA -->
 <section class="cta-section">
   <div class="wrap">
     <div class="cta-box">
@@ -2783,7 +2676,6 @@ function showTab(t){
   </div>
 </section>
 
-<!-- FOOTER -->
 <footer>
   <div class="wrap">
     <div class="footer-top">
@@ -2898,8 +2790,6 @@ drawCanvas();
 </body>
 </html>"""
 
-
-
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
@@ -2929,7 +2819,6 @@ HTML = r"""<!DOCTYPE html>
 (function(){
 'use strict';
 
-// ── 1. Register Service Worker ───────────────────────────────────────────────
 window._pfSWReady = false;
 window._pfPushSub = null;
 
@@ -2938,9 +2827,7 @@ if('serviceWorker' in navigator){
     .then(function(reg){
       window._pfSWReady = true;
       window._pfSWReg   = reg;
-      console.log('[PF] SW registered, scope:', reg.scope);
 
-      // Listen for messages from SW (e.g. navigation requests)
       navigator.serviceWorker.addEventListener('message', function(e){
         if(e.data && e.data.type === 'PF_NAVIGATE'){
           window.location.hash = e.data.url || '/';
@@ -2948,13 +2835,11 @@ if('serviceWorker' in navigator){
         }
       });
 
-      // ── 2. Request Notification permission then subscribe to Push ───────────
       _pfSetupPush(reg);
     })
     .catch(function(e){ console.warn('[PF] SW registration failed:', e); });
 }
 
-// ── urlBase64ToUint8Array helper for VAPID key ───────────────────────────────
 function _pfUrlB64(base64String){
   var padding='='.repeat((4-base64String.length%4)%4);
   var base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
@@ -2965,10 +2850,8 @@ function _pfUrlB64(base64String){
 }
 
 async function _pfSetupPush(reg){
-  // Only proceed if Push API is available
   if(!('PushManager' in window)) return;
 
-  // Fetch VAPID public key from server
   var vapidKey='';
   try{
     var r=await fetch('/api/push/vapid-key',{credentials:'include'});
@@ -2977,19 +2860,15 @@ async function _pfSetupPush(reg){
   }catch(e){ return; }
 
   if(!vapidKey){
-    // pywebpush not available — fall back to polling-only mode
-    console.log('[PF] No VAPID key — using polling mode only');
     return;
   }
 
-  // Request notification permission
   var perm = Notification.permission;
   if(perm==='default'){
     perm = await Notification.requestPermission();
   }
   if(perm!=='granted') return;
 
-  // Check for existing subscription
   var existingSub = await reg.pushManager.getSubscription();
   if(existingSub){
     window._pfPushSub = existingSub;
@@ -2997,15 +2876,12 @@ async function _pfSetupPush(reg){
     return;
   }
 
-  // Subscribe to push
   try{
     var sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: _pfUrlB64(vapidKey)
+      userVisibleOnly: true, applicationServerKey: _pfUrlB64(vapidKey)
     });
     window._pfPushSub = sub;
     _pfSendSubToServer(sub);
-    console.log('[PF] Push subscription created');
   }catch(e){
     console.warn('[PF] Push subscribe failed:', e);
   }
@@ -3014,31 +2890,21 @@ async function _pfSetupPush(reg){
 function _pfSendSubToServer(sub){
   var subJson = sub.toJSON();
   fetch('/api/push/subscribe',{
-    method:'POST',
-    credentials:'include',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      endpoint: subJson.endpoint,
-      keys: subJson.keys
+    method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      endpoint: subJson.endpoint, keys: subJson.keys
     })
   }).catch(function(){});
 }
 
-// ── 3. Visibility-aware polling accelerator ──────────────────────────────────
-// When tab is hidden, browsers throttle setTimeout/setInterval to once per minute.
-// We compensate by using the Page Visibility API to trigger an immediate poll
-// when the user brings the tab back into focus.
 window._pfLastPollTrigger = null;
 document.addEventListener('visibilitychange', function(){
   if(document.visibilityState === 'visible'){
-    // Signal to the React app that it should poll immediately
     if(typeof window._pfOnVisible === 'function'){
       window._pfOnVisible();
     }
   }
 });
 
-// ── 4. Unsubscribe helper (called on logout) ─────────────────────────────────
 window._pfPushUnsubscribe = async function(){
   if(window._pfPushSub){
     try{
@@ -3056,15 +2922,9 @@ window._pfPushUnsubscribe = async function(){
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script>
-// Load JS libs sequentially: React must finish before ReactDOM loads
 (function(){
   var libs=[
-    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js',
-    'https://unpkg.com/htm@3.1.1/dist/htm.js',
-  ];
+    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js', 'https://unpkg.com/htm@3.1.1/dist/htm.js', ];
   function loadNext(i){
     if(i>=libs.length)return;
     var s=document.createElement('script');
@@ -3311,6 +3171,17 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .toast-close:hover{background:var(--sf2);color:var(--tx)}
 @keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}70%{opacity:.8;transform:translateY(-60px) scale(1.2)}100%{opacity:0;transform:translateY(-110px) scale(.8)}}
 @keyframes toastIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
+
+/* ── Utility classes for repeated inline styles ── */
+.tx3-11{font-size:11px;color:var(--tx3)}
+.tx3-10{font-size:10px;color:var(--tx3)}
+.mono-10{font-size:10px;color:var(--tx3);font-family:monospace}
+.f1-mw0{flex:1;min-width:0}
+.jc-sb{display:flex;justify-content:space-between}
+.fc-g8{display:flex;flex-direction:column;gap:8px}
+.fc-g4{display:flex;flex-direction:column;gap:4px}
+.fc-g3{display:flex;flex-direction:column;gap:3px}
+
 @keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(110%)}}
 .toast{animation:toastIn .25s cubic-bezier(.34,1.56,.64,1) forwards}
 .toast.leaving{animation:toastOut .2s ease forwards}
@@ -3327,7 +3198,6 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
 </script>
 <script>
-// Wait for all CDN libs to load before running app
 (function(){
 'use strict';
 function waitForLibs(cb, attempts){
@@ -3348,24 +3218,11 @@ const {useState,useEffect,useRef,useCallback,useMemo}=React;
 const RC=Recharts;
 
 const api={
-  get:u=>fetch(u,{credentials:'include'}).then(r=>r.json()).catch(()=>({})),
-  post:(u,b)=>fetch(u,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})),
-  put:(u,b)=>fetch(u,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})),
-  del:u=>fetch(u,{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(()=>({})),
-  upload:(u,fd)=>fetch(u,{method:'POST',credentials:'include',body:fd}).then(r=>r.json()).catch(()=>({})),
+  get:u=>fetch(u,{credentials:'include'}).then(r=>r.json()).catch(()=>({})), post:(u,b)=>fetch(u,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), put:(u,b)=>fetch(u,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), del:u=>fetch(u,{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(()=>({})), upload:(u,fd)=>fetch(u,{method:'POST',credentials:'include',body:fd}).then(r=>r.json()).catch(()=>({})),
 };
 
 const STAGES={
-  backlog:    {label:'Backlog',    color:'#94a3b8',bg:'rgba(148,163,184,.13)'},
-  planning:   {label:'Planning',  color:'var(--cy)',bg:'rgba(96,165,250,.13)'},
-  development:{label:'Dev',       color:'#9b8ef4',bg:'rgba(167,139,250,.13)'},
-  code_review:{label:'Review',    color:'#22d3ee',bg:'rgba(34,211,238,.13)'},
-  testing:    {label:'Testing',   color:'var(--pu)',bg:'rgba(251,191,36,.13)'},
-  uat:        {label:'UAT',       color:'#f472b6',bg:'rgba(244,114,182,.13)'},
-  release:    {label:'Release',   color:'#fb923c',bg:'rgba(251,146,60,.13)'},
-  production: {label:'Production',color:'#34d399',bg:'rgba(52,211,153,.13)'},
-  completed:  {label:'Completed', color:'#4ade80',bg:'rgba(74,222,128,.13)'},
-  blocked:    {label:'Blocked',   color:'var(--rd2)',bg:'rgba(248,113,113,.13)'},
+  backlog:    {label:'Backlog', color:'#94a3b8',bg:'rgba(148,163,184,.13)'}, planning:   {label:'Planning', color:'var(--cy)',bg:'rgba(96,165,250,.13)'}, development:{label:'Dev', color:'#9b8ef4',bg:'rgba(167,139,250,.13)'}, code_review:{label:'Review', color:'#22d3ee',bg:'rgba(34,211,238,.13)'}, testing:    {label:'Testing', color:'var(--pu)',bg:'rgba(251,191,36,.13)'}, uat:        {label:'UAT', color:'#f472b6',bg:'rgba(244,114,182,.13)'}, release:    {label:'Release', color:'#fb923c',bg:'rgba(251,146,60,.13)'}, production: {label:'Production',color:'#34d399',bg:'rgba(52,211,153,.13)'}, completed:  {label:'Completed', color:'#4ade80',bg:'rgba(74,222,128,.13)'}, blocked:    {label:'Blocked', color:'var(--rd2)',bg:'rgba(248,113,113,.13)'},
 };
 const KCOLS=['backlog','planning','development','code_review','testing','uat','release','production','completed','blocked'];
 const PRIS={critical:{label:'Critical',color:'var(--rd)',sym:'🔴'},high:{label:'High',color:'var(--rd2)',sym:'↑'},medium:{label:'Medium',color:'var(--pu)',sym:'→'},low:{label:'Low',color:'var(--cy)',sym:'↓'}};
@@ -3460,40 +3317,22 @@ function AuthScreen({onLogin}){
     resize();
     const ro=new ResizeObserver(()=>{resize();});ro.observe(cv);
 
-    // Ocean waves (white bg, soft blue tones)
     const waveConfigs=[
-      {spd:.00042,amp:.048,freq:2.2,ph:0,     fill:'rgba(147,197,253,',stroke:'rgba(96,165,250,', base:.50},
-      {spd:.00031,amp:.040,freq:1.8,ph:2.0,   fill:'rgba(96,165,250,', stroke:'rgba(59,130,246,', base:.56},
-      {spd:.00051,amp:.032,freq:2.7,ph:4.1,   fill:'rgba(59,130,246,', stroke:'rgba(37,99,235,',  base:.61},
-      {spd:.00024,amp:.026,freq:1.5,ph:1.2,   fill:'rgba(37,99,235,',  stroke:'rgba(29,78,216,',  base:.66},
-      {spd:.00058,amp:.020,freq:3.1,ph:3.4,   fill:'rgba(29,78,216,',  stroke:'rgba(30,64,175,',  base:.70},
-    ];
+      {spd:.00042,amp:.048,freq:2.2,ph:0, fill:'rgba(147,197,253,',stroke:'rgba(96,165,250,', base:.50}, {spd:.00031,amp:.040,freq:1.8,ph:2.0, fill:'rgba(96,165,250,', stroke:'rgba(59,130,246,', base:.56}, {spd:.00051,amp:.032,freq:2.7,ph:4.1, fill:'rgba(59,130,246,', stroke:'rgba(37,99,235,', base:.61}, {spd:.00024,amp:.026,freq:1.5,ph:1.2, fill:'rgba(37,99,235,', stroke:'rgba(29,78,216,', base:.66}, {spd:.00058,amp:.020,freq:3.1,ph:3.4, fill:'rgba(29,78,216,', stroke:'rgba(30,64,175,', base:.70}, ];
 
-    // Floating particles (subtle, tech feel)
     const pts=Array.from({length:28},()=>({
-      x:Math.random(),y:Math.random()*.5,
-      vx:(Math.random()-.5)*.00012,vy:(Math.random()-.5)*.00010,
-      r:.6+Math.random()*1.2,ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.008,
-    }));
+      x:Math.random(),y:Math.random()*.5, vx:(Math.random()-.5)*.00012,vy:(Math.random()-.5)*.00010, r:.6+Math.random()*1.2,ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.008, }));
 
-    // Bubbles
     const bubbles=Array.from({length:16},()=>({
-      x:Math.random(),y:.45+Math.random()*.45,
-      r:1.5+Math.random()*4,vy:-.00025-Math.random()*.0003,
-      ph:Math.random()*Math.PI*2,sp:.007+Math.random()*.005,a:.06+Math.random()*.10,
-    }));
+      x:Math.random(),y:.45+Math.random()*.45, r:1.5+Math.random()*4,vy:-.00025-Math.random()*.0003, ph:Math.random()*Math.PI*2,sp:.007+Math.random()*.005,a:.06+Math.random()*.10, }));
 
-    // Sparkles
     const sparks=Array.from({length:24},()=>({
-      x:Math.random(),yb:.46+Math.random()*.18,
-      ph:Math.random()*Math.PI*2,sp:.018+Math.random()*.014,sz:.6+Math.random()*1.2,
-    }));
+      x:Math.random(),yb:.46+Math.random()*.18, ph:Math.random()*Math.PI*2,sp:.018+Math.random()*.014,sz:.6+Math.random()*1.2, }));
 
     const draw=()=>{
       const W=cv.width,H=cv.height;
       frame++;const t=frame*.016;
 
-      // White → sky → ocean blue background
       const bg=ctx.createLinearGradient(0,0,0,H);
       bg.addColorStop(0,'#ffffff');
       bg.addColorStop(.30,'#f0f9ff');
@@ -3502,20 +3341,17 @@ function AuthScreen({onLogin}){
       bg.addColorStop(1,'#93c5fd');
       ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-      // Sun glow top-right
       const sg=ctx.createRadialGradient(W*.78,H*.08,0,W*.78,H*.08,W*.5);
       sg.addColorStop(0,'rgba(254,240,138,0.45)');
       sg.addColorStop(.3,'rgba(253,224,71,0.15)');
       sg.addColorStop(1,'rgba(0,0,0,0)');
       ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
 
-      // Soft top ambient
       const ta=ctx.createRadialGradient(W*.5,0,0,W*.5,0,H*.55);
       ta.addColorStop(0,'rgba(219,234,254,0.4)');
       ta.addColorStop(1,'rgba(0,0,0,0)');
       ctx.fillStyle=ta;ctx.fillRect(0,0,W,H);
 
-      // Floating dots (sky area)
       pts.forEach(p=>{
         p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
         if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=.5;if(p.y>.5)p.y=0;
@@ -3524,7 +3360,6 @@ function AuthScreen({onLogin}){
         ctx.fillStyle='rgba(59,130,246,'+a+')';ctx.fill();
       });
 
-      // Connection lines between nearby particles
       ctx.lineWidth=.4;
       for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
         const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H;
@@ -3535,7 +3370,6 @@ function AuthScreen({onLogin}){
         }
       }
 
-      // Horizon shimmer line
       const hy=H*.48;
       const hl=ctx.createLinearGradient(0,hy,W,hy);
       hl.addColorStop(0,'rgba(255,255,255,0)');hl.addColorStop(.3,'rgba(255,255,255,0.4)');
@@ -3543,10 +3377,8 @@ function AuthScreen({onLogin}){
       hl.addColorStop(1,'rgba(255,255,255,0)');
       ctx.fillStyle=hl;ctx.fillRect(0,hy-1,W,3);
 
-      // WAVES
       waveConfigs.forEach((w,wi)=>{
         const ph=t*w.spd*1000+w.ph;
-        // fill
         ctx.beginPath();ctx.moveTo(0,H);
         for(let x=0;x<=W;x+=2){
           const xn=x/W;
@@ -3557,7 +3389,6 @@ function AuthScreen({onLogin}){
         }
         ctx.lineTo(W,H);ctx.closePath();
         ctx.fillStyle=w.fill+[.14,.12,.11,.10,.09][wi]+')';ctx.fill();
-        // crest line
         ctx.beginPath();
         for(let x=0;x<=W;x+=2){
           const xn=x/W;
@@ -3567,7 +3398,6 @@ function AuthScreen({onLogin}){
           x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
         }
         ctx.strokeStyle=w.stroke+[.07,.06,.06,.05,.05][wi]+')';ctx.lineWidth=1.1;ctx.stroke();
-        // foam on front wave
         if(wi===0){
           for(let fx=W*.04;fx<W;fx+=W*.09+Math.sin(fx*0.01)*W*.02){
             const xn=fx/W;
@@ -3581,7 +3411,6 @@ function AuthScreen({onLogin}){
         }
       });
 
-      // Reflection shimmers on water
       for(let rx=W*.02;rx<W;rx+=W*.065){
         const ry=H*(.52+Math.sin(t*.35+rx*.008)*.05);
         const ra=.03+Math.sin(t*.7+rx*.015)*.02;
@@ -3590,7 +3419,6 @@ function AuthScreen({onLogin}){
         ctx.fillStyle=rg;ctx.fillRect(rx,ry,W*.05,2);
       }
 
-      // Bubbles
       bubbles.forEach(b=>{
         b.y+=b.vy;b.ph+=b.sp;
         if(b.y<.42)b.y=.5+Math.random()*.3;
@@ -3603,7 +3431,6 @@ function AuthScreen({onLogin}){
         ctx.fillStyle='rgba(255,255,255,'+(ba*.55)+')';ctx.fill();
       });
 
-      // Sparkles
       sparks.forEach(s=>{
         s.ph+=s.sp;
         const sx=s.x*W+Math.sin(s.ph*.4)*10;
@@ -3669,27 +3496,16 @@ function AuthScreen({onLogin}){
     if(p.length===6){setOtpCode(p);setTimeout(submitOtp,80);}
   };
 
-  // Shared input/label styles — clean light theme
   const inp={
-    width:'100%',padding:'12px 15px',borderRadius:10,fontSize:14,outline:'none',
-    background:'#f8fafc',border:'1.5px solid #e2e8f0',color:'#0f172a',
-    fontFamily:'inherit',transition:'border-color .18s,box-shadow .18s',boxSizing:'border-box',
-  };
-  const lbl={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07,
-    textTransform:'uppercase',color:'#94a3b8',marginBottom:6};
+    width:'100%',padding:'12px 15px',borderRadius:10,fontSize:14,outline:'none', background:'#f8fafc',border:'1.5px solid #e2e8f0',color:'#0f172a', fontFamily:'inherit',transition:'border-color .18s,box-shadow .18s',boxSizing:'border-box', };
+  const lbl={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07, textTransform:'uppercase',color:'#94a3b8',marginBottom:6};
 
-  // ── Left panel: canvas fills everything ──
   const leftPanel=html`
     <div style=${{
-      width:'48%',flexShrink:0,minHeight:'100vh',
-      position:'relative',overflow:'hidden',
-    }}>
+      width:'48%',flexShrink:0,minHeight:'100vh', position:'relative',overflow:'hidden', }}>
       <canvas ref=${cvRef} style=${{
-        position:'absolute',top:0,left:0,
-        width:'100%',height:'100%',display:'block',
-      }}></canvas>
+        position:'absolute',top:0,left:0, width:'100%',height:'100%',display:'block', }}></canvas>
 
-      <!-- Brand overlay top-left -->
       <div style=${{position:'absolute',top:24,left:24,zIndex:10,display:'flex',alignItems:'center',gap:9}}>
         <div style=${{width:32,height:32,borderRadius:9,background:'white',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(59,130,246,0.2)'}}>
           <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#1d4ed8"/><circle cx="32" cy="11" r="6" fill="#1d4ed8"/><circle cx="51" cy="43" r="6" fill="#1d4ed8"/><circle cx="13" cy="43" r="6" fill="#1d4ed8"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/></svg>
@@ -3697,13 +3513,8 @@ function AuthScreen({onLogin}){
         <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>ProjectFlowPro</span>
       </div>
 
-      <!-- Center tagline -->
-      <div style=${{
-        position:'absolute',top:'50%',left:'50%',
-        transform:'translate(-50%,-50%)',
-        textAlign:'center',zIndex:10,pointerEvents:'none',
-        width:'80%',
-      }}>
+            <div style=${{
+        position:'absolute',top:'50%',left:'50%', transform:'translate(-50%,-50%)', textAlign:'center',zIndex:10,pointerEvents:'none', width:'80%', }}>
         <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(255,255,255,0.7)',border:'1px solid rgba(147,197,253,0.6)',padding:'5px 14px',borderRadius:100,marginBottom:18,backdropFilter:'blur(8px)'}}>
           <div style=${{width:5,height:5,borderRadius:'50%',background:'#3b82f6'}}></div>
           <span style=${{fontSize:11,color:'#1d4ed8',fontWeight:700,letterSpacing:.05}}>AI-POWERED · MULTI-TENANT · v4.0</span>
@@ -3716,38 +3527,23 @@ function AuthScreen({onLogin}){
         </p>
       </div>
 
-      <!-- Bottom feature pills -->
-      <div style=${{
-        position:'absolute',bottom:28,left:0,right:0,
-        display:'flex',justifyContent:'center',gap:8,flexWrap:'wrap',
-        padding:'0 20px',zIndex:10,
-      }}>
+            <div style=${{
+        position:'absolute',bottom:28,left:0,right:0, display:'flex',justifyContent:'center',gap:8,flexWrap:'wrap', padding:'0 20px',zIndex:10, }}>
         ${['📋 Tasks','🤖 AI','📅 Timeline','📞 Huddles','🎫 Tickets'].map(f=>html`
           <div key=${f} style=${{
-            background:'rgba(255,255,255,0.72)',
-            border:'1px solid rgba(147,197,253,0.5)',
-            backdropFilter:'blur(8px)',
-            padding:'5px 12px',borderRadius:100,
-            fontSize:11,fontWeight:600,color:'#1d4ed8',
-          }}>${f}</div>
+            background:'rgba(255,255,255,0.72)', border:'1px solid rgba(147,197,253,0.5)', backdropFilter:'blur(8px)', padding:'5px 12px',borderRadius:100, fontSize:11,fontWeight:600,color:'#1d4ed8', }}>${f}</div>
         `)}
       </div>
     </div>`;
 
-  // ── Right panel: clean white form ──
   const rightPanel=(child)=>html`
     <div style=${{
-      flex:1,minHeight:'100vh',background:'#ffffff',
-      display:'flex',alignItems:'center',justifyContent:'center',
-      padding:'40px 36px',overflowY:'auto',
-      borderLeft:'1px solid #f1f5f9',
-    }}>
+      flex:1,minHeight:'100vh',background:'#ffffff', display:'flex',alignItems:'center',justifyContent:'center', padding:'40px 36px',overflowY:'auto', borderLeft:'1px solid #f1f5f9', }}>
       <div style=${{width:'100%',maxWidth:400}}>
         ${child}
       </div>
     </div>`;
 
-  // ── OTP Screen ──
   if(otpStep) return html`
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
@@ -3761,10 +3557,7 @@ function AuthScreen({onLogin}){
         <div style=${{display:'flex',gap:8,marginBottom:20}} onPaste=${handleOtpPaste}>
           ${[0,1,2,3,4,5].map(i=>html`
             <input key=${i} ref=${otpRefs[i]}
-              style=${{flex:1,height:54,borderRadius:10,textAlign:'center',fontSize:20,fontWeight:700,fontFamily:'monospace',outline:'none',boxSizing:'border-box',transition:'all .15s',
-                background:otpCode[i]?'#eff6ff':'#f8fafc',
-                border:'1.5px solid '+(otpCode[i]?'#3b82f6':'#e2e8f0'),
-                color:'#0f172a',boxShadow:otpCode[i]?'0 0 0 3px rgba(59,130,246,0.1)':'none'}}
+              style=${{flex:1,height:54,borderRadius:10,textAlign:'center',fontSize:20,fontWeight:700,fontFamily:'monospace',outline:'none',boxSizing:'border-box',transition:'all .15s', background:otpCode[i]?'#eff6ff':'#f8fafc', border:'1.5px solid '+(otpCode[i]?'#3b82f6':'#e2e8f0'), color:'#0f172a',boxShadow:otpCode[i]?'0 0 0 3px rgba(59,130,246,0.1)':'none'}}
               maxLength=1 value=${otpCode[i]||''}
               onInput=${e=>handleOtpInput(i,e.target.value)}
               onKeyDown=${e=>handleOtpKey(i,e)}
@@ -3773,12 +3566,7 @@ function AuthScreen({onLogin}){
         </div>
         ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca',marginBottom:14}}>${err}</div>`:null}
         <button onClick=${submitOtp} disabled=${busy||otpCode.length!==6}
-          style=${{width:'100%',height:46,borderRadius:10,border:'none',fontFamily:'inherit',
-            background:otpCode.length===6?'#2563eb':'#e2e8f0',
-            color:otpCode.length===6?'#fff':'#94a3b8',
-            fontSize:14,fontWeight:700,cursor:otpCode.length===6?'pointer':'default',
-            transition:'all .18s',marginBottom:14,
-            boxShadow:otpCode.length===6?'0 4px 14px rgba(37,99,235,0.3)':'none'}}>
+          style=${{width:'100%',height:46,borderRadius:10,border:'none',fontFamily:'inherit', background:otpCode.length===6?'#2563eb':'#e2e8f0', color:otpCode.length===6?'#fff':'#94a3b8', fontSize:14,fontWeight:700,cursor:otpCode.length===6?'pointer':'default', transition:'all .18s',marginBottom:14, boxShadow:otpCode.length===6?'0 4px 14px rgba(37,99,235,0.3)':'none'}}>
           ${busy?'Verifying...':'Verify & Sign In →'}
         </button>
         <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:8}}>
@@ -3797,36 +3585,28 @@ function AuthScreen({onLogin}){
       `)}
     </div>`;
 
-  // ── Main login/register ──
   return html`
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
-        <!-- Logo -->
-        <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:28}}>
+                <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:28}}>
           <div style=${{width:28,height:28,borderRadius:7,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
             <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
           <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>ProjectFlowPro</span>
         </div>
 
-        <!-- Heading -->
-        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.2vw,1.85rem)',fontWeight:800,color:'#0f172a',marginBottom:6,letterSpacing:-.03,lineHeight:1.15}}>
+                <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.2vw,1.85rem)',fontWeight:800,color:'#0f172a',marginBottom:6,letterSpacing:-.03,lineHeight:1.15}}>
           ${tab==='login'?'Welcome back':'Create account'}
         </h1>
         <p style=${{fontSize:13.5,color:'#64748b',marginBottom:24,lineHeight:1.6}}>
           ${tab==='login'?'Sign in to your ProjectFlowPro workspace':'Set up your workspace and start shipping'}
         </p>
 
-        <!-- Tab switcher -->
-        <div style=${{display:'flex',background:'#f1f5f9',borderRadius:11,padding:3,marginBottom:22}}>
+                <div style=${{display:'flex',background:'#f1f5f9',borderRadius:11,padding:3,marginBottom:22}}>
           ${['login','register'].map(tp=>html`
             <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
-              style=${{flex:1,height:35,fontSize:13,fontWeight:600,border:'none',cursor:'pointer',
-                borderRadius:9,fontFamily:'inherit',transition:'all .16s',
-                background:tab===tp?'#ffffff':'transparent',
-                color:tab===tp?'#0f172a':'#94a3b8',
-                boxShadow:tab===tp?'0 1px 4px rgba(0,0,0,0.08)':'none'}}>
+              style=${{flex:1,height:35,fontSize:13,fontWeight:600,border:'none',cursor:'pointer', borderRadius:9,fontFamily:'inherit',transition:'all .16s', background:tab===tp?'#ffffff':'transparent', color:tab===tp?'#0f172a':'#94a3b8', boxShadow:tab===tp?'0 1px 4px rgba(0,0,0,0.08)':'none'}}>
               ${tp==='login'?'Sign In':'Create Account'}
             </button>`)}
         </div>
@@ -3835,11 +3615,7 @@ function AuthScreen({onLogin}){
           <div style=${{display:'flex',background:'#f1f5f9',borderRadius:9,padding:3,marginBottom:16}}>
             ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
               <button key=${m} onClick=${()=>setRegMode(m)}
-                style=${{flex:1,height:29,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',
-                  borderRadius:7,fontFamily:'inherit',transition:'all .16s',
-                  background:regMode===m?'#ffffff':'transparent',
-                  color:regMode===m?'#374151':'#94a3b8',
-                  boxShadow:regMode===m?'0 1px 3px rgba(0,0,0,0.07)':'none'}}>
+                style=${{flex:1,height:29,fontSize:11,fontWeight:600,border:'none',cursor:'pointer', borderRadius:7,fontFamily:'inherit',transition:'all .16s', background:regMode===m?'#ffffff':'transparent', color:regMode===m?'#374151':'#94a3b8', boxShadow:regMode===m?'0 1px 3px rgba(0,0,0,0.07)':'none'}}>
                 ${lbl}
               </button>`)}
           </div>
@@ -3888,13 +3664,7 @@ function AuthScreen({onLogin}){
             </div>`:null}
 
           <button onClick=${go} disabled=${busy}
-            style=${{height:46,borderRadius:10,border:'none',cursor:busy?'default':'pointer',
-              fontFamily:'inherit',
-              background:busy?'#bfdbfe':'#2563eb',
-              color:busy?'#93c5fd':'#ffffff',
-              fontSize:14,fontWeight:700,letterSpacing:.01,
-              transition:'all .18s',marginTop:2,
-              boxShadow:busy?'none':'0 4px 14px rgba(37,99,235,0.3),inset 0 1px 0 rgba(255,255,255,0.15)'}}>
+            style=${{height:46,borderRadius:10,border:'none',cursor:busy?'default':'pointer', fontFamily:'inherit', background:busy?'#bfdbfe':'#2563eb', color:busy?'#93c5fd':'#ffffff', fontSize:14,fontWeight:700,letterSpacing:.01, transition:'all .18s',marginTop:2, boxShadow:busy?'none':'0 4px 14px rgba(37,99,235,0.3),inset 0 1px 0 rgba(255,255,255,0.15)'}}>
             ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
           </button>
         </div>
@@ -3917,7 +3687,6 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
     const id=setInterval(load,5000);
     return()=>clearInterval(id);
   },[]);
-  // Filter out: rooms user is already in, and rooms that match current active room
   const joinable=calls.filter(c=>{
     const parts=JSON.parse(c.participants||'[]');
     return !parts.includes(cu.id) && c.id!==currentRoomId;
@@ -3979,8 +3748,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 
     return html`
       <div style=${{width:310,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden'}}>
-        <!-- Header -->
-        <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18,padding:'2px 6px',borderRadius:6,lineHeight:1}} title="Back">←</button>
           <div style=${{flex:1,minWidth:0}}>
             <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
@@ -3998,8 +3766,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
             </button>`}
           <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
         </div>
-        <!-- Quick nav row -->
-        <div style=${{display:'flex',gap:6,padding:'8px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+                <div style=${{display:'flex',gap:6,padding:'8px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
           <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('projects');onClose();}}
             style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
             onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
@@ -4024,24 +3791,16 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
           ${loadingDash?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)',fontSize:12}}>Loading...</div>`:null}
 
           ${!loadingDash&&sum?html`
-          <!-- Summary KPI strip -->
-          <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',borderBottom:'1px solid var(--bd)'}}>
+                    <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',borderBottom:'1px solid var(--bd)'}}>
             ${[
-              {l:'Projects',v:sum.total_projects,c:'var(--ac)'},
-              {l:'Tasks',v:sum.total_tasks,c:'var(--tx)'},
-              {l:'Done',v:sum.completed,c:'var(--gn)'},
-              {l:'In Prog',v:sum.in_progress,c:'var(--cy)'},
-              {l:'Blocked',v:sum.blocked,c:'var(--rd)'},
-              {l:'Pending',v:sum.pending,c:'var(--am)'},
-            ].map((s,i)=>html`
+              {l:'Projects',v:sum.total_projects,c:'var(--ac)'}, {l:'Tasks',v:sum.total_tasks,c:'var(--tx)'}, {l:'Done',v:sum.completed,c:'var(--gn)'}, {l:'In Prog',v:sum.in_progress,c:'var(--cy)'}, {l:'Blocked',v:sum.blocked,c:'var(--rd)'}, {l:'Pending',v:sum.pending,c:'var(--am)'}, ].map((s,i)=>html`
               <div key=${i} style=${{textAlign:'center',padding:'10px 4px',borderRight:i%3<2?'1px solid var(--bd)':'none',borderBottom:i<3?'1px solid var(--bd)':'none'}}>
                 <div style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.v}</div>
                 <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:.4}}>${s.l}</div>
               </div>`)}
           </div>
 
-          <!-- Member workload -->
-          <div style=${{padding:'10px 12px',borderBottom:'1px solid var(--bd)'}}>
+                    <div style=${{padding:'10px 12px',borderBottom:'1px solid var(--bd)'}}>
             <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>👥 Member Workload</div>
             ${memberStats.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No tasks assigned yet</div>`:null}
             ${memberStats.map(m=>html`
@@ -4060,8 +3819,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
               </div>`)}
           </div>
 
-          <!-- Projects list -->
-          <div style=${{padding:'10px 12px'}}>
+                    <div style=${{padding:'10px 12px'}}>
             <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>📁 Projects (${teamProjects.length})</div>
             ${teamProjects.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No projects yet</div>`:null}
             ${teamProjects.map(p=>{
@@ -4154,8 +3912,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
               ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
-              <!-- Mini KPIs -->
-              <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginBottom:7}}>
+                            <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginBottom:7}}>
                 ${[['Tasks',teamTasks.length,'var(--tx)'],['Done',done,'var(--gn)'],['Proj',teamProjs,'var(--ac)']].map(([l,v,c])=>html`
                   <div key=${l} style=${{textAlign:'center',padding:'4px 2px',background:'var(--sf)',borderRadius:5,border:'1px solid var(--bd)'}}>
                     <div style=${{fontSize:13,fontWeight:700,color:c,fontFamily:'monospace',lineHeight:1}}>${v}</div>
@@ -4163,8 +3920,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
                   </div>`)}
               </div>
               ${blocked>0?html`<div style=${{fontSize:10,color:'var(--rd)',fontWeight:600,marginBottom:6}}>⚠ ${blocked} blocked task${blocked!==1?'s':''}</div>`:null}
-              <!-- Member avatars -->
-              <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style=${{display:'flex'}}>
                   ${members.slice(0,5).map((m,i)=>html`
                     <div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-5:0,border:'1.5px solid var(--sf2)',borderRadius:'50%',zIndex:5-i}}>
@@ -4187,42 +3943,12 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const baseView=(view||'dashboard').split(':')[0];
 
-  // Nav items per role
   const NAV_ICONS={
-    dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`,
-    projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
-    tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
-    messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-    tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,
-    timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`,
-    productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
-    reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-    team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
-    dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/></svg>`,
-  };
+    dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
   const adminNav=[
-    {id:'dashboard',   label:'Dashboard'},
-    {id:'projects',    label:'Projects'},
-    {id:'tasks',       label:'Task Board'},
-    {id:'messages',    label:'Channels'},
-    {id:'dm',          label:'Direct Messages'},
-    {id:'tickets',     label:'Tickets'},
-    {id:'timeline',    label:'Timeline Tracker'},
-    {id:'productivity',label:'Dev Productivity'},
-    {id:'reminders',   label:'Reminders'},
-    {id:'team',        label:'Team Management'},
-  ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'},
-    {id:'projects',  label:'Projects'},
-    {id:'tasks',     label:'Task Board'},
-    {id:'messages',  label:'Channels'},
-    {id:'dm',        label:'Direct Messages'},
-    {id:'tickets',   label:'Tickets'},
-    {id:'timeline',  label:'Timeline'},
-    {id:'reminders', label:'Reminders'},
-  ];
-  // Filter DM from nav if disabled and not admin/manager
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -4235,23 +3961,11 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
 
   return html`
     <aside style=${{
-      width:W,minWidth:W,maxWidth:W,
-      background:'#0f172a',
-      display:'flex',flexDirection:'column',
-      height:'100vh',flexShrink:0,overflow:'visible',
-      borderRight:'1px solid rgba(37,99,235,0.15)',
-      transition:'width .2s ease,min-width .2s ease,max-width .2s ease',
-      position:'relative'
+      width:W,minWidth:W,maxWidth:W, background:'#0f172a', display:'flex',flexDirection:'column', height:'100vh',flexShrink:0,overflow:'visible', borderRight:'1px solid rgba(37,99,235,0.15)', transition:'width .2s ease,min-width .2s ease,max-width .2s ease', position:'relative'
     }}>
 
-      <!-- ── Logo / workspace name ── -->
-      <div style=${{
-        padding:col?'14px 0':'12px 14px',
-        display:'flex',alignItems:'center',
-        gap:8,flexShrink:0,
-        borderBottom:'1px solid rgba(37,99,235,0.15)',
-        justifyContent:col?'center':'flex-start',
-        minHeight:52
+            <div style=${{
+        padding:col?'14px 0':'12px 14px', display:'flex',alignItems:'center', gap:8,flexShrink:0, borderBottom:'1px solid rgba(37,99,235,0.15)', justifyContent:col?'center':'flex-start', minHeight:52
       }}>
         <div style=${{width:28,height:28,borderRadius:8,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 2px 8px rgba(37,99,235,0.4)'}}>
           <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity=".9"/><circle cx="51" cy="43" r="6" fill="white" opacity=".9"/><circle cx="13" cy="43" r="6" fill="white" opacity=".9"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
@@ -4266,51 +3980,28 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         </div>`:null}
       </div>
 
-      <!-- ── Nav items ── -->
-      <nav style=${{flex:1,overflowY:'auto',padding:'8px 6px',display:'flex',flexDirection:'column',gap:2}}>
+            <nav style=${{flex:1,overflowY:'auto',padding:'8px 6px',display:'flex',flexDirection:'column',gap:2}}>
         ${navItems.map(it=>html`
           <button key=${it.id}
             title=${col?it.label:''}
             onClick=${()=>setView(it.id)}
             style=${{
-              display:'flex',alignItems:'center',
-              gap:col?0:10,
-              width:'100%',
-              padding:col?'10px 0':'9px 10px',
-              borderRadius:9,border:'none',cursor:'pointer',
-              background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent',
-              color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)',
-              fontSize:12,fontWeight:baseView===it.id?700:500,
-              transition:'all .12s',textAlign:'left',
-              borderLeft:baseView===it.id&&!col?'2px solid var(--ac)':'2px solid transparent',
-              justifyContent:col?'center':'flex-start',
-              position:'relative'
+              display:'flex',alignItems:'center', gap:col?0:10, width:'100%', padding:col?'10px 0':'9px 10px', borderRadius:9,border:'none',cursor:'pointer', background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent', color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)', fontSize:12,fontWeight:baseView===it.id?700:500, transition:'all .12s',textAlign:'left', borderLeft:baseView===it.id&&!col?'2px solid var(--ac)':'2px solid transparent', justifyContent:col?'center':'flex-start', position:'relative'
             }}
             onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
-            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}> 
+            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}>
             <span style=${{flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center',opacity:.85}}>${NAV_ICONS[it.id]||null}</span>
             ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
             ${it.id==='notifs'&&unread>0?html`<span style=${{
-              position:'absolute',top:6,right:col?6:10,
-              minWidth:16,height:16,borderRadius:8,
-              background:'var(--rd)',color:'#fff',
-              fontSize:9,fontWeight:700,
-              display:'flex',alignItems:'center',justifyContent:'center',
-              padding:'0 4px'
+              position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--rd)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
             }}>${unread>9?'9+':unread}</span>`:null}
             ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{
-              position:'absolute',top:6,right:col?6:10,
-              minWidth:16,height:16,borderRadius:8,
-              background:'var(--cy)',color:'#fff',
-              fontSize:9,fontWeight:700,
-              display:'flex',alignItems:'center',justifyContent:'center',
-              padding:'0 4px'
+              position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--cy)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
             }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
           </button>`)}
       </nav>
 
-      <!-- ── Bottom actions ── -->
-      <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
+            <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
         ${inCall?html`
           <button title="In Huddle" onClick=${()=>onCallAction&&onCallAction('show')}
             style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'rgba(34,197,94,.1)',color:'#22c55e',justifyContent:col?'center':'flex-start'}}>
@@ -4326,12 +4017,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         </button>
         ${(cu&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead'))?html`
           <button title=${col?'Settings':''} onClick=${()=>setView('settings')}
-            style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',
-              background:baseView==='settings'?'rgba(37,99,235,0.18)':'transparent',
-              color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)',
-              transition:'all .12s',justifyContent:col?'center':'flex-start'}}
+            style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer', background:baseView==='settings'?'rgba(37,99,235,0.18)':'transparent', color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)', transition:'all .12s',justifyContent:col?'center':'flex-start'}}
             onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
-            onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}> 
+            onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}>
             <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>⚙️</span>
             ${!col?html`<span style=${{fontSize:12}}>Settings</span>`:null}
           </button>`:null}
@@ -4343,28 +4031,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           ${!col?html`<span style=${{fontSize:12}}>Sign out</span>`:null}
         </button>
       </div>
-      <!-- Edge collapse/expand tab — floats on the right edge of sidebar -->
       <button title=${col?'Expand sidebar':'Collapse sidebar'} onClick=${()=>setCol(c=>!c)}
         style=${{
-          position:'absolute',
-          left:col?64:200,
-          top:'50%',
-          transform:'translateY(-50%)',
-          zIndex:200,
-          width:14,
-          height:40,
-          background:'#0f0f0f',
-          border:'1px solid rgba(255,255,255,.1)',
-          borderLeft:'none',
-          borderRadius:'0 6px 6px 0',
-          cursor:'pointer',
-          display:'flex',
-          alignItems:'center',
-          justifyContent:'center',
-          color:'rgba(255,255,255,.35)',
-          transition:'left .2s ease, background .12s, color .12s',
-          padding:0,
-        }}
+          position:'absolute', left:col?64:200, top:'50%', transform:'translateY(-50%)', zIndex:200, width:14, height:40, background:'#0f0f0f', border:'1px solid rgba(255,255,255,.1)', borderLeft:'none', borderRadius:'0 6px 6px 0', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,.35)', transition:'left .2s ease, background .12s, color .12s', padding:0, }}
         onMouseEnter=${e=>{e.currentTarget.style.background='#1a1a1a';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
         onMouseLeave=${e=>{e.currentTarget.style.background='#0f172a';e.currentTarget.style.color='rgba(148,163,184,0.5)';}}>
         <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -4404,16 +4073,13 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
   return html`
     <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd2)',position:'relative',zIndex:100}}>
       <div style=${{padding:'0 18px',height:54,display:'flex',alignItems:'center',gap:10}}>
-        <!-- Your Schedule pill -->
-        <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#1e3a5f',borderRadius:100,cursor:'pointer',border:'1px solid rgba(37,99,235,0.25)',transition:'all .14s'}} onClick=${onViewReminders}>
+                <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#1e3a5f',borderRadius:100,cursor:'pointer',border:'1px solid rgba(37,99,235,0.25)',transition:'all .14s'}} onClick=${onViewReminders}>
           <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#60a5fa"/><circle cx="32" cy="13" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/></svg>
           <span style=${{fontSize:11,fontWeight:700,color:'#bfdbfe',letterSpacing:'.3px'}}>Your Reminders</span>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'#93c5fd',fontWeight:700}}>${todayStr}</span>
         </div>
-        <!-- team pill removed -->
-        <!-- Schedule timeline -->
-        <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none'}}>
+                        <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none'}}>
           <div style=${{height:40,background:'#0f172a',borderRadius:100,display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden',border:'1px solid rgba(37,99,235,0.15)'}}>
             ${upcoming.length===0?html`
               <div style=${{display:'flex',alignItems:'center',gap:10,width:'100%',justifyContent:'center'}}>
@@ -4449,8 +4115,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          <!-- theme toggle moved to sidebar -->
-          <div style=${{position:'relative'}} ref=${npRef}>
+                    <div style=${{position:'relative'}} ref=${npRef}>
             <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -4474,7 +4139,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                       <div style=${{flex:1,minWidth:0}}>
                         <p style=${{fontSize:12,color:'var(--tx)',fontWeight:n.read?400:600,lineHeight:1.35,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${n.content}</p>
                         <div style=${{display:'flex',gap:5,alignItems:'center'}}>
-                          <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span>
+                          <span class="mono-10">${ago(n.ts)}</span>
                           ${n.type==='dm'?html`<span style=${{fontSize:9,fontWeight:700,color:'var(--cy)',background:'rgba(14,116,144,0.1)',borderRadius:4,padding:'1px 5px',letterSpacing:'.03em'}}>DM • click to reply</span>`:null}
                           ${n.type==='task_assigned'||n.type==='status_change'||n.type==='comment'?html`<span style=${{fontSize:9,fontWeight:600,color:'var(--ac)',background:'var(--ac3)',borderRadius:4,padding:'1px 5px'}}>→ Tasks</span>`:null}
                         </div>
@@ -4588,7 +4253,7 @@ function FileAttachments({taskId,projectId,readOnly}){
         <span style=${{fontSize:18}}>${icon(f.mime)}</span>
         <div style=${{flex:1,minWidth:0}}>
           <a href=${'/api/files/'+f.id} style=${{fontSize:13,color:'var(--ac2)',fontWeight:500,textDecoration:'none',display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${f.name}</a>
-          <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${sz(f.size)} · ${ago(f.ts)}</span>
+          <span class="mono-10">${sz(f.size)} · ${ago(f.ts)}</span>
         </div>
         ${!readOnly?html`<button class="btn brd" style=${{padding:'4px 9px',fontSize:11}} onClick=${()=>del(f.id)}>✕</button>`:null}
       </div>`)}
@@ -4612,23 +4277,17 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
   const isEdit=!!(task&&task.id);
-  // When team changes, reset assignee if they're not in that team
   const selectedTeam=safe(teams).find(t=>t.id===teamId);
   const teamMemberIds=selectedTeam?JSON.parse(selectedTeam.member_ids||'[]'):null;
-  // Assignee options: if a team is selected, filter to team members; otherwise show all
   const assigneeOptions=teamMemberIds
     ? safe(users).filter(u=>teamMemberIds.includes(u.id))
     : safe(users);
-  // Role-based + ownership permission checks
   const FULL_EDIT_ROLES=['Admin','Manager','TeamLead'];
   const isAdminManagerTeamLead=cu&&FULL_EDIT_ROLES.includes(cu.role);
   const isAssignee=cu&&task&&task.assignee===cu.id;
-  // canEditTask: full form edit (title, desc, priority, assignee, etc.)
   const canEditTask=isAdminManagerTeamLead||(!isEdit); // new tasks always editable
-  // canUpdateStage: can move stage/pct only (assignee privilege)
   const canUpdateStage=isAdminManagerTeamLead||isAssignee;
   const canDeleteTask=cu&&FULL_EDIT_ROLES.includes(cu.role);
-  // Inline reminder - shown in form before creating task
   const [rmEnabled,setRmEnabled]=useState(false);
   const [rmDate,setRmDate]=useState(()=>{
     const d=new Date();d.setDate(d.getDate()+(d.getHours()>=20?1:0));
@@ -4643,12 +4302,10 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     const updated=[...cmts,newCmt];
     setCmts(updated);setNc('');
     if(task&&task.id){
-      // Everyone can add comments; send minimal payload that includes comments
       const payload={comments:updated};
       if(canEditTask){
         Object.assign(payload,{title:title.trim()||task.title,description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct});
       } else {
-        // Assignee or read-only — only update comments (backend will accept if assignee)
         payload.stage=stage;payload.pct=pct;
       }
       await api.put('/api/tasks/'+task.id,payload);
@@ -4659,7 +4316,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     setSaving(true);setErr('');
     let payload;
     if(isEdit&&canUpdateStage&&!canEditTask){
-      // Assignee-only: send only stage + pct
       payload={stage,pct};
     } else {
       payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId};
@@ -4668,7 +4324,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     const result=await onSave(payload);
     setSaving(false);
     if(result&&result.error){setErr(result.error);return null;}
-    // Save reminder atomically if user enabled it on new task
     if(!isEdit&&rmEnabled&&rmDate&&rmTime){
       const dt=new Date(rmDate+'T'+rmTime);
       const taskId=(result&&result.id)||'';
@@ -4685,7 +4340,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
           <div>
             <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>${isEdit?(canEditTask?'Edit Task':canUpdateStage?'Update Stage':'View Task'):'New Task'}</h2>
-            ${isEdit?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${task.id}</span>`:null}
+            ${isEdit?html`<span class="mono-10">${task.id}</span>`:null}
             ${isEdit&&!canEditTask&&canUpdateStage?html`<div style=${{fontSize:11,color:'var(--am)',marginTop:3}}>You can update stage & progress as the assignee.</div>`:null}
             ${isEdit&&!canEditTask&&!canUpdateStage?html`<div style=${{fontSize:11,color:'var(--tx3)',marginTop:3}}>Read-only — you are not assigned to this task.</div>`:null}
           </div>
@@ -4706,20 +4361,18 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
         ${tab==='details'?html`
           <div style=${{display:'grid',gap:12}}>
             ${!canEditTask&&!canUpdateStage?html`
-              <!-- Full read-only view -->
               <div style=${{background:'var(--sf2)',borderRadius:10,padding:'12px 14px',border:'1px solid var(--bd)',display:'grid',gap:8}}>
-                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Title</span><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${title}</span></div>
-                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Stage</span><${SP} s=${stage}/></div>
-                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Priority</span><${PB} p=${pri}/></div>
-                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Due</span><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${fmtD(due)}</span></div>
-                <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Progress</span><span style=${{fontSize:12,color:'var(--ac)',fontWeight:700,fontFamily:'monospace'}}>${pct}%</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span class="tx3-11">Title</span><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${title}</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span class="tx3-11">Stage</span><${SP} s=${stage}/></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span class="tx3-11">Priority</span><${PB} p=${pri}/></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span class="tx3-11">Due</span><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${fmtD(due)}</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span class="tx3-11">Progress</span><span style=${{fontSize:12,color:'var(--ac)',fontWeight:700,fontFamily:'monospace'}}>${pct}%</span></div>
               </div>
             `:canUpdateStage&&!canEditTask?html`
-              <!-- Assignee-only view: stage + pct editable, rest read-only -->
               <div style=${{background:'var(--sf2)',borderRadius:10,padding:'12px 14px',border:'1px solid var(--bd)',display:'grid',gap:8,marginBottom:4}}>
-                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Title</span><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${title}</span></div>
-                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Priority</span><${PB} p=${pri}/></div>
-                <div style=${{display:'flex',justifyContent:'space-between'}}><span style=${{fontSize:11,color:'var(--tx3)'}}>Due</span><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${fmtD(due)}</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span class="tx3-11">Title</span><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${title}</span></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span class="tx3-11">Priority</span><${PB} p=${pri}/></div>
+                <div style=${{display:'flex',justifyContent:'space-between'}}><span class="tx3-11">Due</span><span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${fmtD(due)}</span></div>
               </div>
               <div><label class="lbl">Stage</label>
                 <select class="sel" value=${stage} onChange=${e=>{
@@ -4736,7 +4389,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                 </div>
               </div>
             `:html`
-              <!-- Full edit form (Admin/Manager/TeamLead/ProjectOwner) -->
               <div><label class="lbl">Title *</label>
                 <input class="inp" placeholder="Task title..." value=${title} onInput=${e=>setTitle(e.target.value)}/></div>
               <div><label class="lbl">Description</label>
@@ -4789,7 +4441,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                       <div style=${{position:'absolute',top:2,left:rmEnabled?18:2,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,.2)'}}></div>
                     </div>
                     <span style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>⏰ Set a reminder</span>
-                    ${!rmEnabled?html`<span style=${{fontSize:11,color:'var(--tx3)'}}>— get notified before this task is due</span>`:null}
+                    ${!rmEnabled?html`<span class="tx3-11">— get notified before this task is due</span>`:null}
                   </div>
                 </div>
                 ${rmEnabled?html`
@@ -4835,7 +4487,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                   <div style=${{flex:1}}>
                     <div style=${{display:'flex',gap:7,alignItems:'center',marginBottom:3}}>
                       <span style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>${(au&&au.name)||'?'}</span>
-                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(c.ts)}</span>
+                      <span class="mono-10">${ago(c.ts)}</span>
                     </div>
                     <p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.5}}>${c.text}</p>
                   </div>
@@ -4867,7 +4519,6 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
   const [showNew,setShowNew]=useState(false);const [editTask,setEditTask]=useState(null);
   const [projTeamId,setProjTeamId]=useState((project.team_id)||'');
 
-  // When team changes, auto-add all team members to project members list
   const handleTeamChange=useCallback((tid)=>{
     setProjTeamId(tid);
     if(!tid)return;
@@ -4931,8 +4582,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
                   </div>
                 </div>
               </div>
-              <!-- Team assignment -->
-              <div>
+                            <div>
                 <label class="lbl">Assign to Team <span style=${{fontWeight:400,color:'var(--tx3)',fontSize:10}}>(auto-adds team members)</span></label>
                 <select class="sel" value=${projTeamId} onChange=${e=>handleTeamChange(e.target.value)}>
                   <option value="">— No team —</option>
@@ -4989,7 +4639,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
                     </div>
                     <div style=${{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:5,flexShrink:0}}>
                       ${au?html`<${Av} u=${au} size=${24}/>`:html`<div style=${{width:24,height:24,borderRadius:'50%',background:'var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'var(--tx3)'}}>?</div>`}
-                      ${tk.due?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${fmtD(tk.due)}</span>`:null}
+                      ${tk.due?html`<span class="mono-10">${fmtD(tk.due)}</span>`:null}
                     </div>
                   </div>`;
                 })}
@@ -5019,7 +4669,6 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
 /* ─── ProjectsView ────────────────────────────────────────────────────────── */
 function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,activeTeam,initialProjectId,onClearInitial}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
-  // Auto-open project detail if routed from Timeline Tracker (fires once, then clears immediately)
   useEffect(()=>{
     if(initialProjectId&&safe(projects).length>0){
       const p=safe(projects).find(proj=>proj.id===initialProjectId);
@@ -5038,14 +4687,12 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
   const [projTeam,setProjTeam]=useState('');
 
   useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
-  // Auto-select active team for new projects
   useEffect(()=>{if(activeTeam)setProjTeam(activeTeam.id);},[activeTeam]);
 
   const create=async()=>{
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
     try{
       let mems=members.includes(cu.id)?members:[cu.id,...members];
-      // If a team is selected, add all team members
       if(projTeam){
         const team=teams.find(t=>t.id===projTeam);
         if(team){
@@ -5057,10 +4704,8 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
       if(newProj&&newProj.error){setErr(newProj.error);return;}
       if(!newProj||!newProj.id){setErr('Failed to create project. Please try again.');return;}
       setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#2563eb');setMembers([]);setProjTeam('');
-      // Reload with small delay to ensure DB write is committed before read
       await new Promise(r=>setTimeout(r,300));
       await reload();
-      // If reload somehow missed it (race), do a second reload after 1s
       setTimeout(()=>reload(),1000);
     }catch(e){setErr('Error creating project: '+(e.message||'Unknown error'));}
   };
@@ -5085,10 +4730,8 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
   return html`
     <div class="fi" style=${{height:'100%',overflow:'hidden',display:'flex',flexDirection:'column'}}>
 
-      <!-- ── TOOLBAR ── -->
-      <div style=${{flexShrink:0,padding:'10px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',background:'var(--bg)'}}>
-        <!-- Search -->
-        <div style=${{position:'relative',flex:'1',minWidth:140,maxWidth:280}}>
+            <div style=${{flexShrink:0,padding:'10px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',background:'var(--bg)'}}>
+                <div style=${{position:'relative',flex:'1',minWidth:140,maxWidth:280}}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
             style=${{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -5098,15 +4741,13 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
         </div>
         <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap',flexShrink:0}}>${filteredProjects.length} of ${safe(projects).length}</span>
 
-        <!-- Sort -->
-        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,flexShrink:0}}>
+                <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,flexShrink:0}}>
           ${[['newest','🕐 Newest'],['oldest','🕐 Oldest'],['name','🔤 Name'],['progress','📊 Progress'],['tasks','📋 Tasks']].map(([k,lbl])=>html`
             <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 7px'}}
               onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
         </div>
 
-        <!-- View toggle -->
-        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,flexShrink:0}}>
+                <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,flexShrink:0}}>
           <button class=${'tb'+(viewMode==='grid'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
             onClick=${()=>setViewMode('grid')} title="Card view">⊞</button>
           <button class=${'tb'+(viewMode==='compact'?' act':'')} style=${{fontSize:12,padding:'2px 8px'}}
@@ -5121,8 +4762,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
             onClick=${()=>setShowNew(true)}>+ New Project</button>`:null}
       </div>
 
-      <!-- ── PROJECT LIST (scrollable) ── -->
-      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 16px'}}>
+            <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 16px'}}>
 
         ${filteredProjects.length===0?html`
           <div style=${{textAlign:'center',padding:'60px 0',color:'var(--tx3)'}}>
@@ -5131,8 +4771,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
             ${search?html`<button class="btn bg" style=${{fontSize:12}} onClick=${()=>setSearch('')}>Clear search</button>`:null}
           </div>`:null}
 
-        <!-- CARD GRID -->
-        ${viewMode==='grid'&&filteredProjects.length>0?html`
+                ${viewMode==='grid'&&filteredProjects.length>0?html`
           <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(275px,1fr))',gap:12}}>
             ${filteredProjects.map(p=>{
               const pt=safe(tasks).filter(t=>t.project===p.id);
@@ -5201,12 +4840,9 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
             })}
           </div>`:null}
 
-        <!-- COMPACT LIST — best for 50-200 projects -->
         ${viewMode==='compact'&&filteredProjects.length>0?html`
           <div style=${{display:'flex',flexDirection:'column',gap:3}}>
-            <!-- Header row -->
-            <div style=${{display:'grid',gridTemplateColumns:'1fr 90px 50px 50px 50px 90px',gap:8,padding:'4px 12px',
-              fontSize:9,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>
+                        <div style=${{display:'grid',gridTemplateColumns:'1fr 90px 50px 50px 50px 90px',gap:8,padding:'4px 12px', fontSize:9,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>
               <span>Project</span><span>Progress</span><span style=${{textAlign:'center'}}>Tasks</span>
               <span style=${{textAlign:'center'}}>Done</span><span style=${{textAlign:'center'}}>Open</span>
               <span style=${{textAlign:'right'}}>End Date</span>
@@ -5217,31 +4853,24 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
               const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
               return html`
                 <div key=${p.id}
-                  style=${{display:'grid',gridTemplateColumns:'1fr 90px 50px 50px 50px 90px',gap:8,
-                    alignItems:'center',padding:'8px 12px',
-                    background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,
-                    cursor:'pointer',transition:'background .1s',borderLeft:'3px solid '+p.color}}
+                  style=${{display:'grid',gridTemplateColumns:'1fr 90px 50px 50px 50px 90px',gap:8, alignItems:'center',padding:'8px 12px', background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8, cursor:'pointer',transition:'background .1s',borderLeft:'3px solid '+p.color}}
                   onClick=${()=>setDetail(p)}
                   onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
                   onMouseLeave=${e=>e.currentTarget.style.background='var(--sf)'}>
-                  <!-- Name + desc -->
-                  <div style=${{minWidth:0}}>
+                                    <div style=${{minWidth:0}}>
                     <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
                     <div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginTop:1}}>${p.description||'—'}</div>
                   </div>
-                  <!-- Progress bar -->
-                  <div style=${{display:'flex',alignItems:'center',gap:5}}>
+                                    <div style=${{display:'flex',alignItems:'center',gap:5}}>
                     <div style=${{flex:1,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
                       <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
                     </div>
                     <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)',flexShrink:0,minWidth:24}}>${pc}%</span>
                   </div>
-                  <!-- Stats -->
-                  <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>${pt.length}</div>
+                                    <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>${pt.length}</div>
                   <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--gn)'}}>${done}</div>
                   <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--am)'}}>${pt.length-done}</div>
-                  <!-- Date -->
-                  <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textAlign:'right'}}>
+                                    <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textAlign:'right'}}>
                     ${p.target_date?new Date(p.target_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—'}
                   </div>
                 </div>`;
@@ -5270,9 +4899,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
               <div><label class="lbl">Color</label>
                 <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
                   ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)}
-                    style=${{width:26,height:26,borderRadius:6,background:c,
-                      border:'3px solid '+(color===c?'#fff':'transparent'),
-                      cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
+                    style=${{width:26,height:26,borderRadius:6,background:c, border:'3px solid '+(color===c?'#fff':'transparent'), cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
                 </div>
               </div>
               <div><label class="lbl">Add Members</label>
@@ -5302,7 +4929,6 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
 }
 
 /* ─── TasksView with inline stage dropdown ────────────────────────────────── */
-// SDLC stage → typical days from today & auto completion %
 const STAGE_DAYS={backlog:0,planning:7,development:21,code_review:28,testing:35,uat:42,release:49,production:56,completed:60,blocked:0};
 const STAGE_PCT={backlog:0,planning:10,development:35,code_review:55,testing:70,uat:80,release:90,production:95,completed:100,blocked:null};
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split('T')[0];}
@@ -5337,7 +4963,6 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
   const activeFilters=[pid,teamF,priF,stageF,assF,dueF].filter(v=>v!=='all').length;
   const clearAll=()=>{setPid('all');setTeamF('all');setPriF('all');setStageF('all');setAssF('all');setDueF('all');setSearch('');setShowResolved(false);};
 
-  // Build team member id set for filter
   const teamFilterMemberIds=useMemo(()=>{
     if(teamF==='all')return null;
     const team=safe(teams).find(t=>t.id===teamF);
@@ -5354,7 +4979,6 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
       if(priF!=='all'&&t.priority!==priF)return false;
       if(stageF!=='all'&&t.stage!==stageF)return false;
       if(assF!=='all'&&t.assignee!==assF)return false;
-      // Team filter: match by team_id OR assignee in team
       if(teamF!=='all'){
         const byTeamId=t.team_id&&t.team_id===teamF;
         const byAssignee=teamFilterMemberIds&&t.assignee&&teamFilterMemberIds.has(t.assignee);
@@ -5431,8 +5055,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
                 style=${{background:'none',border:'none',cursor:'pointer',color:'var(--ac)',fontSize:14,lineHeight:1,padding:'0 2px'}}>×</button>
             </div>`:null}
           ${activeFilters>0?html`<button class="btn bam" style=${{padding:'7px 11px',fontSize:11}} onClick=${clearAll}>✕ Clear</button>`:null}
-          <!-- Resolved toggle removed -->
-          <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
+                    <div style=${{display:'flex',background:'var(--sf2)',borderRadius:9,padding:3,gap:2,flex:'0 0 auto'}}>
             <button class=${'tb'+(mode==='kanban'?' act':'')} onClick=${()=>setMode('kanban')}>⊞ Board</button>
             <button class=${'tb'+(mode==='list'?' act':'')} onClick=${()=>setMode('list')}>☰ List</button>
           </div>
@@ -5563,15 +5186,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
               <thead>
                 <tr style=${{borderBottom:'2px solid var(--bd)',background:'var(--sf2)'}}>
                   ${[
-                    {k:'id',      lbl:'ID',       s:null},
-                    {k:'title',   lbl:'Title',    s:null},
-                    {k:'project', lbl:'Project',  s:null},
-                    {k:'assignee',lbl:'Assignee', s:'assignee'},
-                    {k:'priority',lbl:'Priority', s:'priority'},
-                    {k:'stage',   lbl:'Stage',    s:'stage'},
-                    {k:'due',     lbl:'Due',      s:'due'},
-                    {k:'pct',     lbl:'%',        s:'pct'},
-                  ].map(h=>{
+                    {k:'id', lbl:'ID', s:null}, {k:'title', lbl:'Title', s:null}, {k:'project', lbl:'Project', s:null}, {k:'assignee',lbl:'Assignee', s:'assignee'}, {k:'priority',lbl:'Priority', s:'priority'}, {k:'stage', lbl:'Stage', s:'stage'}, {k:'due', lbl:'Due', s:'due'}, {k:'pct', lbl:'%', s:'pct'}, ].map(h=>{
                     const isA=sortCol===h.s;const can=!!h.s;
                     return html`<th key=${h.k}
                       onClick=${can?()=>toggleSort(h.s):null}
@@ -5596,7 +5211,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
                     <tr key=${tk.id} style=${{borderBottom:i<sorted.length-1?'1px solid var(--bd)':'none'}}
                       onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
                       onMouseLeave=${e=>e.currentTarget.style.background=''}>
-                      <td style=${{padding:'9px 13px'}}><span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.id}</span></td>
+                      <td style=${{padding:'9px 13px'}}><span class="mono-10">${tk.id}</span></td>
                       <td style=${{padding:'9px 13px',cursor:'pointer'}} onClick=${()=>setEditT(tk)}><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${tk.title}</span></td>
                       <td style=${{padding:'9px 13px'}}>${pr?html`<div style=${{display:'flex',alignItems:'center',gap:5}}><div style=${{width:6,height:6,borderRadius:2,background:pr.color}}></div><span style=${{fontSize:12,color:'var(--tx2)'}}>${pr.name}</span></div>`:null}</td>
                       <td style=${{padding:'9px 13px'}}>${au?html`<div style=${{display:'flex',alignItems:'center',gap:6}}><${Av} u=${au} size=${19}/><span style=${{fontSize:12,color:'var(--tx2)'}}>${au.name}</span></div>`:html`<span style=${{color:'var(--tx3)',fontSize:12}}>—</span>`}</td>
@@ -5663,25 +5278,12 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
   const activeProjectIds=new Set(p.map(proj=>proj.id));
   const activeTasks=t.filter(x=>activeProjectIds.has(x.project)&&x.stage!=='completed');
   const priChart=[
-    {name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)',priKey:'critical'},
-    {name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)',priKey:'high'},
-    {name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)',priKey:'medium'},
-    {name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)',priKey:'low'}
+    {name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)',priKey:'critical'}, {name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)',priKey:'high'}, {name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)',priKey:'medium'}, {name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)',priKey:'low'}
   ];
   const stats=[
-    {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
-    {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
-    {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'},
-    {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'},
-    {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'},
-    {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'},
-    {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'},
-    {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'},
-    {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'},
-  ];
+    {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'}, ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
-      <!-- Compact unified header: greeting + team info + dropdown -->
       <div style=${{padding:'10px 14px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:10}}>
         <${Av} u=${cu} size=${32}/>
         <div style=${{flex:1,minWidth:0}}>
@@ -5701,11 +5303,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
         ${isAdminManager&&safe(teams).length>0?html`
           <div ref=${teamDropRef} style=${{position:'relative',flexShrink:0}}>
             <button onClick=${()=>setTeamDropOpen(v=>!v)}
-              style=${{display:'flex',alignItems:'center',gap:7,padding:'7px 12px 7px 10px',borderRadius:10,
-                border:'1px solid '+(teamDropOpen?'var(--ac)':'var(--bd)'),
-                background:activeTeam?'var(--ac3)':'var(--sf2)',
-                color:activeTeam?'var(--ac)':'var(--tx2)',
-                cursor:'pointer',fontSize:12,fontWeight:600,transition:'all .15s',whiteSpace:'nowrap'}}>
+              style=${{display:'flex',alignItems:'center',gap:7,padding:'7px 12px 7px 10px',borderRadius:10, border:'1px solid '+(teamDropOpen?'var(--ac)':'var(--bd)'), background:activeTeam?'var(--ac3)':'var(--sf2)', color:activeTeam?'var(--ac)':'var(--tx2)', cursor:'pointer',fontSize:12,fontWeight:600,transition:'all .15s',whiteSpace:'nowrap'}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="17" cy="8" r="3"/><circle cx="7" cy="8" r="3"/><path d="M3 21v-2a5 5 0 0 1 8.66-3.43"/><path d="M13 21v-2a5 5 0 0 1 10 0v2"/></svg>
               ${activeTeam?html`<div style=${{width:7,height:7,borderRadius:2,background:activeTeam.color||'var(--ac)',flexShrink:0}}></div>`:null}
               <span style=${{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis'}}>${activeTeam?activeTeam.name:'All Teams'}</span>
@@ -5726,22 +5324,14 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
                 </div>
                 <div style=${{maxHeight:200,overflowY:'auto',padding:'4px 6px'}}>
                   <button onClick=${()=>{setTeamCtx&&setTeamCtx('');setTeamDropOpen(false);setTeamSearch('');}}
-                    style=${{width:'100%',padding:'7px 10px',borderRadius:7,border:'none',
-                      background:!activeTeam?'var(--ac3)':'transparent',
-                      color:!activeTeam?'var(--ac)':'var(--tx2)',
-                      fontSize:12,fontWeight:!activeTeam?700:400,
-                      cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
+                    style=${{width:'100%',padding:'7px 10px',borderRadius:7,border:'none', background:!activeTeam?'var(--ac3)':'transparent', color:!activeTeam?'var(--ac)':'var(--tx2)', fontSize:12,fontWeight:!activeTeam?700:400, cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
                     onMouseEnter=${e=>{if(activeTeam)e.currentTarget.style.background='var(--sf2)';}}
                     onMouseLeave=${e=>{if(activeTeam)e.currentTarget.style.background='transparent';}}>
                     🌐 All Teams
                   </button>
                   ${filteredTeams.map(team=>html`
                     <button key=${team.id} onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);setTeamDropOpen(false);setTeamSearch('');}}
-                      style=${{width:'100%',padding:'7px 10px',borderRadius:7,border:'none',
-                        background:activeTeam&&activeTeam.id===team.id?'var(--ac3)':'transparent',
-                        color:activeTeam&&activeTeam.id===team.id?'var(--ac)':'var(--tx2)',
-                        fontSize:12,fontWeight:activeTeam&&activeTeam.id===team.id?700:400,
-                        cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
+                      style=${{width:'100%',padding:'7px 10px',borderRadius:7,border:'none', background:activeTeam&&activeTeam.id===team.id?'var(--ac3)':'transparent', color:activeTeam&&activeTeam.id===team.id?'var(--ac)':'var(--tx2)', fontSize:12,fontWeight:activeTeam&&activeTeam.id===team.id?700:400, cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:8,transition:'all .1s'}}
                       onMouseEnter=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='var(--sf2)';}}
                       onMouseLeave=${e=>{if(!(activeTeam&&activeTeam.id===team.id))e.currentTarget.style.background='transparent';}}>
                       <div style=${{width:8,height:8,borderRadius:2,background:team.color||'var(--ac)',flexShrink:0}}></div>
@@ -5753,8 +5343,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
               </div>`:null}
           </div>`:null}
       </div>
-      <!-- Stat cards -->
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:8}}>
+            <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:8}}>
         ${stats.map((s,i)=>html`
           <div key=${i} onClick=${()=>onNav(s.nav)}
             style=${{background:'var(--sf)',borderRadius:14,padding:'12px 14px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .16s',border:'1px solid var(--bd2)'}}
@@ -5766,7 +5355,6 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:5,fontWeight:500}}>${s.label}</div>
           </div>`)}
       </div>
-      <!-- Priority split + Project Progress + My Tasks -->
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
@@ -5852,14 +5440,8 @@ function TimelineView({cu,tasks,projects,onNav}){
   const [search,setSearch]=useState('');
   const [sortBy,setSortBy]=useState('health');
 
-  // Config — defined once, used for tabs and filter logic
   const HC={
-    'on-track':{label:'On Track',color:'var(--gn)',bg:'rgba(74,222,128,.12)'},
-    'warning':{label:'At Risk',color:'var(--am)',bg:'rgba(251,191,36,.12)'},
-    'at-risk':{label:'Needs Attention',color:'var(--rd)',bg:'rgba(248,113,113,.12)'},
-    'overdue':{label:'Overdue',color:'var(--rd)',bg:'rgba(248,113,113,.2)'},
-    'no-dates':{label:'No Dates',color:'var(--tx3)',bg:'rgba(255,255,255,.04)'},
-  };
+    'on-track':{label:'On Track',color:'var(--gn)',bg:'rgba(74,222,128,.12)'}, 'warning':{label:'At Risk',color:'var(--am)',bg:'rgba(251,191,36,.12)'}, 'at-risk':{label:'Needs Attention',color:'var(--rd)',bg:'rgba(248,113,113,.12)'}, 'overdue':{label:'Overdue',color:'var(--rd)',bg:'rgba(248,113,113,.2)'}, 'no-dates':{label:'No Dates',color:'var(--tx3)',bg:'rgba(255,255,255,.04)'}, };
   const HO={'overdue':0,'at-risk':1,'warning':2,'on-track':3,'no-dates':4};
 
   const timelines=useMemo(()=>p.map(proj=>{
@@ -5876,8 +5458,7 @@ function TimelineView({cu,tasks,projects,onNav}){
     const taskProgress=pt.length?Math.round(pt.reduce((a,x)=>a+(x.pct||0),0)/pt.length):(proj.progress||0);
     const gap=timeProgress!==null?(timeProgress-taskProgress):null;
     const health=gap===null?'no-dates':isOverdue&&taskProgress<100?'overdue':gap>30?'at-risk':gap>15?'warning':'on-track';
-    return {...proj,start,end,totalDays,daysSpent,daysLeft,timeProgress,taskProgress,isOverdue,health,gap,
-      taskCount:pt.length,doneTasks:pt.filter(x=>x.stage==='completed').length};
+    return {...proj,start,end,totalDays,daysSpent,daysLeft,timeProgress,taskProgress,isOverdue,health,gap, taskCount:pt.length,doneTasks:pt.filter(x=>x.stage==='completed').length};
   }),[p,t,now]);
 
   const filtered=useMemo(()=>{
@@ -5901,11 +5482,9 @@ function TimelineView({cu,tasks,projects,onNav}){
   return html`
     <div style=${{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
 
-      <!-- ── FIXED HEADER ── -->
-      <div style=${{flexShrink:0,padding:'12px 20px 10px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
+            <div style=${{flexShrink:0,padding:'12px 20px 10px',borderBottom:'1px solid var(--bd)',background:'var(--bg)'}}>
 
-        <!-- Title + today -->
-        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
           <div>
             <h2 style=${{fontSize:15,fontWeight:800,color:'var(--tx)',display:'flex',alignItems:'center',gap:7,margin:0}}>📅 Project Timeline Tracker</h2>
             <p style=${{fontSize:11,color:'var(--tx2)',marginTop:2,fontWeight:500}}>Days spent vs. remaining — based on today</p>
@@ -5915,19 +5494,10 @@ function TimelineView({cu,tasks,projects,onNav}){
           </span>
         </div>
 
-        <!-- Health tab cards -->
-        <div style=${{display:'flex',gap:7,marginBottom:10,flexWrap:'wrap'}}>
-          ${[['all','All','#1d4ed8','rgba(29,78,216,0.08)',counts.total],
-             ['on-track','On Track','var(--gn)','rgba(74,222,128,.1)',counts['on-track']],
-             ['warning','At Risk','var(--am)','rgba(251,191,36,.1)',counts['warning']],
-             ['at-risk','Needs Attn','var(--rd)','rgba(248,113,113,.1)',counts['at-risk']],
-             ['overdue','Overdue','var(--rd)','rgba(248,113,113,.15)',counts['overdue']],
-             ['no-dates','No Dates','var(--tx3)','rgba(255,255,255,.04)',counts['no-dates']],
-          ].map(([k,lbl,color,bg,cnt])=>html`
+                <div style=${{display:'flex',gap:7,marginBottom:10,flexWrap:'wrap'}}>
+          ${[['all','All','#1d4ed8','rgba(29,78,216,0.08)',counts.total], ['on-track','On Track','var(--gn)','rgba(74,222,128,.1)',counts['on-track']], ['warning','At Risk','var(--am)','rgba(251,191,36,.1)',counts['warning']], ['at-risk','Needs Attn','var(--rd)','rgba(248,113,113,.1)',counts['at-risk']], ['overdue','Overdue','var(--rd)','rgba(248,113,113,.15)',counts['overdue']], ['no-dates','No Dates','var(--tx3)','rgba(255,255,255,.04)',counts['no-dates']], ].map(([k,lbl,color,bg,cnt])=>html`
             <div key=${k} onClick=${()=>setFilterHealth(k)}
-              style=${{background:filterHealth===k?bg:'var(--sf)',border:'2px solid '+(filterHealth===k?color:'var(--bd)'),
-                borderRadius:9,padding:'7px 14px',cursor:'pointer',transition:'all .15s',
-                display:'flex',alignItems:'center',gap:8}}
+              style=${{background:filterHealth===k?bg:'var(--sf)',border:'2px solid '+(filterHealth===k?color:'var(--bd)'), borderRadius:9,padding:'7px 14px',cursor:'pointer',transition:'all .15s', display:'flex',alignItems:'center',gap:8}}
               onMouseEnter=${e=>{if(filterHealth!==k)e.currentTarget.style.borderColor=color+'66';}}
               onMouseLeave=${e=>{if(filterHealth!==k)e.currentTarget.style.borderColor='var(--bd)';}}>
               <span style=${{fontSize:17,fontWeight:800,color,fontFamily:'monospace',lineHeight:1}}>${cnt}</span>
@@ -5935,10 +5505,8 @@ function TimelineView({cu,tasks,projects,onNav}){
             </div>`)}
         </div>
 
-        <!-- Search + sort — single compact row -->
-        <div style=${{display:'flex',gap:8,alignItems:'center'}}>
-          <!-- Search -->
-          <div style=${{position:'relative',flex:1,maxWidth:260}}>
+                <div style=${{display:'flex',gap:8,alignItems:'center'}}>
+                    <div style=${{position:'relative',flex:1,maxWidth:260}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
               style=${{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -5947,22 +5515,19 @@ function TimelineView({cu,tasks,projects,onNav}){
               style=${{height:26,fontSize:11,paddingLeft:26}}
               onInput=${e=>setSearch(e.target.value)}/>
           </div>
-          <!-- Sort -->
-          <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Sort:</span>
+                    <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5}}>Sort:</span>
           <div style=${{display:'flex',background:'var(--sf2)',borderRadius:6,padding:2,gap:1}}>
             ${[['health','🚦 Health'],['name','🔤 Name'],['progress','✅ Tasks'],['days_left','⏳ Days Left'],['spent','📆 Days Spent']].map(([k,lbl])=>html`
               <button key=${k} class=${'tb'+(sortBy===k?' act':'')} style=${{fontSize:10,padding:'2px 8px'}} onClick=${()=>setSortBy(k)}>${lbl}</button>`)}
           </div>
-          <!-- Clear -->
-          ${(filterHealth!=='all'||search)?html`
+                    ${(filterHealth!=='all'||search)?html`
             <button class="btn bg" style=${{fontSize:10,padding:'3px 9px'}}
               onClick=${()=>{setFilterHealth('all');setSearch('');}}>✕ Clear</button>`:null}
           <span style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap'}}>${filtered.length}/${timelines.length} projects</span>
         </div>
       </div>
 
-      <!-- ── SCROLLABLE LIST ── -->
-      <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:10}}>
+            <div style=${{flex:1,minHeight:0,overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:10}}>
         ${filtered.length===0?html`
           <div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)'}}>
             <div style=${{fontSize:36,marginBottom:10}}>🔍</div>
@@ -5972,8 +5537,7 @@ function TimelineView({cu,tasks,projects,onNav}){
         ${filtered.map(proj=>{
           const hc=HC[proj.health];
           return html`
-            <div key=${proj.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,
-              padding:'13px 17px',borderLeft:'4px solid '+proj.color,transition:'all .15s',cursor:'pointer'}}
+            <div key=${proj.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12, padding:'13px 17px',borderLeft:'4px solid '+proj.color,transition:'all .15s',cursor:'pointer'}}
               onClick=${()=>onNav&&onNav('projects',proj.id)}
               onMouseEnter=${e=>{e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.3)';e.currentTarget.style.borderColor=proj.color;}}
               onMouseLeave=${e=>{e.currentTarget.style.boxShadow='';e.currentTarget.style.borderColor='var(--bd)';}}>
@@ -5987,8 +5551,7 @@ function TimelineView({cu,tasks,projects,onNav}){
                   <div style=${{display:'flex',alignItems:'center',gap:10}}>
                     <span style=${{fontSize:10,color:'var(--tx2)',fontWeight:600,width:90,flexShrink:0}}>⏱ Time elapsed</span>
                     <div style=${{flex:1,height:7,background:'var(--sf3)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
-                      <div style=${{height:'100%',width:proj.timeProgress+'%',borderRadius:100,
-                        background:proj.isOverdue?'var(--rd)':proj.timeProgress>70?'var(--am)':'var(--cy)'}}></div>
+                      <div style=${{height:'100%',width:proj.timeProgress+'%',borderRadius:100, background:proj.isOverdue?'var(--rd)':proj.timeProgress>70?'var(--am)':'var(--cy)'}}></div>
                     </div>
                     <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',width:34,textAlign:'right',fontWeight:700}}>${proj.timeProgress}%</span>
                   </div>
@@ -6002,13 +5565,7 @@ function TimelineView({cu,tasks,projects,onNav}){
                 </div>
                 <div style=${{display:'flex',gap:7,flexWrap:'wrap'}}>
                   ${[
-                    {lbl:'Start',val:fmtD(proj.start),c:'var(--tx2)'},
-                    {lbl:'End',val:fmtD(proj.end),c:proj.isOverdue?'var(--rd)':'var(--tx2)'},
-                    {lbl:'Total',val:proj.totalDays+' days',c:'var(--tx2)'},
-                    {lbl:'Spent',val:proj.daysSpent+' days',c:'var(--tx2)'},
-                    {lbl:proj.isOverdue?'Overdue by':'Remaining',val:Math.abs(proj.daysLeft)+' days',c:proj.isOverdue?'var(--rd)':'var(--gn)'},
-                    proj.gap!==null?{lbl:'Gap',val:(proj.gap>0?'+':'')+proj.gap+'%',c:proj.gap>15?'var(--rd)':proj.gap>0?'var(--am)':'var(--gn)'}:null,
-                  ].filter(Boolean).map((ch,i)=>html`
+                    {lbl:'Start',val:fmtD(proj.start),c:'var(--tx2)'}, {lbl:'End',val:fmtD(proj.end),c:proj.isOverdue?'var(--rd)':'var(--tx2)'}, {lbl:'Total',val:proj.totalDays+' days',c:'var(--tx2)'}, {lbl:'Spent',val:proj.daysSpent+' days',c:'var(--tx2)'}, {lbl:proj.isOverdue?'Overdue by':'Remaining',val:Math.abs(proj.daysLeft)+' days',c:proj.isOverdue?'var(--rd)':'var(--gn)'}, proj.gap!==null?{lbl:'Gap',val:(proj.gap>0?'+':'')+proj.gap+'%',c:proj.gap>15?'var(--rd)':proj.gap>0?'var(--am)':'var(--gn)'}:null, ].filter(Boolean).map((ch,i)=>html`
                     <div key=${i} style=${{padding:'3px 8px',background:'var(--sf2)',borderRadius:6,border:'1px solid var(--bd)'}}>
                       <span style=${{fontSize:9,color:'var(--tx2)',fontWeight:600,textTransform:'uppercase',letterSpacing:.4}}>${ch.lbl} </span>
                       <span style=${{fontSize:10,fontWeight:700,color:ch.c,fontFamily:'monospace'}}>${ch.val}</span>
@@ -6047,8 +5604,7 @@ function ProductivityView({cu,tasks,projects,users}){
     const scoreColor=score>=70?'var(--gn)':score>=40?'var(--am)':'var(--rd)';
     const last7=t.filter(x=>x.assignee===dev.id&&(now-new Date(x.created||0))<7*86400000).length;
     const projSet=new Set(devTasks.map(x=>x.project));
-    return {...dev,total,completed:completed.length,inProg:inProg.length,blocked:blocked.length,
-      overdue:overdue.length,completionRate,avgPct,score,scoreColor,last7,projCount:projSet.size};
+    return {...dev,total,completed:completed.length,inProg:inProg.length,blocked:blocked.length, overdue:overdue.length,completionRate,avgPct,score,scoreColor,last7,projCount:projSet.size};
   }),[u,t,filterProject,now]);
 
   const filtered=useMemo(()=>{
@@ -6076,17 +5632,14 @@ function ProductivityView({cu,tasks,projects,users}){
   return html`
     <div style=${{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column',background:'var(--bg)'}}>
 
-      <!-- ── TOP BAR (very compact) ── -->
-      <div style=${{flexShrink:0,padding:'10px 18px',borderBottom:'1px solid var(--bd)',background:'var(--bg)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <div style=${{flexShrink:0,padding:'10px 18px',borderBottom:'1px solid var(--bd)',background:'var(--bg)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
 
-        <!-- Title -->
-        <div style=${{marginRight:4}}>
+                <div style=${{marginRight:4}}>
           <span style=${{fontSize:14,fontWeight:800,color:'var(--tx)'}}>👩‍💻 Dev Productivity</span>
           <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:8}}>${u.length} developers · ${t.length} tasks</span>
         </div>
 
-        <!-- Search -->
-        <div style=${{position:'relative',flex:'1',maxWidth:200}}>
+                <div style=${{position:'relative',flex:'1',maxWidth:200}}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
             style=${{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -6096,22 +5649,19 @@ function ProductivityView({cu,tasks,projects,users}){
             onInput=${e=>setSearch(e.target.value)}/>
         </div>
 
-        <!-- Role filter -->
-        <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:120}} value=${filterRole}
+                <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:120}} value=${filterRole}
           onChange=${e=>{setFilterRole(e.target.value);setSelectedDev(null);}}>
           <option value="all">All Roles</option>
           ${roles.map(r=>html`<option key=${r} value=${r}>${r}</option>`)}
         </select>
 
-        <!-- Project filter -->
-        <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:140}} value=${filterProject}
+                <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:140}} value=${filterProject}
           onChange=${e=>{setFilterProject(e.target.value);setSelectedDev(null);}}>
           <option value="all">All Projects</option>
           ${p.map(pr=>html`<option key=${pr.id} value=${pr.id}>${pr.name}</option>`)}
         </select>
 
-        <!-- Sort -->
-        <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:130}} value=${sortBy}
+                <select class="inp" style=${{height:26,fontSize:11,padding:'0 8px',maxWidth:130}} value=${sortBy}
           onChange=${e=>setSortBy(e.target.value)}>
           <option value="score">Sort: Score</option>
           <option value="name">Sort: Name</option>
@@ -6120,8 +5670,7 @@ function ProductivityView({cu,tasks,projects,users}){
           <option value="overdue">Sort: Overdue</option>
         </select>
 
-        <!-- Tab switcher -->
-        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,marginLeft:'auto'}}>
+                <div style=${{display:'flex',background:'var(--sf2)',borderRadius:7,padding:2,gap:1,marginLeft:'auto'}}>
           ${[['table','📋 Table'],['chart','📊 Chart']].map(([k,lbl])=>html`
             <button key=${k} class=${'tb'+(tab===k&&!selDev?' act':'')} style=${{fontSize:10,padding:'3px 10px'}}
               onClick=${()=>{closeDetail();setTab(k);}}>${lbl}</button>`)}
@@ -6130,37 +5679,25 @@ function ProductivityView({cu,tasks,projects,users}){
         <span style=${{fontSize:11,color:'var(--tx3)',whiteSpace:'nowrap'}}>${filtered.length}/${u.length}</span>
       </div>
 
-      <!-- ── SUMMARY STRIP ── -->
-      ${!selDev?html`
+            ${!selDev?html`
         <div style=${{flexShrink:0,display:'flex',gap:0,borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
           ${[
-            {lbl:'Total Tasks',val:t.length,c:'var(--tx)'},
-            {lbl:'Completed',val:t.filter(x=>x.stage==='completed').length,c:'var(--gn)'},
-            {lbl:'In Progress',val:t.filter(x=>x.stage==='in-progress'||x.stage==='development').length,c:'var(--cy)'},
-            {lbl:'Blocked',val:t.filter(x=>x.stage==='blocked').length,c:'var(--rd)'},
-            {lbl:'Overdue',val:t.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length,c:'var(--am)'},
-          ].map((s,i)=>html`
+            {lbl:'Total Tasks',val:t.length,c:'var(--tx)'}, {lbl:'Completed',val:t.filter(x=>x.stage==='completed').length,c:'var(--gn)'}, {lbl:'In Progress',val:t.filter(x=>x.stage==='in-progress'||x.stage==='development').length,c:'var(--cy)'}, {lbl:'Blocked',val:t.filter(x=>x.stage==='blocked').length,c:'var(--rd)'}, {lbl:'Overdue',val:t.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length,c:'var(--am)'}, ].map((s,i)=>html`
             <div key=${i} style=${{flex:1,textAlign:'center',padding:'8px 4px',borderRight:i<4?'1px solid var(--bd)':'none'}}>
               <div style=${{fontSize:16,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.val}</div>
               <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:600,marginTop:2,textTransform:'uppercase',letterSpacing:.4}}>${s.lbl}</div>
             </div>`)}
         </div>`:null}
 
-      <!-- ── SCROLLABLE CONTENT ── -->
-      <div style=${{flex:1,minHeight:0,overflowY:'auto'}}>
+            <div style=${{flex:1,minHeight:0,overflowY:'auto'}}>
 
-        <!-- TABLE TAB -->
-        ${tab==='table'&&!selDev?html`
+                ${tab==='table'&&!selDev?html`
           <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead style=${{position:'sticky',top:0,zIndex:10}}>
               <tr style=${{background:'var(--sf2)',borderBottom:'2px solid var(--bd)'}}>
-                ${[['#','36px'],['Developer','180px'],['Role','90px'],['Score','60px'],
-                   ['Tasks','60px'],['Done','60px'],['Active','60px'],['Blocked','70px'],
-                   ['Overdue','70px'],['Avg %','100px'],['Last 7d','70px'],['Projects','70px'],['','48px']
+                ${[['#','36px'],['Developer','180px'],['Role','90px'],['Score','60px'], ['Tasks','60px'],['Done','60px'],['Active','60px'],['Blocked','70px'], ['Overdue','70px'],['Avg %','100px'],['Last 7d','70px'],['Projects','70px'],['','48px']
                 ].map(([h,w])=>html`
-                  <th key=${h} style=${{padding:'8px 10px',textAlign:'left',fontSize:9,fontWeight:700,
-                    color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,whiteSpace:'nowrap',
-                    minWidth:w,width:w}}>${h}</th>`)}
+                  <th key=${h} style=${{padding:'8px 10px',textAlign:'left',fontSize:9,fontWeight:700, color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,whiteSpace:'nowrap', minWidth:w,width:w}}>${h}</th>`)}
               </tr>
             </thead>
             <tbody>
@@ -6169,12 +5706,10 @@ function ProductivityView({cu,tasks,projects,users}){
                   onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}
                   onMouseLeave=${e=>e.currentTarget.style.background=''}
                   onClick=${()=>openDetail(dev.id)}>
-                  <!-- Rank -->
-                  <td style=${{padding:'9px 10px',textAlign:'center',fontSize:12}}>
+                                    <td style=${{padding:'9px 10px',textAlign:'center',fontSize:12}}>
                     ${i===0?'🥇':i===1?'🥈':i===2?'🥉':html`<span style=${{color:'var(--tx3)',fontFamily:'monospace',fontSize:10}}>${i+1}</span>`}
                   </td>
-                  <!-- Developer -->
-                  <td style=${{padding:'9px 10px'}}>
+                                    <td style=${{padding:'9px 10px'}}>
                     <div style=${{display:'flex',alignItems:'center',gap:8}}>
                       <${Av} u=${dev} size=${28}/>
                       <div>
@@ -6184,31 +5719,23 @@ function ProductivityView({cu,tasks,projects,users}){
                     </div>
                   </td>
                   <td style=${{padding:'9px 10px',color:'var(--tx2)',fontSize:11,whiteSpace:'nowrap'}}>${dev.role||'—'}</td>
-                  <!-- Score ring -->
-                  <td style=${{padding:'9px 10px'}}>
-                    <div style=${{width:32,height:32,borderRadius:'50%',border:'2.5px solid '+dev.scoreColor,
-                      display:'flex',alignItems:'center',justifyContent:'center',
-                      background:'rgba(255,255,255,.02)',fontSize:10,fontWeight:800,
-                      color:dev.scoreColor,fontFamily:'monospace'}}>${dev.score}</div>
+                                    <td style=${{padding:'9px 10px'}}>
+                    <div style=${{width:32,height:32,borderRadius:'50%',border:'2.5px solid '+dev.scoreColor, display:'flex',alignItems:'center',justifyContent:'center', background:'rgba(255,255,255,.02)',fontSize:10,fontWeight:800, color:dev.scoreColor,fontFamily:'monospace'}}>${dev.score}</div>
                   </td>
                   <td style=${{padding:'9px 10px',fontFamily:'monospace',fontWeight:600,color:'var(--tx)',textAlign:'center'}}>${dev.total}</td>
                   <td style=${{padding:'9px 10px',fontFamily:'monospace',fontWeight:700,color:'var(--gn)',textAlign:'center'}}>${dev.completed}</td>
                   <td style=${{padding:'9px 10px',fontFamily:'monospace',color:'var(--cy)',textAlign:'center'}}>${dev.inProg}</td>
                   <td style=${{padding:'9px 10px',fontFamily:'monospace',color:dev.blocked>0?'var(--rd)':'var(--tx3)',textAlign:'center'}}>${dev.blocked}</td>
-                  <td style=${{padding:'9px 10px',fontFamily:'monospace',fontWeight:dev.overdue>0?700:400,
-                    color:dev.overdue>0?'var(--rd)':'var(--tx3)',textAlign:'center'}}>${dev.overdue}</td>
-                  <!-- Avg % bar -->
-                  <td style=${{padding:'9px 10px'}}>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',fontWeight:dev.overdue>0?700:400, color:dev.overdue>0?'var(--rd)':'var(--tx3)',textAlign:'center'}}>${dev.overdue}</td>
+                                    <td style=${{padding:'9px 10px'}}>
                     <div style=${{display:'flex',alignItems:'center',gap:5}}>
                       <div style=${{width:50,height:4,background:'var(--bd)',borderRadius:100,overflow:'hidden',flexShrink:0}}>
-                        <div style=${{height:'100%',width:dev.avgPct+'%',borderRadius:100,
-                          background:dev.avgPct>70?'var(--gn)':dev.avgPct>40?'var(--am)':'var(--rd)'}}></div>
+                        <div style=${{height:'100%',width:dev.avgPct+'%',borderRadius:100, background:dev.avgPct>70?'var(--gn)':dev.avgPct>40?'var(--am)':'var(--rd)'}}></div>
                       </div>
                       <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',flexShrink:0}}>${dev.avgPct}%</span>
                     </div>
                   </td>
-                  <td style=${{padding:'9px 10px',fontFamily:'monospace',color:dev.last7>0?'var(--ac)':'var(--tx3)',
-                    fontWeight:dev.last7>0?700:400,textAlign:'center'}}>${dev.last7}</td>
+                  <td style=${{padding:'9px 10px',fontFamily:'monospace',color:dev.last7>0?'var(--ac)':'var(--tx3)', fontWeight:dev.last7>0?700:400,textAlign:'center'}}>${dev.last7}</td>
                   <td style=${{padding:'9px 10px',color:'var(--tx2)',fontFamily:'monospace',textAlign:'center'}}>${dev.projCount}</td>
                   <td style=${{padding:'9px 10px',textAlign:'center'}}>
                     <button class="btn bg" style=${{fontSize:10,padding:'3px 8px',whiteSpace:'nowrap'}}
@@ -6222,8 +5749,7 @@ function ProductivityView({cu,tasks,projects,users}){
             </tbody>
           </table>`:null}
 
-        <!-- CHART TAB -->
-        ${tab==='chart'&&!selDev?html`
+                ${tab==='chart'&&!selDev?html`
           <div style=${{padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
             <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
               <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:14}}>Task Distribution per Developer</h3>
@@ -6243,11 +5769,9 @@ function ProductivityView({cu,tasks,projects,users}){
             </div>
           </div>`:null}
 
-        <!-- DETAIL VIEW -->
-        ${selDev?html`
+                ${selDev?html`
           <div style=${{padding:'14px 18px',display:'flex',flexDirection:'column',gap:12}}>
-            <!-- Back button -->
-            <div>
+                        <div>
               <button onClick=${()=>closeDetail()}
                 style=${{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--sf)',color:'var(--tx2)',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .12s'}}
                 onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
@@ -6256,36 +5780,24 @@ function ProductivityView({cu,tasks,projects,users}){
                 All Developers
               </button>
             </div>
-            <!-- Dev profile card -->
-            <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px',
-              display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
+                        <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px', display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
               <${Av} u=${selDev} size=${52}/>
               <div style=${{flex:1,minWidth:100}}>
                 <div style=${{fontSize:17,fontWeight:800,color:'var(--tx)'}}>${selDev.name}</div>
                 <div style=${{fontSize:12,color:'var(--tx2)',marginTop:3}}>${selDev.role||'Team Member'}</div>
               </div>
-              <div style=${{width:58,height:58,borderRadius:'50%',border:'3px solid '+selDev.scoreColor,
-                display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',
-                background:'rgba(255,255,255,.03)',flexShrink:0}}>
+              <div style=${{width:58,height:58,borderRadius:'50%',border:'3px solid '+selDev.scoreColor, display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column', background:'rgba(255,255,255,.03)',flexShrink:0}}>
                 <span style=${{fontSize:20,fontWeight:900,color:selDev.scoreColor,fontFamily:'monospace',lineHeight:1}}>${selDev.score}</span>
                 <span style=${{fontSize:8,color:'var(--tx3)',textTransform:'uppercase'}}>score</span>
               </div>
               ${[
-                {l:'Total',v:selDev.total,c:'var(--tx)'},
-                {l:'Done',v:selDev.completed,c:'var(--gn)'},
-                {l:'Active',v:selDev.inProg,c:'var(--cy)'},
-                {l:'Blocked',v:selDev.blocked,c:selDev.blocked>0?'var(--rd)':'var(--tx3)'},
-                {l:'Overdue',v:selDev.overdue,c:selDev.overdue>0?'var(--rd)':'var(--tx3)'},
-                {l:'Avg%',v:selDev.avgPct+'%',c:selDev.avgPct>70?'var(--gn)':selDev.avgPct>40?'var(--am)':'var(--rd)'},
-                {l:'Last7d',v:selDev.last7,c:selDev.last7>0?'var(--ac)':'var(--tx3)'},
-              ].map(s=>html`
+                {l:'Total',v:selDev.total,c:'var(--tx)'}, {l:'Done',v:selDev.completed,c:'var(--gn)'}, {l:'Active',v:selDev.inProg,c:'var(--cy)'}, {l:'Blocked',v:selDev.blocked,c:selDev.blocked>0?'var(--rd)':'var(--tx3)'}, {l:'Overdue',v:selDev.overdue,c:selDev.overdue>0?'var(--rd)':'var(--tx3)'}, {l:'Avg%',v:selDev.avgPct+'%',c:selDev.avgPct>70?'var(--gn)':selDev.avgPct>40?'var(--am)':'var(--rd)'}, {l:'Last7d',v:selDev.last7,c:selDev.last7>0?'var(--ac)':'var(--tx3)'}, ].map(s=>html`
                 <div key=${s.l} style=${{textAlign:'center',padding:'6px 10px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',minWidth:48}}>
                   <div style=${{fontSize:16,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.v}</div>
                   <div style=${{fontSize:8,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.4,marginTop:2}}>${s.l}</div>
                 </div>`)}
             </div>
-            <!-- Tasks -->
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>
+                        <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>
               Assigned Tasks <span style=${{color:'var(--ac)'}}>(${selTasks.length})</span>${filterProject!=='all'?' — filtered':''}
             </div>
             ${selTasks.length===0?html`
@@ -6319,8 +5831,7 @@ function ProductivityView({cu,tasks,projects,users}){
             </div>
           </div>`:null}
 
-      </div><!-- end scroll -->
-    </div>`;
+      </div>    </div>`;
 }
 function renderMd(text){
   return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
@@ -6328,20 +5839,16 @@ function renderMd(text){
 function MessagesView({projects,users,cu,tasks}){
   const [allProjects,setAllProjects]=useState(safe(projects));
   const [lastMsgTs,setLastMsgTs]=useState({});
-  // Stable sorted order — computed ONCE after first real fetch, never re-sorted again
-  // This prevents the glitch where Google SecOps jumps to top on every poll
   const [stableOrder,setStableOrder]=useState(null); // null = not yet fetched
   const orderSetRef=useRef(false);
 
   useEffect(()=>{api.get('/api/projects/all').then(d=>{if(Array.isArray(d)&&d.length)setAllProjects(d);});},[]);
 
-  // Fetch last-message timestamps — only lock in sort order on FIRST successful fetch
   useEffect(()=>{
     const fetchTs=async()=>{
       const d=await api.get('/api/projects/last-messages');
       if(d&&typeof d==='object'){
         setLastMsgTs(d);
-        // Set stable order only once on first fetch — never re-sort after that
         if(!orderSetRef.current){
           orderSetRef.current=true;
           setStableOrder(d);
@@ -6378,7 +5885,6 @@ function MessagesView({projects,users,cu,tasks}){
               if(d.length>0){
                 const latest=d.reduce((mx,m)=>m.ts>mx?m.ts:mx,'');
                 setLastMsgTs(prev=>({...prev,[pid]:latest}));
-                // DO NOT update stableOrder here — prevents re-sort glitch
               }
             }
             return d;
@@ -6404,19 +5910,15 @@ function MessagesView({projects,users,cu,tasks}){
     if(!txt.trim())return;const c=txt.trim();setTxt('');
     const m=await api.post('/api/messages',{project:pid,content:c});
     setMsgs(prev=>[...prev,m]);
-    // Update lastMsgTs for unread indicators but do NOT change stableOrder
     setLastMsgTs(prev=>({...prev,[pid]:m.ts||new Date().toISOString()}));
   };
 
-  // Sort channels: use stableOrder (locked after first fetch) for ordering
-  // If stableOrder not yet available, use project creation order (no jump)
   const sortedProjects=useMemo(()=>{
     let rows=[...allProjects];
     if(chanSearch.trim()){
       const q=chanSearch.toLowerCase();
       rows=rows.filter(p=>p.name.toLowerCase().includes(q));
     }
-    // Use stableOrder if available, else sort by name (stable, no jumping)
     const orderTs=stableOrder||{};
     const hasAnyTs=Object.keys(orderTs).length>0;
     rows.sort((a,b)=>{
@@ -6425,7 +5927,6 @@ function MessagesView({projects,users,cu,tasks}){
         const bTs=orderTs[b.id]||b.created||'';
         return bTs.localeCompare(aTs);
       }
-      // Fallback: alphabetical (stable while loading)
       return a.name.localeCompare(b.name);
     });
     return rows;
@@ -6433,16 +5934,13 @@ function MessagesView({projects,users,cu,tasks}){
 
   return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
 
-    <!-- ── Channel sidebar ── -->
-    <div style=${{width:220,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
-      <!-- Sidebar header + search -->
-      <div style=${{padding:'10px 10px 8px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <div style=${{width:220,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
+            <div style=${{padding:'10px 10px 8px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
         <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:7}}>
           <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7}}>Channels</span>
           <span style=${{fontSize:10,color:'var(--tx3)'}}>${sortedProjects.length} of ${allProjects.length}</span>
         </div>
-        <!-- Search -->
-        <div style=${{position:'relative'}}>
+                <div style=${{position:'relative'}}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
             style=${{position:'absolute',left:7,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',pointerEvents:'none'}}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -6452,8 +5950,7 @@ function MessagesView({projects,users,cu,tasks}){
             onInput=${e=>setChanSearch(e.target.value)}/>
         </div>
       </div>
-      <!-- Channel list — sorted by recent activity -->
-      <div style=${{flex:1,overflowY:'auto',padding:'4px 6px'}}>
+            <div style=${{flex:1,overflowY:'auto',padding:'4px 6px'}}>
         ${sortedProjects.length===0?html`
           <div style=${{textAlign:'center',padding:'24px 8px',color:'var(--tx3)',fontSize:11}}>No channels match "${chanSearch}"</div>`:null}
         ${sortedProjects.map(p=>{
@@ -6485,16 +5982,13 @@ function MessagesView({projects,users,cu,tasks}){
       </div>
     </div>
 
-    <!-- ── Main chat ── -->
-    <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-      <!-- Channel header -->
-      <div style=${{padding:'9px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
+        <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+            <div style=${{padding:'9px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:9,flexShrink:0}}>
         ${sp?html`
           <div style=${{width:9,height:9,borderRadius:2,background:sp.color}}></div>
           <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}># ${sp.name}</span>
           <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:4}}>${projTasks.length} tasks · ${pc}% done</span>
-          <!-- Newest first toggle -->
-          <button class=${'btn bg'+(newestFirst?' act':'')} style=${{fontSize:10,padding:'3px 9px',marginLeft:6}}
+                    <button class=${'btn bg'+(newestFirst?' act':'')} style=${{fontSize:10,padding:'3px 9px',marginLeft:6}}
             onClick=${()=>setNewestFirst(v=>!v)}
             title=${newestFirst?'Showing newest first — click to show oldest first':'Showing oldest first — click to show newest first'}>
             ${newestFirst?'↓ Newest first':'↑ Oldest first'}
@@ -6506,16 +6000,11 @@ function MessagesView({projects,users,cu,tasks}){
         `:html`<span style=${{color:'var(--tx3)'}}>Select a channel</span>`}
       </div>
 
-      <!-- Project info panel (collapsible) -->
-      ${showInfo&&sp?html`
+            ${showInfo&&sp?html`
         <div style=${{padding:'12px 16px',background:'var(--sf2)',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
           <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:10,marginBottom:12}}>
             ${[
-              {label:'Total Tasks',val:projTasks.length,color:'var(--tx)'},
-              {label:'Completed',val:doneTasks,color:'var(--gn)'},
-              {label:'In Progress',val:projTasks.filter(t=>t.stage==='development'||t.stage==='testing'||t.stage==='uat').length,color:'var(--cy)'},
-              {label:'Blocked',val:blockedTasks,color:'var(--rd)'},
-            ].map(s=>html`
+              {label:'Total Tasks',val:projTasks.length,color:'var(--tx)'}, {label:'Completed',val:doneTasks,color:'var(--gn)'}, {label:'In Progress',val:projTasks.filter(t=>t.stage==='development'||t.stage==='testing'||t.stage==='uat').length,color:'var(--cy)'}, {label:'Blocked',val:blockedTasks,color:'var(--rd)'}, ].map(s=>html`
               <div key=${s.label} style=${{background:'var(--sf)',borderRadius:9,padding:'10px 12px',border:'1px solid var(--bd)'}}>
                 <div style=${{fontSize:20,fontWeight:800,color:s.color,lineHeight:1}}>${s.val}</div>
                 <div style=${{fontSize:10,color:'var(--tx3)',marginTop:3}}>${s.label}</div>
@@ -6523,7 +6012,7 @@ function MessagesView({projects,users,cu,tasks}){
           </div>
           <div style=${{marginBottom:10}}>
             <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-              <span style=${{fontSize:11,color:'var(--tx3)'}}>Overall Progress</span>
+              <span class="tx3-11">Overall Progress</span>
               <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
             </div>
             <div style=${{height:6,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
@@ -6538,7 +6027,7 @@ function MessagesView({projects,users,cu,tasks}){
             })}
           </div>
           <div style=${{display:'flex',alignItems:'center',gap:6}}>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>Members:</span>
+            <span class="tx3-11">Members:</span>
             <div style=${{display:'flex',gap:-4}}>
               ${projMembers.slice(0,8).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf2)',borderRadius:'50%'}}><${Av} u=${m} size=${22}/></div>`)}
               ${projMembers.length>8?html`<span style=${{fontSize:10,color:'var(--tx3)',marginLeft:6}}>+${projMembers.length-8} more</span>`:null}
@@ -6546,8 +6035,7 @@ function MessagesView({projects,users,cu,tasks}){
           </div>
         </div>`:null}
 
-      <!-- Messages area -->
-      <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:0}}>
+            <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'13px 15px',display:'flex',flexDirection:'column',gap:0}}>
         ${(()=>{
           const fmtDate=iso=>{const d=new Date(iso);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();};
           const fmtTime=iso=>{const d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
@@ -6559,11 +6047,9 @@ function MessagesView({projects,users,cu,tasks}){
             if(d.getTime()===yesterday.getTime()) return 'Yesterday · '+fmtDate(iso);
             return fmtDate(iso);
           };
-          // Sort: newest first OR oldest first based on toggle
           const sorted=[...msgs].sort((a,b)=>newestFirst
             ? new Date(b.ts)-new Date(a.ts)
             : new Date(a.ts)-new Date(b.ts));
-          // Group by date
           const groups=[];let lastDate='';
           sorted.forEach(m=>{
             const d=new Date(m.ts);
@@ -6596,11 +6082,8 @@ function MessagesView({projects,users,cu,tasks}){
                 ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
                 <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
                   ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
-                  <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5,
-                    background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)',
-                    border:isMe?'none':'1px solid var(--bd)',
-                    borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
-                  <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${timeStr}</span>
+                  <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5, background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)', border:isMe?'none':'1px solid var(--bd)', borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
+                  <span class="mono-10">${timeStr}</span>
                 </div>
               </div>`;
           });
@@ -6611,8 +6094,7 @@ function MessagesView({projects,users,cu,tasks}){
         </div>`:null}
       </div>
 
-      <!-- Message input -->
-      <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
+            <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
         <input class="inp" style=${{flex:1}} placeholder=${'Message in #'+((sp&&sp.name)||'...')} value=${txt}
           onInput=${e=>setTxt(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}/>
         <button class="btn bp" style=${{padding:'8px 14px',fontSize:12}} onClick=${send}>➤</button>
@@ -6648,7 +6130,6 @@ const playSound=(type='notif')=>{
 };
 function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true,initialUserId=null,onClearInitial}){
   const isAdminOrManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
-  // Show disabled state for non-admin when DMs are turned off
   if(!dmEnabled&&!isAdminOrManager) return html`
     <div style=${{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'var(--tx3)'}}>
       <div style=${{fontSize:40}}>💬</div>
@@ -6657,7 +6138,6 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
     </div>`;
   const others=safe(users).filter(u=>u.id!==cu.id);
   const [toId,setToId]=useState(others[0]&&others[0].id||'');const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const [search,setSearch]=useState('');const ref=useRef(null);
-  // Auto-open specific DM thread when navigating from a notification
   useEffect(()=>{
     if(initialUserId){
       const u=safe(users).find(u=>u.id===initialUserId);
@@ -6666,7 +6146,6 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
   },[initialUserId]);
   const prevMsgCount=useRef(0);
   const loadMsgs=useCallback(async(id)=>{if(!id)return;const d=await api.get('/api/dm/'+id);if(Array.isArray(d)){setMsgs(d);onDmRead(id);};},[onDmRead]);
-  // Auto-poll every 3 seconds for new messages in active chat
   useEffect(()=>{
     if(!toId)return;
     loadMsgs(toId);
@@ -6694,14 +6173,14 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
         ${filtered.map(u=>{const unr=unreadFor(u.id);const isA=toId===u.id;return html`
           <button key=${u.id} onClick=${()=>setToId(u.id)} style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',border:'none',borderRadius:9,cursor:'pointer',marginBottom:2,background:isA?'rgba(99,102,241,.14)':'transparent',transition:'all .14s'}}>
             <div style=${{position:'relative',flexShrink:0}}><${Av} u=${u} size=${32}/><div style=${{position:'absolute',bottom:0,right:0,width:8,height:8,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div>
-            <div style=${{flex:1,minWidth:0,textAlign:'left'}}><div style=${{fontSize:13,fontWeight:600,color:'#000000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div><div style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${u.role}</div></div>
+            <div style=${{flex:1,minWidth:0,textAlign:'left'}}><div style=${{fontSize:13,fontWeight:600,color:'#000000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div><div class="mono-10">${u.role}</div></div>
             ${unr>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${unr}</span>`:null}
           </button>`;})}
       </div>
     </div>
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
-        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div style=${{fontSize:11,color:'var(--tx3)'}}>${toUser.role}</div></div>
+        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
           <button title=${'Start huddle with '+toUser.name}
             onClick=${()=>onStartHuddle&&onStartHuddle(toUser)}
             style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid var(--bd)',background:'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s',flexShrink:0}}>
@@ -6732,15 +6211,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
 /* ─── NotifsView ──────────────────────────────────────────────────────────── */
 function NotifsView({notifs,reload,onNavigate}){
   const NT={
-    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'},
-    status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'},
-    comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'},
-    deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'},
-    dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'},
-    project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'},
-    reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'},
-    call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Huddle'},
-  };
+    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}, call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Huddle'}, };
   const unread=safe(notifs).filter(n=>!n.read).length;
   const handleClick=async(n)=>{
     if(!n.read) await api.put('/api/notifications/'+n.id+'/read',{});
@@ -6771,7 +6242,7 @@ function NotifsView({notifs,reload,onNavigate}){
           <div style=${{flex:1}}>
             <p style=${{fontSize:13,color:'var(--tx)',fontWeight:n.read?400:600,marginBottom:3}}>${n.content}</p>
             <div style=${{display:'flex',gap:10,alignItems:'center'}}>
-              <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span>
+              <span class="mono-10">${ago(n.ts)}</span>
               ${T.nav?html`<span style=${{fontSize:10,color:T.c,fontWeight:600}}>→ ${T.label}</span>`:null}
             </div>
           </div>
@@ -6795,7 +6266,6 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
     setSaving(true);
     await api.put('/api/users/'+u.id,{password:newPw.trim()});
     setSaving(false);setEditPw(false);setNewPw('');
-    // reload to get fresh plain_password
     reload&&reload();
   };
   return html`
@@ -6815,8 +6285,7 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
       <td style=${{padding:'11px 15px'}}>
         <span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${u.email}</span>
       </td>
-      <!-- Password cell -->
-      <td style=${{padding:'11px 15px',minWidth:180}}>
+            <td style=${{padding:'11px 15px',minWidth:180}}>
         ${editPw?html`
           <div style=${{display:'flex',gap:5,alignItems:'center'}}>
             <input class="inp" type="text" placeholder="New password" value=${newPw}
@@ -6831,14 +6300,7 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
           <div style=${{display:'flex',alignItems:'center',gap:6}}>
             ${u.plain_password?html`
               <span style=${{
-                fontFamily:'monospace',fontSize:12,
-                color:showPw?'var(--tx2)':'transparent',
-                background:showPw?'transparent':'var(--bd)',
-                borderRadius:4,padding:'2px 6px',
-                letterSpacing:showPw?'.5px':'.1px',
-                userSelect:showPw?'text':'none',
-                transition:'all .15s',
-                minWidth:70,display:'inline-block'
+                fontFamily:'monospace',fontSize:12, color:showPw?'var(--tx2)':'transparent', background:showPw?'transparent':'var(--bd)', borderRadius:4,padding:'2px 6px', letterSpacing:showPw?'.5px':'.1px', userSelect:showPw?'text':'none', transition:'all .15s', minWidth:70,display:'inline-block'
               }}>${showPw?u.plain_password:'••••••••'}</span>
               <button title=${showPw?'Hide password':'Show password'}
                 style=${{background:'none',border:'none',cursor:'pointer',padding:'2px 4px',color:'var(--tx3)',fontSize:12,transition:'color .1s'}}
@@ -6873,9 +6335,7 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
 
 function TeamView({users,cu,reload}){
   const [tab,setTab]=useState('teams');
-  // Members tab state
   const [showNew,setShowNew]=useState(false);const [name,setName]=useState('');const [email,setEmail]=useState('');const [pw,setPw]=useState('');const [role,setRole]=useState('Developer');const [err,setErr]=useState('');
-  // Teams tab state
   const [teams,setTeams]=useState([]);const [showNewTeam,setShowNewTeam]=useState(false);
   const [editTeam,setEditTeam]=useState(null);
   const [tName,setTName]=useState('');const [tLead,setTLead]=useState('');const [tMembers,setTMembers]=useState([]);
@@ -6908,12 +6368,10 @@ function TeamView({users,cu,reload}){
   const ROLE_COLORS={Admin:'var(--ac)',Manager:'var(--gn)',TeamLead:'var(--cy)',Developer:'var(--pu)',Tester:'var(--am)',Viewer:'var(--tx3)'};
 
   return html`<div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',boxSizing:'border-box'}}>
-    <!-- Tab switcher -->
-    <div style=${{display:'flex',gap:4,marginBottom:18,background:'var(--sf2)',borderRadius:12,padding:4,width:'fit-content',border:'1px solid var(--bd)'}}>
+        <div style=${{display:'flex',gap:4,marginBottom:18,background:'var(--sf2)',borderRadius:12,padding:4,width:'fit-content',border:'1px solid var(--bd)'}}>
       ${['members','teams'].map(t=>html`
         <button key=${t} class="btn" onClick=${()=>setTab(t)}
-          style=${{padding:'6px 18px',borderRadius:9,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
-            background:tab===t?'var(--ac)':'transparent',color:tab===t?'var(--ac-tx)':'var(--tx2)',transition:'all .14s'}}>
+          style=${{padding:'6px 18px',borderRadius:9,fontSize:12,fontWeight:600,border:'none',cursor:'pointer', background:tab===t?'var(--ac)':'transparent',color:tab===t?'var(--ac-tx)':'var(--tx2)',transition:'all .14s'}}>
           ${t==='members'?'👥 Members':'🏷 Teams'}
         </button>`)}
     </div>
@@ -6974,10 +6432,10 @@ function TeamView({users,cu,reload}){
             <div style=${{flex:1,minWidth:0}}>
               <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                 <span style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${t.name}</span>
-                <span style=${{fontSize:11,color:'var(--tx3)'}}>${members.length} member${members.length!==1?'s':''}</span>
+                <span class="tx3-11">${members.length} member${members.length!==1?'s':''}</span>
               </div>
               ${lead?html`<div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
-                <span style=${{fontSize:11,color:'var(--tx3)'}}>Lead:</span>
+                <span class="tx3-11">Lead:</span>
                 <${Av} u=${lead} size=${20}/>
                 <span style=${{fontSize:12,fontWeight:600,color:'var(--cy)'}}>${lead.name}</span>
               </div>`:null}
@@ -7000,8 +6458,7 @@ function TeamView({users,cu,reload}){
         })}
       </div>`:null}
 
-    <!-- Add Member Modal -->
-    ${showNew?html`<div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
+        ${showNew?html`<div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNew(false)}>
       <div class="mo fi" style=${{maxWidth:400}}>
         <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}><h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>👤 Add Member</h2><button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>setShowNew(false)}>✕</button></div>
         <div style=${{display:'flex',flexDirection:'column',gap:11}}>
@@ -7018,8 +6475,7 @@ function TeamView({users,cu,reload}){
       </div>
     </div>`:null}
 
-    <!-- New / Edit Team Modal -->
-    ${showNewTeam?html`<div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNewTeam(false)}>
+        ${showNewTeam?html`<div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowNewTeam(false)}>
       <div class="mo fi" style=${{maxWidth:480}}>
         <div style=${{display:'flex',justifyContent:'space-between',marginBottom:18}}>
           <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)'}}>${editTeam?'✏️ Edit Team':'🏷 New Sub-Team'}</h2>
@@ -7065,7 +6521,6 @@ function TeamView({users,cu,reload}){
   </div>`;
 }
 
-
 /* ─── TicketsView ────────────────────────────────────────────────────────── */
 function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,initialStatus}){
   const [tickets,setTickets]=useState([]);
@@ -7094,7 +6549,6 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
   const [nStatus,setNStatus]=useState('open');
   const [saving,setSaving]=useState(false);
 
-  // Load tickets — team-scoped when activeTeam is set
   const load=useCallback(async()=>{
     setBusy(true);
     const url=activeTeam?'/api/tickets?team_id='+activeTeam.id:'/api/tickets';
@@ -7104,10 +6558,8 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
   },[activeTeam]);
   useEffect(()=>{load();},[load]);
 
-  // Client-side filtering (status chip + priority + type + resolved toggle)
   const visibleTickets=useMemo(()=>{
     return tickets.filter(t=>{
-      // Resolved toggle: hide resolved/closed unless showResolved OR the status chip for resolved/closed is active
       const isResolved=t.status==='resolved'||t.status==='closed';
       if(isResolved&&!showResolved&&filterStatus!=='resolved'&&filterStatus!=='closed')return false;
       if(filterStatus&&t.status!==filterStatus)return false;
@@ -7164,25 +6616,11 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
   };
 
   const TYPE_CFG={
-    bug:{icon:'🐛',color:'var(--rd)',bg:'rgba(248,113,113,.12)',label:'Bug'},
-    feature:{icon:'✨',color:'var(--ac)',bg:'rgba(170,255,0,.12)',label:'Feature'},
-    improvement:{icon:'🔧',color:'var(--cy)',bg:'rgba(34,211,238,.12)',label:'Improvement'},
-    task:{icon:'✅',color:'var(--gn)',bg:'rgba(74,222,128,.12)',label:'Task'},
-    question:{icon:'❓',color:'var(--pu)',bg:'rgba(167,139,250,.12)',label:'Question'},
-  };
+    bug:{icon:'🐛',color:'var(--rd)',bg:'rgba(248,113,113,.12)',label:'Bug'}, feature:{icon:'✨',color:'var(--ac)',bg:'rgba(170,255,0,.12)',label:'Feature'}, improvement:{icon:'🔧',color:'var(--cy)',bg:'rgba(34,211,238,.12)',label:'Improvement'}, task:{icon:'✅',color:'var(--gn)',bg:'rgba(74,222,128,.12)',label:'Task'}, question:{icon:'❓',color:'var(--pu)',bg:'rgba(167,139,250,.12)',label:'Question'}, };
   const PRIORITY_CFG={
-    critical:{icon:'🔴',color:'#ef4444',label:'Critical'},
-    high:{icon:'🟠',color:'#f97316',label:'High'},
-    medium:{icon:'🟡',color:'#eab308',label:'Medium'},
-    low:{icon:'🟢',color:'#22c55e',label:'Low'},
-  };
+    critical:{icon:'🔴',color:'#ef4444',label:'Critical'}, high:{icon:'🟠',color:'#f97316',label:'High'}, medium:{icon:'🟡',color:'#eab308',label:'Medium'}, low:{icon:'🟢',color:'#22c55e',label:'Low'}, };
   const STATUS_CFG={
-    open:{icon:'🔵',color:'var(--cy)',label:'Open'},
-    'in-progress':{icon:'🟡',color:'var(--am)',label:'In Progress'},
-    review:{icon:'🟣',color:'var(--pu)',label:'In Review'},
-    resolved:{icon:'🟢',color:'var(--gn)',label:'Resolved'},
-    closed:{icon:'⚫',color:'var(--tx3)',label:'Closed'},
-  };
+    open:{icon:'🔵',color:'var(--cy)',label:'Open'}, 'in-progress':{icon:'🟡',color:'var(--am)',label:'In Progress'}, review:{icon:'🟣',color:'var(--pu)',label:'In Review'}, resolved:{icon:'🟢',color:'var(--gn)',label:'Resolved'}, closed:{icon:'⚫',color:'var(--tx3)',label:'Closed'}, };
 
   const statCounts=Object.keys(STATUS_CFG).reduce((a,s)=>{a[s]=tickets.filter(t=>t.status===s).length;return a;},{});
   const myTicketsCount=tickets.filter(t=>t.assignee===cu.id&&t.status!=='closed'&&t.status!=='resolved').length;
@@ -7265,7 +6703,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
               </select>
             </div>
             <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',marginBottom:4}}>${detailTicket.title}</h2>
-            <div style=${{fontSize:11,color:'var(--tx3)'}}>
+            <div class="tx3-11">
               Reported by ${(umap[detailTicket.reporter]||{name:'Unknown'}).name} · ${new Date(detailTicket.created).toLocaleDateString()}
               ${detailTicket.assignee?html` · Assigned to <b style=${{color:'var(--tx2)'}}>${(umap[detailTicket.assignee]||{name:'?'}).name}</b>`:null}
             </div>
@@ -7310,8 +6748,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
 
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',background:'var(--bg)'}}>
-      <!-- Header -->
-      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
         <div style=${{display:'flex',gap:8,flexWrap:'wrap'}}>
           ${Object.entries(STATUS_CFG).map(([s,c])=>html`
             <button key=${s} class=${'chip'+(filterStatus===s?' on':'')} onClick=${()=>setFilterStatus(filterStatus===s?'':s)}
@@ -7324,8 +6761,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
         </button>
       </div>
 
-      <!-- Filter bar -->
-      <div style=${{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+            <div style=${{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
         ${filterStatus?html`
           <div style=${{display:'flex',alignItems:'center',gap:6,padding:'4px 10px 4px 8px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:20,flexShrink:0}}>
             <span style=${{fontSize:11,color:'var(--tx2)',fontWeight:600}}>${(STATUS_CFG[filterStatus]||{label:filterStatus}).icon} ${(STATUS_CFG[filterStatus]||{label:filterStatus}).label}</span>
@@ -7355,8 +6791,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
         <span style=${{fontSize:11,color:'var(--tx3)',alignSelf:'center',marginLeft:4}}>${visibleTickets.length} ticket${visibleTickets.length!==1?'s':''}</span>
       </div>
 
-      <!-- Ticket list -->
-      ${busy?html`<div style=${{textAlign:'center',padding:40}}><div class="spin" style=${{margin:'0 auto'}}></div></div>`:null}
+            ${busy?html`<div style=${{textAlign:'center',padding:40}}><div class="spin" style=${{margin:'0 auto'}}></div></div>`:null}
       ${!busy&&visibleTickets.length===0?html`
         <div style=${{textAlign:'center',padding:'48px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd)'}}>
           <div style=${{fontSize:36,marginBottom:12}}>🎫</div>
@@ -7374,10 +6809,8 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
             style=${{display:'flex',gap:12,padding:'12px 15px',background:'var(--sf)',borderRadius:11,border:'1px solid var(--bd)',alignItems:'center',cursor:'pointer',transition:'all .14s'}}
             onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.background='var(--sf2)';}}
             onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.background='var(--sf)';}}>
-            <!-- Type icon -->
-            <div style=${{width:36,height:36,borderRadius:9,background:tc.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0}}>${tc.icon}</div>
-            <!-- Info -->
-            <div style=${{flex:1,minWidth:0}}>
+                        <div style=${{width:36,height:36,borderRadius:9,background:tc.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0}}>${tc.icon}</div>
+                        <div style=${{flex:1,minWidth:0}}>
               <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
                 <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${t.title}</span>
                 <span style=${{fontSize:10,padding:'1px 7px',borderRadius:5,background:sc.color+'22',color:sc.color,fontWeight:700,flexShrink:0}}>${sc.icon} ${sc.label}</span>
@@ -7389,8 +6822,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
                 <span style=${{fontSize:10,color:'var(--tx3)',marginLeft:'auto'}}>${new Date(t.created).toLocaleDateString()}</span>
               </div>
             </div>
-            <!-- Assignee avatar -->
-            ${assignee?html`<div style=${{flexShrink:0}}><${Av} u=${assignee} size=${28}/></div>`:null}
+                        ${assignee?html`<div style=${{flexShrink:0}}><${Av} u=${assignee} size=${28}/></div>`:null}
           </div>`;})}
       </div>
       ${showNew?FORM:null}
@@ -7404,22 +6836,7 @@ function WorkspaceSettings({cu,onReload}){
   const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);const [otpEnabled,setOtpEnabled]=useState(false);
   const [dmEnabled,setDmEnabled]=useState(true);
   const PERM_DEFAULTS={
-    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
-    'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false},
-    'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
-    'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false},
-    'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
-    'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
-    'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
-    'Start Huddle Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
-    'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
-  };
+    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false}, 'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Start Huddle Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, };
   const storedPerms=()=>{try{return JSON.parse(localStorage.getItem('pf_perms')||'null');}catch{return null;}};
   const [perms,setPerms]=useState(()=>storedPerms()||PERM_DEFAULTS);
   const togglePerm=(label,role)=>{
@@ -7468,13 +6885,7 @@ function WorkspaceSettings({cu,onReload}){
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Choose a preset or set a custom accent color for the UI.</p>
         <div style=${{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',marginBottom:12}}>
           ${[
-            {name:'Ocean',   ac:'#1d4ed8',ac2:'#1e40af',tx:'#ffffff'},
-            {name:'Cyan',    ac:'#22d3ee',ac2:'#06b6d4',tx:'#001a1f'},
-            {name:'Purple',  ac:'#a78bfa',ac2:'#8b5cf6',tx:'#1a0a2e'},
-            {name:'Pink',    ac:'#f472b6',ac2:'#ec4899',tx:'#2d001a'},
-            {name:'Orange',  ac:'#fb923c',ac2:'#f97316',tx:'#2d0f00'},
-            {name:'Green',   ac:'#4ade80',ac2:'#22c55e',tx:'#002d10'},
-          ].map(({name,ac,ac2,tx})=>html`
+            {name:'Ocean', ac:'#1d4ed8',ac2:'#1e40af',tx:'#ffffff'}, {name:'Cyan', ac:'#22d3ee',ac2:'#06b6d4',tx:'#001a1f'}, {name:'Purple', ac:'#a78bfa',ac2:'#8b5cf6',tx:'#1a0a2e'}, {name:'Pink', ac:'#f472b6',ac2:'#ec4899',tx:'#2d001a'}, {name:'Orange', ac:'#fb923c',ac2:'#f97316',tx:'#2d0f00'}, {name:'Green', ac:'#4ade80',ac2:'#22c55e',tx:'#002d10'}, ].map(({name,ac,ac2,tx})=>html`
             <button key=${name} title=${name}
               onClick=${()=>{
                 const r=document.body.style;
@@ -7608,27 +7019,18 @@ function WorkspaceSettings({cu,onReload}){
                 <span>${otpEnabled?'✅':'⬜'}</span>
                 <span style=${{fontWeight:600,color:otpEnabled?'var(--ac)':'var(--tx2)'}}>OTP is ${otpEnabled?'ENABLED':'DISABLED'}</span>
               </div>
-              ${otpEnabled?html`<div style=${{fontSize:11,color:'var(--tx3)'}}>📧 A 6-digit code will be emailed to each user on every login · Code expires in 10 minutes · Resend available after 60s</div>`:null}
-              ${!otpEnabled?html`<div style=${{fontSize:11,color:'var(--tx3)'}}>Users log in with email + password only. Enable OTP to add email verification on every login.</div>`:null}
+              ${otpEnabled?html`<div class="tx3-11">📧 A 6-digit code will be emailed to each user on every login · Code expires in 10 minutes · Resend available after 60s</div>`:null}
+              ${!otpEnabled?html`<div class="tx3-11">Users log in with email + password only. Enable OTP to add email verification on every login.</div>`:null}
             </div>
             ${otpEnabled&&!smtpUsername?html`<div style=${{marginTop:8,padding:'7px 12px',background:'rgba(239,68,68,0.07)',borderRadius:8,border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:'#f87171'}}>⚠️ Warning: SMTP is not configured. OTP emails will fail. Configure SMTP above before enabling OTP.</div>`:null}
           </div>
           <div style=${{flexShrink:0,paddingTop:4}}>
             <label style=${{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
               <div onClick=${()=>setOtpEnabled(!otpEnabled)} style=${{
-                width:44,height:24,borderRadius:100,
-                background:otpEnabled?'var(--ac)':'rgba(255,255,255,0.1)',
-                border:otpEnabled?'1px solid var(--ac)':'1px solid var(--bd)',
-                position:'relative',cursor:'pointer',transition:'all .2s',
-                flexShrink:0
+                width:44,height:24,borderRadius:100, background:otpEnabled?'var(--ac)':'rgba(255,255,255,0.1)', border:otpEnabled?'1px solid var(--ac)':'1px solid var(--bd)', position:'relative',cursor:'pointer',transition:'all .2s', flexShrink:0
               }}>
                 <div style=${{
-                  position:'absolute',top:2,
-                  left:otpEnabled?'22px':'2px',
-                  width:18,height:18,borderRadius:'50%',
-                  background:otpEnabled?'#040506':'var(--tx3)',
-                  transition:'left .2s',
-                  boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
+                  position:'absolute',top:2, left:otpEnabled?'22px':'2px', width:18,height:18,borderRadius:'50%', background:otpEnabled?'#040506':'var(--tx3)', transition:'left .2s', boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
                 }}></div>
               </div>
               <span style=${{fontSize:12,fontWeight:600,color:otpEnabled?'var(--ac)':'var(--tx3)'}}>
@@ -7639,8 +7041,7 @@ function WorkspaceSettings({cu,onReload}){
         </div>
       </div>
 
-      <!-- DM Enable/Disable -->
-      <div class="card" style=${{marginBottom:0}}>
+            <div class="card" style=${{marginBottom:0}}>
         <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16}}>
           <div style=${{flex:1}}>
             <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>💬 Direct Messages (DMs)</h3>
@@ -7650,7 +7051,7 @@ function WorkspaceSettings({cu,onReload}){
                 <span>${dmEnabled?'✅':'⬜'}</span>
                 <span style=${{fontWeight:600,color:dmEnabled?'var(--ac)':'var(--tx2)'}}>Direct Messages are ${dmEnabled?'ENABLED':'DISABLED'}</span>
               </div>
-              <div style=${{fontSize:11,color:'var(--tx3)'}}>
+              <div class="tx3-11">
                 ${dmEnabled?'Members can send private messages to each other.':'Members cannot send or view DMs. Admins & Managers can still access DMs.'}
               </div>
             </div>
@@ -7658,19 +7059,10 @@ function WorkspaceSettings({cu,onReload}){
           <div style=${{flexShrink:0,paddingTop:4}}>
             <label style=${{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
               <div onClick=${()=>setDmEnabled(!dmEnabled)} style=${{
-                width:44,height:24,borderRadius:100,
-                background:dmEnabled?'var(--ac)':'rgba(255,255,255,0.1)',
-                border:dmEnabled?'1px solid var(--ac)':'1px solid var(--bd)',
-                position:'relative',cursor:'pointer',transition:'all .2s',
-                flexShrink:0
+                width:44,height:24,borderRadius:100, background:dmEnabled?'var(--ac)':'rgba(255,255,255,0.1)', border:dmEnabled?'1px solid var(--ac)':'1px solid var(--bd)', position:'relative',cursor:'pointer',transition:'all .2s', flexShrink:0
               }}>
                 <div style=${{
-                  position:'absolute',top:2,
-                  left:dmEnabled?'22px':'2px',
-                  width:18,height:18,borderRadius:'50%',
-                  background:dmEnabled?'#fff':'var(--tx3)',
-                  transition:'left .2s',
-                  boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
+                  position:'absolute',top:2, left:dmEnabled?'22px':'2px', width:18,height:18,borderRadius:'50%', background:dmEnabled?'#fff':'var(--tx3)', transition:'left .2s', boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
                 }}></div>
               </div>
               <span style=${{fontSize:12,fontWeight:600,color:dmEnabled?'var(--ac)':'var(--tx3)'}}>
@@ -7697,11 +7089,7 @@ function AIAssistant({cu,projects,tasks,users}){
   useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
 
   const QUICK=[
-    {label:'📊 EOD Report',msg:'Generate an end-of-day status report for all projects'},
-    {label:'🔴 Blocked tasks',msg:'What tasks are blocked and need attention?'},
-    {label:'📈 Progress summary',msg:'Give me a quick summary of overall project progress'},
-    {label:'⚠️ Overdue',msg:'Are there any overdue tasks?'},
-  ];
+    {label:'📊 EOD Report',msg:'Generate an end-of-day status report for all projects'}, {label:'🔴 Blocked tasks',msg:'What tasks are blocked and need attention?'}, {label:'📈 Progress summary',msg:'Give me a quick summary of overall project progress'}, {label:'⚠️ Overdue',msg:'Are there any overdue tasks?'}, ];
 
   const send=async(text)=>{
     const m=text||input.trim();
@@ -7781,19 +7169,16 @@ function AIAssistant({cu,projects,tasks,users}){
 const NOTIF_ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236366f1'/%3E%3Ccircle cx='32' cy='32' r='9' fill='white'/%3E%3Ccircle cx='32' cy='11' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='51' cy='43' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='13' cy='43' r='6' fill='white' opacity='.95'/%3E%3Cline x1='32' y1='17' x2='32' y2='23' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='46' y1='40' x2='40' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='18' y1='40' x2='24' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
 
 function updateBadge(count){
-  // 1. Browser App Badge API (works in Chrome/Edge/Safari PWA + desktop)
   try{
     if(navigator.setAppBadge){
       if(count>0)navigator.setAppBadge(count);
       else navigator.clearAppBadge();
     }
   }catch(e){}
-  // 2. Favicon badge via canvas
   try{
     const canvas=document.createElement('canvas');
     canvas.width=32;canvas.height=32;
     const ctx=canvas.getContext('2d');
-    // Draw base icon
     const img=new Image();
     img.onload=()=>{
       ctx.drawImage(img,0,0,32,32);
@@ -7806,7 +7191,6 @@ function updateBadge(count){
       }
       const links=document.querySelectorAll("link[rel*='icon']");
       links.forEach(l=>{l.href=canvas.toDataURL();});
-      // Also update document title
       document.title=count>0?'('+count+') ProjectFlow':'ProjectFlowPro';
     };
     img.src=NOTIF_ICON;
@@ -7826,7 +7210,6 @@ async function requestNotifPermission(){
   if('Notification' in window&&Notification.permission==='default'){
     const p=await Notification.requestPermission();
     if(p==='granted'){
-      // Permission just granted — bootstrap Push subscription immediately
       if(window._pfSWReg){
         try{
           const r=await fetch('/api/push/vapid-key',{credentials:'include'});
@@ -7860,19 +7243,11 @@ async function showBrowserNotif(title,body,onClick,opts={}){
   }
   if(!('Notification' in window)||Notification.permission!=='granted')return;
   const tag=opts.tag||'pf-'+Date.now();
-  // ── Prefer Service Worker showNotification — works in background tabs ───────
   if(window._pfSWReg){
     try{
       await window._pfSWReg.showNotification(title,{
-        body,
-        icon:NOTIF_ICON,
-        badge:NOTIF_ICON,
-        tag,
-        vibrate:[200,100,200],
-        requireInteraction:opts.requireInteraction||false,
-        data:{url:'/'}
+        body, icon:NOTIF_ICON, badge:NOTIF_ICON, tag, vibrate:[200,100,200], requireInteraction:opts.requireInteraction||false, data:{url:'/'}
       });
-      // Store click handler keyed by tag so SW message handler can call it
       if(onClick){
         window._pfNotifHandlers=window._pfNotifHandlers||{};
         window._pfNotifHandlers[tag]=onClick;
@@ -7880,7 +7255,6 @@ async function showBrowserNotif(title,body,onClick,opts={}){
       return;
     }catch(e){}
   }
-  // ── Fallback: standard Notification API (foreground only) ───────────────────
   try{
     const n=new Notification(title,{body,icon:NOTIF_ICON,badge:NOTIF_ICON,tag,requireInteraction:opts.requireInteraction||false,silent:false});
     if(onClick)n.onclick=()=>{window.focus();onClick();n.close();};
@@ -7889,20 +7263,10 @@ async function showBrowserNotif(title,body,onClick,opts={}){
 }
 
 /* ─── In-App Toast System ─────────────────────────────────────────────────── */
-// Global toast queue — controlled from App, shared via window ref
 window._pfToast=window._pfToast||null; // will be set to addToast fn after mount
 
 const TOAST_CFG={
-  dm:      {icon:'💬', color:'var(--ac)',  bg:'var(--ac3)',    nav:'dm'},
-  call:    {icon:'📞', color:'var(--gn)',  bg:'rgba(62,207,110,.12)', nav:'dashboard'},
-  task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'},
-  status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'},
-  comment: {icon:'💬', color:'var(--pu)',  bg:'rgba(167,139,250,.1)', nav:'tasks'},
-  deadline:{icon:'⏰', color:'var(--am)',  bg:'rgba(245,158,11,.1)',  nav:'tasks'},
-  project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'},
-  reminder:{icon:'⏰', color:'var(--rd)',  bg:'rgba(255,68,68,.1)',   nav:'reminders'},
-  message: {icon:'#️⃣', color:'#a78bfa',   bg:'rgba(167,139,250,.1)', nav:'messages'},
-  default: {icon:'🔔', color:'var(--ac)',  bg:'var(--ac3)',           nav:'notifs'},
+  dm:      {icon:'💬', color:'var(--ac)', bg:'var(--ac3)', nav:'dm'}, call:    {icon:'📞', color:'var(--gn)', bg:'rgba(62,207,110,.12)', nav:'dashboard'}, task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'}, status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'}, comment: {icon:'💬', color:'var(--pu)', bg:'rgba(167,139,250,.1)', nav:'tasks'}, deadline:{icon:'⏰', color:'var(--am)', bg:'rgba(245,158,11,.1)', nav:'tasks'}, project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'}, reminder:{icon:'⏰', color:'var(--rd)', bg:'rgba(255,68,68,.1)', nav:'reminders'}, message: {icon:'#️⃣', color:'#a78bfa', bg:'rgba(167,139,250,.1)', nav:'messages'}, default: {icon:'🔔', color:'var(--ac)', bg:'var(--ac3)', nav:'notifs'},
 };
 
 function ToastStack({toasts,onDismiss,onNav}){
@@ -7933,20 +7297,16 @@ function ReminderModal({task,onClose,onSaved}){
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState('');
 
-  // Pre-fill with task due date/time if exists
   useEffect(()=>{
     if(task&&task.due){
-      // Convert due date to datetime-local format
       try{
         const d=new Date(task.due);
         if(!isNaN(d)){
-          // Set to 9am on due date by default
           d.setHours(9,0,0,0);
           setRemindAt(d.toISOString().slice(0,16));
         }
       }catch(e){}
     } else {
-      // Default to 1 hour from now
       const d=new Date();d.setHours(d.getHours()+1,0,0,0);
       setRemindAt(d.toISOString().slice(0,16));
     }
@@ -7958,11 +7318,7 @@ function ReminderModal({task,onClose,onSaved}){
     const alertAt=new Date(remindUtc.getTime()-parseInt(minBefore)*60000);
     setSaving(true);
     const r=await api.post('/api/reminders',{
-      task_id:task?task.id:'',
-      task_title:task?task.title:'Reminder',
-      remind_at:alertAt.toISOString(),
-      minutes_before:parseInt(minBefore),
-    });
+      task_id:task?task.id:'', task_title:task?task.title:'Reminder', remind_at:alertAt.toISOString(), minutes_before:parseInt(minBefore), });
     setSaving(false);
     if(r.error){setErr(r.error);return;}
     playSound('reminder');onSaved&&onSaved(r);
@@ -8057,7 +7413,6 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
   };
 
   const saveReminder=async()=>{
-    // Accept: task selected OR custom title filled (or both — task takes priority for linking)
     const realTaskId=(addTaskId&&addTaskId!=='__custom__')?addTaskId:'';
     const titleToUse=realTaskId
       ?(safe(tasks).find(t=>t.id===realTaskId)||{title:addCustomTitle.trim()||'Reminder'}).title
@@ -8071,7 +7426,6 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
     setAddTaskId('');setAddCustomTitle('');setAddDate('');setAddTime('');setAddMins(10);
     load();
   };
-
 
   const active=reminders.filter(r=>!r.fired);
   const completed=reminders.filter(r=>r.fired);
@@ -8089,11 +7443,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
   };
 
   const statCards=[
-    {label:'Upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
-    {label:'Overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
-    {label:'Completed',val:completed.length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'✅'},
-    {label:'Today',val:active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:'📅'},
-  ];
+    {label:'Upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'}, {label:'Overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'}, {label:'Completed',val:completed.length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'✅'}, {label:'Today',val:active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:'📅'}, ];
 
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'18px 22px',background:'var(--bg)'}}>
@@ -8124,8 +7474,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
       ${showAdd?html`
         <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowAdd(false)}>
           <div class="mo fi" style=${{maxWidth:600}}>
-            <!-- Header -->
-            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+                        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
               <div>
                 <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:8}}>
                   <span style=${{width:32,height:32,borderRadius:9,background:'rgba(251,191,36,.15)',border:'1px solid rgba(251,191,36,.3)',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:16}}>⏰</span>
@@ -8136,11 +7485,9 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
               <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${()=>{setShowAdd(false);setAddCustomTitle('');setAddTaskId('');}}>✕</button>
             </div>
 
-            <!-- TWO SECTIONS SIDE BY SIDE -->
-            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:16}}>
+                        <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:16}}>
 
-              <!-- SECTION 1: Project Reminder -->
-              <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'2px solid '+(addTaskId&&addTaskId!=='__custom__'?'var(--ac)':'var(--bd)'),transition:'border-color .15s',position:'relative',overflow:'hidden'}}>
+                            <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'2px solid '+(addTaskId&&addTaskId!=='__custom__'?'var(--ac)':'var(--bd)'),transition:'border-color .15s',position:'relative',overflow:'hidden'}}>
                 <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,var(--ac),var(--cy))',borderRadius:'14px 14px 0 0',opacity:addTaskId&&addTaskId!=='__custom__'?1:.3,transition:'opacity .15s'}}></div>
                 <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
                   <div style=${{width:28,height:28,borderRadius:7,background:'rgba(170,255,0,.12)',border:'1px solid rgba(170,255,0,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>📋</div>
@@ -8172,8 +7519,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
                 </div>
               </div>
 
-              <!-- SECTION 2: Custom Reminder -->
-              <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'2px solid '+(addTaskId==='__custom__'||(!addTaskId&&addCustomTitle.trim())?'var(--pu)':'var(--bd)'),transition:'border-color .15s',position:'relative',overflow:'hidden'}}>
+                            <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'2px solid '+(addTaskId==='__custom__'||(!addTaskId&&addCustomTitle.trim())?'var(--pu)':'var(--bd)'),transition:'border-color .15s',position:'relative',overflow:'hidden'}}>
                 <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,var(--pu),var(--pk))',borderRadius:'14px 14px 0 0',opacity:addTaskId==='__custom__'||(!addTaskId&&addCustomTitle.trim())?1:.3,transition:'opacity .15s'}}></div>
                 <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
                   <div style=${{width:28,height:28,borderRadius:7,background:'rgba(167,139,250,.12)',border:'1px solid rgba(167,139,250,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>✏️</div>
@@ -8194,8 +7540,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
               </div>
             </div>
 
-            <!-- SHARED DATE / TIME / NOTIFY section -->
-            <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'1px solid var(--bd)',marginBottom:16}}>
+                        <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'1px solid var(--bd)',marginBottom:16}}>
               <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
                 <div style=${{width:28,height:28,borderRadius:7,background:'rgba(34,211,238,.12)',border:'1px solid rgba(34,211,238,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>📅</div>
                 <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)'}}>Date, Time &amp; Notification</div>
@@ -8240,7 +7585,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
             <span style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>⚡ Upcoming</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${upcoming.length} reminder${upcoming.length!==1?'s':''}</span>
+            <span class="tx3-11">${upcoming.length} reminder${upcoming.length!==1?'s':''}</span>
           </div>
           ${busy?html`<div class="spin" style=${{margin:'20px auto',display:'block'}}></div>`:null}
           ${!busy&&upcoming.length===0?html`
@@ -8258,7 +7603,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
                     <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>${r.task_title}</div>
                     <div style=${{display:'flex',gap:6,alignItems:'center'}}>
                       <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:ft.bg,color:ft.cls,fontWeight:700}}>${ft.label}</span>
-                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                      <span class="mono-10">${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
                       ${r.minutes_before>0?html`<span style=${{fontSize:10,color:'var(--am)'}}>🔔 ${r.minutes_before}min before</span>`:null}
                     </div>
                   </div>
@@ -8271,7 +7616,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
         <div>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
             <span style=${{fontWeight:700,fontSize:13,color:'var(--rd)'}}>🚨 Overdue</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${overdue.length} past due</span>
+            <span class="tx3-11">${overdue.length} past due</span>
           </div>
           ${!busy&&overdue.length===0?html`
             <div style=${{textAlign:'center',padding:'28px 16px',color:'var(--tx3)',fontSize:13,background:'var(--sf)',borderRadius:10,border:'1px solid var(--bd)'}}>
@@ -8296,7 +7641,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
         <div style=${{marginTop:20}}>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
             <span style=${{fontWeight:700,fontSize:13,color:'var(--gn)'}}>✅ Completed Reminders</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${completed.length} done</span>
+            <span class="tx3-11">${completed.length} done</span>
           </div>
           <div style=${{display:'flex',flexDirection:'column',gap:8}}>
             ${completed.map(r=>html`
@@ -8304,7 +7649,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
                 <div style=${{width:32,height:32,borderRadius:8,background:'rgba(74,222,128,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>✅</div>
                 <div style=${{flex:1,minWidth:0}}>
                   <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:'line-through',opacity:.7}}>${r.task_title}</div>
-                  <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                  <span class="mono-10">${new Date(r.remind_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
                 </div>
                 <button class="btn brd" style=${{fontSize:10,padding:'4px 8px',flexShrink:0}} onClick=${()=>del(r.id)}>✕</button>
               </div>`)}
@@ -8377,8 +7722,8 @@ function RemindersPanel({onClose,onReload}){
               <div style=${{fontSize:24}}>⏰</div>
               <div style=${{flex:1}}>
                 <p style=${{fontSize:13,fontWeight:600,color:'var(--tx)',marginBottom:3}}>${r.task_title}</p>
-                <p style=${{fontSize:11,color:'var(--tx3)'}}>
-                  ${r.minutes_before>0?r.minutes_before+' min before · ':''} 
+                <p class="tx3-11">
+                  ${r.minutes_before>0?r.minutes_before+' min before · ':''}
                   ${new Date(r.remind_at).toLocaleString()}
                 </p>
               </div>
@@ -8417,7 +7762,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [dragging,setDragging]=useState(false);
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
   const emojiPickerRef=useRef(null);
-  // Close emoji picker on outside click
   useEffect(()=>{
     if(!showEmojiPicker)return;
     const handler=(e)=>{
@@ -8460,58 +7804,43 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
 
   useEffect(()=>{
     onStateChange&&onStateChange({
-      status:phase==='in-call'?'in-call':'idle',
-      roomId,roomName,participants,elapsed,muted,incomingCall,allUsers:users
+      status:phase==='in-call'?'in-call':'idle', roomId,roomName,participants,elapsed,muted,incomingCall,allUsers:users
     });
   },[phase,roomId,roomName,participants,elapsed,muted,incomingCall]);
 
   if(cmdRef){
     cmdRef.current={
-      openHuddle:(user)=>{setTargetUser(user||null);setPhase('preview');setMinimized(false);},
-      start:(name)=>doStart(name),
-      join:(rid,rname)=>{setTargetUser(null);doJoin(rid,rname);},
-      leave:()=>cleanup(),
-      mute:()=>toggleMute(),
-    };
+      openHuddle:(user)=>{setTargetUser(user||null);setPhase('preview');setMinimized(false);}, start:(name)=>doStart(name), join:(rid,rname)=>{setTargetUser(null);doJoin(rid,rname);}, leave:()=>cleanup(), mute:()=>toggleMute(), };
   }
 
   const STUN={
     iceServers:[
-      {urls:'stun:stun.l.google.com:19302'},
-      {urls:'stun:stun1.l.google.com:19302'},
-      {urls:'stun:stun.relay.metered.ca:80'},
-      // Free Open Relay TURN — handles symmetric NAT / corporate firewalls
-      {urls:'turn:a.relay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
-      {urls:'turn:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-      {urls:'turns:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
-    ],
-    iceCandidatePoolSize:10,
-  };
+      {urls:'stun:stun.l.google.com:19302'}, {urls:'stun:stun1.l.google.com:19302'}, {urls:'stun:stun.relay.metered.ca:80'}, {urls:'turn:a.relay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'}, {urls:'turn:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'}, {urls:'turns:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'}, ], iceCandidatePoolSize:10, };
   const fmtTime=s=>{const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const centerPos=(w,h)=>({x:Math.max(40,(window.innerWidth-w)/2),y:Math.max(40,(window.innerHeight-h)/2)});
 
-  // Poll for incoming calls when idle
+  const dismissedCallsRef=useRef(new Set());
+  const justLeftRef=useRef(false); // cooldown: prevent re-showing toast right after leaving
+
   useEffect(()=>{
     if(phase!=='idle')return;
-    let lastId=null;
+    let lastNotifiedId=null;
     const id=setInterval(async()=>{
       try{
         const calls=await api.get('/api/calls');
-        if(!Array.isArray(calls)||calls.length===0){setIncomingCall(null);lastId=null;return;}
+        if(!Array.isArray(calls)||calls.length===0){setIncomingCall(null);lastNotifiedId=null;return;}
         const c=calls[0];
         const parts=JSON.parse(c.participants||'[]');
-        // Hide if already in call or if YOU initiated it
-        if(parts.includes(cu.id)||c.initiator===cu.id){setIncomingCall(null);return;}
-        if(c.id===lastId)return; // don't re-notify same call
-        lastId=c.id;
+        if(justLeftRef.current||parts.includes(cu.id)||c.initiator===cu.id||dismissedCallsRef.current.has(c.id)){
+          setIncomingCall(null);return;
+        }
+        if(c.id===lastNotifiedId)return; // already showing this toast
+        lastNotifiedId=c.id;
         const init=safe(users).find(u=>u.id===c.initiator);
         setIncomingCall({id:c.id,name:c.name,initiatorName:(init&&init.name)||'Someone',initiator:init});
-        // Browser notification for incoming call
         showBrowserNotif('📞 Incoming Huddle',(init?init.name:'Someone')+' started a Huddle — click to join',()=>{
-          // Focus window and navigate to dashboard when notification clicked
-          if(window.electronAPI){window.electronAPI.focusWindow();window.electronAPI.navigateTo('dashboard');}
+          if(window.electronAPI){window.electronAPI.focusWindow();}
           else{window.focus();}
-          // Also trigger join if huddle cmd available
           if(typeof huddleCmdRef!=='undefined'&&huddleCmdRef&&huddleCmdRef.current){
             const cc=calls&&calls[0]||c;
             setTimeout(()=>{if(huddleCmdRef.current.join)huddleCmdRef.current.join(cc.id,cc.name);},300);
@@ -8522,7 +7851,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     return()=>clearInterval(id);
   },[phase,cu,users]);
 
-  // Check mic access on preview
   useEffect(()=>{
     if(phase!=='preview')return;
     navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{s.getTracks().forEach(t=>t.stop());setPreviewMicOk(true);}).catch(()=>setPreviewMicOk(false));
@@ -8534,7 +7862,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(phase==='idle')setPopupPos({x:null,y:null});
   },[phase]);
 
-  // Drag logic
   const onDragStart=e=>{
     if(e.button!==0)return;
     if(!popupPos||popupPos.x===null)return;
@@ -8545,8 +7872,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   useEffect(()=>{
     if(!dragging)return;
     const mm=e=>setPopupPos({
-      x:Math.max(0,Math.min(window.innerWidth-80,e.clientX-dragOffset.current.x)),
-      y:Math.max(0,Math.min(window.innerHeight-60,e.clientY-dragOffset.current.y))
+      x:Math.max(0,Math.min(window.innerWidth-80,e.clientX-dragOffset.current.x)), y:Math.max(0,Math.min(window.innerHeight-60,e.clientY-dragOffset.current.y))
     });
     const mu=()=>setDragging(false);
     window.addEventListener('mousemove',mm);window.addEventListener('mouseup',mu);
@@ -8555,7 +7881,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
 
   const detectSpeaking=(uid,stream)=>{
     try{
-      // Close existing
       if(analyserCtxRef.current[uid]){try{analyserCtxRef.current[uid].ctx.close();}catch(e){}}
       const ctx=new(window.AudioContext||window.webkitAudioContext)();
       const src=ctx.createMediaStreamSource(stream);
@@ -8586,7 +7911,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const createPC=(remoteUid,rid)=>{
     if(pcs.current[remoteUid]){try{pcs.current[remoteUid].close();}catch(e){}}
     const pc=new RTCPeerConnection(STUN);
-    // Add all local tracks
     if(localStream.current)localStream.current.getTracks().forEach(t=>pc.addTrack(t,localStream.current));
     if(screenStream.current)screenStream.current.getTracks().forEach(t=>pc.addTrack(t,screenStream.current));
 
@@ -8604,20 +7928,15 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         audioEls.current[remoteUid].play().catch(()=>{});
         detectSpeaking(remoteUid,stream);
       } else if(e.track.kind==='video'){
-        // Determine if screen share using multiple signals:
-        // 1. contentHint (Chrome sets this reliably for getDisplayMedia)
-        // 2. track label (fallback)
-        // 3. screen-start signal from peer (most reliable — handled in signaling poll)
         const lbl=(e.track.label||'').toLowerCase();
         const isScreenByHint=e.track.contentHint==='detail'||e.track.contentHint==='text';
         const isScreenByLabel=lbl.includes('screen')||lbl.includes('display')||lbl.includes('monitor')||
           lbl.includes('entire')||lbl.includes('window')||lbl.includes('tab');
-        // pendingScreenTrack: if screen-start arrived before track, apply immediately
+
         const isScreen=isScreenByHint||isScreenByLabel||pendingScreenUidsRef.current.has(remoteUid);
 
         if(isScreen){
           setRemoteScreenUid(remoteUid);
-          // Use rAF to ensure remoteScreenRef DOM element is mounted
           const tryAttach=(attempts)=>{
             if(remoteScreenRef.current){
               remoteScreenRef.current.srcObject=stream;
@@ -8633,7 +7952,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             pendingScreenUidsRef.current.delete(remoteUid);
           };
         } else {
-          // Camera video
           const tryAttachCam=(attempts)=>{
             const el=remoteVideoRefs.current[remoteUid];
             if(el){el.srcObject=stream;el.play().catch(()=>{});}
@@ -8682,13 +8000,10 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           } else if(sig.type==='ice'){
             const pc=pcs.current[from];
             if(pc&&pc.remoteDescription){try{await pc.addIceCandidate(new RTCIceCandidate(data));}catch(ex){}}          } else if(sig.type==='screen-start'){
-            // Mark this uid as a screen sharer — in case ontrack fires after this signal
             pendingScreenUidsRef.current.add(from);
             setRemoteScreenUid(from);
-            // If we already have a video track from this peer, attach it to screen ref now
             setTimeout(()=>{
               if(remoteScreenRef.current&&!remoteScreenRef.current.srcObject){
-                // Try to find stream from peer connections
                 const pc=pcs.current[from];
                 if(pc){
                   const receivers=pc.getReceivers();
@@ -8712,10 +8027,8 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
           } else if(sig.type==='hand'){
             const hid='hand-'+from;
-            // Update per-participant raised hands state for tile indicator
             setRaisedHands(prev=>({...prev,[from]:data.raised||false}));
             if(data.raised){
-              // Show floating notification
               setFloatingReactions(prev=>[...prev.filter(r=>r.id!==hid),{id:hid,emoji:'✋',x:10+Math.random()*30,label:(data.from||'Someone')+' raised hand'}]);
               setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==hid)),5000);
             } else {
@@ -8734,7 +8047,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         const r=await api.post('/api/calls/'+rid+'/ping',{});
         if(!r||r.error){cleanup();return;}
         setParticipants(r.participants||[]);
-        // Notify when someone new joins
       }catch(e){}
     },4000);
   };
@@ -8753,7 +8065,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     const s=await getAudio();
     if(!s){alert('Microphone access required. Please allow it in your browser.');return;}
     localStream.current=s;
-    // Apply mute state
     s.getAudioTracks().forEach(t=>{t.enabled=!mutedRef.current;});
     detectSpeaking(cu.id,s);
     const roomLabel=name||(targetUser?cu.name+' ↔ '+targetUser.name:cu.name+"'s Huddle");
@@ -8762,7 +8073,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     setRoomId(r.room_id);setRoomName(r.name||roomLabel);
     setParticipants([cu.id]);setPhase('in-call');setIncomingCall(null);
     setPopupPos(centerPos(780,540));
-    // If targetUser, auto-invite them
     if(targetUser){
       setTimeout(()=>api.post('/api/calls/'+r.room_id+'/invite/'+targetUser.id,{}),500);
     }
@@ -8779,8 +8089,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(!r||r.error){alert(r&&r.error||'Could not join.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
     const parts=r.participants||[];
     setRoomId(rid);setRoomName(r.name||rname||'Huddle');
-    // Generate a unique Google Meet link for this huddle session
-    // Uses room_id hash to create a consistent 10-char Meet code (xxx-yyyy-zzz format)
     const mkMeet=(id)=>{
       const h=id.replace(/[^a-z0-9]/gi,'').toLowerCase().padEnd(12,'x');
       return 'https://meet.google.com/'+h.slice(0,3)+'-'+h.slice(3,7)+'-'+h.slice(7,11);
@@ -8790,7 +8098,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     setPopupPos(centerPos(780,540));
     playSound('notif');
     startChatPoll(rid);
-    // Send offers to existing participants
     for(const uid of parts){
       if(uid===cu.id)continue;
       const pc=createPC(uid,rid);
@@ -8812,7 +8119,12 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(localStream.current){localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;}
     if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
     Object.values(audioEls.current).forEach(el=>{try{el.srcObject=null;el.remove();}catch(e){}});audioEls.current={};
-    if(roomIdRef.current)try{await api.post('/api/calls/'+roomIdRef.current+'/leave',{});}catch(e){}
+    if(roomIdRef.current){
+      dismissedCallsRef.current.add(roomIdRef.current); // never show this room again
+      justLeftRef.current=true; // suppress incoming toast for 6s after leaving
+      setTimeout(()=>{justLeftRef.current=false;},6000);
+      try{await api.post('/api/calls/'+roomIdRef.current+'/leave',{});}catch(e){}
+    }
     setRoomId(null);setRoomName('');setParticipants([]);
     setPhase('idle');setMuted(false);setVideoOn(false);setElapsed(0);
     setHandRaised(false);setRaisedHands({});setScreenSharing(false);setSpeaking({});
@@ -8867,18 +8179,18 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         const vs=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'}});
         const camTrack=vs.getVideoTracks()[0];
         if(!camTrack)return;
-        // Add to local stream
+
         if(localStream.current){
-          // Remove any existing video tracks first
+
           localStream.current.getVideoTracks().forEach(t=>{t.stop();localStream.current.removeTrack(t);});
           localStream.current.addTrack(camTrack);
         }
-        // Update local video preview
+
         if(localVideoRef.current&&localStream.current){
           localVideoRef.current.srcObject=localStream.current;
           localVideoRef.current.play().catch(()=>{});
         }
-        // Renegotiate with all peers using replaceTrack when possible
+
         for(const [uid,pc] of Object.entries(pcs.current)){
           const senders=pc.getSenders();
           const vs2=senders.find(s=>s.track&&s.track.kind==='video');
@@ -8902,7 +8214,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         localStream.current.getVideoTracks().forEach(t=>{t.stop();try{localStream.current.removeTrack(t);}catch(ex){}});
       }
       if(localVideoRef.current)localVideoRef.current.srcObject=null;
-      // Notify peers — remove video sender
+
       for(const [uid,pc] of Object.entries(pcs.current)){
         const senders=pc.getSenders();
         const vs=senders.find(s=>s.track&&s.track.kind==='video');
@@ -8916,14 +8228,11 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(!screenSharing){
       try{
         const ss=await navigator.mediaDevices.getDisplayMedia({
-          video:{cursor:'always',displaySurface:'monitor',width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}},
-          audio:false
+          video:{cursor:'always',displaySurface:'monitor',width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}}, audio:false
         });
         screenStream.current=ss;
 
-        // Show local preview immediately — no setTimeout race
         setScreenSharing(true);
-        // Use requestAnimationFrame to ensure DOM has rendered screenVideoRef
         requestAnimationFrame(()=>{
           requestAnimationFrame(()=>{
             if(screenVideoRef.current){
@@ -8933,25 +8242,21 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           });
         });
 
-        // Renegotiate with each peer properly
         const renegotiate=async(uid,pc)=>{
-          // Replace existing video sender or add new track
           const senders=pc.getSenders();
           const screenTrack=ss.getVideoTracks()[0];
           if(!screenTrack)return;
-          // Check if there's already a video sender we can replace
+
           const videoSender=senders.find(s=>s.track&&s.track.kind==='video'&&
             (s.track.label.toLowerCase().includes('camera')||s.track===localStream.current?.getVideoTracks()[0]));
           if(videoSender){
-            // Replace camera track with screen track
             await videoSender.replaceTrack(screenTrack).catch(()=>{
-              // replaceTrack failed — add as new track instead
+
               pc.addTrack(screenTrack,ss);
             });
           } else {
             pc.addTrack(screenTrack,ss);
           }
-          // Create and send offer
           try{
             const offer=await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -8959,7 +8264,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
               to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}
             });
           }catch(ex){console.warn('Screen share renegotiate failed:',ex);}
-          // Always send explicit screen-start signal — don't rely on contentHint
+
           api.post('/api/calls/'+roomIdRef.current+'/signal',{
             to_user:uid,type:'screen-start',data:{from:cu.id,name:cu.name||'Someone'}
           }).catch(()=>{});
@@ -8969,12 +8274,11 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           await renegotiate(uid,pc);
         }
 
-        // When user clicks "Stop sharing" in browser toolbar
         ss.getVideoTracks()[0].onended=async()=>{
           setScreenSharing(false);
           if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
           screenStream.current=null;
-          // Restore camera tracks on senders if video was on
+
           if(localStream.current){
             const camTrack=localStream.current.getVideoTracks()[0];
             if(camTrack){
@@ -8985,7 +8289,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
               }
             }
           }
-          // Notify peers
+
           if(roomIdRef.current){
             Object.keys(pcs.current).forEach(uid=>{
               api.post('/api/calls/'+roomIdRef.current+'/signal',{
@@ -8995,17 +8299,15 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           }
         };
       }catch(e){
-        // User cancelled picker or permission denied — reset cleanly
         if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
         setScreenSharing(false);
         if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
       }
     } else {
-      // Stop screen share
+
       if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
       if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
       setScreenSharing(false);
-      // Restore camera if it was on, notify peers
       if(localStream.current){
         const camTrack=localStream.current.getVideoTracks()[0];
         if(camTrack){
@@ -9029,7 +8331,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const inviteUser=async(uid)=>{
     if(!roomIdRef.current)return;
     await api.post('/api/calls/'+roomIdRef.current+'/invite/'+uid,{});
-    // Also send WebRTC offer so they can join audio immediately when they accept
     const pc=createPC(uid,roomIdRef.current);
     try{
       const offer=await pc.createOffer();
@@ -9041,7 +8342,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#aaff00'});
   const notInCall=safe(users).filter(u=>u.id!==cu.id&&!participants.includes(u.id));
 
-  // ── INCOMING CALL TOAST
   const incomingToast=incomingCall&&phase==='idle'?html`
     <div style=${{position:'fixed',bottom:24,right:24,zIndex:9100,background:'#1a1625',border:'1px solid rgba(34,197,94,.35)',borderRadius:18,padding:'16px 18px',boxShadow:'0 16px 60px rgba(0,0,0,.7)',minWidth:300,animation:'slideUp .3s cubic-bezier(.2,.8,.4,1)'}}>
       <div style=${{display:'flex',alignItems:'center',gap:11,marginBottom:14}}>
@@ -9060,7 +8360,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             <span style=${{fontSize:10,color:'#22c55e',fontWeight:600}}>Huddle in progress</span>
           </div>
         </div>
-        <button onClick=${()=>setIncomingCall(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.35)',fontSize:19,lineHeight:1,padding:4}}>✕</button>
+        <button onClick=${()=>{if(incomingCall)dismissedCallsRef.current.add(incomingCall.id);setIncomingCall(null);}} style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.35)',fontSize:19,lineHeight:1,padding:4}}>✕</button>
       </div>
       <div style=${{display:'flex',gap:8}}>
         <button style=${{flex:1,height:40,borderRadius:11,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:7,boxShadow:'0 4px 18px rgba(34,197,94,.35)'}}
@@ -9069,13 +8369,12 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           Join Huddle
         </button>
         <button style=${{width:40,height:40,borderRadius:11,background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',color:'var(--rd2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
-          onClick=${()=>setIncomingCall(null)}>
+          onClick=${()=>{if(incomingCall)dismissedCallsRef.current.add(incomingCall.id);setIncomingCall(null);}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
     </div>`:null;
 
-  // ── PREVIEW POPUP
   const previewPopup=phase==='preview'&&popupPos&&popupPos.x!==null?html`
     <div style=${{position:'fixed',left:(popupPos&&popupPos.x||100)+'px',top:(popupPos&&popupPos.y||60)+'px',width:'460px',zIndex:8600,borderRadius:20,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.75)',background:'#1a1625',border:'1px solid rgba(255,255,255,.08)',userSelect:dragging?'none':'auto'}}>
       <div onMouseDown=${onDragStart} style=${{background:'#221e30',padding:'13px 18px',display:'flex',alignItems:'center',gap:10,cursor:'move',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
@@ -9125,37 +8424,26 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
       </div>
     </div>`:null;
 
-  // ── IN-CALL POPUP
   const callPopup=phase==='in-call'&&popupPos&&popupPos.x!==null?html`
     <div style=${{position:'fixed',left:minimized?(popupPos&&popupPos.x||100)+'px':'0',top:minimized?(popupPos&&popupPos.y||60)+'px':'0',width:minimized?'240px':'100vw',height:minimized?'auto':'100vh',zIndex:8600,borderRadius:minimized?14:0,overflow:'hidden',boxShadow:'0 32px 100px rgba(0,0,0,.85)',background:'#0d0d1a',border:minimized?'1px solid rgba(255,255,255,.07)':'none',display:'flex',flexDirection:'column',transition:dragging?'none':'all .2s',userSelect:dragging?'none':'auto'}}>
-      <!-- Title bar (always visible, draggable) -->
-      <div onMouseDown=${onDragStart} style=${{background:'rgba(0,0,0,.5)',padding:'9px 14px',display:'flex',alignItems:'center',gap:8,cursor:'move',flexShrink:0,backdropFilter:'blur(10px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.05)'}}>
+            <div onMouseDown=${onDragStart} style=${{background:'rgba(0,0,0,.5)',padding:'9px 14px',display:'flex',alignItems:'center',gap:8,cursor:'move',flexShrink:0,backdropFilter:'blur(10px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.05)'}}>
         <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
         <span style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.85)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${roomName||'Huddle'}</span>
         <span style=${{fontSize:11,color:'#22c55e',fontFamily:'monospace',fontWeight:700,flexShrink:0}}>${fmtTime(elapsed)}</span>
-        <!-- Mini participant avatars in minimized -->
-        ${minimized?html`
+                ${minimized?html`
           <div style=${{display:'flex',marginLeft:4}}>
             ${partUsers.slice(0,4).map((u,i)=>html`
               <div key=${u.id} style=${{marginLeft:i>0?-6:0,border:'1.5px solid #0d0d1a',borderRadius:'50%',zIndex:4-i}}>
                 <${Av} u=${u} size=${22}/>
               </div>`)}
           </div>`:null}
-        <!-- Google Meet Button -->
-        ${meetUrl?html`
+                ${meetUrl?html`
           <a href=${meetUrl} target="_blank" rel="noopener"
             onClick=${e=>e.stopPropagation()}
             title="Open this huddle in Google Meet"
             style=${{
-              display:'flex',alignItems:'center',gap:5,
-              padding:'4px 10px',borderRadius:7,
-              background:'rgba(66,133,244,0.18)',
-              border:'1px solid rgba(66,133,244,0.35)',
-              color:'#7bb3f7',fontSize:10,fontWeight:700,
-              textDecoration:'none',cursor:'pointer',
-              transition:'all .15s',flexShrink:0,
-              letterSpacing:'.02em',marginLeft:4
+              display:'flex',alignItems:'center',gap:5, padding:'4px 10px',borderRadius:7, background:'rgba(66,133,244,0.18)', border:'1px solid rgba(66,133,244,0.35)', color:'#7bb3f7',fontSize:10,fontWeight:700, textDecoration:'none',cursor:'pointer', transition:'all .15s',flexShrink:0, letterSpacing:'.02em',marginLeft:4
             }}
             onMouseEnter=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.32)';e.currentTarget.style.borderColor='rgba(66,133,244,0.6)';}}
             onMouseLeave=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.18)';e.currentTarget.style.borderColor='rgba(66,133,244,0.35)';}}>
@@ -9165,8 +8453,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             </svg>
             Meet
           </a>`:null}
-        <!-- Window controls -->
-        <div style=${{display:'flex',gap:4,marginLeft:6,flexShrink:0}}>
+                <div style=${{display:'flex',gap:4,marginLeft:6,flexShrink:0}}>
           <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}}
             title=${minimized?'Expand':'Minimize'}
             style=${{width:24,height:24,borderRadius:7,background:'rgba(255,255,255,.08)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.5)',transition:'all .15s'}}>
@@ -9180,28 +8467,22 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         </div>
       </div>
       ${!minimized?html`
-        <!-- Main content -->
-        <div style=${{flex:1,display:'flex',overflow:'hidden',position:'relative'}}>
-          <!-- Gradient background -->
-          <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 10% 40%,rgba(170,255,0,.15) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(251,146,60,.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 85%,rgba(34,197,94,.08) 0%,transparent 50%)',pointerEvents:'none'}}></div>
-          <!-- Participant tiles -->
-          <div style=${{flex:1,display:'flex',flexWrap:'wrap',gap:10,padding:'14px',alignContent:'center',justifyContent:'center',position:'relative',zIndex:1}}>
+                <div style=${{flex:1,display:'flex',overflow:'hidden',position:'relative'}}>
+                    <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 10% 40%,rgba(170,255,0,.15) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(251,146,60,.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 85%,rgba(34,197,94,.08) 0%,transparent 50%)',pointerEvents:'none'}}></div>
+                    <div style=${{flex:1,display:'flex',flexWrap:'wrap',gap:10,padding:'14px',alignContent:'center',justifyContent:'center',position:'relative',zIndex:1}}>
             ${partUsers.map(u=>{
               const tileW=partUsers.length===1?360:partUsers.length<=2?320:partUsers.length<=4?220:160;
               const tileH=partUsers.length===1?280:partUsers.length<=2?240:partUsers.length<=4?170:130;
               return html`
               <div key=${u.id} style=${{position:'relative',width:tileW,height:tileH,borderRadius:14,overflow:'hidden',background:'rgba(255,255,255,.05)',border:'2px solid '+(speaking[u.id]?'#22c55e':'rgba(255,255,255,.07)'),transition:'border-color .2s,box-shadow .2s',boxShadow:speaking[u.id]?'0 0 0 3px rgba(34,197,94,.2)':'none',flexShrink:0}}>
-                <!-- Video element for this remote user -->
-                ${u.id!==cu.id?html`<video ref=${el=>{if(el)remoteVideoRefs.current[u.id]=el;}} autoPlay playsInline style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
+                                ${u.id!==cu.id?html`<video ref=${el=>{if(el)remoteVideoRefs.current[u.id]=el;}} autoPlay playsInline style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
                 ${u.id===cu.id&&videoOn?html`<video ref=${localVideoRef} autoPlay playsInline muted style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
-                <!-- Avatar fallback (shown when no video) -->
-                <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1,pointerEvents:'none',background:'rgba(20,20,40,.3)'}}>
+                                <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1,pointerEvents:'none',background:'rgba(20,20,40,.3)'}}>
                   ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
                     html`<img src=${u.avatar_data} style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',objectFit:'cover',border:'2.5px solid rgba(255,255,255,.2)',opacity:(u.id===cu.id&&videoOn)||u.id!==cu.id?0:1,transition:'opacity .3s'}}/>`:
                     html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:700,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
                 </div>
-                <!-- Name + indicator -->
-                <div style=${{position:'absolute',bottom:7,left:7,right:7,zIndex:3,display:'flex',alignItems:'center',gap:5}}>
+                                <div style=${{position:'absolute',bottom:7,left:7,right:7,zIndex:3,display:'flex',alignItems:'center',gap:5}}>
                   <div style=${{flex:1,background:'rgba(0,0,0,.6)',backdropFilter:'blur(6px)',borderRadius:8,padding:'3px 8px',display:'flex',alignItems:'center',gap:5,minWidth:0}}>
                     ${speaking[u.id]?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',flexShrink:0,animation:'pulse .8s infinite'}}></div>`:null}
                     <span style=${{fontSize:11,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}${u.id===cu.id?' (you)':''}</span>
@@ -9212,7 +8493,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 </div>
               </div>`;})}
           </div>
-          <!-- FULL-SCREEN SHARE OVERLAY — sharer + receiver -->
           ${(screenSharing||remoteScreenUid)?html`
             <div style=${{position:'absolute',inset:0,zIndex:20,background:'#000',display:'flex',flexDirection:'column',overflow:'hidden'}}>
               ${screenSharing?html`
@@ -9242,12 +8522,10 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                   </div>`)}
               </div>
             </div>`:null}
-          <!-- Side panels: People / Invite -->
-          ${(showParticipants||showInvite)?html`
+                    ${(showParticipants||showInvite)?html`
             <div style=${{width:260,background:'rgba(10,10,22,.93)',backdropFilter:'blur(16px)',borderLeft:'1px solid rgba(255,255,255,.08)',display:'flex',flexDirection:'column',overflow:'hidden',zIndex:2,flexShrink:0}}>
               <div style=${{display:'flex',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
-                ${[['People',showParticipants,()=>{setShowParticipants(true);setShowInvite(false);}],
-                   ['Invite',showInvite,()=>{setShowInvite(true);setShowParticipants(false);}]
+                ${[['People',showParticipants,()=>{setShowParticipants(true);setShowInvite(false);}], ['Invite',showInvite,()=>{setShowInvite(true);setShowParticipants(false);}]
                 ].map(([lbl,active,fn])=>html`
                   <button key=${lbl} onClick=${fn} style=${{flex:1,padding:'9px 4px',background:active?'rgba(37,99,235,.12)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:active?'#99ee00':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,borderBottom:active?'2px solid #99ee00':'2px solid transparent',transition:'all .15s'}}>
                     ${lbl}
@@ -9257,21 +8535,15 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
               ${showInvite?html`<div style=${{flex:1,overflowY:'auto',padding:'8px'}}><div style=${{fontSize:10,color:'rgba(255,255,255,.35)',marginBottom:8}}>Click to invite</div>${notInCall.map(u=>html`<button key=${u.id} onClick=${()=>inviteUser(u.id)} style=${{width:'100%',display:'flex',alignItems:'center',gap:7,padding:'7px 9px',borderRadius:9,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',cursor:'pointer',marginBottom:4}} onMouseEnter=${e=>e.currentTarget.style.background='rgba(34,197,94,.1)'} onMouseLeave=${e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}><${Av} u=${u} size=${26}/><span style=${{fontSize:11,color:'rgba(255,255,255,.8)',flex:1,textAlign:'left',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`)}</div>`:null}
             </div>`:null}
         </div>
-        <!-- Toolbar -->
-        <div style=${{background:'rgba(0,0,0,.65)',backdropFilter:'blur(14px)',padding:'8px 16px',display:'flex',alignItems:'center',gap:6,borderTop:'1px solid rgba(255,255,255,.05)',flexShrink:0}}>
-          <!-- Signal indicator left -->
-          <div style=${{display:'flex',alignItems:'center',gap:6,marginRight:'auto'}}>
+                <div style=${{background:'rgba(0,0,0,.65)',backdropFilter:'blur(14px)',padding:'8px 16px',display:'flex',alignItems:'center',gap:6,borderTop:'1px solid rgba(255,255,255,.05)',flexShrink:0}}>
+                    <div style=${{display:'flex',alignItems:'center',gap:6,marginRight:'auto'}}>
             <button style=${{width:34,height:34,borderRadius:9,background:'rgba(255,255,255,.06)',border:'none',cursor:'default',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.4)'}} title="Connection quality">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="16" width="4" height="6" rx="1" opacity=".4"/><rect x="7" y="11" width="4" height="11" rx="1" opacity=".6"/><rect x="13" y="6" width="4" height="16" rx="1" opacity=".8"/><rect x="19" y="1" width="4" height="21" rx="1"/></svg>
           </button>
-          <!-- Google Meet quick-join (in toolbar) -->
           ${meetUrl?html`
             <a href=${meetUrl} target="_blank" rel="noopener"
               title="Open in Google Meet"
-              style=${{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:8,
-                background:'rgba(66,133,244,0.15)',border:'1px solid rgba(66,133,244,0.3)',
-                color:'#93c5fd',fontSize:10,fontWeight:700,textDecoration:'none',
-                letterSpacing:'.02em',transition:'all .15s'}}
+              style=${{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:8, background:'rgba(66,133,244,0.15)',border:'1px solid rgba(66,133,244,0.3)', color:'#93c5fd',fontSize:10,fontWeight:700,textDecoration:'none', letterSpacing:'.02em',transition:'all .15s'}}
               onMouseEnter=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.28)';}}
               onMouseLeave=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.15)';}}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
@@ -9281,48 +8553,36 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
               Google Meet
             </a>`:null}
           </div>
-          <!-- Mic -->
-          ${[
-            {icon:muted?'mic-off':'mic',label:muted?'Unmute':'Mute',active:muted,color:'var(--rd2)',action:toggleMute,svgOn:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,svgOff:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`},
-          ].map(btn=>html`
+                    ${[
+            {icon:muted?'mic-off':'mic',label:muted?'Unmute':'Mute',active:muted,color:'var(--rd2)',action:toggleMute,svgOn:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,svgOff:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}, ].map(btn=>html`
             <div key=${btn.label} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
               <button onClick=${btn.action} style=${{width:44,height:44,borderRadius:13,background:btn.active?'rgba(239,68,68,.2)':'rgba(255,255,255,.09)',border:'1.5px solid '+(btn.active?'rgba(239,68,68,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:btn.active?btn.color:'#fff',transition:'all .15s'}}>
                 ${btn.active?btn.svgOn:btn.svgOff}
               </button>
               <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>${btn.label}</span>
             </div>`)}
-          <!-- Video -->
-          <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
             <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(37,99,235,.22)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(59,130,246,.6)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#93c5fd':'#fff',transition:'all .15s',boxShadow:videoOn?'0 0 10px rgba(59,130,246,.3)':'none'}}>
               ${videoOn?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
               html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
             </button>
             <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>${videoOn?'Video on':'Video'}</span>
           </div>
-          <!-- Screen Share -->
-          <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13,
-              background:screenSharing?'rgba(37,99,235,.35)':'rgba(255,255,255,.09)',
-              border:'1.5px solid '+(screenSharing?'rgba(59,130,246,.7)':'rgba(255,255,255,.12)'),
-              cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
-              color:screenSharing?'#93c5fd':'#fff',transition:'all .15s',
-              boxShadow:screenSharing?'0 0 12px rgba(59,130,246,.4)':'none'}}>
+                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13, background:screenSharing?'rgba(37,99,235,.35)':'rgba(255,255,255,.09)', border:'1.5px solid '+(screenSharing?'rgba(59,130,246,.7)':'rgba(255,255,255,.12)'), cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center', color:screenSharing?'#93c5fd':'#fff',transition:'all .15s', boxShadow:screenSharing?'0 0 12px rgba(59,130,246,.4)':'none'}}>
               ${screenSharing
                 ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" fill="rgba(59,130,246,.3)"/><path d="M8 21h8M12 17v4"/><line x1="8" y1="10" x2="16" y2="10" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/></svg>`
                 :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`}
             </button>
             <span style=${{fontSize:8,color:screenSharing?'#93c5fd':'rgba(255,255,255,.35)',lineHeight:1}}>${screenSharing?'Sharing':'Share'}</span>
           </div>
-          <!-- Raise Hand -->
-          <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
             <button onClick=${()=>{
               const nv=!handRaised;setHandRaised(nv);
               const room=roomIdRef.current;if(!room)return;
-              // Broadcast to ALL participants including self-notification
               participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
                 api.post('/api/calls/'+room+'/signal',{to_user:uid,type:'hand',data:{raised:nv,from:cu.name||'You'}}).catch(()=>{});
               });
-              // Auto-lower hand after 30 seconds
               if(nv){
                 setTimeout(()=>{
                   setHandRaised(false);
@@ -9337,9 +8597,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             </button>
             <span style=${{fontSize:8,color:handRaised?'rgba(251,191,36,.95)':'rgba(255,255,255,.35)',lineHeight:1,fontWeight:handRaised?700:400}}>Hand</span>
           </div>
-          <!-- React — floating panel trigger (bottom-right corner style) -->
-          <!-- Invite / People -->
-          <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
             <button onClick=${()=>{setShowInvite(p=>!p||showParticipants);setShowParticipants(false);}}
               style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(37,99,235,.22)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(59,130,246,.6)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#93c5fd':'#fff',transition:'all .15s',position:'relative'}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -9347,8 +8605,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             </button>
             <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>People</span>
           </div>
-          <!-- Leave (right) -->
-          <div style=${{marginLeft:'auto'}}>
+                    <div style=${{marginLeft:'auto'}}>
             <button onClick=${cleanup} style=${{height:42,borderRadius:12,background:'linear-gradient(135deg,#ef4444,#dc2626)',border:'none',color:'#fff',padding:'0 20px',cursor:'pointer',fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:7,boxShadow:'0 4px 16px rgba(239,68,68,.35)'}}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
               Leave
@@ -9359,48 +8616,31 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
 
   const reactionsOverlay=floatingReactions.length>0?html`
     <div style=${{
-      position:'fixed',
-      bottom:popupPos?Math.max(120,(window.innerHeight-(popupPos.y||0))-540+120)+'px':'140px',
-      left:popupPos?popupPos.x+'px':'50%',
-      transform:popupPos?'none':'translateX(-50%)',
-      zIndex:9300,pointerEvents:'none',width:320,height:200,overflow:'hidden'
+      position:'fixed', bottom:popupPos?Math.max(120,(window.innerHeight-(popupPos.y||0))-540+120)+'px':'140px', left:popupPos?popupPos.x+'px':'50%', transform:popupPos?'none':'translateX(-50%)', zIndex:9300,pointerEvents:'none',width:320,height:200,overflow:'hidden'
     }}>
       ${floatingReactions.map(r=>html`
         <div key=${r.id} style=${{
-          position:'absolute',
-          left:r.x+'%',
-          bottom:0,
-          display:'flex',flexDirection:'column',alignItems:'center',gap:3,
-          animation:'floatUp 2.8s cubic-bezier(.2,.8,.4,1) forwards',
-          pointerEvents:'none'
+          position:'absolute', left:r.x+'%', bottom:0, display:'flex',flexDirection:'column',alignItems:'center',gap:3, animation:'floatUp 2.8s cubic-bezier(.2,.8,.4,1) forwards', pointerEvents:'none'
         }}>
           <span style=${{fontSize:32,filter:'drop-shadow(0 2px 4px rgba(0,0,0,.5))'}}>${r.emoji}</span>
           ${r.label&&r.label!=='You'?html`
-            <span style=${{fontSize:10,fontWeight:700,color:'#fff',
-              background:'rgba(0,0,0,.75)',borderRadius:6,
-              padding:'2px 7px',whiteSpace:'nowrap',
-              backdropFilter:'blur(4px)'}}>${r.label}</span>`:null}
+            <span style=${{fontSize:10,fontWeight:700,color:'#fff', background:'rgba(0,0,0,.75)',borderRadius:6, padding:'2px 7px',whiteSpace:'nowrap', backdropFilter:'blur(4px)'}}>${r.label}</span>`:null}
         </div>`)}
     </div>`:null;
 
   return html`<div>${incomingToast}${previewPopup}${callPopup}${reactionsOverlay}</div>`;
 }
 
-
 /* ─── App ─────────────────────────────────────────────────────────────────── */
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
   const [initialProjectId,setInitialProjectId]=useState(null);
-  // initialProjectId cleared immediately by onClearInitial callback in ProjectsView
-  // Restore saved accent color on mount
-  // Clear old green (#aaff00) accent — force blue ocean theme
   useEffect(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem('pf_accent')||'null');
       const oldGreen=['#aaff00','#99ee00','#aaf000','#aaff00'.toLowerCase(),'#7c3aed','#8b5cf6','#6d28d9','#9333ea','#a855f7'];
       if(saved&&saved.ac&&oldGreen.includes(saved.ac.toLowerCase())){
-        // Old green accent — clear it, use new blue default
         localStorage.removeItem('pf_accent');
         return;
       }
@@ -9418,9 +8658,7 @@ function App(){
   const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[],teams:[]});
   const [teamCtx,setTeamCtxRaw]=useState(()=>{try{return localStorage.getItem('pf_team_ctx')||'';}catch{return '';}});
   const setTeamCtx=useCallback((id,forceDev=false)=>{
-    // Developers cannot manually switch team context (unless forceDev bypass)
     if(cu&&cu.role!=='Admin'&&cu.role!=='Manager'&&!forceDev)return;
-    // If cu not yet loaded, allow the call (initial auto-scope)
     setTeamCtxRaw(id);
     try{localStorage.setItem('pf_team_ctx',id||'');}catch{}
   },[cu]);
@@ -9431,12 +8669,10 @@ function App(){
   const toastTimers=useRef({});
   const TOAST_DUR=6000; // ms before auto-dismiss
 
-  // ── Add in-app toast ────────────────────────────────────────────────────────
   const addToast=useCallback((type,title,body)=>{
     const id='t'+Date.now()+Math.random();
     const timeStr=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     setToasts(prev=>[{id,type,title,body,timeStr,progress:100,leaving:false},...prev].slice(0,5));
-    // Countdown progress bar
     const start=Date.now();
     const tick=setInterval(()=>{
       const elapsed=Date.now()-start;
@@ -9453,20 +8689,14 @@ function App(){
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),220);
   },[]);
 
-  // Expose addToast globally so polling closures can call it
   useEffect(()=>{window._pfToast=addToast;},[addToast]);
 
-  // ── Fire both OS notif + in-app toast ───────────────────────────────────────
   const notify=useCallback((type,title,body,navTo,opts={})=>{
-    // 1. In-app toast (always works, regardless of OS permission)
     addToast(type,title,body);
-    // 2. OS/desktop notification (only when permission granted)
     showBrowserNotif(title,body,()=>setView(navTo),{...opts,tag:opts.tag||type+'-'+Date.now()});
-    // 3. Sound
     playSound(type==='call'?'call':'notif');
   },[addToast]);
 
-  // Show notification permission banner after login
   useEffect(()=>{
     if(cu&&'Notification' in window&&Notification.permission==='default'){
       setTimeout(()=>setShowNotifBanner(true),2500);
@@ -9482,14 +8712,10 @@ function App(){
     if(!cu)return;
     const tCtx=overrideTeamCtx!==undefined?overrideTeamCtx:teamCtx;
     try{
-      // Build team-scoped API URLs when a team context is active
       const projUrl=tCtx?'/api/projects?team_id='+tCtx:'/api/projects';
       const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw]=await Promise.all([
-        api.get('/api/users'),api.get(projUrl),api.get(taskUrl),
-        api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'),
-        api.get('/api/teams'),
-      ]);
+        api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'), ]);
       const teams=Array.isArray(teamsRaw)?teamsRaw:[];
       setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
@@ -9503,7 +8729,6 @@ function App(){
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   useEffect(()=>{load();},[load]);
 
-  // ── Reload all data when team context switches ──────────────────────────────
   const prevTeamCtxRef=useRef(teamCtx);
   useEffect(()=>{
     if(!cu)return;
@@ -9511,11 +8736,9 @@ function App(){
     prevTeamCtxRef.current=teamCtx;
     setTeamLoading(true);
     setView('dashboard'); // always go to dashboard on team switch
-    // Clear stale data immediately so old data doesn't flash
     setData(prev=>({...prev,projects:[],tasks:[]}));
     load(teamCtx).finally(()=>setTeamLoading(false));
   },[teamCtx,cu]);
-  // Auto-refresh projects+tasks every 30s — team-scoped
   useEffect(()=>{
     if(!cu)return;
     const id=setInterval(async()=>{
@@ -9546,12 +8769,9 @@ function App(){
     }catch(e){}
   },[dark]);
 
-  // ── Poll DM unread every 5s ─────────────────────────────────────────────────
-  // Uses a ref for prevDms so closure stays fresh without re-creating interval
   const prevDmsRef=useRef([]);
   useEffect(()=>{
     if(!cu)return;
-    // Seed with current on first mount so we don't false-fire on login
     api.get('/api/dm/unread').then(d=>{if(Array.isArray(d)){prevDmsRef.current=d;setDmUnread(d);}});
     const id=setInterval(()=>{
       api.get('/api/dm/unread').then(d=>{
@@ -9560,7 +8780,6 @@ function App(){
         d.forEach(x=>{
           const old=prev.find(p=>p.sender===x.sender);
           if(!old||(x.cnt||0)>(old.cnt||0)){
-            // New DM from this sender
             const sender=data.users.find(u=>u.id===x.sender);
             const sname=sender?sender.name:'Someone';
             window._pfToast&&window._pfToast('dm','💬 New message from '+sname,'Tap to open Direct Messages');
@@ -9575,19 +8794,9 @@ function App(){
     return()=>clearInterval(id);
   },[cu]); // intentionally omit data.users to avoid reset — sender name is best-effort
 
-  // ── Poll notifications every 6s — fixed: seed prevIds on mount ─────────────
   const prevNotifIdsRef=useRef(null); // null = not yet seeded
   const NTITLES={
-    task_assigned:'✅ Task assigned to you',
-    status_change:'🔄 Task status changed',
-    comment:'💬 New comment on task',
-    deadline:'⏰ Deadline approaching',
-    dm:'📨 New direct message',
-    project_added:'📁 Added to a project',
-    reminder:'⏰ Reminder',
-    call:'📞 Huddle call',
-    message:'#️⃣ New channel message',
-  };
+    task_assigned:'✅ Task assigned to you', status_change:'🔄 Task status changed', comment:'💬 New comment on task', deadline:'⏰ Deadline approaching', dm:'📨 New direct message', project_added:'📁 Added to a project', reminder:'⏰ Reminder', call:'📞 Huddle call', message:'#️⃣ New channel message', };
   const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
   useEffect(()=>{
     if(!cu)return;
@@ -9617,7 +8826,6 @@ function App(){
       });
     };
 
-    // Seed baseline on mount
     api.get('/api/notifications').then(d=>{
       if(Array.isArray(d)){
         prevNotifIdsRef.current=new Set(d.map(n=>n.id));
@@ -9627,7 +8835,6 @@ function App(){
       }
     });
 
-    // Register for visibility-based immediate poll
     triggerPollRef.current=pollOnce;
 
     const id=setInterval(pollOnce, 6000);
@@ -9636,18 +8843,13 @@ function App(){
 
   const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
   const logout=async()=>{
-    // Unsubscribe from Web Push before clearing session
     if(window._pfPushUnsubscribe) await window._pfPushUnsubscribe().catch(()=>{});
     await api.post('/api/auth/logout',{});
     setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);
   };
 
-  // Request browser notification permission on login
   useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
 
-  // ── Visibility-based instant poll ───────────────────────────────────────────
-  // When user switches back to this tab we fire a poll immediately so they
-  // see fresh data without waiting for the next interval tick.
   const triggerPollRef = useRef(null);
   useEffect(()=>{
     window._pfOnVisible = ()=>{
@@ -9656,19 +8858,16 @@ function App(){
     return ()=>{ window._pfOnVisible = null; };
   },[]);
 
-  // Update badge on unread changes
   useEffect(()=>{
     const unread=safe(data.notifs).filter(n=>!n.read).length;
     const dmTotal=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
     updateBadge(unread+dmTotal);
   },[data.notifs,dmUnread]);
 
-  // Poll for due reminders every 30s + check "minutes_before" early warnings
   const firedEarlyRef=useRef(new Set());
   useEffect(()=>{
     if(!cu)return;
     const checkDue=async()=>{
-      // Check exact-time reminders from server
       const due=await api.get('/api/reminders/due');
       if(Array.isArray(due)&&due.length>0){
         due.forEach(r=>{
@@ -9680,7 +8879,6 @@ function App(){
           playSound('reminder');
         });
       }
-      // Check "minutes_before" warnings from local state
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){
         const now=new Date();
@@ -9691,7 +8889,6 @@ function App(){
             const warnAt=new Date(remAt.getTime()-minsBefore*60000);
             const diff=warnAt-now;
             const earlyKey='early-'+r.id+'-'+minsBefore;
-            // Fire if within 60s window and not already fired
             if(diff>=-60000&&diff<=60000&&!firedEarlyRef.current.has(earlyKey)){
               firedEarlyRef.current.add(earlyKey);
               addToast('reminder','⏰ Coming up in '+minsBefore+'min',r.task_title);
@@ -9711,13 +8908,10 @@ function App(){
     return()=>clearInterval(id);
   },[cu,addToast]);
 
-  // ── Team Context ─────────────────────────────────────────────────────────────
-  // Auto-scope developer to their first assigned team on data load
   const isDevRole=cu&&cu.role!=='Admin'&&cu.role!=='Manager';
   const [devNoTeam,setDevNoTeam]=useState(false);
   useEffect(()=>{
     if(!isDevRole||!cu||safe(data.teams).length===0)return;
-    // Find all teams this dev belongs to
     const myTeams=safe(data.teams).filter(t=>{
       try{return JSON.parse(t.member_ids||'[]').includes(cu.id);}catch{return false;}
     });
@@ -9726,20 +8920,15 @@ function App(){
     if(!teamCtx){
       setTeamCtx(myTeams[0].id,true); // forceDev=true bypasses lock
     } else {
-      // Ensure current teamCtx is one dev belongs to
       const valid=myTeams.find(t=>t.id===teamCtx);
       if(!valid)setTeamCtx(myTeams[0].id,true);setView('dashboard');
     }
   },[cu,isDevRole,data.teams,teamCtx,setTeamCtx]);
 
-  // activeTeam: the currently selected team object (or null = all workspace)
   const activeTeam=useMemo(()=>teamCtx?safe(data.teams).find(t=>t.id===teamCtx)||null:null,[teamCtx,data.teams]);
   const teamMemberIds=useMemo(()=>activeTeam?new Set(JSON.parse(activeTeam.member_ids||'[]')):new Set(),[activeTeam]);
-  // When teamCtx is set, data.projects/tasks are server-filtered (API ?team_id=).
-  // scopedProjects/scopedTasks are direct aliases — clean, no duplication.
   const scopedProjects=data.projects;
   const scopedTasks=data.tasks;
-  // scopedUsers: team members only when a team is active
   const scopedUsers=useMemo(()=>{
     if(!activeTeam)return data.users;
     return safe(data.users).filter(u=>teamMemberIds.has(u.id));
@@ -9759,7 +8948,6 @@ function App(){
   </div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
-  // Developer with no team assigned — show friendly blocker
   if(isDevRole && devNoTeam && safe(data.teams).length>0) return html`
     <div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column',gap:16,padding:24}}>
       <div style=${{width:72,height:72,borderRadius:20,background:'var(--sf)',border:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:34}}>🏷</div>
@@ -9773,25 +8961,12 @@ function App(){
       <button class="btn bg" style=${{fontSize:12,marginTop:4}} onClick=${logout}>Sign out</button>
     </div>`;
 
-
   const unread=safe(data.notifs).filter(n=>!n.read).length;
   const totalDm=dmUnread.reduce((a,x)=>a+(x.cnt||0),0);
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'},
-    projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')},
-    tasks:{title:'Task Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')},
-    messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'},
-    dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'},
-    reminders:{title:'Reminders',sub:'Upcoming task reminders'},
-    notifs:{title:'Notifications',sub:unread+' unread'},
-    team:{title:'Team Management',sub:'Members & sub-teams'},
-    settings:{title:'Settings',sub:wsName||'Workspace configuration'},
-    timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'},
-    productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'},
-    tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'},
-  };
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Task Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, };
 
   const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
@@ -9827,7 +9002,6 @@ function App(){
             if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});
             const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
             const dest=nav[n.type]||'notifs';
-            // For DM notifications — extract sender ID from notification and open that thread
             if(n.type==='dm'&&n.sender){
               setDmTargetUser(n.sender); // set target before navigating
             }
@@ -9864,30 +9038,20 @@ function App(){
     <${AIAssistant} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users}/>
     <${HuddleCall} cu=${cu} users=${data.users} onStateChange=${s=>setCallState(prev=>({...prev,...s}))} cmdRef=${huddleCmdRef}/>
 
-    <!-- Team switch loading overlay -->
-    ${teamLoading?html`
-      <div style=${{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,
-        background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center',
-        backdropFilter:'blur(2px)'}}>
+        ${teamLoading?html`
+      <div style=${{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999, background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center', backdropFilter:'blur(2px)'}}>
         <div style=${{background:'var(--sf)',borderRadius:16,padding:'24px 32px',display:'flex',flexDirection:'column',alignItems:'center',gap:12,border:'1px solid var(--bd)',boxShadow:'0 8px 40px rgba(0,0,0,.5)'}}>
           <div style=${{width:40,height:40,border:'3px solid var(--bd)',borderTop:'3px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite'}}></div>
           <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)'}}>Switching to ${activeTeam?activeTeam.name:'workspace'}...</div>
-          <div style=${{fontSize:11,color:'var(--tx3)'}}>Loading team data</div>
+          <div class="tx3-11">Loading team data</div>
         </div>
       </div>`:null}
 
-    <!-- ★ In-app toast stack — always visible, no OS permission needed -->
     <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${setView}/>
 
-    <!-- Notification permission banner — shown once after login -->
     ${showNotifBanner?html`
-      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100,
-        background:'var(--sf)',border:'1px solid rgba(170,255,0,.35)',borderRadius:18,
-        padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)',
-        display:'flex',alignItems:'flex-start',gap:14,maxWidth:440,
-        animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
-        <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,rgba(170,255,0,.2),rgba(170,255,0,.05))',border:'1px solid rgba(170,255,0,.35)',
-          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:22}}>🔔</div>
+      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100, background:'var(--sf)',border:'1px solid rgba(170,255,0,.35)',borderRadius:18, padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)', display:'flex',alignItems:'flex-start',gap:14,maxWidth:440, animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
+        <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,rgba(170,255,0,.2),rgba(170,255,0,.05))',border:'1px solid rgba(170,255,0,.35)', display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:22}}>🔔</div>
         <div style=${{flex:1,minWidth:0}}>
           <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>Enable desktop notifications</div>
           <div style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.55,marginBottom:10}}>
@@ -9914,7 +9078,6 @@ function App(){
 
 ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary}><${App}<//>`);
 };
-// Start app once libs are ready
 waitForLibs(window._pfStartApp);
 })();
 </script>
@@ -9943,12 +9106,7 @@ def find_free_port(preferred=5000):
 def download_js():
     os.makedirs(JS_DIR,exist_ok=True)
     libs=[
-        ("react.min.js",     "https://unpkg.com/react@18/umd/react.production.min.js"),
-        ("react-dom.min.js", "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"),
-        ("prop-types.min.js","https://unpkg.com/prop-types@15/prop-types.min.js"),
-        ("recharts.min.js",  "https://unpkg.com/recharts@2/umd/Recharts.js"),
-        ("htm.min.js",       "https://unpkg.com/htm@3/dist/htm.js"),
-    ]
+        ("react.min.js", "https://unpkg.com/react@18/umd/react.production.min.js"), ("react-dom.min.js", "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"), ("prop-types.min.js","https://unpkg.com/prop-types@15/prop-types.min.js"), ("recharts.min.js", "https://unpkg.com/recharts@2/umd/Recharts.js"), ("htm.min.js", "https://unpkg.com/htm@3/dist/htm.js"), ]
     all_ok=True
     for fn,url in libs:
         path=os.path.join(JS_DIR,fn)
