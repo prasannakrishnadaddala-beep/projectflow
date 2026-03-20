@@ -3517,7 +3517,7 @@ class ErrorBoundary extends React.Component{
   }
 }
 
-/* ─── AuthScreen with Workspace + OTP ────────────────────────────────────── */
+/* ─── AuthScreen — Full-width split layout ────────────────────────────────── */
 function AuthScreen({onLogin}){
   const [tab,setTab]=useState('login');
   const [regMode,setRegMode]=useState('create');
@@ -3530,22 +3530,19 @@ function AuthScreen({onLogin}){
   const [showPw,setShowPw]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
-  // OTP state
-  const [otpStep,setOtpStep]=useState(false);  // true = show OTP entry screen
+  const [otpStep,setOtpStep]=useState(false);
   const [otpEmail,setOtpEmail]=useState('');
   const [otpName,setOtpName]=useState('');
   const [otpCode,setOtpCode]=useState('');
-  const [otpResendCd,setOtpResendCd]=useState(0); // countdown seconds
+  const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
 
-  // Resend countdown timer
   useEffect(()=>{
     if(otpResendCd<=0)return;
     const t=setTimeout(()=>setOtpResendCd(c=>c-1),1000);
     return()=>clearTimeout(t);
   },[otpResendCd]);
 
-  // Auto-focus first OTP box when entering OTP step
   useEffect(()=>{
     if(otpStep && otpRefs[0].current) otpRefs[0].current.focus();
   },[otpStep]);
@@ -3556,10 +3553,8 @@ function AuthScreen({onLogin}){
       const r=await api.post('/api/auth/login',{email,password:pw});
       if(r.error){setErr(r.error);}
       else if(r.otp_required){
-        setOtpEmail(r.email);
-        setOtpName(r.name);
-        setOtpStep(true);
-        setOtpResendCd(60);
+        setOtpEmail(r.email);setOtpName(r.name);
+        setOtpStep(true);setOtpResendCd(60);
       } else {onLogin(r);}
     } else {
       if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
@@ -3588,7 +3583,6 @@ function AuthScreen({onLogin}){
     else{setOtpResendCd(60);setOtpCode('');}
   };
 
-  // Handle OTP digit boxes — auto-advance on input
   const handleOtpInput=(i,val)=>{
     const digits=otpCode.split('');
     digits[i]=val.slice(-1);
@@ -3608,122 +3602,180 @@ function AuthScreen({onLogin}){
     if(pasted.length===6){setOtpCode(pasted);setTimeout(submitOtp,80);}
   };
 
-  const logo=html`
-    <div style=${{textAlign:'center',marginBottom:24}}>
-      <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:64,height:64,background:'var(--ac)',borderRadius:20,marginBottom:14,boxShadow:'0 4px 24px rgba(170,255,0,.35)'}}><svg width="34" height="34" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-      <h1 style=${{fontSize:26,fontWeight:700,color:'var(--tx)',letterSpacing:-1,fontFamily:"'Space Grotesk',sans-serif"}}>ProjectFlow</h1>
-      <p style=${{color:'var(--tx2)',fontSize:12,marginTop:4}}>Team project management, your way</p>
-    </div>`;
+  const leftPanel=html`
+    <div style=${{
+      flex:'0 0 42%',background:'linear-gradient(145deg,#080e1a 0%,#0b1800 55%,#080e1a 100%)',
+      display:'flex',flexDirection:'column',justifyContent:'space-between',
+      padding:'48px 44px',position:'relative',overflow:'hidden',
+      borderRight:'1px solid rgba(170,255,0,0.07)'
+    }}>
+      <div style=${{position:'absolute',width:400,height:400,borderRadius:'50%',background:'rgba(170,255,0,0.05)',filter:'blur(90px)',top:-120,left:-100,pointerEvents:'none'}}></div>
+      <div style=${{position:'absolute',width:280,height:280,borderRadius:'50%',background:'rgba(59,130,246,0.06)',filter:'blur(80px)',bottom:40,right:-60,pointerEvents:'none'}}></div>
 
-  // ── OTP Entry Screen ─────────────────────────────────────────────────────
-  if(otpStep) return html`
-    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-      <div class="fi" style=${{width:'100%',maxWidth:520}}>
-        ${logo}
-        <div class="card" style=${{padding:28,textAlign:'center'}}>
-          <div style=${{width:56,height:56,borderRadius:16,background:'rgba(170,255,0,0.1)',border:'1px solid rgba(170,255,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:26}}>🔐</div>
-          <h2 style=${{fontSize:18,fontWeight:700,marginBottom:8,color:'var(--tx)'}}>Check your email</h2>
-          <p style=${{fontSize:13,color:'var(--tx2)',marginBottom:4}}>We sent a 6-digit code to</p>
-          <p style=${{fontSize:13,fontWeight:600,color:'var(--ac)',marginBottom:24}}>${otpEmail}</p>
-
-          <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
-            ${[0,1,2,3,4,5].map(i=>html`
-              <input key=${i} ref=${otpRefs[i]}
-                style=${{width:44,height:52,borderRadius:10,border:'2px solid '+(otpCode[i]?'var(--ac)':'var(--bd)'),background:'var(--sf2)',color:'var(--tx)',fontSize:22,fontWeight:700,textAlign:'center',fontFamily:'monospace',outline:'none',transition:'border-color .15s'}}
-                maxLength=1 value=${otpCode[i]||''}
-                onInput=${e=>handleOtpInput(i,e.target.value)}
-                onKeyDown=${e=>handleOtpKey(i,e)}
-                onFocus=${e=>e.target.select()}
-              />`)}
+      <div style=${{position:'relative',zIndex:1}}>
+        <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:52}}>
+          <div style=${{width:36,height:36,borderRadius:10,background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 18px rgba(170,255,0,0.3)'}}>
+            <svg width="19" height="19" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-
-          ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'8px 12px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)',marginBottom:12}}>${err}</div>`:null}
-
-          <button class="btn bp" style=${{justifyContent:'center',height:42,width:'100%',marginBottom:12}} onClick=${submitOtp} disabled=${busy||otpCode.length!==6}>
-            ${busy?html`<span class="spin"></span>`:'Verify & Sign In →'}
-          </button>
-
-          <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:16}}>
-            <span style=${{fontSize:12,color:'var(--tx3)'}}>Didn't receive it?</span>
-            <button onClick=${resendOtp} disabled=${otpResendCd>0}
-              style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',
-                color:otpResendCd>0?'var(--tx3)':'var(--ac)',fontSize:12,fontWeight:600,padding:0}}>
-              ${otpResendCd>0?'Resend in '+otpResendCd+'s':'Resend code'}
-            </button>
-          </div>
-
-          <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:12}}>
-            ← Back to login
-          </button>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:17,color:'var(--tx)',letterSpacing:-0.4}}>ProjectFlow</span>
         </div>
-        <p style=${{textAlign:'center',fontSize:11,color:'var(--tx3)',marginTop:12}}>Code expires in 10 minutes · Do not share this code</p>
+
+        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.8vw,2.1rem)',fontWeight:800,color:'var(--tx)',lineHeight:1.18,marginBottom:14,letterSpacing:-0.5}}>
+          The workspace<br/>your team<br/><span style=${{color:'var(--ac)'}}>actually uses.</span>
+        </h2>
+        <p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.75,maxWidth:300,marginBottom:36}}>
+          Tasks, AI assistant, huddle calls, tickets, and timeline tracking all in one place.
+        </p>
+
+        <div style=${{display:'flex',flexDirection:'column',gap:10}}>
+          ${[
+            ['📋','Smart task boards with custom stages'],
+            ['🤖','AI assistant with workspace context'],
+            ['📅','Timeline tracker and health badges'],
+            ['💬','Real-time messaging and direct DMs'],
+            ['📞','Instant voice huddle calls'],
+            ['🎫','Support tickets and bug tracking'],
+          ].map(([ico,txt])=>html`
+            <div key=${txt} style=${{display:'flex',alignItems:'center',gap:10}}>
+              <div style=${{width:26,height:26,borderRadius:7,background:'rgba(170,255,0,0.07)',border:'1px solid rgba(170,255,0,0.11)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>${ico}</div>
+              <span style=${{fontSize:12,color:'var(--tx2)'}}>${txt}</span>
+            </div>
+          `)}
+        </div>
+      </div>
+
+      <div style=${{position:'relative',zIndex:1,marginTop:36}}>
+        <div style=${{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(170,255,0,0.06)',border:'1px solid rgba(170,255,0,0.13)',padding:'6px 13px',borderRadius:100}}>
+          <div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',boxShadow:'0 0 6px var(--ac)'}}></div>
+          <span style=${{fontSize:10,color:'var(--ac)',fontWeight:600,letterSpacing:.04}}>v4.0 · Railway · PostgreSQL · bcrypt</span>
+        </div>
       </div>
     </div>`;
 
-  // ── Normal Login/Register Screen ─────────────────────────────────────────
-  return html`
-    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-      <div class="fi" style=${{width:'100%',maxWidth:560}}>
-        ${logo}
-        <div class="card" style=${{padding:28}}>
-          <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:10,padding:4,marginBottom:20}}>
-            ${['login','register'].map(t=>html`
-              <button key=${t} class=${'tb'+(tab===t?' act':'')} style=${{flex:1,padding:'7px 0'}}
-                onClick=${()=>{setTab(t);setErr('');}}>
-                ${t==='login'?'Sign In':'Create Account'}
-              </button>`)}
+  if(otpStep) return html`
+    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex'}}>
+      ${leftPanel}
+      <div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
+        <div style=${{width:'100%',maxWidth:400}}>
+          <div style=${{textAlign:'center',marginBottom:28}}>
+            <div style=${{width:58,height:58,borderRadius:16,background:'rgba(170,255,0,0.1)',border:'1px solid rgba(170,255,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:26}}>🔐</div>
+            <h2 style=${{fontSize:20,fontWeight:700,color:'var(--tx)',marginBottom:6}}>Check your email</h2>
+            <p style=${{fontSize:13,color:'var(--tx2)',marginBottom:2}}>We sent a 6-digit code to</p>
+            <p style=${{fontSize:14,fontWeight:700,color:'var(--ac)'}}>${otpEmail}</p>
           </div>
-
-          ${tab==='register'?html`
-            <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:16}}>
-              ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
-                <button key=${m} class=${'tb'+(regMode===m?' act':'')} style=${{flex:1,padding:'6px 0',fontSize:11}}
-                  onClick=${()=>setRegMode(m)}>${lbl}</button>`)}
+          <div class="card" style=${{padding:28}}>
+            <div style=${{display:'flex',gap:10,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
+              ${[0,1,2,3,4,5].map(i=>html`
+                <input key=${i} ref=${otpRefs[i]}
+                  style=${{width:50,height:58,borderRadius:12,border:'2px solid '+(otpCode[i]?'var(--ac)':'var(--bd)'),background:'var(--sf2)',color:'var(--tx)',fontSize:24,fontWeight:700,textAlign:'center',fontFamily:'monospace',outline:'none',transition:'border-color .15s',boxShadow:otpCode[i]?'0 0 12px rgba(170,255,0,0.15)':'none'}}
+                  maxLength=1 value=${otpCode[i]||''}
+                  onInput=${e=>handleOtpInput(i,e.target.value)}
+                  onKeyDown=${e=>handleOtpKey(i,e)}
+                  onFocus=${e=>e.target.select()}
+                />`)}
             </div>
-            ${regMode==='create'?html`
-              <div style=${{marginBottom:12}}><label class="lbl">Workspace Name</label>
-                <input class="inp" placeholder="e.g. Acme Corp, My Startup" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
-            ${regMode==='join'?html`
-              <div style=${{marginBottom:12,padding:'10px 13px',background:'rgba(99,102,241,.07)',borderRadius:9,border:'1px solid rgba(170,255,0,.18)'}}>
-                <label class="lbl">Invite Code</label>
-                <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode}
-                  onInput=${e=>setInviteCode(e.target.value.toUpperCase())}
-                  style=${{fontFamily:'monospace',letterSpacing:2,fontSize:15,textAlign:'center'}}/>
-                <p style=${{fontSize:11,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Get this code from your workspace admin</p>
-              </div>`:null}`:null}
-
-          <div style=${{display:'flex',flexDirection:'column',gap:12}}>
-            ${tab==='register'?html`<div><label class="lbl">Full Name</label>
-              <input class="inp" placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
-            <div><label class="lbl">Email</label>
-              <input class="inp" type="email" placeholder="you@company.com" value=${email}
-                onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
-            <div><label class="lbl">Password</label>
-              <div style=${{position:'relative'}}>
-                <input class="inp" style=${{paddingRight:40}} type=${showPw?'text':'password'}
-                  placeholder="••••••••" value=${pw}
-                  onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
-                <button onClick=${()=>setShowPw(!showPw)}
-                  style=${{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14}}>
-                  ${showPw?'🙈':'👁'}
-                </button>
-              </div>
-            </div>
-            ${tab==='register'?html`<div><label class="lbl">Role</label>
-              <select class="sel" value=${role} onChange=${e=>setRole(e.target.value)}>
-                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
-              </select></div>`:null}
-            ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'8px 12px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)'}}>${err}</div>`:null}
-            <button class="btn bp" style=${{justifyContent:'center',height:42}} onClick=${go} disabled=${busy}>
-              ${busy?html`<span class="spin"></span>`:(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join & Create Account →')}
+            ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'8px 12px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)',marginBottom:12,textAlign:'center'}}>${err}</div>`:null}
+            <button class="btn bp" style=${{justifyContent:'center',height:44,width:'100%',marginBottom:14,fontSize:14}} onClick=${submitOtp} disabled=${busy||otpCode.length!==6}>
+              ${busy?html`<span class="spin"></span>`:'Verify and Sign In'}
             </button>
+            <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:10}}>
+              <span style=${{fontSize:12,color:'var(--tx3)'}}>Didn't receive it?</span>
+              <button onClick=${resendOtp} disabled=${otpResendCd>0}
+                style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'var(--tx3)':'var(--ac)',fontSize:12,fontWeight:600,padding:0}}>
+                ${otpResendCd>0?'Resend in '+otpResendCd+'s':'Resend code'}
+              </button>
+            </div>
+            <div style=${{textAlign:'center'}}>
+              <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
+                style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:12}}>
+                Back to login
+              </button>
+            </div>
           </div>
+          <p style=${{textAlign:'center',fontSize:11,color:'var(--tx3)',marginTop:12}}>Expires in 10 minutes. Do not share this code.</p>
+        </div>
+      </div>
+    </div>`;
+
+  return html`
+    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex'}}>
+      ${leftPanel}
+      <div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
+        <div style=${{width:'100%',maxWidth:460}}>
+          <div style=${{marginBottom:24}}>
+            <h2 style=${{fontSize:22,fontWeight:700,color:'var(--tx)',marginBottom:5,letterSpacing:-0.3}}>
+              ${tab==='login'?'Welcome back':'Create your account'}
+            </h2>
+            <p style=${{fontSize:13,color:'var(--tx2)'}}>
+              ${tab==='login'?'Sign in to your ProjectFlow workspace':'Set up your workspace and start shipping'}
+            </p>
+          </div>
+
+          <div class="card" style=${{padding:28}}>
+            <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:10,padding:4,marginBottom:22}}>
+              ${['login','register'].map(t=>html`
+                <button key=${t} class=${'tb'+(tab===t?' act':'')} style=${{flex:1,padding:'8px 0',fontSize:13}}
+                  onClick=${()=>{setTab(t);setErr('');}}>
+                  ${t==='login'?'Sign In':'Create Account'}
+                </button>`)}
+            </div>
+
+            ${tab==='register'?html`
+              <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:16}}>
+                ${[['create','New Workspace'],['join','Join Workspace']].map(([m,lbl])=>html`
+                  <button key=${m} class=${'tb'+(regMode===m?' act':'')} style=${{flex:1,padding:'6px 0',fontSize:11}}
+                    onClick=${()=>setRegMode(m)}>${lbl}</button>`)}
+              </div>
+              ${regMode==='create'?html`
+                <div style=${{marginBottom:14}}><label class="lbl">Workspace Name</label>
+                  <input class="inp" placeholder="e.g. Acme Corp, My Startup" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
+              ${regMode==='join'?html`
+                <div style=${{marginBottom:14,padding:'12px 14px',background:'rgba(99,102,241,.06)',borderRadius:10,border:'1px solid rgba(170,255,0,.15)'}}>
+                  <label class="lbl">Invite Code</label>
+                  <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode}
+                    onInput=${e=>setInviteCode(e.target.value.toUpperCase())}
+                    style=${{fontFamily:'monospace',letterSpacing:3,fontSize:16,textAlign:'center'}}/>
+                  <p style=${{fontSize:11,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Get this code from your workspace admin</p>
+                </div>`:null}`:null}
+
+            <div style=${{display:'flex',flexDirection:'column',gap:14}}>
+              ${tab==='register'?html`
+                <div><label class="lbl">Full Name</label>
+                  <input class="inp" placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
+              <div><label class="lbl">Email Address</label>
+                <input class="inp" type="email" placeholder="you@company.com" value=${email}
+                  onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}
+                  style=${{fontSize:14}}/></div>
+              <div><label class="lbl">Password</label>
+                <div style=${{position:'relative'}}>
+                  <input class="inp" style=${{paddingRight:44,fontSize:14}} type=${showPw?'text':'password'}
+                    placeholder="Enter your password" value=${pw}
+                    onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
+                  <button onClick=${()=>setShowPw(!showPw)}
+                    style=${{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:15,padding:0}}>
+                    ${showPw?'🙈':'👁'}
+                  </button>
+                </div>
+              </div>
+              ${tab==='register'?html`
+                <div><label class="lbl">Role</label>
+                  <select class="sel" value=${role} onChange=${e=>setRole(e.target.value)}>
+                    ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
+                  </select></div>`:null}
+              ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'9px 13px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)',display:'flex',alignItems:'center',gap:7}}>⚠️ ${err}</div>`:null}
+              <button class="btn bp" style=${{justifyContent:'center',height:46,fontSize:14,marginTop:2}} onClick=${go} disabled=${busy}>
+                ${busy?html`<span class="spin"></span>`:(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace and Account →':'Join Workspace →')}
+              </button>
+            </div>
+          </div>
+
+          <p style=${{textAlign:'center',fontSize:11,color:'var(--tx3)',marginTop:14}}>
+            ${tab==='login'?html`Don't have an account? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'var(--ac)',cursor:'pointer',fontSize:11,fontWeight:600,padding:0}}>Create one</button>`:html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'var(--ac)',cursor:'pointer',fontSize:11,fontWeight:600,padding:0}}>Sign in</button>`}
+          </p>
         </div>
       </div>
     </div>`;
 }
-
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
 function SidebarCallsList({cu,onJoin,currentRoomId}){
   const [calls,setCalls]=useState([]);
