@@ -3517,7 +3517,7 @@ class ErrorBoundary extends React.Component{
   }
 }
 
-/* ─── AuthScreen — Professional Dark Design ───────────────────────────────── */
+/* ─── AuthScreen — 3D Globe Premium Design ────────────────────────────────── */
 function AuthScreen({onLogin}){
   const [tab,setTab]=useState('login');
   const [regMode,setRegMode]=useState('create');
@@ -3547,6 +3547,7 @@ function AuthScreen({onLogin}){
     if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
   },[otpStep]);
 
+  // ── 3D Globe Canvas ──
   useEffect(()=>{
     const cv=canvasRef.current;if(!cv)return;
     const ctx=cv.getContext('2d');
@@ -3554,105 +3555,224 @@ function AuthScreen({onLogin}){
     const resize=()=>{cv.width=window.innerWidth;cv.height=window.innerHeight;};
     resize();window.addEventListener('resize',resize);
 
-    // Subtle aurora blobs — kept to background edges only
-    const auroras=[
-      {x:-.05,y:-.1,rx:600,ry:300,rot:-.2,c:'rgba(170,255,0,',spd:.0003,ph:0},
-      {x:1.05,y:.9,rx:550,ry:280,rot:.3,c:'rgba(99,91,255,',spd:.00025,ph:2.0},
-      {x:1.1,y:.1,rx:420,ry:220,rot:.15,c:'rgba(6,182,212,',spd:.00035,ph:4.1},
-      {x:-.1,y:.85,rx:400,ry:200,rot:-.1,c:'rgba(139,92,246,',spd:.0003,ph:1.2},
-    ];
+    // Globe params
+    const GLOBE_POINTS=320;
+    const CONNECTIONS=120;
+    let globeRot=0;
 
-    // Star field
-    const stars=Array.from({length:180},()=>({
-      x:Math.random(),y:Math.random(),
-      r:.3+Math.random()*1.2,
-      a:.05+Math.random()*.4,
-      ph:Math.random()*Math.PI*2,
-      sp:.008+Math.random()*.015,
+    // Generate points on sphere surface using fibonacci lattice
+    const pts3d=Array.from({length:GLOBE_POINTS},(_, i)=>{
+      const phi=Math.acos(1-2*(i+.5)/GLOBE_POINTS);
+      const theta=Math.PI*(1+Math.sqrt(5))*i;
+      return {
+        x:Math.sin(phi)*Math.cos(theta),
+        y:Math.sin(phi)*Math.sin(theta),
+        z:Math.cos(phi),
+        pulse:Math.random()*Math.PI*2,
+        pspd:.02+Math.random()*.015,
+      };
+    });
+
+    // Connections between nearby points
+    const conns=[];
+    for(let i=0;i<GLOBE_POINTS&&conns.length<CONNECTIONS;i++){
+      for(let j=i+1;j<GLOBE_POINTS&&conns.length<CONNECTIONS;j++){
+        const dx=pts3d[i].x-pts3d[j].x,dy=pts3d[i].y-pts3d[j].y,dz=pts3d[i].z-pts3d[j].z;
+        if(Math.sqrt(dx*dx+dy*dy+dz*dz)<.42)conns.push({a:i,b:j,speed:.006+Math.random()*.012,offset:Math.random()});
+      }
+    }
+
+    // Floating data points around globe
+    const dataPts=Array.from({length:22},()=>({
+      lat:(Math.random()-.5)*Math.PI,
+      lon:Math.random()*Math.PI*2,
+      size:2+Math.random()*3,
+      pulse:Math.random()*Math.PI*2,
+      col:Math.random()>.5?'170,255,0':Math.random()>.5?'99,91,255':'6,182,212',
     }));
 
-    // Mesh — only on left and right thirds, not center
-    const meshPts=[];
-    const addMesh=(xRange,yDiv,cols,rows)=>{
-      for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-        meshPts.push({
-          bx:xRange[0]+(xRange[1]-xRange[0])*c/(cols-1),
-          by:r/(rows-1),
-          ph:Math.random()*Math.PI*2,ox:0,oy:0,
-          vx:(Math.random()-.5)*.0003,vy:(Math.random()-.5)*.0003,
-        });
-      }
+    // Particle field (background)
+    const particles=Array.from({length:200},()=>({
+      x:Math.random(),y:Math.random(),
+      vx:(Math.random()-.5)*.00015,vy:(Math.random()-.5)*.00015,
+      r:.3+Math.random()*.8,a:.05+Math.random()*.25,
+      ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.01,
+    }));
+
+    // Project 3D point to 2D
+    const project=(x,y,z,cx,cy,R)=>{
+      // Rotate around Y axis
+      const cosR=Math.cos(globeRot),sinR=Math.sin(globeRot);
+      const rx=x*cosR+z*sinR;
+      const ry=y;
+      const rz=-x*sinR+z*cosR;
+      // Slight tilt around X
+      const tilt=.22;
+      const ty=ry*Math.cos(tilt)-rz*Math.sin(tilt);
+      const tz=ry*Math.sin(tilt)+rz*Math.cos(tilt);
+      // Perspective
+      const fov=2.8;
+      const scale=fov/(fov+tz);
+      return {sx:cx+rx*R*scale,sy:cy+ty*R*scale,sz:tz,scale,visible:tz>-0.95};
     };
-    addMesh([0,.28],1,7,8);   // left side
-    addMesh([.72,1],1,7,8);   // right side
 
     const draw=()=>{
       const W=cv.width,H=cv.height;
       frame++;const t=frame*.016;
-      ctx.fillStyle='#080b14';ctx.fillRect(0,0,W,H);
+      globeRot+=.0025;
 
-      // Radial darkening (brighter center, dark edges — like spotlight)
-      const spot=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*.65);
-      spot.addColorStop(0,'rgba(15,20,40,0)');
-      spot.addColorStop(.5,'rgba(8,11,20,0.3)');
-      spot.addColorStop(1,'rgba(4,6,14,0.75)');
-      ctx.fillStyle=spot;ctx.fillRect(0,0,W,H);
+      // Background
+      ctx.fillStyle='#060810';ctx.fillRect(0,0,W,H);
 
-      // Auroras (stay near edges)
-      auroras.forEach(a=>{
-        a.ph+=a.spd;
-        const px=a.x*W+Math.sin(a.ph*.6)*W*.03;
-        const py=a.y*H+Math.cos(a.ph*.4)*H*.03;
-        ctx.save();ctx.translate(px,py);ctx.rotate(a.rot+Math.sin(a.ph*.25)*.1);
-        const g=ctx.createRadialGradient(0,0,0,0,0,a.rx);
-        g.addColorStop(0,a.c+'0.10)');g.addColorStop(.45,a.c+'0.04)');g.addColorStop(1,a.c+'0)');
-        ctx.scale(1,a.ry/a.rx);ctx.fillStyle=g;
-        ctx.beginPath();ctx.arc(0,0,a.rx,0,Math.PI*2);ctx.fill();
-        ctx.restore();
-      });
+      // Deep radial glow center
+      const cg=ctx.createRadialGradient(W*.62,H*.5,0,W*.62,H*.5,W*.45);
+      cg.addColorStop(0,'rgba(10,25,50,0.9)');
+      cg.addColorStop(.4,'rgba(6,10,20,0.6)');
+      cg.addColorStop(1,'rgba(4,6,14,0)');
+      ctx.fillStyle=cg;ctx.fillRect(0,0,W,H);
 
-      // Stars
-      stars.forEach(s=>{
-        s.ph+=s.sp;
-        const a=s.a*(0.4+Math.sin(s.ph)*0.6);
-        ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);
+      // Subtle aurora top-left
+      const ag=ctx.createRadialGradient(W*.05,H*.1,0,W*.05,H*.1,W*.35);
+      ag.addColorStop(0,'rgba(170,255,0,0.06)');ag.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=ag;ctx.fillRect(0,0,W,H);
+      const ag2=ctx.createRadialGradient(W*.95,H*.85,0,W*.95,H*.85,W*.3);
+      ag2.addColorStop(0,'rgba(99,91,255,0.07)');ag2.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=ag2;ctx.fillRect(0,0,W,H);
+
+      // Background particles
+      particles.forEach(p=>{
+        p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
+        if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=1;if(p.y>1)p.y=0;
+        const a=p.a*(0.4+Math.sin(p.ph)*0.6);
+        ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
         ctx.fillStyle='rgba(200,210,255,'+a+')';ctx.fill();
       });
 
-      // Mesh (left + right panels only)
-      const leftN=7*8,rightN=7*8;
-      const drawMeshSection=(pts,cols,rows)=>{
-        // Move nodes
-        pts.forEach(p=>{
-          p.ph+=.008;
-          p.ox+=p.vx*(Math.random()-.5)*.08;p.oy+=p.vy*(Math.random()-.5)*.08;
-          p.ox=Math.max(-.03,Math.min(.03,p.ox));p.oy=Math.max(-.03,Math.min(.03,p.oy));
-        });
-        const gp=(p)=>[(p.bx+p.ox+Math.sin(t*.3+p.ph)*.008)*W,(p.by+p.oy+Math.cos(t*.28+p.ph)*.008)*H];
-        // edges
-        for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-          const i=r*cols+c;
-          const [x1,y1]=gp(pts[i]);
-          if(c<cols-1){const[x2,y2]=gp(pts[i+1]);const a=.025+Math.sin(t*.4+pts[i].ph)*.015;ctx.strokeStyle='rgba(170,255,0,'+a+')';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
-          if(r<rows-1){const[x2,y2]=gp(pts[i+cols]);const a=.020+Math.sin(t*.35+pts[i].ph)*.012;ctx.strokeStyle='rgba(99,91,255,'+a+')';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
-          // node dot
-          const[nx,ny]=gp(pts[i]);const na=.06+Math.sin(t*.7+pts[i].ph)*.04;
-          ctx.beginPath();ctx.arc(nx,ny,1,0,Math.PI*2);ctx.fillStyle='rgba(170,255,0,'+na+')';ctx.fill();
-        }
-      };
-      drawMeshSection(meshPts.slice(0,leftN),7,8);
-      drawMeshSection(meshPts.slice(leftN),7,8);
+      // ── GLOBE ──
+      const GX=W*.65,GY=H*.5;
+      const R=Math.min(W,H)*.28;
 
-      // Floating rings — corners only
-      [{cx:.05,cy:.12,br:18,sp:.7},{cx:.95,cy:.88,br:16,sp:.85},{cx:.92,cy:.10,br:14,sp:.65},{cx:.06,cy:.88,br:15,sp:.75}]
-      .forEach((ring,i)=>{
-        const pulse=Math.sin(t*ring.sp+i*1.6)*7;
-        [1,1.8,2.8].forEach((s,ri)=>{
-          const alpha=[.12,.06,.025][ri];
-          ctx.beginPath();ctx.arc(ring.cx*W,ring.cy*H,(ring.br+pulse)*s,0,Math.PI*2);
-          ctx.strokeStyle='rgba(170,255,0,'+alpha+')';ctx.lineWidth=1;ctx.stroke();
-        });
+      // Globe atmosphere glow
+      const atmos=ctx.createRadialGradient(GX,GY,R*.7,GX,GY,R*1.3);
+      atmos.addColorStop(0,'rgba(170,255,0,0)');
+      atmos.addColorStop(.6,'rgba(170,255,0,0.025)');
+      atmos.addColorStop(1,'rgba(170,255,0,0)');
+      ctx.fillStyle=atmos;ctx.beginPath();ctx.arc(GX,GY,R*1.3,0,Math.PI*2);ctx.fill();
+
+      // Globe base sphere (subtle)
+      const sphereG=ctx.createRadialGradient(GX-R*.25,GY-R*.2,0,GX,GY,R);
+      sphereG.addColorStop(0,'rgba(20,40,80,0.18)');
+      sphereG.addColorStop(.6,'rgba(10,20,40,0.08)');
+      sphereG.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=sphereG;ctx.beginPath();ctx.arc(GX,GY,R,0,Math.PI*2);ctx.fill();
+
+      // Latitude/longitude grid lines (subtle)
+      ctx.strokeStyle='rgba(170,255,0,0.04)';ctx.lineWidth=.5;
+      // Latitude rings
+      for(let lat=-75;lat<=75;lat+=30){
+        const phi=lat*Math.PI/180;
+        const r2=Math.cos(phi)*R;
+        const yOff=Math.sin(phi)*R;
+        const p0=project(Math.cos(0),Math.sin(phi),Math.sin(0),GX,GY,R);
+        ctx.beginPath();
+        for(let a=0;a<=360;a+=3){
+          const ra=a*Math.PI/180;
+          const p=project(Math.cos(ra)*Math.cos(phi),Math.sin(phi),Math.sin(ra)*Math.cos(phi),GX,GY,R);
+          if(p.visible){a===0?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy);}
+        }
+        ctx.stroke();
+      }
+      // Meridians
+      for(let lon=0;lon<360;lon+=30){
+        const baseLon=lon*Math.PI/180;
+        ctx.beginPath();let started=false;
+        for(let lat=-90;lat<=90;lat+=3){
+          const phi=lat*Math.PI/180;
+          const p=project(Math.cos(phi)*Math.cos(baseLon),Math.sin(phi),Math.cos(phi)*Math.sin(baseLon),GX,GY,R);
+          if(p.visible){if(!started){ctx.moveTo(p.sx,p.sy);started=true;}else ctx.lineTo(p.sx,p.sy);}
+          else started=false;
+        }
+        ctx.stroke();
+      }
+
+      // Project all points
+      const projected=pts3d.map(p=>{
+        p.pulse+=p.pspd;
+        return {...project(p.x,p.y,p.z,GX,GY,R),pulse:p.pulse};
       });
+
+      // Draw connections (back layer)
+      conns.forEach(c=>{
+        const pa=projected[c.a],pb=projected[c.b];
+        if(!pa.visible||!pb.visible)return;
+        if(pa.sz<-.3||pb.sz<-.3)return;
+        const prog=(Math.sin(t*c.speed*6+c.offset*Math.PI*2)+1)/2;
+        const alpha=.06+prog*.12;
+        const depth=Math.max(0,(pa.sz+pb.sz)/2+1)/2;
+        ctx.strokeStyle='rgba(170,255,0,'+(alpha*depth)+')';
+        ctx.lineWidth=.5+pa.scale*.3;
+        ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();
+      });
+
+      // Draw globe points
+      projected.forEach((p,i)=>{
+        if(!p.visible||p.sz<-.2)return;
+        const depth=(p.sz+1)/2;
+        const pulse=(Math.sin(p.pulse)+1)/2;
+        const r=(.8+pulse*.8)*p.scale;
+        const a=(.15+pulse*.25)*depth;
+        ctx.beginPath();ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
+        ctx.fillStyle='rgba(170,255,0,'+a+')';ctx.fill();
+      });
+
+      // Bright highlighted nodes (data points on globe)
+      dataPts.forEach(dp=>{
+        dp.pulse+=.018;
+        const phi=dp.lat,theta=dp.lon+globeRot*1.0;
+        const px=Math.cos(phi)*Math.cos(theta);
+        const py=Math.sin(phi);
+        const pz=Math.cos(phi)*Math.sin(theta);
+        const p=project(px,py,pz,GX,GY,R);
+        if(!p.visible||p.sz<0)return;
+        const depth=(p.sz+1)/2;
+        const pulse=(Math.sin(dp.pulse)+1)/2;
+        // Outer ring
+        ctx.beginPath();ctx.arc(p.sx,p.sy,(dp.size+pulse*4)*p.scale,0,Math.PI*2);
+        ctx.fillStyle='rgba('+dp.col+','+(0.06*depth)+')';ctx.fill();
+        // Core dot
+        ctx.beginPath();ctx.arc(p.sx,p.sy,dp.size*.6*p.scale,0,Math.PI*2);
+        ctx.fillStyle='rgba('+dp.col+','+(0.7*depth)+')';ctx.fill();
+      });
+
+      // Globe edge glow ring
+      ctx.strokeStyle='rgba(170,255,0,0.08)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(GX,GY,R,0,Math.PI*2);ctx.stroke();
+
+      // Scanning beam effect (horizontal scan line across globe)
+      const scanY=GY+Math.sin(t*.4)*R*.8;
+      const scanAlpha=.04+Math.sin(t*.4)*.02;
+      const scanG=ctx.createLinearGradient(GX-R,scanY,GX+R,scanY);
+      scanG.addColorStop(0,'rgba(170,255,0,0)');
+      scanG.addColorStop(.4,'rgba(170,255,0,'+scanAlpha+')');
+      scanG.addColorStop(.5,'rgba(170,255,0,'+(scanAlpha*2)+')');
+      scanG.addColorStop(.6,'rgba(170,255,0,'+scanAlpha+')');
+      scanG.addColorStop(1,'rgba(170,255,0,0)');
+      ctx.fillStyle=scanG;ctx.fillRect(GX-R,scanY-1,R*2,2);
+
+      // Orbit ring around globe
+      ctx.save();ctx.translate(GX,GY);ctx.scale(1,.28);
+      ctx.strokeStyle='rgba(99,91,255,0.12)';ctx.lineWidth=1/0.28;
+      ctx.setLineDash([4,8]);ctx.beginPath();ctx.arc(0,0,R*1.12,0,Math.PI*2);ctx.stroke();
+      ctx.setLineDash([]);ctx.restore();
+
+      // Orbit dot
+      const orbitAngle=t*.5;
+      const ox=GX+Math.cos(orbitAngle)*R*1.12;
+      const oy=GY+Math.sin(orbitAngle)*R*1.12*.28;
+      ctx.beginPath();ctx.arc(ox,oy,3,0,Math.PI*2);
+      ctx.fillStyle='rgba(99,91,255,0.8)';ctx.fill();
+      ctx.beginPath();ctx.arc(ox,oy,6,0,Math.PI*2);
+      ctx.fillStyle='rgba(99,91,255,0.15)';ctx.fill();
 
       id=requestAnimationFrame(draw);
     };
@@ -3660,6 +3780,7 @@ function AuthScreen({onLogin}){
     return()=>{window.removeEventListener('resize',resize);cancelAnimationFrame(id);};
   },[]);
 
+  // ── Auth logic ──
   const go=async()=>{
     setErr('');setBusy(true);
     if(tab==='login'){
@@ -3702,59 +3823,67 @@ function AuthScreen({onLogin}){
     if(p.length===6){setOtpCode(p);setTimeout(submitOtp,80);}
   };
 
-  // ── Shared input/label styles ──
-  const inp=`width:100%;padding:11px 14px;border-radius:9px;font-size:13.5px;outline:none;
-    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);
-    color:#e8eaf6;font-family:inherit;transition:border-color .2s,box-shadow .2s;`;
-  const inpStyle={width:'100%',padding:'11px 14px',borderRadius:9,fontSize:13.5,outline:'none',
-    background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.09)',
-    color:'#e8eaf6',fontFamily:'inherit',transition:'border-color .2s,box-shadow .2s'};
-  const lblStyle={display:'block',fontSize:10.5,fontWeight:700,letterSpacing:.08,
-    textTransform:'uppercase',color:'rgba(148,163,200,0.65)',marginBottom:7};
-  const field=(label,child)=>html`<div><label style=${lblStyle}>${label}</label>${child}</div>`;
+  // ── Shared styles ──
+  const inpS={
+    width:'100%',padding:'11px 14px',borderRadius:9,fontSize:13.5,outline:'none',
+    background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.09)',
+    color:'#e8eaf6',fontFamily:'inherit',transition:'border-color .2s,background .2s',
+    boxSizing:'border-box',
+  };
+  const lblS={display:'block',fontSize:10.5,fontWeight:700,letterSpacing:.08,
+    textTransform:'uppercase',color:'rgba(148,163,200,0.6)',marginBottom:7};
+  const cardS={
+    background:'rgba(10,14,28,0.88)',
+    backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',
+    border:'1px solid rgba(255,255,255,0.07)',
+    borderRadius:20,padding:'28px 28px 24px',
+    boxShadow:'0 0 0 1px rgba(170,255,0,0.04),0 40px 100px rgba(0,0,0,0.8),inset 0 1px 0 rgba(255,255,255,0.06)',
+  };
 
-  const layout=(content)=>html`
+  const shell=(child)=>html`
     <div style=${{position:'fixed',inset:0,overflow:'hidden'}}>
       <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',display:'block'}}></canvas>
 
-      <!-- Top bar -->
-      <div style=${{position:'absolute',top:0,left:0,right:0,zIndex:30,padding:'16px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid rgba(255,255,255,0.04)',background:'rgba(8,11,20,0.5)',backdropFilter:'blur(12px)'}}>
+      <!-- Topbar -->
+      <div style=${{position:'absolute',top:0,left:0,right:0,zIndex:30,height:52,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 28px',background:'rgba(6,8,16,0.6)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
         <div style=${{display:'flex',alignItems:'center',gap:9}}>
-          <div style=${{width:30,height:30,borderRadius:8,background:'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 12px rgba(170,255,0,0.45)'}}>
-            <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00"/><circle cx="51" cy="43" r="6" fill="#0a1a00"/><circle cx="13" cy="43" r="6" fill="#0a1a00"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
+          <div style=${{width:28,height:28,borderRadius:7,background:'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 12px rgba(170,255,0,0.5)'}}>
+            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00"/><circle cx="51" cy="43" r="6" fill="#0a1a00"/><circle cx="13" cy="43" r="6" fill="#0a1a00"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#fff',letterSpacing:-.3}}>ProjectFlow</span>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#fff',letterSpacing:-.3}}>ProjectFlow</span>
         </div>
-        <div style=${{display:'flex',alignItems:'center',gap:6,background:'rgba(170,255,0,0.07)',border:'1px solid rgba(170,255,0,0.16)',padding:'4px 12px',borderRadius:100}}>
-          <div style=${{width:5,height:5,borderRadius:'50%',background:'#aaff00',boxShadow:'0 0 5px #aaff00'}}></div>
-          <span style=${{fontSize:10,color:'rgba(170,255,0,0.85)',fontWeight:600,letterSpacing:.04}}>v4.0 · Online</span>
+        <div style=${{display:'flex',alignItems:'center',gap:12}}>
+          <span style=${{fontSize:11,color:'rgba(148,163,200,0.35)'}}>Team project management · AI-powered</span>
+          <div style=${{display:'flex',alignItems:'center',gap:5,background:'rgba(170,255,0,0.07)',border:'1px solid rgba(170,255,0,0.15)',padding:'3px 10px',borderRadius:100}}>
+            <div style=${{width:4,height:4,borderRadius:'50%',background:'#aaff00',boxShadow:'0 0 5px #aaff00'}}></div>
+            <span style=${{fontSize:9.5,color:'rgba(170,255,0,0.8)',fontWeight:700,letterSpacing:.05}}>LIVE</span>
+          </div>
         </div>
       </div>
 
-      <!-- Content -->
-      <div style=${{position:'relative',zIndex:20,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:'72px 20px 20px',overflowY:'auto'}}>
-        ${content}
+      <!-- Main -->
+      <div style=${{position:'relative',zIndex:20,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:'max(32px,5vw)',paddingTop:52,paddingBottom:20,paddingRight:20,overflowY:'auto'}}>
+        ${child}
       </div>
     </div>`;
 
-  // ── OTP Screen ──
-  if(otpStep) return layout(html`
-    <div style=${{width:'100%',maxWidth:400}}>
-      <div style=${{textAlign:'center',marginBottom:24}}>
-        <div style=${{width:54,height:54,borderRadius:14,background:'rgba(170,255,0,0.08)',border:'1px solid rgba(170,255,0,0.2)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:24,boxShadow:'0 0 20px rgba(170,255,0,0.1)'}}>🔐</div>
-        <h2 style=${{fontSize:19,fontWeight:700,color:'#fff',marginBottom:6,fontFamily:"'Syne',sans-serif"}}>Verify your identity</h2>
-        <p style=${{fontSize:12.5,color:'rgba(148,163,200,0.65)',marginBottom:3}}>6-digit code sent to</p>
+  // ── OTP ──
+  if(otpStep) return shell(html`
+    <div style=${{width:'100%',maxWidth:380}}>
+      <div style=${{marginBottom:24}}>
+        <div style=${{width:52,height:52,borderRadius:14,background:'rgba(170,255,0,0.08)',border:'1px solid rgba(170,255,0,0.2)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:16,fontSize:22}}>🔐</div>
+        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:'#fff',marginBottom:6,letterSpacing:-.3}}>Verify your identity</h2>
+        <p style=${{fontSize:12.5,color:'rgba(148,163,200,0.55)',marginBottom:2}}>6-digit code sent to</p>
         <p style=${{fontSize:13,fontWeight:700,color:'#aaff00'}}>${otpEmail}</p>
       </div>
-
-      <div style=${{background:'rgba(13,17,35,0.85)',backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:18,padding:28,boxShadow:'0 32px 80px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.05)'}}>
+      <div style=${cardS}>
         <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
           ${[0,1,2,3,4,5].map(i=>html`
             <input key=${i} ref=${otpRefs[i]}
-              style=${{width:48,height:54,borderRadius:11,textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',outline:'none',transition:'all .18s',
-                background:otpCode[i]?'rgba(170,255,0,0.08)':'rgba(255,255,255,0.04)',
-                border:'1px solid '+(otpCode[i]?'rgba(170,255,0,0.5)':'rgba(255,255,255,0.08)'),
-                color:'#fff',boxShadow:otpCode[i]?'0 0 14px rgba(170,255,0,0.15)':'none'}}
+              style=${{width:46,height:52,borderRadius:10,textAlign:'center',fontSize:21,fontWeight:700,fontFamily:'monospace',outline:'none',transition:'all .18s',boxSizing:'border-box',
+                background:otpCode[i]?'rgba(170,255,0,0.07)':'rgba(255,255,255,0.04)',
+                border:'1px solid '+(otpCode[i]?'rgba(170,255,0,0.45)':'rgba(255,255,255,0.08)'),
+                color:'#fff',boxShadow:otpCode[i]?'0 0 14px rgba(170,255,0,0.12)':'none'}}
               maxLength=1 value=${otpCode[i]||''}
               onInput=${e=>handleOtpInput(i,e.target.value)}
               onKeyDown=${e=>handleOtpKey(i,e)}
@@ -3763,131 +3892,133 @@ function AuthScreen({onLogin}){
         </div>
         ${err?html`<div style=${{color:'#fca5a5',fontSize:12,padding:'9px 12px',background:'rgba(239,68,68,.07)',borderRadius:8,border:'1px solid rgba(239,68,68,.18)',marginBottom:14,textAlign:'center'}}>${err}</div>`:null}
         <button onClick=${submitOtp} disabled=${busy||otpCode.length!==6}
-          style=${{width:'100%',height:44,borderRadius:10,border:'none',cursor:busy||otpCode.length!==6?'default':'pointer',
-            background:otpCode.length===6?'#aaff00':'rgba(170,255,0,0.2)',
-            color:otpCode.length===6?'#040a00':'rgba(170,255,0,0.4)',
-            fontSize:13.5,fontWeight:700,fontFamily:'inherit',transition:'all .2s',marginBottom:14,
-            boxShadow:otpCode.length===6?'0 4px 20px rgba(170,255,0,0.3)':'none'}}>
+          style=${{width:'100%',height:44,borderRadius:10,border:'none',fontFamily:'inherit',
+            background:otpCode.length===6?'#aaff00':'rgba(170,255,0,0.15)',
+            color:otpCode.length===6?'#040a00':'rgba(170,255,0,0.35)',
+            fontSize:13.5,fontWeight:700,cursor:otpCode.length===6?'pointer':'default',
+            transition:'all .2s',marginBottom:14,
+            boxShadow:otpCode.length===6?'0 4px 20px rgba(170,255,0,0.28)':'none'}}>
           ${busy?'Verifying...':'Verify & Sign In →'}
         </button>
-        <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-          <span style=${{fontSize:12,color:'rgba(148,163,200,0.45)'}}>Didn't receive it?</span>
+        <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:8}}>
+          <span style=${{fontSize:12,color:'rgba(148,163,200,0.4)'}}>Didn't receive it?</span>
           <button onClick=${resendOtp} disabled=${otpResendCd>0}
             style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',
-              color:otpResendCd>0?'rgba(148,163,200,0.3)':'#aaff00',fontSize:12,fontWeight:600,padding:0}}>
+              color:otpResendCd>0?'rgba(148,163,200,0.25)':'#aaff00',fontSize:12,fontWeight:600,padding:0}}>
             ${otpResendCd>0?`Resend in ${otpResendCd}s`:'Resend code'}
           </button>
         </div>
-        <div style=${{textAlign:'center',marginTop:12}}>
+        <div style=${{textAlign:'center'}}>
           <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(148,163,200,0.35)',fontSize:11.5}}>
+            style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(148,163,200,0.3)',fontSize:11.5,fontFamily:'inherit'}}>
             ← Back to login
           </button>
         </div>
       </div>
-      <p style=${{textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.15)',marginTop:14}}>Expires in 10 minutes · Never share this code</p>
     </div>`);
 
-  // ── Main Auth Screen ──
-  return layout(html`
-    <div style=${{width:'100%',maxWidth:tab==='register'?480:420}}>
+  // ── Main form ──
+  return shell(html`
+    <div style=${{width:'100%',maxWidth:tab==='register'?440:400}}>
 
-      <!-- Header -->
-      <div style=${{textAlign:'center',marginBottom:24}}>
-        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(170,255,0,0.06)',border:'1px solid rgba(170,255,0,0.13)',padding:'4px 13px',borderRadius:100,marginBottom:16}}>
-          <span style=${{fontSize:10.5,color:'rgba(170,255,0,0.8)',fontWeight:600,letterSpacing:.04}}>⚡ AI-powered team workspace</span>
+      <!-- Header text -->
+      <div style=${{marginBottom:22}}>
+        <div style=${{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(170,255,0,0.06)',border:'1px solid rgba(170,255,0,0.12)',padding:'3px 11px',borderRadius:100,marginBottom:14}}>
+          <div style=${{width:4,height:4,borderRadius:'50%',background:'#aaff00'}}></div>
+          <span style=${{fontSize:10,color:'rgba(170,255,0,0.75)',fontWeight:700,letterSpacing:.06}}>AI-POWERED TEAM OS</span>
         </div>
-        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.7rem,2.8vw,2.2rem)',fontWeight:800,color:'#fff',marginBottom:7,letterSpacing:-.04,lineHeight:1.1}}>
-          ${tab==='login'?'Welcome back':'Get started free'}
+        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.6rem,2.5vw,2rem)',fontWeight:800,color:'#fff',marginBottom:7,letterSpacing:-.04,lineHeight:1.12}}>
+          ${tab==='login'?'Welcome back':'Start your workspace'}
         </h1>
-        <p style=${{fontSize:13,color:'rgba(148,163,200,0.55)'}}>
-          ${tab==='login'?'Sign in to continue to your workspace':'Create your workspace in 2 minutes'}
+        <p style=${{fontSize:12.5,color:'rgba(148,163,200,0.5)',lineHeight:1.6}}>
+          ${tab==='login'?'Sign in to continue to ProjectFlow':'Create your team workspace in 2 minutes'}
         </p>
       </div>
 
-      <!-- Glass card -->
-      <div style=${{background:'rgba(13,17,35,0.82)',backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:20,padding:'28px 28px 24px',boxShadow:'0 32px 80px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.05)'}}>
-
-        <!-- Tab switcher -->
-        <div style=${{display:'flex',background:'rgba(255,255,255,0.04)',borderRadius:11,padding:3,marginBottom:24,border:'1px solid rgba(255,255,255,0.05)'}}>
+      <!-- Card -->
+      <div style=${cardS}>
+        <!-- Tabs -->
+        <div style=${{display:'flex',background:'rgba(255,255,255,0.03)',borderRadius:11,padding:3,marginBottom:22,border:'1px solid rgba(255,255,255,0.05)'}}>
           ${['login','register'].map(tp=>html`
             <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
-              style=${{flex:1,height:36,fontSize:13,fontWeight:600,border:'none',cursor:'pointer',borderRadius:9,fontFamily:'inherit',transition:'all .2s',
-                background:tab===tp?'rgba(170,255,0,0.12)':'transparent',
-                color:tab===tp?'#aaff00':'rgba(148,163,200,0.45)',
-                boxShadow:tab===tp?'0 0 0 1px rgba(170,255,0,0.22)':'none'}}>
+              style=${{flex:1,height:34,fontSize:12.5,fontWeight:600,border:'none',cursor:'pointer',borderRadius:9,fontFamily:'inherit',transition:'all .18s',
+                background:tab===tp?'rgba(170,255,0,0.11)':'transparent',
+                color:tab===tp?'#aaff00':'rgba(148,163,200,0.4)',
+                boxShadow:tab===tp?'0 0 0 1px rgba(170,255,0,0.2)':'none'}}>
               ${tp==='login'?'Sign In':'Create Account'}
             </button>`)}
         </div>
 
         ${tab==='register'?html`
-          <div style=${{display:'flex',background:'rgba(255,255,255,0.03)',borderRadius:9,padding:3,marginBottom:18,border:'1px solid rgba(255,255,255,0.04)'}}>
+          <div style=${{display:'flex',background:'rgba(255,255,255,0.025)',borderRadius:9,padding:3,marginBottom:16,border:'1px solid rgba(255,255,255,0.04)'}}>
             ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
               <button key=${m} onClick=${()=>setRegMode(m)}
-                style=${{flex:1,height:32,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',borderRadius:7,fontFamily:'inherit',transition:'all .2s',
-                  background:regMode===m?'rgba(99,91,255,0.18)':'transparent',
-                  color:regMode===m?'#a5b4fc':'rgba(148,163,200,0.35)',
-                  boxShadow:regMode===m?'0 0 0 1px rgba(99,91,255,0.28)':'none'}}>
+                style=${{flex:1,height:30,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',borderRadius:7,fontFamily:'inherit',transition:'all .18s',
+                  background:regMode===m?'rgba(99,91,255,0.16)':'transparent',
+                  color:regMode===m?'#a5b4fc':'rgba(148,163,200,0.32)',
+                  boxShadow:regMode===m?'0 0 0 1px rgba(99,91,255,0.25)':'none'}}>
                 ${lbl}
               </button>`)}
           </div>
           ${regMode==='create'?html`
-            <div style=${{marginBottom:14}}>${field('Workspace Name',html`
-              <input style=${inpStyle} placeholder="e.g. Acme Corp, Five Star Group" value=${wsName} onInput=${e=>setWsName(e.target.value)}/>`)}</div>`:null}
+            <div style=${{marginBottom:14}}><label style=${lblS}>Workspace Name</label>
+              <input style=${inpS} placeholder="e.g. Acme Corp, Five Star Group" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
           ${regMode==='join'?html`
-            <div style=${{marginBottom:14,padding:'12px 14px',background:'rgba(99,91,255,0.05)',borderRadius:10,border:'1px solid rgba(99,91,255,0.13)'}}>
-              ${field('Invite Code',html`
-                <input style=${{...inpStyle,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center'}} placeholder="XXXXXXXX"
-                  value=${inviteCode} onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>`)}</div>`:null}`:null}
+            <div style=${{marginBottom:14,padding:'12px',background:'rgba(99,91,255,0.05)',borderRadius:10,border:'1px solid rgba(99,91,255,0.12)'}}>
+              <label style=${lblS}>Invite Code</label>
+              <input style=${{...inpS,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center'}} placeholder="XXXXXXXX"
+                value=${inviteCode} onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
+              <p style=${{fontSize:11,color:'rgba(148,163,200,0.3)',marginTop:6,textAlign:'center'}}>Get this from your workspace Admin</p>
+            </div>`:null}`:null}
 
         <div style=${{display:'flex',flexDirection:'column',gap:14}}>
-          ${tab==='register'?field('Full Name',html`
-            <input style=${inpStyle} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/>`):null}
+          ${tab==='register'?html`
+            <div><label style=${lblS}>Full Name</label>
+              <input style=${inpS} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
 
-          ${field('Email Address',html`
-            <input style=${inpStyle} type="email" placeholder="you@company.com" value=${email}
-              onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>`)}
+          <div><label style=${lblS}>Email Address</label>
+            <input style=${inpS} type="email" placeholder="you@company.com" value=${email}
+              onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
 
-          ${field('Password',html`
+          <div><label style=${lblS}>Password</label>
             <div style=${{position:'relative'}}>
-              <input style=${{...inpStyle,paddingRight:42}} type=${showPw?'text':'password'}
+              <input style=${{...inpS,paddingRight:42}} type=${showPw?'text':'password'}
                 placeholder="••••••••••" value=${pw}
                 onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
               <button onClick=${()=>setShowPw(!showPw)}
                 style=${{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(148,163,200,0.4)',fontSize:14,padding:0,lineHeight:1}}>
                 ${showPw?'🙈':'👁'}
               </button>
-            </div>`)}
+            </div>
+          </div>
 
-          ${tab==='register'?field('Role',html`
-            <select style=${{...inpStyle,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
-              ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r} style=${{background:'#0d1117',color:'#e8eaf6'}}>${r}</option>`)}
-            </select>`):null}
+          ${tab==='register'?html`
+            <div><label style=${lblS}>Role</label>
+              <select style=${{...inpS,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
+                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r} style=${{background:'#0d1117',color:'#e8eaf6'}}>${r}</option>`)}
+              </select></div>`:null}
 
           ${err?html`
-            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'9px 13px',background:'rgba(239,68,68,.07)',borderRadius:9,border:'1px solid rgba(239,68,68,.16)'}}>
-              <span style=${{fontSize:13}}>⚠️</span>
-              <span style=${{fontSize:12.5,color:'#fca5a5'}}>${err}</span>
+            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'9px 12px',background:'rgba(239,68,68,.07)',borderRadius:9,border:'1px solid rgba(239,68,68,.16)'}}>
+              <span>⚠️</span><span style=${{fontSize:12.5,color:'#fca5a5'}}>${err}</span>
             </div>`:null}
 
           <button onClick=${go} disabled=${busy}
-            style=${{height:46,borderRadius:11,border:'none',cursor:busy?'default':'pointer',
-              background:busy?'rgba(170,255,0,0.25)':'#aaff00',
-              color:busy?'rgba(0,0,0,0.4)':'#040a00',
-              fontSize:14,fontWeight:700,fontFamily:'inherit',letterSpacing:.01,
-              transition:'all .18s',
-              boxShadow:busy?'none':'0 4px 20px rgba(170,255,0,0.28),0 1px 0 rgba(255,255,255,0.15) inset',
-              marginTop:2}}>
+            style=${{height:46,borderRadius:11,border:'none',cursor:busy?'default':'pointer',fontFamily:'inherit',
+              background:busy?'rgba(170,255,0,0.2)':'#aaff00',
+              color:busy?'rgba(0,0,0,0.35)':'#030801',
+              fontSize:13.5,fontWeight:700,letterSpacing:.01,
+              transition:'all .18s',marginTop:2,
+              boxShadow:busy?'none':'0 4px 24px rgba(170,255,0,0.3),inset 0 1px 0 rgba(255,255,255,0.2)'}}>
             ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
           </button>
         </div>
       </div>
 
-      <!-- Footer link -->
-      <p style=${{textAlign:'center',fontSize:12,color:'rgba(148,163,200,0.3)',marginTop:16}}>
+      <p style=${{fontSize:11.5,color:'rgba(148,163,200,0.28)',marginTop:14,paddingLeft:2}}>
         ${tab==='login'
-          ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.7)',cursor:'pointer',fontSize:12,fontWeight:600,padding:'0 0 0 2px'}}>Create an account</button>`
-          :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.7)',cursor:'pointer',fontSize:12,fontWeight:600,padding:'0 0 0 2px'}}>Sign in</button>`}
+          ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.65)',cursor:'pointer',fontSize:11.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+          :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.65)',cursor:'pointer',fontSize:11.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
       </p>
     </div>`);
 }
