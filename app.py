@@ -3618,7 +3618,7 @@ function AuthScreen({onLogin}){
   // ── OTP Entry Screen ─────────────────────────────────────────────────────
   if(otpStep) return html`
     <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-      <div class="fi" style=${{width:'100%',maxWidth:420}}>
+      <div class="fi" style=${{width:'100%',maxWidth:520}}>
         ${logo}
         <div class="card" style=${{padding:28,textAlign:'center'}}>
           <div style=${{width:56,height:56,borderRadius:16,background:'rgba(170,255,0,0.1)',border:'1px solid rgba(170,255,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:26}}>🔐</div>
@@ -3664,7 +3664,7 @@ function AuthScreen({onLogin}){
   // ── Normal Login/Register Screen ─────────────────────────────────────────
   return html`
     <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-      <div class="fi" style=${{width:'100%',maxWidth:460}}>
+      <div class="fi" style=${{width:'100%',maxWidth:560}}>
         ${logo}
         <div class="card" style=${{padding:28}}>
           <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:10,padding:4,marginBottom:20}}>
@@ -5087,7 +5087,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
               <div><label class="lbl">Assign to Team <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:400}}>(optional — adds all team members)</span></label>
                 <select class="sel" value=${projTeam} onChange=${e=>setProjTeam(e.target.value)}>
                   <option value="">— No team —</option>
-                  ${filteredTeams.map(t=>{
+                  ${safe(teams).map(t=>{
                     const mids=JSON.parse(t.member_ids||'[]');
                     return html`<option key=${t.id} value=${t.id}>${t.name} (${mids.length} member${mids.length!==1?'s':''})</option>`;
                   })}
