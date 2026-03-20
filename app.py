@@ -565,6 +565,10 @@ def init_db():
         except: pass
         try: db.execute("ALTER TABLE workspaces ADD COLUMN dm_enabled INTEGER DEFAULT 1")
         except: pass
+        try: db.execute("ALTER TABLE call_rooms ADD COLUMN invited_users TEXT DEFAULT '[]'")
+        except: pass
+        try: db.execute("ALTER TABLE notifications ADD COLUMN sender_id TEXT DEFAULT ''")
+        except: pass
         try:
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_server TEXT")
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_port INTEGER DEFAULT 587")
@@ -1347,8 +1351,12 @@ def send_dm():
         sender_name=sender["name"] if sender else "Someone"
         nid=f"n{int(datetime.now().timestamp()*1000)}"
         preview=d["content"][:60]+"..." if len(d["content"])>60 else d["content"]
-        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                   (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts()))
+        try:
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts(),session["user_id"]))
+        except:
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM direct_messages WHERE id=?",(mid,)).fetchone()))
 
 @app.route("/api/dm/unread")
@@ -1605,6 +1613,7 @@ def get_active_calls():
     with get_db() as db:
         rooms=db.execute("SELECT * FROM call_rooms WHERE workspace_id=? AND status='active' ORDER BY created DESC",(wid(),)).fetchall()
         result=[]
+        uid=session["user_id"]
         for r in rooms:
             rd=dict(r)
             try:
@@ -1613,7 +1622,13 @@ def get_active_calls():
                     db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(rd['id'],))
                     continue
             except: pass
-            result.append(rd)
+            # STRICT: only show room if user was explicitly invited or is already a participant
+            try:
+                invited=json.loads(rd.get("invited_users","[]") or "[]")
+                parts=json.loads(rd.get("participants","[]") or "[]")
+            except: invited=[]; parts=[]
+            if uid in invited or uid in parts or rd.get("initiator")==uid:
+                result.append(rd)
         return jsonify(result)
 
 @app.route("/api/calls", methods=["POST"])
@@ -1624,14 +1639,16 @@ def create_call():
     with get_db() as db:
         caller=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cname=caller["name"] if caller else "Someone"
-        room_name=d.get("name",f"{cname}'s Huddle")
+        room_name=d.get("name",f"{cname}'s Instant Meet")
         db.execute("INSERT INTO call_rooms VALUES (?,?,?,?,?,?,?)",
                    (room_id,wid(),room_name,session["user_id"],json.dumps([session["user_id"]]),"active",ts()))
         users=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
-        for u in users:
-            nid=f"n{int(datetime.now().timestamp()*1000)}{u['id']}"
+        invited=[u["id"] for u in users]
+        db.execute("UPDATE call_rooms SET invited_users=? WHERE id=?",(json.dumps(invited),room_id))
+        for uid in invited:
+            nid=f"n{int(datetime.now().timestamp()*1000)}{uid}"
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"call",f"📞 {cname} started a Huddle — Join now! ({room_name})",u["id"],0,ts()))
+                       (nid,wid(),"call",f"📞 {cname} started an Instant Meet — Join now! ({room_name})",uid,0,ts()))
         return jsonify({"room_id":room_id,"name":room_name})
 
 @app.route("/api/calls/<room_id>/join", methods=["POST"])
@@ -1668,7 +1685,14 @@ def invite_to_call(room_id, target_id):
         cname=caller["name"] if caller else "Someone"
         nid=f"n{int(datetime.now().timestamp()*1000)}"
         db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                   (nid,wid(),"call",f"📞 {cname} is pulling you into: {room['name']} — Join now!",target_id,0,ts()))
+                   (nid,wid(),"call",f"📞 {cname} invited you to: {room['name']} — Join now!",target_id,0,ts()))
+        # Add target to invited_users list
+        try:
+            inv=json.loads(room.get("invited_users","[]") or "[]")
+            if target_id not in inv:
+                inv.append(target_id)
+                db.execute("UPDATE call_rooms SET invited_users=? WHERE id=?",(json.dumps(inv),room_id))
+        except: pass
         return jsonify({"ok":True})
 
 @app.route("/api/calls/<room_id>/signal", methods=["POST"])
@@ -1737,6 +1761,13 @@ def notifs_read_all():
 def notifs_clear_all():
     with get_db() as db:
         db.execute("DELETE FROM notifications WHERE workspace_id=?",(wid(),))
+        return jsonify({"ok":True})
+
+@app.route("/api/notifications/<nid>", methods=["DELETE"])
+@login_required
+def delete_notif(nid):
+    with get_db() as db:
+        db.execute("DELETE FROM notifications WHERE id=? AND user_id=?",(nid,session["user_id"]))
         return jsonify({"ok":True})
 
 @app.route("/api/notifications/<nid>/read",methods=["PUT"])
@@ -2373,7 +2404,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
   <div class="hero-content">
     <div class="hero-badge a1"><span class="hero-badge-dot"></span>ProjectFlowPro v4.0 — AI-Powered</div>
     <h1 class="a2">The workspace your<br/>team <span class="blue">actually uses.</span></h1>
-    <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, voice huddles, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
+    <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, Instant Meet, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
     <div class="hero-actions a4">
       <a href="/?action=register" class="btn btn-primary btn-xl">Get Started Free →</a>
       <a href="/?action=login" class="btn btn-outline btn-xl">Sign In</a>
@@ -2570,7 +2601,7 @@ function showTab(t){
     <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
     <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
     <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📞 <span class="hi">Voice Huddles</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
     <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
     <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
     <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
@@ -2580,7 +2611,7 @@ function showTab(t){
     <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
     <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
     <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📞 <span class="hi">Voice Huddles</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
     <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
     <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
     <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
@@ -2613,7 +2644,7 @@ function showTab(t){
       <div class="bc span2"><div class="b-ico">📅</div><h3>Timeline Tracker <span class="role-badge">Admin / Manager</span></h3><p>Dual progress bars compare time elapsed against task completion % so you catch at-risk projects instantly. Auto health badges calculated from today's date.</p><ul class="feat-list"><li>Days spent & remaining — calculated from today</li><li>Health badges: On Track · At Risk · Needs Attention · Overdue</li><li>Filter by health status, sort by days remaining</li></ul></div>
       <div class="bc"><div class="b-ico">👩‍💻</div><h3>Dev Productivity <span class="role-badge">Admin</span></h3><p>Full leaderboard with productivity score 0–100 per developer. Table + Chart views with drill-down.</p><ul class="feat-list"><li>Productivity score 0–100 auto-calculated</li><li>Table & chart view toggle</li><li>Drill into any developer's full task list</li></ul></div>
       <div class="bc"><div class="b-ico">💬</div><h3>Messaging & DMs</h3><p>Per-project channels plus private one-on-one direct messages with unread badges.</p><ul class="feat-list"><li>Per-project message channels</li><li>Private direct messages</li><li>Start huddle directly from DMs</li></ul></div>
-      <div class="bc"><div class="b-ico">📞</div><h3>Huddle Calls</h3><p>Instant in-app voice huddles. Start from sidebar or DMs, invite mid-call.</p><ul class="feat-list"><li>One-click room creation</li><li>Invite participants mid-call</li><li>Mute/unmute controls</li></ul></div>
+      <div class="bc"><div class="b-ico">📞</div><h3>Instant Meet</h3><p>Instant in-app Instant Meet. Start from sidebar or DMs, invite mid-call.</p><ul class="feat-list"><li>One-click room creation</li><li>Invite participants mid-call</li><li>Mute/unmute controls</li></ul></div>
       <div class="bc"><div class="b-ico">🎫</div><h3>Support Tickets</h3><p>Built-in bug tracking & support ticketing separate from project tasks.</p><ul class="feat-list"><li>Bug, feature-request & incident types</li><li>Status: Open · In Progress · Resolved</li><li>Threaded comments per ticket</li></ul></div>
 
     </div>
@@ -2633,7 +2664,7 @@ function showTab(t){
       <div class="mod-card"><div class="mod-ico">👩‍💻</div><div class="mod-n">Dev Analytics</div><div class="mod-d">Productivity leaderboard</div></div>
       <div class="mod-card"><div class="mod-ico">💬</div><div class="mod-n">Messaging</div><div class="mod-d">Per-project channels</div></div>
       <div class="mod-card"><div class="mod-ico">✉️</div><div class="mod-n">Direct DMs</div><div class="mod-d">Private conversations</div></div>
-      <div class="mod-card"><div class="mod-ico">📞</div><div class="mod-n">Huddle Calls</div><div class="mod-d">Instant voice rooms</div></div>
+      <div class="mod-card"><div class="mod-ico">📞</div><div class="mod-n">Instant Meet</div><div class="mod-d">Instant voice rooms</div></div>
       <div class="mod-card"><div class="mod-ico">🎫</div><div class="mod-n">Tickets</div><div class="mod-d">Bug & support tracking</div></div>
       <div class="mod-card"><div class="mod-ico">⏰</div><div class="mod-n">Reminders</div><div class="mod-d">Per-task alerts</div></div>
       <div class="mod-card"><div class="mod-ico">🔔</div><div class="mod-n">Notifications</div><div class="mod-d">Push, email & in-app</div></div>
@@ -2685,7 +2716,7 @@ function showTab(t){
       </div>
       <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#how">How it works</a></li></ul></div>
       <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li></ul></div>
-      <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Voice Huddles</a></li><li><a href="#features">Notifications</a></li></ul></div>
+      <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
     </div>
     <div class="footer-bottom">
       <div class="footer-copy">© 2025 ProjectFlowPro v4.0 — Hosted on Railway</div>
@@ -3694,7 +3725,7 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
   if(!joinable.length)return html`
     <div style=${{textAlign:'center',padding:'14px 8px'}}>
       <div style=${{fontSize:22,marginBottom:5}}>📞</div>
-      <p style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>No active huddles.<br/>Start one to connect with your team.</p>
+      <p style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>No active meetings.<br/>Start one to connect with your team.</p>
     </div>`;
   return html`<div style=${{display:'flex',flexDirection:'column',gap:5}}>
     ${joinable.map(c=>{
@@ -3710,7 +3741,7 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
         <button style=${{width:'100%',height:28,borderRadius:7,border:'none',background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}
           onClick=${()=>onJoin(c.id,c.name)}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          Join Huddle
+          Join Instant Meet
         </button>
       </div>`;
     })}
@@ -4003,7 +4034,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
 
             <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
         ${inCall?html`
-          <button title="In Huddle" onClick=${()=>onCallAction&&onCallAction('show')}
+          <button title="In Instant Meet" onClick=${()=>onCallAction&&onCallAction('show')}
             style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'rgba(34,197,94,.1)',color:'#22c55e',justifyContent:col?'center':'flex-start'}}>
             <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>📞</span>
             ${!col?html`<span style=${{fontSize:11,fontWeight:700}}>${fmtTime(callState.elapsed||0)}</span>`:null}
@@ -6181,7 +6212,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
         ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
-          <button title=${'Start huddle with '+toUser.name}
+          <button title=${'Start Instant Meet with '+toUser.name}
             onClick=${()=>onStartHuddle&&onStartHuddle(toUser)}
             style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid var(--bd)',background:'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s',flexShrink:0}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -6211,7 +6242,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
 /* ─── NotifsView ──────────────────────────────────────────────────────────── */
 function NotifsView({notifs,reload,onNavigate}){
   const NT={
-    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}, call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Huddle'}, };
+    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}, call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Instant Meet'}, };
   const unread=safe(notifs).filter(n=>!n.read).length;
   const handleClick=async(n)=>{
     if(!n.read) await api.put('/api/notifications/'+n.id+'/read',{});
@@ -6836,7 +6867,7 @@ function WorkspaceSettings({cu,onReload}){
   const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);const [otpEnabled,setOtpEnabled]=useState(false);
   const [dmEnabled,setDmEnabled]=useState(true);
   const PERM_DEFAULTS={
-    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false}, 'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Start Huddle Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, };
+    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false}, 'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Start Instant Meet Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, };
   const storedPerms=()=>{try{return JSON.parse(localStorage.getItem('pf_perms')||'null');}catch{return null;}};
   const [perms,setPerms]=useState(()=>storedPerms()||PERM_DEFAULTS);
   const togglePerm=(label,role)=>{
@@ -7760,17 +7791,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [minimized,setMinimized]=useState(false);
   const [popupPos,setPopupPos]=useState({x:null,y:null});
   const [dragging,setDragging]=useState(false);
-  const [showEmojiPicker,setShowEmojiPicker]=useState(false);
-  const emojiPickerRef=useRef(null);
-  useEffect(()=>{
-    if(!showEmojiPicker)return;
-    const handler=(e)=>{
-      if(emojiPickerRef.current&&!emojiPickerRef.current.contains(e.target))
-        setShowEmojiPicker(false);
-    };
-    document.addEventListener('mousedown',handler,true);
-    return()=>document.removeEventListener('mousedown',handler,true);
-  },[showEmojiPicker]);
+    const emojiPickerRef=useRef(null);
   const [showChat,setShowChat]=useState(false);
   const [chatMsgs,setChatMsgs]=useState([]);
   const [chatTxt,setChatTxt]=useState('');
@@ -7838,7 +7859,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         lastNotifiedId=c.id;
         const init=safe(users).find(u=>u.id===c.initiator);
         setIncomingCall({id:c.id,name:c.name,initiatorName:(init&&init.name)||'Someone',initiator:init});
-        showBrowserNotif('📞 Incoming Huddle',(init?init.name:'Someone')+' started a Huddle — click to join',()=>{
+        showBrowserNotif('📞 Incoming Instant Meet',(init?init.name:'Someone')+' started an Instant Meet — click to join',()=>{
           if(window.electronAPI){window.electronAPI.focusWindow();}
           else{window.focus();}
           if(typeof huddleCmdRef!=='undefined'&&huddleCmdRef&&huddleCmdRef.current){
@@ -8067,7 +8088,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     localStream.current=s;
     s.getAudioTracks().forEach(t=>{t.enabled=!mutedRef.current;});
     detectSpeaking(cu.id,s);
-    const roomLabel=name||(targetUser?cu.name+' ↔ '+targetUser.name:cu.name+"'s Huddle");
+    const roomLabel=name||(targetUser?cu.name+' ↔ '+targetUser.name:cu.name+"'s Instant Meet");
     const r=await api.post('/api/calls',{name:roomLabel});
     if(!r||r.error){alert('Could not start huddle.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
     setRoomId(r.room_id);setRoomName(r.name||roomLabel);
@@ -8357,7 +8378,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <div style=${{fontSize:11,color:'rgba(255,255,255,.5)',marginBottom:3}}>${incomingCall.name}</div>
           <div style=${{display:'flex',alignItems:'center',gap:4}}>
             <div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 1s infinite'}}></div>
-            <span style=${{fontSize:10,color:'#22c55e',fontWeight:600}}>Huddle in progress</span>
+            <span style=${{fontSize:10,color:'#22c55e',fontWeight:600}}>Instant Meet in progress</span>
           </div>
         </div>
         <button onClick=${()=>{if(incomingCall)dismissedCallsRef.current.add(incomingCall.id);setIncomingCall(null);}} style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.35)',fontSize:19,lineHeight:1,padding:4}}>✕</button>
@@ -8366,7 +8387,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         <button style=${{flex:1,height:40,borderRadius:11,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:7,boxShadow:'0 4px 18px rgba(34,197,94,.35)'}}
           onClick=${()=>{const c=incomingCall;setIncomingCall(null);doJoin(c.id,c.name);}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-          Join Huddle
+          Join Instant Meet
         </button>
         <button style=${{width:40,height:40,borderRadius:11,background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',color:'var(--rd2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
           onClick=${()=>{if(incomingCall)dismissedCallsRef.current.add(incomingCall.id);setIncomingCall(null);}}>
@@ -8419,7 +8440,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         <button style=${{flex:2,height:42,borderRadius:12,background:previewMicOk?'linear-gradient(135deg,#22c55e,#16a34a)':'rgba(255,255,255,.08)',border:'none',color:previewMicOk?'#fff':'rgba(255,255,255,.3)',cursor:previewMicOk?'pointer':'not-allowed',fontWeight:700,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:previewMicOk?'0 6px 20px rgba(34,197,94,.3)':'none',transition:'all .2s'}}
           onClick=${previewMicOk?()=>{doStart();}:null}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-          Start Huddle
+          Start Instant Meet
         </button>
       </div>
     </div>`:null;
@@ -8999,14 +9020,19 @@ function App(){
           notifs=${data.notifs}
           activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}
           onNotifClick=${async n=>{
-            if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});
+            // Mark read + DELETE from panel immediately (natural notification behaviour)
+            api.put('/api/notifications/'+n.id+'/read',{}).catch(()=>{});
+            api.del('/api/notifications/'+n.id).catch(()=>{});
+            // Remove from local state instantly — panel clears without waiting for reload
+            setData(prev=>({...prev,notifs:prev.notifs.filter(x=>x.id!==n.id)}));
             const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
             const dest=nav[n.type]||'notifs';
-            if(n.type==='dm'&&n.sender){
-              setDmTargetUser(n.sender); // set target before navigating
+            // DM: use sender_id (from DB) or sender field to open that person's thread
+            if(n.type==='dm'){
+              const senderId=n.sender_id||n.sender||null;
+              if(senderId)setDmTargetUser(senderId);
             }
             setView(dest);
-            await load();
           }}
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
           onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
