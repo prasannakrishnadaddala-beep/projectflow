@@ -4402,7 +4402,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
     document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
   },[showProfile]);
   return html`
-    <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd2)',backdropFilter:'blur(8px)'}}>
+    <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd2)',position:'relative',zIndex:100}}>
       <div style=${{padding:'0 18px',height:54,display:'flex',alignItems:'center',gap:10}}>
         <!-- Your Schedule pill -->
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#1e3a5f',borderRadius:100,cursor:'pointer',border:'1px solid rgba(37,99,235,0.25)',transition:'all .14s'}} onClick=${onViewReminders}>
@@ -4469,11 +4469,15 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                   ${safe(notifs).length===0?html`<div style=${{textAlign:'center',padding:'20px 0',color:'var(--tx3)',fontSize:12}}>🔔 All caught up!</div>`:null}
                   ${safe(notifs).slice(0,25).map(n=>html`
                     <div key=${n.id} onClick=${()=>{onNotifClick&&onNotifClick(n);setShowNP(false);}}
-                      style=${{display:'flex',gap:9,padding:'9px 13px',borderBottom:'1px solid var(--bd)',cursor:'pointer',background:n.read?'transparent':'rgba(170,255,0,.04)'}}>
+                      style=${{display:'flex',gap:9,padding:'9px 13px',borderBottom:'1px solid var(--bd)',cursor:'pointer',background:n.read?'transparent':'rgba(29,78,216,.04)',borderLeft:n.read?'none':'2px solid rgba(29,78,216,.3)'}}>
                       <div style=${{width:26,height:26,borderRadius:7,background:(NC[n.type]||'var(--ac)')+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>${NI[n.type]||'🔔'}</div>
                       <div style=${{flex:1,minWidth:0}}>
                         <p style=${{fontSize:12,color:'var(--tx)',fontWeight:n.read?400:600,lineHeight:1.35,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${n.content}</p>
-                        <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span>
+                        <div style=${{display:'flex',gap:5,alignItems:'center'}}>
+                          <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace'}}>${ago(n.ts)}</span>
+                          ${n.type==='dm'?html`<span style=${{fontSize:9,fontWeight:700,color:'var(--cy)',background:'rgba(14,116,144,0.1)',borderRadius:4,padding:'1px 5px',letterSpacing:'.03em'}}>DM • click to reply</span>`:null}
+                          ${n.type==='task_assigned'||n.type==='status_change'||n.type==='comment'?html`<span style=${{fontSize:9,fontWeight:600,color:'var(--ac)',background:'var(--ac3)',borderRadius:4,padding:'1px 5px'}}>→ Tasks</span>`:null}
+                        </div>
                       </div>
                       ${!n.read?html`<div style=${{width:5,height:5,borderRadius:'50%',background:'var(--ac)',flexShrink:0,marginTop:5}}></div>`:null}
                     </div>`)}
@@ -6642,7 +6646,7 @@ const playSound=(type='notif')=>{
     }
   }catch(e){}
 };
-function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true}){
+function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true,initialUserId=null,onClearInitial}){
   const isAdminOrManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   // Show disabled state for non-admin when DMs are turned off
   if(!dmEnabled&&!isAdminOrManager) return html`
@@ -6653,6 +6657,13 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
     </div>`;
   const others=safe(users).filter(u=>u.id!==cu.id);
   const [toId,setToId]=useState(others[0]&&others[0].id||'');const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const [search,setSearch]=useState('');const ref=useRef(null);
+  // Auto-open specific DM thread when navigating from a notification
+  useEffect(()=>{
+    if(initialUserId){
+      const u=safe(users).find(u=>u.id===initialUserId);
+      if(u){setToId(initialUserId);if(onClearInitial)onClearInitial();}
+    }
+  },[initialUserId]);
   const prevMsgCount=useRef(0);
   const loadMsgs=useCallback(async(id)=>{if(!id)return;const d=await api.get('/api/dm/'+id);if(Array.isArray(d)){setMsgs(d);onDmRead(id);};},[onDmRead]);
   // Auto-poll every 3 seconds for new messages in active chat
@@ -9413,7 +9424,7 @@ function App(){
     setTeamCtxRaw(id);
     try{localStorage.setItem('pf_team_ctx',id||'');}catch{}
   },[cu]);
-  const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);
+  const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
   const [toasts,setToasts]=useState([]);
@@ -9814,8 +9825,12 @@ function App(){
           activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}
           onNotifClick=${async n=>{
             if(!n.read)await api.put('/api/notifications/'+n.id+'/read',{});
-            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard'};
+            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
             const dest=nav[n.type]||'notifs';
+            // For DM notifications — extract sender ID from notification and open that thread
+            if(n.type==='dm'&&n.sender){
+              setDmTargetUser(n.sender); // set target before navigating
+            }
             setView(dest);
             await load();
           }}
@@ -9833,7 +9848,7 @@ function App(){
               initialAssignee=${taskFilterType==='assignee'?taskFilterValue:null}
             />`:null}
             ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks} key=${'msgs-'+(teamCtx||'all')}/>`:null}
-            ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} dmEnabled=${wsDmEnabled} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
+            ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} dmEnabled=${wsDmEnabled} initialUserId=${dmTargetUser} onClearInitial=${()=>setDmTargetUser(null)} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
             ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam} initialAssignee=${ticketFilterType==='assignee'?ticketFilterValue:null} initialStatus=${ticketFilterType==='status'?ticketFilterValue:null}/>`:null}
