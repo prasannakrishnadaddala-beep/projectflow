@@ -7394,7 +7394,7 @@ function WorkspaceSettings({cu,onReload}){
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Choose a preset or set a custom accent color for the UI.</p>
         <div style=${{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',marginBottom:12}}>
           ${[
-            {name:'Lime',    ac:'#aaff00',ac2:'#99ee00',tx:'#0d1f00'},
+            {name:'Ocean',   ac:'#1d4ed8',ac2:'#1e40af',tx:'#ffffff'},
             {name:'Cyan',    ac:'#22d3ee',ac2:'#06b6d4',tx:'#001a1f'},
             {name:'Purple',  ac:'#a78bfa',ac2:'#8b5cf6',tx:'#1a0a2e'},
             {name:'Pink',    ac:'#f472b6',ac2:'#ec4899',tx:'#2d001a'},
@@ -7418,7 +7418,7 @@ function WorkspaceSettings({cu,onReload}){
             ></button>`)}
           <div style=${{display:'flex',alignItems:'center',gap:8,marginLeft:4}}>
             <label style=${{fontSize:12,color:'var(--tx2)'}}>Custom:</label>
-            <input type="color" defaultValue="#aaff00"
+            <input type="color" defaultValue="#1d4ed8"
               style=${{width:34,height:34,borderRadius:10,border:'2px solid var(--bd)',cursor:'pointer',background:'none',padding:2}}
               onChange=${e=>{
                 const hex=e.target.value;
@@ -7438,9 +7438,9 @@ function WorkspaceSettings({cu,onReload}){
           </div>
           <button class="btn brd" style=${{fontSize:11,padding:'5px 10px',marginLeft:4}} onClick=${()=>{
             const r=document.body.style;
-            r.setProperty('--ac','#aaff00');r.setProperty('--ac2','#99ee00');
-            r.setProperty('--ac3','rgba(170,255,0,.10)');r.setProperty('--ac4','rgba(170,255,0,.06)');
-            r.setProperty('--ac-tx','#0d1f00');
+            r.setProperty('--ac','#1d4ed8');r.setProperty('--ac2','#1e40af');
+            r.setProperty('--ac3','rgba(29,78,216,.10)');r.setProperty('--ac4','rgba(29,78,216,.06)');
+            r.setProperty('--ac-tx','#ffffff');
             localStorage.removeItem('pf_accent');
           }}>↺ Reset</button>
         </div>
@@ -9039,9 +9039,16 @@ function App(){
   const [initialProjectId,setInitialProjectId]=useState(null);
   // initialProjectId cleared immediately by onClearInitial callback in ProjectsView
   // Restore saved accent color on mount
+  // Clear old green (#aaff00) accent — force blue ocean theme
   useEffect(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem('pf_accent')||'null');
+      const oldGreen=['#aaff00','#99ee00','#aaf000','#aaff00'.toLowerCase(),'#7c3aed','#8b5cf6','#6d28d9','#9333ea','#a855f7'];
+      if(saved&&saved.ac&&oldGreen.includes(saved.ac.toLowerCase())){
+        // Old green accent — clear it, use new blue default
+        localStorage.removeItem('pf_accent');
+        return;
+      }
       if(saved&&saved.ac){
         const r=document.body.style;
         r.setProperty('--ac',saved.ac);r.setProperty('--ac2',saved.ac2||saved.ac);
@@ -9049,7 +9056,7 @@ function App(){
         const ri=Math.round((bigint>>16)&255),gi=Math.round((bigint>>8)&255),bi=Math.round(bigint&255);
         r.setProperty('--ac3','rgba('+ri+','+gi+','+bi+',.10)');
         r.setProperty('--ac4','rgba('+ri+','+gi+','+bi+',.06)');
-        r.setProperty('--ac-tx',saved.tx||'#0d1f00');
+        r.setProperty('--ac-tx',saved.tx||'#ffffff');
       }
     }catch(e){}
   },[]);
