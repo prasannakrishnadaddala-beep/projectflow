@@ -59,7 +59,8 @@ class _Cursor:
         self._columns = []
         self.rowcount = 0
     def _convert_sql(self, sql, params):
-        """Convert SQLite ? placeholders → pg8000 :1 :2 style and fix SQLite-isms."""
+        """Convert SQLite ? placeholders → pg8000 $1 $2 style and fix SQLite-isms."""
+        import re
         # INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
         if "INSERT OR IGNORE INTO" in sql:
             sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO")
@@ -69,12 +70,11 @@ class _Cursor:
             sql = sql.replace("INSERT OR REPLACE INTO push_subscriptions",
                               "INSERT INTO push_subscriptions")
             sql = sql.rstrip() + " ON CONFLICT (endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, created=EXCLUDED.created"
-        # Convert ? to :1, :2, ... (pg8000 native uses :n style)
+        # Convert ? to $1, $2, ... (pg8000 native positional style)
         idx = [0]
         def replacer(m):
             idx[0] += 1
-            return f":{idx[0]}"
-        import re
+            return f"${idx[0]}"
         sql = re.sub(r'\?', replacer, sql)
         return sql, list(params)
     def execute(self, sql, params=()):
@@ -100,6 +100,24 @@ class _DB:
         cur = _Cursor(self._conn)
         cur.execute(sql, params)
         return cur
+    def executescript(self, sql):
+        """Run multiple semicolon-separated statements (SQLite compat)."""
+        # Split on semicolons, skip empty/whitespace-only statements
+        stmts = [s.strip() for s in sql.split(';') if s.strip()]
+        for stmt in stmts:
+            try:
+                self._conn.run(stmt)
+                self._conn.commit()  # DDL must be committed immediately in PG
+            except Exception as e:
+                self._conn.rollback()
+                # Ignore safe errors: table/column/index already exists
+                msg = str(e).lower()
+                if any(x in msg for x in ['already exists', 'duplicate column', 
+                                           'duplicate table', 'column already',
+                                           'relation already']):
+                    continue
+                # Re-raise unexpected errors
+                raise
     def commit(self): self._conn.commit()
     def close(self): self._conn.close()
     def __enter__(self): return self
@@ -138,9 +156,9 @@ CORS(app, supports_credentials=True)
 
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#aaff00"]
 
-def get_db():
+def get_db(autocommit=False):
     conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
-    conn.autocommit = False
+    conn.autocommit = autocommit
     return _DB(conn)
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 def ts(): return datetime.utcnow().isoformat() + 'Z'
@@ -375,7 +393,7 @@ def push_notification_to_user(db_ignored, user_id, title, body, nav_url="/", tag
 # ── DB Init & Migration ───────────────────────────────────────────────────────
 def init_db():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    with get_db() as db:
+    with get_db(autocommit=True) as db:
         db.executescript("""
             CREATE TABLE IF NOT EXISTS workspaces (
                 id TEXT PRIMARY KEY, name TEXT, invite_code TEXT,
