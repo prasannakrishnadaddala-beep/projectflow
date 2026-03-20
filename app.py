@@ -74,10 +74,12 @@ class _Cursor:
         self.rowcount = 0
     def execute(self, sql, params=()):
         sql = _sql_compat(sql)
-        # pg8000 native: pass params as keyword arg `args`
-        result = self._conn.run(sql, args=list(params)) if params else self._conn.run(sql)
+        # pg8000 native: run(sql, val1, val2, ...) — pass params as positional args
+        if params:
+            result = self._conn.run(sql, *params)
+        else:
+            result = self._conn.run(sql)
         self._rows = result or []
-        # conn.columns is a list of dicts with key "name"
         self._cols = [c["name"] for c in (self._conn.columns or [])]
         self.rowcount = self._conn.row_count or 0
         return self
@@ -3507,8 +3509,8 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
               onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.background='var(--sf2)';}}>
               <${Av} u=${cu} size=${24}/>
               <div style=${{lineHeight:1.2}}>
-                <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)'}}>${cu.name.split(' ')[0]}</div>
-                <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu.role}</div>
+                <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)'}}>${cu&&cu.name?cu.name.split(' ')[0]:''}</div>
+                <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu&&cu.role||''}</div>
               </div>
             </div>
             ${showProfile?html`
@@ -3542,7 +3544,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                   <div style=${{textAlign:'center',width:'100%'}}>
                     <div style=${{fontSize:15,fontWeight:700,color:'var(--tx)',marginBottom:2}}>${cu.name}</div>
                     <div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',marginBottom:4,wordBreak:'break-all'}}>${cu.email}</div>
-                    <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(170,255,0,.15)',color:'var(--ac2)',textTransform:'uppercase'}}>${cu.role}</span>
+                    <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(170,255,0,.15)',color:'var(--ac2)',textTransform:'uppercase'}}>${cu&&cu.role||''}</span>
                     ${uploadMsg?html`<div style=${{marginTop:8,fontSize:11,color:uploadMsg.startsWith('✓')?'var(--gn)':'var(--rd)',fontFamily:'monospace'}}>${uploadMsg}</div>`:null}
                   </div>
                 </div>
