@@ -3517,7 +3517,7 @@ class ErrorBoundary extends React.Component{
   }
 }
 
-/* ─── AuthScreen — Premium Full-screen Design ─────────────────────────────── */
+/* ─── AuthScreen — Professional Dark Design ───────────────────────────────── */
 function AuthScreen({onLogin}){
   const [tab,setTab]=useState('login');
   const [regMode,setRegMode]=useState('create');
@@ -3532,7 +3532,6 @@ function AuthScreen({onLogin}){
   const [busy,setBusy]=useState(false);
   const [otpStep,setOtpStep]=useState(false);
   const [otpEmail,setOtpEmail]=useState('');
-  const [otpName,setOtpName]=useState('');
   const [otpCode,setOtpCode]=useState('');
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
@@ -3548,168 +3547,117 @@ function AuthScreen({onLogin}){
     if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
   },[otpStep]);
 
-  // Premium canvas — dark mesh + aurora
   useEffect(()=>{
     const cv=canvasRef.current;if(!cv)return;
     const ctx=cv.getContext('2d');
     let id,frame=0;
-    const resize=()=>{cv.width=cv.offsetWidth||1400;cv.height=cv.offsetHeight||900;};
-    resize();
-    const ro=new ResizeObserver(resize);ro.observe(cv);
+    const resize=()=>{cv.width=window.innerWidth;cv.height=window.innerHeight;};
+    resize();window.addEventListener('resize',resize);
 
-    // Mesh nodes
-    const COLS=14,ROWS=10;
-    const nodes=[];
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-      nodes.push({bx:c/(COLS-1),by:r/(ROWS-1),
-        ox:(Math.random()-.5)*0.04,oy:(Math.random()-.5)*0.04,
-        phase:Math.random()*Math.PI*2,
-        spx:.0008+Math.random()*.0005,spy:.0007+Math.random()*.0005});
-    }
-
-    // Aurora layers
+    // Subtle aurora blobs — kept to background edges only
     const auroras=[
-      {x:.2,y:.3,rx:500,ry:200,rot:-.3,c1:'rgba(170,255,0,',c2:'rgba(80,220,0,',spd:.0004,phase:0},
-      {x:.75,y:.6,rx:450,ry:180,rot:.4,c1:'rgba(99,91,255,',c2:'rgba(139,92,246,',spd:.0003,phase:2.1},
-      {x:.5,y:.15,rx:380,ry:150,rot:.1,c1:'rgba(6,182,212,',c2:'rgba(59,130,246,',spd:.0005,phase:4.2},
-      {x:.15,y:.75,rx:320,ry:130,rot:-.2,c1:'rgba(236,72,153,',c2:'rgba(139,92,246,',spd:.00035,phase:1.5},
+      {x:-.05,y:-.1,rx:600,ry:300,rot:-.2,c:'rgba(170,255,0,',spd:.0003,ph:0},
+      {x:1.05,y:.9,rx:550,ry:280,rot:.3,c:'rgba(99,91,255,',spd:.00025,ph:2.0},
+      {x:1.1,y:.1,rx:420,ry:220,rot:.15,c:'rgba(6,182,212,',spd:.00035,ph:4.1},
+      {x:-.1,y:.85,rx:400,ry:200,rot:-.1,c:'rgba(139,92,246,',spd:.0003,ph:1.2},
     ];
 
-    // Stars/particles
-    const stars=Array.from({length:120},()=>({
-      x:Math.random(),y:Math.random(),r:.5+Math.random()*1.5,
-      alpha:.1+Math.random()*.6,pulse:Math.random()*Math.PI*2,
-      pspd:.01+Math.random()*.02,
-      col:Math.random()>.7?'170,255,0':Math.random()>.5?'99,91,255':'255,255,255',
+    // Star field
+    const stars=Array.from({length:180},()=>({
+      x:Math.random(),y:Math.random(),
+      r:.3+Math.random()*1.2,
+      a:.05+Math.random()*.4,
+      ph:Math.random()*Math.PI*2,
+      sp:.008+Math.random()*.015,
     }));
 
-    // Floating UI mockup elements
-    const uiCards=[
-      {bx:.72,by:.12,w:200,h:72,vx:-.00004,vy:.00003,phase:0,
-       title:'Sprint Progress',value:'78%',sub:'14 of 18 tasks done',color:'#aaff00'},
-      {bx:.80,by:.65,w:180,h:68,vx:.00003,vy:-.00004,phase:2.1,
-       title:'Team Velocity',value:'↑ 24%',sub:'vs last sprint',color:'#818cf8'},
-      {bx:.60,by:.82,w:190,h:68,vx:-.00005,vy:-.00003,phase:4.2,
-       title:'Active Tasks',value:'47',sub:'3 blocked · 12 in review',color:'#34d399'},
-    ];
+    // Mesh — only on left and right thirds, not center
+    const meshPts=[];
+    const addMesh=(xRange,yDiv,cols,rows)=>{
+      for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+        meshPts.push({
+          bx:xRange[0]+(xRange[1]-xRange[0])*c/(cols-1),
+          by:r/(rows-1),
+          ph:Math.random()*Math.PI*2,ox:0,oy:0,
+          vx:(Math.random()-.5)*.0003,vy:(Math.random()-.5)*.0003,
+        });
+      }
+    };
+    addMesh([0,.28],1,7,8);   // left side
+    addMesh([.72,1],1,7,8);   // right side
 
     const draw=()=>{
       const W=cv.width,H=cv.height;
       frame++;const t=frame*.016;
+      ctx.fillStyle='#080b14';ctx.fillRect(0,0,W,H);
 
-      // Deep dark bg
-      ctx.fillStyle='#050810';ctx.fillRect(0,0,W,H);
+      // Radial darkening (brighter center, dark edges — like spotlight)
+      const spot=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*.65);
+      spot.addColorStop(0,'rgba(15,20,40,0)');
+      spot.addColorStop(.5,'rgba(8,11,20,0.3)');
+      spot.addColorStop(1,'rgba(4,6,14,0.75)');
+      ctx.fillStyle=spot;ctx.fillRect(0,0,W,H);
 
-      // Vignette
-      const vig=ctx.createRadialGradient(W/2,H/2,H*.1,W/2,H/2,H*.9);
-      vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,8,0.7)');
-      ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
-
-      // Aurora blobs
+      // Auroras (stay near edges)
       auroras.forEach(a=>{
-        a.phase+=a.spd;
-        const px=a.x*W+Math.sin(a.phase*.7)*W*.04;
-        const py=a.y*H+Math.cos(a.phase*.5)*H*.04;
-        ctx.save();ctx.translate(px,py);ctx.rotate(a.rot+Math.sin(a.phase*.3)*.15);
+        a.ph+=a.spd;
+        const px=a.x*W+Math.sin(a.ph*.6)*W*.03;
+        const py=a.y*H+Math.cos(a.ph*.4)*H*.03;
+        ctx.save();ctx.translate(px,py);ctx.rotate(a.rot+Math.sin(a.ph*.25)*.1);
         const g=ctx.createRadialGradient(0,0,0,0,0,a.rx);
-        g.addColorStop(0,a.c1+'0.13)');g.addColorStop(.4,a.c1+'0.06)');g.addColorStop(1,a.c2+'0)');
+        g.addColorStop(0,a.c+'0.10)');g.addColorStop(.45,a.c+'0.04)');g.addColorStop(1,a.c+'0)');
         ctx.scale(1,a.ry/a.rx);ctx.fillStyle=g;
         ctx.beginPath();ctx.arc(0,0,a.rx,0,Math.PI*2);ctx.fill();
         ctx.restore();
       });
 
-      // Animated mesh grid
-      nodes.forEach(n=>{
-        n.phase+=.01;
-        n.ox+=n.spx*(Math.random()-.5)*.1;n.oy+=n.spy*(Math.random()-.5)*.1;
-        n.ox=Math.max(-.05,Math.min(.05,n.ox));n.oy=Math.max(-.05,Math.min(.05,n.oy));
-      });
-      const getPos=(n)=>[(n.bx+n.ox+Math.sin(t*.4+n.phase)*.012)*W,(n.by+n.oy+Math.cos(t*.35+n.phase)*.01)*H];
-
-      // Draw mesh edges
-      ctx.lineWidth=.4;
-      for(let r=0;r<ROWS;r++){
-        for(let c=0;c<COLS;c++){
-          const i=r*COLS+c;
-          const [x1,y1]=getPos(nodes[i]);
-          if(c<COLS-1){
-            const [x2,y2]=getPos(nodes[i+1]);
-            const alpha=.04+Math.sin(t*.5+nodes[i].phase)*.02;
-            ctx.strokeStyle='rgba(170,255,0,'+alpha+')';
-            ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-          }
-          if(r<ROWS-1){
-            const [x2,y2]=getPos(nodes[i+COLS]);
-            const alpha=.04+Math.sin(t*.4+nodes[i].phase)*.02;
-            ctx.strokeStyle='rgba(99,91,255,'+alpha+')';
-            ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-          }
-        }
-      }
-
-      // Mesh nodes dots
-      nodes.forEach(n=>{
-        const [x,y]=getPos(n);
-        const a=.1+Math.sin(t*.8+n.phase)*.08;
-        ctx.beginPath();ctx.arc(x,y,1.2,0,Math.PI*2);
-        ctx.fillStyle='rgba(170,255,0,'+a+')';ctx.fill();
-      });
-
       // Stars
       stars.forEach(s=>{
-        s.pulse+=s.pspd;
-        const a=s.alpha*(0.5+Math.sin(s.pulse)*0.5);
+        s.ph+=s.sp;
+        const a=s.a*(0.4+Math.sin(s.ph)*0.6);
         ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);
-        ctx.fillStyle='rgba('+s.col+','+a+')';ctx.fill();
+        ctx.fillStyle='rgba(200,210,255,'+a+')';ctx.fill();
       });
 
-      // Glowing orb accents
-      [{x:.05,y:.08,r:80,c:'rgba(170,255,0,0.08)'},{x:.95,y:.92,r:70,c:'rgba(99,91,255,0.09)'},{x:.92,y:.1,r:60,c:'rgba(6,182,212,0.07)'}]
-      .forEach(o=>{
-        const g=ctx.createRadialGradient(o.x*W,o.y*H,0,o.x*W,o.y*H,o.r);
-        g.addColorStop(0,o.c);g.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=g;ctx.beginPath();ctx.arc(o.x*W,o.y*H,o.r,0,Math.PI*2);ctx.fill();
-      });
+      // Mesh (left + right panels only)
+      const leftN=7*8,rightN=7*8;
+      const drawMeshSection=(pts,cols,rows)=>{
+        // Move nodes
+        pts.forEach(p=>{
+          p.ph+=.008;
+          p.ox+=p.vx*(Math.random()-.5)*.08;p.oy+=p.vy*(Math.random()-.5)*.08;
+          p.ox=Math.max(-.03,Math.min(.03,p.ox));p.oy=Math.max(-.03,Math.min(.03,p.oy));
+        });
+        const gp=(p)=>[(p.bx+p.ox+Math.sin(t*.3+p.ph)*.008)*W,(p.by+p.oy+Math.cos(t*.28+p.ph)*.008)*H];
+        // edges
+        for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+          const i=r*cols+c;
+          const [x1,y1]=gp(pts[i]);
+          if(c<cols-1){const[x2,y2]=gp(pts[i+1]);const a=.025+Math.sin(t*.4+pts[i].ph)*.015;ctx.strokeStyle='rgba(170,255,0,'+a+')';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+          if(r<rows-1){const[x2,y2]=gp(pts[i+cols]);const a=.020+Math.sin(t*.35+pts[i].ph)*.012;ctx.strokeStyle='rgba(99,91,255,'+a+')';ctx.lineWidth=.5;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+          // node dot
+          const[nx,ny]=gp(pts[i]);const na=.06+Math.sin(t*.7+pts[i].ph)*.04;
+          ctx.beginPath();ctx.arc(nx,ny,1,0,Math.PI*2);ctx.fillStyle='rgba(170,255,0,'+na+')';ctx.fill();
+        }
+      };
+      drawMeshSection(meshPts.slice(0,leftN),7,8);
+      drawMeshSection(meshPts.slice(leftN),7,8);
 
-      // Floating UI stat cards
-      uiCards.forEach(c=>{
-        c.bx+=c.vx;c.by+=c.vy;c.phase+=.008;
-        if(c.bx<-.3||c.bx>1.1)c.vx*=-1;if(c.by<-.2||c.by>1.1)c.vy*=-1;
-        const cx=c.bx*W,cy=c.by*H+Math.sin(c.phase)*8;
-        const w=c.w,h=c.h,r=12;
-        ctx.save();ctx.globalAlpha=.7;
-        // Glass card
-        ctx.shadowColor=c.color;ctx.shadowBlur=20;
-        ctx.fillStyle='rgba(15,20,40,0.75)';
-        ctx.beginPath();ctx.moveTo(cx+r,cy);ctx.lineTo(cx+w-r,cy);ctx.arcTo(cx+w,cy,cx+w,cy+r,r);
-        ctx.lineTo(cx+w,cy+h-r);ctx.arcTo(cx+w,cy+h,cx+w-r,cy+h,r);
-        ctx.lineTo(cx+r,cy+h);ctx.arcTo(cx,cy+h,cx,cy+h-r,r);
-        ctx.lineTo(cx,cy+r);ctx.arcTo(cx,cy,cx+r,cy,r);ctx.closePath();ctx.fill();
-        ctx.shadowBlur=0;
-        // Border glow
-        ctx.strokeStyle=c.color+'55';ctx.lineWidth=1;
-        ctx.beginPath();ctx.moveTo(cx+r,cy);ctx.lineTo(cx+w-r,cy);ctx.arcTo(cx+w,cy,cx+w,cy+r,r);
-        ctx.lineTo(cx+w,cy+h-r);ctx.arcTo(cx+w,cy+h,cx+w-r,cy+h,r);
-        ctx.lineTo(cx+r,cy+h);ctx.arcTo(cx,cy+h,cx,cy+h-r,r);
-        ctx.lineTo(cx,cy+r);ctx.arcTo(cx,cy,cx+r,cy,r);ctx.closePath();ctx.stroke();
-        // Left accent bar
-        ctx.fillStyle=c.color;ctx.beginPath();ctx.roundRect(cx+10,cy+12,3,h-24,2);ctx.fill();
-        // Text
-        ctx.globalAlpha=.9;ctx.fillStyle='rgba(180,190,220,0.7)';ctx.font='10px system-ui,sans-serif';ctx.fillText(c.title,cx+20,cy+22);
-        ctx.fillStyle=c.color;ctx.font='bold 18px system-ui,sans-serif';ctx.fillText(c.value,cx+20,cy+44);
-        ctx.fillStyle='rgba(150,160,190,0.6)';ctx.font='9px system-ui,sans-serif';ctx.fillText(c.sub,cx+20,cy+60);
-        ctx.restore();
+      // Floating rings — corners only
+      [{cx:.05,cy:.12,br:18,sp:.7},{cx:.95,cy:.88,br:16,sp:.85},{cx:.92,cy:.10,br:14,sp:.65},{cx:.06,cy:.88,br:15,sp:.75}]
+      .forEach((ring,i)=>{
+        const pulse=Math.sin(t*ring.sp+i*1.6)*7;
+        [1,1.8,2.8].forEach((s,ri)=>{
+          const alpha=[.12,.06,.025][ri];
+          ctx.beginPath();ctx.arc(ring.cx*W,ring.cy*H,(ring.br+pulse)*s,0,Math.PI*2);
+          ctx.strokeStyle='rgba(170,255,0,'+alpha+')';ctx.lineWidth=1;ctx.stroke();
+        });
       });
-
-      // Scan line effect
-      ctx.save();ctx.globalAlpha=.015;
-      for(let sy=0;sy<H;sy+=3){ctx.fillStyle='rgba(0,0,0,1)';ctx.fillRect(0,sy,W,1);}
-      ctx.restore();
 
       id=requestAnimationFrame(draw);
     };
     draw();
-    return()=>{ro.disconnect();cancelAnimationFrame(id);};
+    return()=>{window.removeEventListener('resize',resize);cancelAnimationFrame(id);};
   },[]);
 
   const go=async()=>{
@@ -3717,7 +3665,7 @@ function AuthScreen({onLogin}){
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
       if(r.error)setErr(r.error);
-      else if(r.otp_required){setOtpEmail(r.email);setOtpName(r.name);setOtpStep(true);setOtpResendCd(60);}
+      else if(r.otp_required){setOtpEmail(r.email);setOtpStep(true);setOtpResendCd(60);}
       else onLogin(r);
     } else {
       if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
@@ -3754,206 +3702,194 @@ function AuthScreen({onLogin}){
     if(p.length===6){setOtpCode(p);setTimeout(submitOtp,80);}
   };
 
-  // Shared styles
-  const cardStyle={
-    background:'rgba(12,16,32,0.75)',
-    backdropFilter:'blur(24px)',
-    WebkitBackdropFilter:'blur(24px)',
-    border:'1px solid rgba(170,255,0,0.15)',
-    borderRadius:20,
-    padding:32,
-    boxShadow:'0 0 0 1px rgba(255,255,255,0.04),0 24px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)',
-  };
-  const inpStyle={
-    width:'100%',padding:'12px 16px',borderRadius:10,fontSize:14,outline:'none',
-    background:'rgba(255,255,255,0.05)',
-    border:'1px solid rgba(255,255,255,0.10)',
-    color:'#f0f4ff',transition:'border-color .2s,box-shadow .2s',
-    fontFamily:'inherit',
-  };
-  const lblStyle={display:'block',fontSize:11,fontWeight:600,letterSpacing:.06,textTransform:'uppercase',color:'rgba(160,170,210,0.7)',marginBottom:7};
+  // ── Shared input/label styles ──
+  const inp=`width:100%;padding:11px 14px;border-radius:9px;font-size:13.5px;outline:none;
+    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);
+    color:#e8eaf6;font-family:inherit;transition:border-color .2s,box-shadow .2s;`;
+  const inpStyle={width:'100%',padding:'11px 14px',borderRadius:9,fontSize:13.5,outline:'none',
+    background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.09)',
+    color:'#e8eaf6',fontFamily:'inherit',transition:'border-color .2s,box-shadow .2s'};
+  const lblStyle={display:'block',fontSize:10.5,fontWeight:700,letterSpacing:.08,
+    textTransform:'uppercase',color:'rgba(148,163,200,0.65)',marginBottom:7};
+  const field=(label,child)=>html`<div><label style=${lblStyle}>${label}</label>${child}</div>`;
 
-  const topBadge=html`
-    <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:32}}>
-      <div style=${{width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,#aaff00,#7cff47)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 20px rgba(170,255,0,0.5)'}}>
-        <svg width="18" height="18" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
-      </div>
-      <div>
-        <div style=${{fontSize:15,fontWeight:800,color:'#fff',letterSpacing:-.3,fontFamily:"'Syne',sans-serif"}}>ProjectFlow</div>
-        <div style=${{fontSize:10,color:'rgba(170,255,0,0.7)',fontWeight:600,letterSpacing:.04}}>v4.0 · Team OS</div>
-      </div>
-    </div>`;
-
-  if(otpStep) return html`
-    <div style=${{position:'fixed',inset:0,overflow:'hidden'}}>
-      <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',display:'block'}}></canvas>
-      <div style=${{position:'relative',zIndex:10,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
-        <div style=${{width:'100%',maxWidth:400}}>
-          ${topBadge}
-          <div style=${cardStyle}>
-            <div style=${{textAlign:'center',marginBottom:28}}>
-              <div style=${{width:56,height:56,borderRadius:16,background:'rgba(170,255,0,0.1)',border:'1px solid rgba(170,255,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:26,boxShadow:'0 0 24px rgba(170,255,0,0.15)'}}>🔐</div>
-              <h2 style=${{fontSize:20,fontWeight:700,color:'#fff',marginBottom:6}}>Verify your identity</h2>
-              <p style=${{fontSize:13,color:'rgba(160,170,210,0.7)',marginBottom:2}}>6-digit code sent to</p>
-              <p style=${{fontSize:14,fontWeight:700,color:'#aaff00'}}>${otpEmail}</p>
-            </div>
-            <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
-              ${[0,1,2,3,4,5].map(i=>html`
-                <input key=${i} ref=${otpRefs[i]}
-                  style=${{width:48,height:56,borderRadius:12,border:'2px solid '+(otpCode[i]?'rgba(170,255,0,0.7)':'rgba(255,255,255,0.10)'),background:'rgba(255,255,255,0.05)',color:'#fff',fontSize:22,fontWeight:700,textAlign:'center',fontFamily:'monospace',outline:'none',transition:'all .15s',boxShadow:otpCode[i]?'0 0 16px rgba(170,255,0,0.2)':'none'}}
-                  maxLength=1 value=${otpCode[i]||''}
-                  onInput=${e=>handleOtpInput(i,e.target.value)}
-                  onKeyDown=${e=>handleOtpKey(i,e)}
-                  onFocus=${e=>e.target.select()}
-                />`)}
-            </div>
-            ${err?html`<div style=${{color:'#f87171',fontSize:12,padding:'9px 13px',background:'rgba(248,113,113,.08)',borderRadius:9,border:'1px solid rgba(248,113,113,.2)',marginBottom:12,textAlign:'center'}}>${err}</div>`:null}
-            <button class="btn bp" style=${{justifyContent:'center',height:46,width:'100%',marginBottom:14,fontSize:14,borderRadius:11,background:'linear-gradient(135deg,#aaff00,#7cff47)',color:'#040506',fontWeight:700}} onClick=${submitOtp} disabled=${busy||otpCode.length!==6}>
-              ${busy?html`<span class="spin"></span>`:'✓ Verify & Sign In'}
-            </button>
-            <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:10}}>
-              <span style=${{fontSize:12,color:'rgba(160,170,210,0.5)'}}>Didn't receive it?</span>
-              <button onClick=${resendOtp} disabled=${otpResendCd>0}
-                style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'rgba(160,170,210,0.3)':'#aaff00',fontSize:12,fontWeight:600,padding:0}}>
-                ${otpResendCd>0?'Resend in '+otpResendCd+'s':'Resend code'}
-              </button>
-            </div>
-            <div style=${{textAlign:'center'}}>
-              <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
-                style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(160,170,210,0.5)',fontSize:12}}>
-                ← Back to login
-              </button>
-            </div>
-          </div>
-          <p style=${{textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.2)',marginTop:14}}>Expires in 10 minutes · Do not share</p>
-        </div>
-      </div>
-    </div>`;
-
-  return html`
+  const layout=(content)=>html`
     <div style=${{position:'fixed',inset:0,overflow:'hidden'}}>
       <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',display:'block'}}></canvas>
 
-      <!-- Top nav bar -->
-      <div style=${{position:'absolute',top:0,left:0,right:0,zIndex:20,padding:'18px 32px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <!-- Top bar -->
+      <div style=${{position:'absolute',top:0,left:0,right:0,zIndex:30,padding:'16px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid rgba(255,255,255,0.04)',background:'rgba(8,11,20,0.5)',backdropFilter:'blur(12px)'}}>
         <div style=${{display:'flex',alignItems:'center',gap:9}}>
-          <div style=${{width:30,height:30,borderRadius:8,background:'linear-gradient(135deg,#aaff00,#7cff47)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 14px rgba(170,255,0,0.4)'}}>
+          <div style=${{width:30,height:30,borderRadius:8,background:'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 12px rgba(170,255,0,0.45)'}}>
             <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00"/><circle cx="51" cy="43" r="6" fill="#0a1a00"/><circle cx="13" cy="43" r="6" fill="#0a1a00"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
           <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#fff',letterSpacing:-.3}}>ProjectFlow</span>
         </div>
-        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(170,255,0,0.08)',border:'1px solid rgba(170,255,0,0.18)',padding:'5px 12px',borderRadius:100}}>
-          <div style=${{width:5,height:5,borderRadius:'50%',background:'#aaff00',boxShadow:'0 0 6px #aaff00'}}></div>
-          <span style=${{fontSize:10,color:'#aaff00',fontWeight:600,letterSpacing:.05}}>Live · Railway · PostgreSQL</span>
+        <div style=${{display:'flex',alignItems:'center',gap:6,background:'rgba(170,255,0,0.07)',border:'1px solid rgba(170,255,0,0.16)',padding:'4px 12px',borderRadius:100}}>
+          <div style=${{width:5,height:5,borderRadius:'50%',background:'#aaff00',boxShadow:'0 0 5px #aaff00'}}></div>
+          <span style=${{fontSize:10,color:'rgba(170,255,0,0.85)',fontWeight:600,letterSpacing:.04}}>v4.0 · Online</span>
         </div>
       </div>
 
-      <!-- Center form -->
-      <div style=${{position:'relative',zIndex:10,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:'80px 24px 24px'}}>
-        <div style=${{width:'100%',maxWidth:tab==='register'?500:440}}>
-
-          <!-- Heading -->
-          <div style=${{textAlign:'center',marginBottom:28}}>
-            <div style=${{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(170,255,0,0.07)',border:'1px solid rgba(170,255,0,0.15)',padding:'5px 14px',borderRadius:100,marginBottom:20}}>
-              <span style=${{fontSize:11,color:'#aaff00',fontWeight:600,letterSpacing:.05}}>⚡ Multi-tenant workspace platform</span>
-            </div>
-            <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.8rem,3vw,2.4rem)',fontWeight:800,color:'#fff',marginBottom:8,letterSpacing:-.04,lineHeight:1.1}}>
-              ${tab==='login'?html`Welcome back <span style=${{display:'inline-block',animation:'wave 1.2s ease-in-out infinite'}}>👋</span>`:'Start shipping faster'}
-            </h1>
-            <p style=${{fontSize:13,color:'rgba(160,180,220,0.65)'}}>
-              ${tab==='login'?'Sign in to your ProjectFlow workspace':'Create your workspace and invite your team'}
-            </p>
-          </div>
-
-          <!-- Card -->
-          <div style=${cardStyle}>
-
-            <!-- Tab pills -->
-            <div style=${{display:'flex',gap:3,background:'rgba(255,255,255,0.04)',borderRadius:12,padding:4,marginBottom:24,border:'1px solid rgba(255,255,255,0.06)'}}>
-              ${['login','register'].map(tp=>html`
-                <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
-                  style=${{flex:1,padding:'9px 0',fontSize:13,fontWeight:600,border:'none',cursor:'pointer',borderRadius:9,transition:'all .2s',
-                    background:tab===tp?'linear-gradient(135deg,rgba(170,255,0,0.15),rgba(170,255,0,0.08))':'transparent',
-                    color:tab===tp?'#aaff00':'rgba(160,180,220,0.5)',
-                    boxShadow:tab===tp?'0 0 0 1px rgba(170,255,0,0.25)':'none'}}>
-                  ${tp==='login'?'Sign In':'Create Account'}
-                </button>`)}
-            </div>
-
-            ${tab==='register'?html`
-              <div style=${{display:'flex',gap:3,background:'rgba(255,255,255,0.03)',borderRadius:10,padding:3,marginBottom:18,border:'1px solid rgba(255,255,255,0.05)'}}>
-                ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
-                  <button key=${m} onClick=${()=>setRegMode(m)}
-                    style=${{flex:1,padding:'7px 0',fontSize:11,fontWeight:600,border:'none',cursor:'pointer',borderRadius:8,transition:'all .2s',
-                      background:regMode===m?'rgba(99,91,255,0.2)':'transparent',
-                      color:regMode===m?'#a5b4fc':'rgba(160,180,220,0.4)',
-                      boxShadow:regMode===m?'0 0 0 1px rgba(99,91,255,0.3)':'none'}}>
-                    ${lbl}
-                  </button>`)}
-              </div>
-              ${regMode==='create'?html`
-                <div style=${{marginBottom:16}}><label style=${lblStyle}>Workspace Name</label>
-                  <input style=${inpStyle} placeholder="e.g. Acme Corp, Five Star Group" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
-              ${regMode==='join'?html`
-                <div style=${{marginBottom:16,padding:'14px',background:'rgba(99,91,255,0.06)',borderRadius:12,border:'1px solid rgba(99,91,255,0.15)'}}>
-                  <label style=${lblStyle}>Invite Code</label>
-                  <input style=${{...inpStyle,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center'}} placeholder="XXXXXXXX" value=${inviteCode}
-                    onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
-                  <p style=${{fontSize:11,color:'rgba(160,180,220,0.4)',marginTop:7,textAlign:'center'}}>Get this from your workspace Admin</p>
-                </div>`:null}`:null}
-
-            <div style=${{display:'flex',flexDirection:'column',gap:16}}>
-              ${tab==='register'?html`
-                <div><label style=${lblStyle}>Full Name</label>
-                  <input style=${inpStyle} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
-
-              <div><label style=${lblStyle}>Email Address</label>
-                <input style=${inpStyle} type="email" placeholder="you@company.com" value=${email}
-                  onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
-
-              <div><label style=${lblStyle}>Password</label>
-                <div style=${{position:'relative'}}>
-                  <input style=${{...inpStyle,paddingRight:44}} type=${showPw?'text':'password'}
-                    placeholder="••••••••••" value=${pw}
-                    onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
-                  <button onClick=${()=>setShowPw(!showPw)}
-                    style=${{position:'absolute',right:13,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(160,180,220,0.5)',fontSize:15,padding:0}}>
-                    ${showPw?'🙈':'👁'}
-                  </button>
-                </div>
-              </div>
-
-              ${tab==='register'?html`
-                <div><label style=${lblStyle}>Role</label>
-                  <select style=${{...inpStyle,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
-                    ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r} style=${{background:'#0d1117'}}>${r}</option>`)}
-                  </select></div>`:null}
-
-              ${err?html`
-                <div style=${{color:'#fca5a5',fontSize:12,padding:'10px 14px',background:'rgba(239,68,68,.08)',borderRadius:10,border:'1px solid rgba(239,68,68,.2)',display:'flex',alignItems:'center',gap:8}}>
-                  <span>⚠️</span><span>${err}</span>
-                </div>`:null}
-
-              <button onClick=${go} disabled=${busy}
-                style=${{height:48,borderRadius:12,border:'none',cursor:busy?'default':'pointer',fontSize:14,fontWeight:700,
-                  background:busy?'rgba(170,255,0,0.3)':'linear-gradient(135deg,#aaff00 0%,#7cff47 100%)',
-                  color:'#040506',transition:'all .2s',boxShadow:busy?'none':'0 4px 24px rgba(170,255,0,0.3)',
-                  display:'flex',alignItems:'center',justifyContent:'center',gap:8,
-                  transform:busy?'none':'translateY(0)',fontFamily:'inherit'}}>
-                ${busy?html`<span class="spin" style=${{borderColor:'rgba(0,0,0,0.2)',borderTopColor:'#040506'}}></span>`:
-                  (tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
-              </button>
-            </div>
-          </div>
-
-          <p style=${{textAlign:'center',fontSize:12,color:'rgba(255,255,255,0.2)',marginTop:18}}>
-            ${tab==='login'
-              ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.8)',cursor:'pointer',fontSize:12,fontWeight:600,padding:0}}>Create an account →</button>`
-              :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.8)',cursor:'pointer',fontSize:12,fontWeight:600,padding:0}}>Sign in →</button>`}
-          </p>
-        </div>
+      <!-- Content -->
+      <div style=${{position:'relative',zIndex:20,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:'72px 20px 20px',overflowY:'auto'}}>
+        ${content}
       </div>
     </div>`;
+
+  // ── OTP Screen ──
+  if(otpStep) return layout(html`
+    <div style=${{width:'100%',maxWidth:400}}>
+      <div style=${{textAlign:'center',marginBottom:24}}>
+        <div style=${{width:54,height:54,borderRadius:14,background:'rgba(170,255,0,0.08)',border:'1px solid rgba(170,255,0,0.2)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:24,boxShadow:'0 0 20px rgba(170,255,0,0.1)'}}>🔐</div>
+        <h2 style=${{fontSize:19,fontWeight:700,color:'#fff',marginBottom:6,fontFamily:"'Syne',sans-serif"}}>Verify your identity</h2>
+        <p style=${{fontSize:12.5,color:'rgba(148,163,200,0.65)',marginBottom:3}}>6-digit code sent to</p>
+        <p style=${{fontSize:13,fontWeight:700,color:'#aaff00'}}>${otpEmail}</p>
+      </div>
+
+      <div style=${{background:'rgba(13,17,35,0.85)',backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:18,padding:28,boxShadow:'0 32px 80px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.05)'}}>
+        <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
+          ${[0,1,2,3,4,5].map(i=>html`
+            <input key=${i} ref=${otpRefs[i]}
+              style=${{width:48,height:54,borderRadius:11,textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',outline:'none',transition:'all .18s',
+                background:otpCode[i]?'rgba(170,255,0,0.08)':'rgba(255,255,255,0.04)',
+                border:'1px solid '+(otpCode[i]?'rgba(170,255,0,0.5)':'rgba(255,255,255,0.08)'),
+                color:'#fff',boxShadow:otpCode[i]?'0 0 14px rgba(170,255,0,0.15)':'none'}}
+              maxLength=1 value=${otpCode[i]||''}
+              onInput=${e=>handleOtpInput(i,e.target.value)}
+              onKeyDown=${e=>handleOtpKey(i,e)}
+              onFocus=${e=>e.target.select()}
+            />`)}
+        </div>
+        ${err?html`<div style=${{color:'#fca5a5',fontSize:12,padding:'9px 12px',background:'rgba(239,68,68,.07)',borderRadius:8,border:'1px solid rgba(239,68,68,.18)',marginBottom:14,textAlign:'center'}}>${err}</div>`:null}
+        <button onClick=${submitOtp} disabled=${busy||otpCode.length!==6}
+          style=${{width:'100%',height:44,borderRadius:10,border:'none',cursor:busy||otpCode.length!==6?'default':'pointer',
+            background:otpCode.length===6?'#aaff00':'rgba(170,255,0,0.2)',
+            color:otpCode.length===6?'#040a00':'rgba(170,255,0,0.4)',
+            fontSize:13.5,fontWeight:700,fontFamily:'inherit',transition:'all .2s',marginBottom:14,
+            boxShadow:otpCode.length===6?'0 4px 20px rgba(170,255,0,0.3)':'none'}}>
+          ${busy?'Verifying...':'Verify & Sign In →'}
+        </button>
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+          <span style=${{fontSize:12,color:'rgba(148,163,200,0.45)'}}>Didn't receive it?</span>
+          <button onClick=${resendOtp} disabled=${otpResendCd>0}
+            style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',
+              color:otpResendCd>0?'rgba(148,163,200,0.3)':'#aaff00',fontSize:12,fontWeight:600,padding:0}}>
+            ${otpResendCd>0?`Resend in ${otpResendCd}s`:'Resend code'}
+          </button>
+        </div>
+        <div style=${{textAlign:'center',marginTop:12}}>
+          <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
+            style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(148,163,200,0.35)',fontSize:11.5}}>
+            ← Back to login
+          </button>
+        </div>
+      </div>
+      <p style=${{textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.15)',marginTop:14}}>Expires in 10 minutes · Never share this code</p>
+    </div>`);
+
+  // ── Main Auth Screen ──
+  return layout(html`
+    <div style=${{width:'100%',maxWidth:tab==='register'?480:420}}>
+
+      <!-- Header -->
+      <div style=${{textAlign:'center',marginBottom:24}}>
+        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(170,255,0,0.06)',border:'1px solid rgba(170,255,0,0.13)',padding:'4px 13px',borderRadius:100,marginBottom:16}}>
+          <span style=${{fontSize:10.5,color:'rgba(170,255,0,0.8)',fontWeight:600,letterSpacing:.04}}>⚡ AI-powered team workspace</span>
+        </div>
+        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.7rem,2.8vw,2.2rem)',fontWeight:800,color:'#fff',marginBottom:7,letterSpacing:-.04,lineHeight:1.1}}>
+          ${tab==='login'?'Welcome back':'Get started free'}
+        </h1>
+        <p style=${{fontSize:13,color:'rgba(148,163,200,0.55)'}}>
+          ${tab==='login'?'Sign in to continue to your workspace':'Create your workspace in 2 minutes'}
+        </p>
+      </div>
+
+      <!-- Glass card -->
+      <div style=${{background:'rgba(13,17,35,0.82)',backdropFilter:'blur(28px)',WebkitBackdropFilter:'blur(28px)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:20,padding:'28px 28px 24px',boxShadow:'0 32px 80px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.05)'}}>
+
+        <!-- Tab switcher -->
+        <div style=${{display:'flex',background:'rgba(255,255,255,0.04)',borderRadius:11,padding:3,marginBottom:24,border:'1px solid rgba(255,255,255,0.05)'}}>
+          ${['login','register'].map(tp=>html`
+            <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
+              style=${{flex:1,height:36,fontSize:13,fontWeight:600,border:'none',cursor:'pointer',borderRadius:9,fontFamily:'inherit',transition:'all .2s',
+                background:tab===tp?'rgba(170,255,0,0.12)':'transparent',
+                color:tab===tp?'#aaff00':'rgba(148,163,200,0.45)',
+                boxShadow:tab===tp?'0 0 0 1px rgba(170,255,0,0.22)':'none'}}>
+              ${tp==='login'?'Sign In':'Create Account'}
+            </button>`)}
+        </div>
+
+        ${tab==='register'?html`
+          <div style=${{display:'flex',background:'rgba(255,255,255,0.03)',borderRadius:9,padding:3,marginBottom:18,border:'1px solid rgba(255,255,255,0.04)'}}>
+            ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
+              <button key=${m} onClick=${()=>setRegMode(m)}
+                style=${{flex:1,height:32,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',borderRadius:7,fontFamily:'inherit',transition:'all .2s',
+                  background:regMode===m?'rgba(99,91,255,0.18)':'transparent',
+                  color:regMode===m?'#a5b4fc':'rgba(148,163,200,0.35)',
+                  boxShadow:regMode===m?'0 0 0 1px rgba(99,91,255,0.28)':'none'}}>
+                ${lbl}
+              </button>`)}
+          </div>
+          ${regMode==='create'?html`
+            <div style=${{marginBottom:14}}>${field('Workspace Name',html`
+              <input style=${inpStyle} placeholder="e.g. Acme Corp, Five Star Group" value=${wsName} onInput=${e=>setWsName(e.target.value)}/>`)}</div>`:null}
+          ${regMode==='join'?html`
+            <div style=${{marginBottom:14,padding:'12px 14px',background:'rgba(99,91,255,0.05)',borderRadius:10,border:'1px solid rgba(99,91,255,0.13)'}}>
+              ${field('Invite Code',html`
+                <input style=${{...inpStyle,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center'}} placeholder="XXXXXXXX"
+                  value=${inviteCode} onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>`)}</div>`:null}`:null}
+
+        <div style=${{display:'flex',flexDirection:'column',gap:14}}>
+          ${tab==='register'?field('Full Name',html`
+            <input style=${inpStyle} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/>`):null}
+
+          ${field('Email Address',html`
+            <input style=${inpStyle} type="email" placeholder="you@company.com" value=${email}
+              onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>`)}
+
+          ${field('Password',html`
+            <div style=${{position:'relative'}}>
+              <input style=${{...inpStyle,paddingRight:42}} type=${showPw?'text':'password'}
+                placeholder="••••••••••" value=${pw}
+                onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
+              <button onClick=${()=>setShowPw(!showPw)}
+                style=${{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(148,163,200,0.4)',fontSize:14,padding:0,lineHeight:1}}>
+                ${showPw?'🙈':'👁'}
+              </button>
+            </div>`)}
+
+          ${tab==='register'?field('Role',html`
+            <select style=${{...inpStyle,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
+              ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r} style=${{background:'#0d1117',color:'#e8eaf6'}}>${r}</option>`)}
+            </select>`):null}
+
+          ${err?html`
+            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'9px 13px',background:'rgba(239,68,68,.07)',borderRadius:9,border:'1px solid rgba(239,68,68,.16)'}}>
+              <span style=${{fontSize:13}}>⚠️</span>
+              <span style=${{fontSize:12.5,color:'#fca5a5'}}>${err}</span>
+            </div>`:null}
+
+          <button onClick=${go} disabled=${busy}
+            style=${{height:46,borderRadius:11,border:'none',cursor:busy?'default':'pointer',
+              background:busy?'rgba(170,255,0,0.25)':'#aaff00',
+              color:busy?'rgba(0,0,0,0.4)':'#040a00',
+              fontSize:14,fontWeight:700,fontFamily:'inherit',letterSpacing:.01,
+              transition:'all .18s',
+              boxShadow:busy?'none':'0 4px 20px rgba(170,255,0,0.28),0 1px 0 rgba(255,255,255,0.15) inset',
+              marginTop:2}}>
+            ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
+          </button>
+        </div>
+      </div>
+
+      <!-- Footer link -->
+      <p style=${{textAlign:'center',fontSize:12,color:'rgba(148,163,200,0.3)',marginTop:16}}>
+        ${tab==='login'
+          ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.7)',cursor:'pointer',fontSize:12,fontWeight:600,padding:'0 0 0 2px'}}>Create an account</button>`
+          :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.7)',cursor:'pointer',fontSize:12,fontWeight:600,padding:'0 0 0 2px'}}>Sign in</button>`}
+      </p>
+    </div>`);
 }
 
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
