@@ -4181,7 +4181,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam}){
+function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true}){
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
@@ -4198,12 +4198,14 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
     reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/></svg>`,
   };
   const adminNav=[
     {id:'dashboard',   label:'Dashboard'},
     {id:'projects',    label:'Projects'},
     {id:'tasks',       label:'Task Board'},
     {id:'messages',    label:'Channels'},
+    {id:'dm',          label:'Direct Messages'},
     {id:'tickets',     label:'Tickets'},
     {id:'timeline',    label:'Timeline Tracker'},
     {id:'productivity',label:'Dev Productivity'},
@@ -4215,11 +4217,15 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     {id:'projects',  label:'Projects'},
     {id:'tasks',     label:'Task Board'},
     {id:'messages',  label:'Channels'},
+    {id:'dm',        label:'Direct Messages'},
     {id:'tickets',   label:'Tickets'},
     {id:'timeline',  label:'Timeline'},
     {id:'reminders', label:'Reminders'},
   ];
-  const navItems=isAdminManager?adminNav:devNav;
+  // Filter DM from nav if disabled and not admin/manager
+  const navItems=(isAdminManager?adminNav:devNav).filter(it=>
+    it.id!=='dm'||(wsDmEnabled||isAdminManager)
+  );
 
   const themeIcon=dark
     ?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
@@ -8378,6 +8384,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [phase,setPhase]=useState('idle'); // idle | preview | in-call
   const [roomId,setRoomId]=useState(null);
   const [roomName,setRoomName]=useState('');
+  const [meetUrl,setMeetUrl]=useState(null); // Google Meet link for this huddle session
   const [participants,setParticipants]=useState([]);
   const participantsRef=useRef([]);
   const [muted,setMuted]=useState(false);
@@ -8757,6 +8764,13 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(!r||r.error){alert(r&&r.error||'Could not join.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
     const parts=r.participants||[];
     setRoomId(rid);setRoomName(r.name||rname||'Huddle');
+    // Generate a unique Google Meet link for this huddle session
+    // Uses room_id hash to create a consistent 10-char Meet code (xxx-yyyy-zzz format)
+    const mkMeet=(id)=>{
+      const h=id.replace(/[^a-z0-9]/gi,'').toLowerCase().padEnd(12,'x');
+      return 'https://meet.google.com/'+h.slice(0,3)+'-'+h.slice(3,7)+'-'+h.slice(7,11);
+    };
+    setMeetUrl(mkMeet(rid));
     setParticipants(parts);setPhase('in-call');setIncomingCall(null);
     setPopupPos(centerPos(780,540));
     playSound('notif');
@@ -8789,7 +8803,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     setHandRaised(false);setScreenSharing(false);setSpeaking({});
     if(chatPollRef.current)clearInterval(chatPollRef.current);
     setChatMsgs([]);setChatTxt('');setChatUnread(0);lastChatCountRef.current=0;setShowChat(false);
-    setRemoteScreenUid(null);setFloatingReactions([]);
+    setRemoteScreenUid(null);setFloatingReactions([]);setMeetUrl(null);
     if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;
     setTargetUser(null);setMinimized(false);setShowInvite(false);
   };
@@ -9113,6 +9127,29 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 <${Av} u=${u} size=${22}/>
               </div>`)}
           </div>`:null}
+        <!-- Google Meet Button -->
+        ${meetUrl?html`
+          <a href=${meetUrl} target="_blank" rel="noopener"
+            onClick=${e=>e.stopPropagation()}
+            title="Open this huddle in Google Meet"
+            style=${{
+              display:'flex',alignItems:'center',gap:5,
+              padding:'4px 10px',borderRadius:7,
+              background:'rgba(66,133,244,0.18)',
+              border:'1px solid rgba(66,133,244,0.35)',
+              color:'#7bb3f7',fontSize:10,fontWeight:700,
+              textDecoration:'none',cursor:'pointer',
+              transition:'all .15s',flexShrink:0,
+              letterSpacing:'.02em',marginLeft:4
+            }}
+            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.32)';e.currentTarget.style.borderColor='rgba(66,133,244,0.6)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.18)';e.currentTarget.style.borderColor='rgba(66,133,244,0.35)';}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style=${{flexShrink:0}}>
+              <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="#7bb3f7" strokeWidth="2" strokeLinecap="round"/>
+              <rect x="3" y="6" width="12" height="12" rx="2" stroke="#7bb3f7" strokeWidth="2"/>
+            </svg>
+            Meet
+          </a>`:null}
         <!-- Window controls -->
         <div style=${{display:'flex',gap:4,marginLeft:6,flexShrink:0}}>
           <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}}
@@ -9205,9 +9242,27 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         <!-- Toolbar -->
         <div style=${{background:'rgba(0,0,0,.65)',backdropFilter:'blur(14px)',padding:'8px 16px',display:'flex',alignItems:'center',gap:6,borderTop:'1px solid rgba(255,255,255,.05)',flexShrink:0}}>
           <!-- Signal indicator left -->
-          <button style=${{width:34,height:34,borderRadius:9,background:'rgba(255,255,255,.06)',border:'none',cursor:'default',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.4)',marginRight:'auto'}} title="Connection quality">
+          <div style=${{display:'flex',alignItems:'center',gap:6,marginRight:'auto'}}>
+            <button style=${{width:34,height:34,borderRadius:9,background:'rgba(255,255,255,.06)',border:'none',cursor:'default',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.4)'}} title="Connection quality">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="16" width="4" height="6" rx="1" opacity=".4"/><rect x="7" y="11" width="4" height="11" rx="1" opacity=".6"/><rect x="13" y="6" width="4" height="16" rx="1" opacity=".8"/><rect x="19" y="1" width="4" height="21" rx="1"/></svg>
           </button>
+          <!-- Google Meet quick-join (in toolbar) -->
+          ${meetUrl?html`
+            <a href=${meetUrl} target="_blank" rel="noopener"
+              title="Open in Google Meet"
+              style=${{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:8,
+                background:'rgba(66,133,244,0.15)',border:'1px solid rgba(66,133,244,0.3)',
+                color:'#93c5fd',fontSize:10,fontWeight:700,textDecoration:'none',
+                letterSpacing:'.02em',transition:'all .15s'}}
+              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.28)';}}
+              onMouseLeave=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.15)';}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round"/>
+                <rect x="3" y="6" width="12" height="12" rx="2" stroke="#93c5fd" strokeWidth="2"/>
+              </svg>
+              Google Meet
+            </a>`:null}
+          </div>
           <!-- Mic -->
           ${[
             {icon:muted?'mic-off':'mic',label:muted?'Unmute':'Mute',active:muted,color:'var(--rd2)',action:toggleMute,svgOn:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,svgOff:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`},
@@ -9763,7 +9818,7 @@ function App(){
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${baseView} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${v=>{setCol(v);try{localStorage.setItem('pf_col',v?'1':'0');}catch{}}} wsName=${wsName}
-        dark=${dark} setDark=${setDark}
+        dark=${dark} setDark=${setDark} wsDmEnabled=${wsDmEnabled}
         teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}
         teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
         callState=${{...callState,allUsers:data.users}}
