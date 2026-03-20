@@ -2196,19 +2196,55 @@ async function pollNotifications() {
 
 @app.route("/manifest.json")
 def serve_manifest():
-    """PWA manifest for installability."""
+    """PWA manifest — full desktop installability."""
     manifest = {
         "name": "ProjectFlowPro",
-        "short_name": "ProjectFlowPro",
-        "start_url": "/",
+        "short_name": "PFPro",
+        "description": "AI-powered team project management — tasks, huddles, timeline, tickets & more.",
+        "start_url": "/?action=login",
+        "scope": "/",
         "display": "standalone",
-        "background_color": "#111111",
-        "theme_color": "#aaff00",
+        "display_override": ["window-controls-overlay", "standalone"],
+        "background_color": "#ffffff",
+        "theme_color": "#1d4ed8",
+        "orientation": "landscape-primary",
+        "categories": ["productivity", "business", "collaboration"],
+        "lang": "en",
         "icons": [
-            {"src": "/favicon.ico", "sizes": "any", "type": "image/x-icon"}
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+            {"src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon"}
+        ],
+        "shortcuts": [
+            {"name": "Dashboard", "short_name": "Dashboard", "url": "/?action=login", "description": "Go to your dashboard"},
+            {"name": "New Task", "short_name": "New Task", "url": "/?action=login", "description": "Create a new task"},
+            {"name": "Projects", "short_name": "Projects", "url": "/?action=login", "description": "View all projects"}
+        ],
+        "screenshots": [
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "wide", "label": "ProjectFlowPro Dashboard"}
         ]
     }
     return jsonify(manifest)
+
+@app.route("/icon-192.png")
+def icon_192():
+    """Real PNG icon — 192x192 blue app icon."""
+    import base64
+    png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAEuklEQVR4nO3UQQ5TSRAEUS7ClTj/3IZZITWDRgJsV2b/eiHF3r8rw1++AAAAAAAAAAAAAAAAAAAAAAAAhPj67Z/vnDV9cxykx7DR9M1xkB7DRtM3x0F6DL/r75D+jQK4kPQYXh39jTGkb46D9BjePfwbQkjfHAfpMXxy/K0RpG+Og/QYPj3+xgjSN8dBegwT42+LIH1zHKTHMDX+pgjSN8dBegwCQJT0GBKkvzl9cxykxyAARNk2/oYI0jfHgQAEsBoBCGA1G8f/AwFAAALYjQAEsBoBCGA1AhDAagQggNWkRpCOIPnd6ZvjQAACWI0ABLCa5BBSEaS/OX1zHKTHIABESY9hOoL0twqgjPQYBIAo6TFMRpD+RgEUkh7DVATpbxNAKekxTESQ/iYBFJMew6cjSH+LAMpJj0EAS0kfodmnB9CiAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKPOTpL+tUQEUOUH6G9sUQJECmFcAJU6S/tYmBVBggvQ3tyiAAgWQUwBhk6S/vUEBhBWAAFYrAAGstYH0G6QVgABWK4Clw/8v6TcRwBKbSb+NAB7sTaTfSgAP8mbSbyeAy30C6TcUwIU+kfSbCuACN5B+YwGUuon0WwugyM2k314Ahl9B+hYCMPwK0rcRgPHHSd9IAIZfQfpmAjD8CtI3FIDxx0nfUgCGX0H6tgIw/ArStxbARcP/k997+7cJYGDMtwxkS+Sv3E8AFxz4b/jEP93TEICjerPvr7/ZlQE8jYnhe8OHBPAkEsP3nhcH8CTSw/euAoiQHrv3vTSA20mP21tfHMDtpActAgFESI94cwgCCJIerRAeFMBNpEcqhJ8RwCDpYYrgVwQwQHqMQvh/BPBB0uNrshUBfIj04BptRABvJj2yG2xCAG8iPaobbUAAQ4/Ie28ngDc8Iu+9nQDe8Ii893YCePEBeff96gNIPmJ6PE+w/XYCePEBeff9rggg8Yjp0TzJ5tsJ4MUH5N33uyaAqUdMD+XJNt7vqgAmHjE9kifbeLvrAvjUQ6bHscmm+10ZwLsfMT2IjbbcLxpAC+kxbDR9cxykx7DR9M1xkB7DRtM3x0F6DBtN3xwH6TFsNH1zHKTHsNH0zXGQHsNG0zfHQXoMG03fHAfpMWw0fXMcpMew0fTNcZAew0bTN8dBegwbTd8cB+kxbDR9cxykx7DR9M1xkB7DRtM3x0F6DBtN3xwH6TFsNH1zHKTHsNH0zXGQHsNG0zfHQXoMG03fHAfpMWw0fXMcpMew0fTNcZAew0bTN8dBegwbTd8cB+kxbDR9cxykx7DR9M1xkB7DRtM3x0F6DBtN3xwH6TFsNH1zHKTHsNH0zXGQHsNG0zfHQXoMG03fHAfpMWw0fXMcpMew0fTNAQAAAAAAAAAAAAAAAAAAAGAx/wJoKCsUOqYWXQAAAABJRU5ErkJggg=="
+    png_data = base64.b64decode(png_b64)
+    return Response(png_data, mimetype='image/png',
+        headers={'Cache-Control':'public,max-age=86400'})
+
+@app.route("/icon-512.png")
+def icon_512():
+    """Real PNG icon — 512x512 blue app icon."""
+    import base64
+    png_b64 = "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TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbqP6TaXb1bdzhXqI0u02qt9Uul19O1eohyjdbLP6baWb1bdzhXqI0q2eoH5j6Vb17VyhHqJ0oyep31q6UX07V6iHKL26J6rfXHp19e1coR6i9MqerH576ZXVt3OFeojSq8J/ArS3+nauUA9RekX8Wz0L6RXVt3OFeojS6fineibS6erbuUI9ROl0/FM9E+l09e1c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"
+    png_data = base64.b64decode(png_b64)
+    return Response(png_data, mimetype='image/png',
+        headers={'Cache-Control':'public,max-age=86400'})
 
 @app.route("/",defaults={"p":""})
 @app.route("/<path:p>")
@@ -2866,7 +2902,11 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>ProjectFlowProPro</title>
 <link rel="manifest" href="/manifest.json"/>
-<meta name="theme-color" content="#2563eb"/>
+<meta name="theme-color" content="#1d4ed8"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="ProjectFlowPro"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
 <script>
 (function(){
