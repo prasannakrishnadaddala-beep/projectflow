@@ -4,7 +4,6 @@ ProjectFlow v4.0
 Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 """
 import os, sys, json, hashlib, secrets, random, urllib.request, urllib.error
-import psycopg2, psycopg2.extras
 import socket, threading, time, webbrowser, mimetypes, base64, smtplib
 from datetime import datetime
 from functools import wraps
@@ -18,9 +17,79 @@ DATA_DIR   = "/data" if os.path.isdir("/data") else BASE_DIR
 JS_DIR     = os.path.join(BASE_DIR, "pf_static")
 UPLOAD_DIR = os.path.join(DATA_DIR, "pf_uploads")
 KEY_FILE   = os.path.join(DATA_DIR, ".pf_secret")
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/projectflow")
+
+# ── PostgreSQL via psycopg2 ──────────────────────────────────────────────────
+import psycopg2
+import psycopg2.extras
+
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("PGURL") or ""
+
+class _Row(dict):
+    """dict subclass that supports both row['col'] and row[index] access,
+    matching the sqlite3.Row interface used throughout the codebase."""
+    def __init__(self, cursor, row):
+        super().__init__(zip([d[0] for d in cursor.description], row))
+        self._list = list(row)
+    def __getitem__(self, key):
+        if isinstance(key, int): return self._list[key]
+        return super().__getitem__(key)
+    def keys(self): return list(super().keys())
+
+class _Cursor:
+    """Wraps psycopg2 cursor to match sqlite3 cursor interface."""
+    def __init__(self, pg_cursor):
+        self._c = pg_cursor
+        self.lastrowid = None
+        self.rowcount = 0
+    def execute(self, sql, params=()):
+        # Convert ? placeholders to %s for PostgreSQL
+        sql = sql.replace("?", "%s")
+        # Convert INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
+        sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO").rstrip()
+        if "INSERT OR IGNORE" in sql:
+            sql = sql + " ON CONFLICT DO NOTHING"
+        # Convert INSERT OR REPLACE → INSERT ... ON CONFLICT DO UPDATE
+        if "INSERT OR REPLACE INTO push_subscriptions" in sql:
+            sql = sql.replace("INSERT OR REPLACE INTO push_subscriptions",
+                              "INSERT INTO push_subscriptions")
+            sql = sql + " ON CONFLICT (workspace_id, endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, created=EXCLUDED.created"
+        self._c.execute(sql, params)
+        self.rowcount = self._c.rowcount
+        return self
+    def fetchone(self):
+        row = self._c.fetchone()
+        if row is None: return None
+        return _Row(self._c, row)
+    def fetchall(self):
+        rows = self._c.fetchall()
+        return [_Row(self._c, r) for r in rows]
+    def __iter__(self):
+        for row in self._c.fetchall():
+            yield _Row(self._c, row)
+
+class _DB:
+    """Wraps psycopg2 connection to match 'with get_db() as db:' pattern."""
+    def __init__(self, conn):
+        self._conn = conn
+    def execute(self, sql, params=()):
+        cur = _Cursor(self._conn.cursor())
+        cur.execute(sql, params)
+        return cur
+    def commit(self): self._conn.commit()
+    def close(self): self._conn.close()
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self._conn.rollback()
+        else:
+            self._conn.commit()
+        self._conn.close()
+        return False
 
 def get_secret_key():
+    # Prefer env var (Railway sets this); fall back to file for local dev
+    env_key = os.environ.get("SECRET_KEY","")
+    if len(env_key) >= 32: return env_key
     if os.path.exists(KEY_FILE):
         try:
             with open(KEY_FILE,"r") as f:
@@ -43,54 +112,8 @@ CORS(app, supports_credentials=True)
 
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#aaff00"]
 
-class _DB:
-    """Thin wrapper around a psycopg2 connection that mimics the SQLite
-    connection interface used throughout this codebase:
-      - db.execute(sql, params) → cursor (supports .fetchone() / .fetchall())
-      - db.executescript(sql)   → runs multiple statements separated by ';'
-      - 'with get_db() as db'   → commits on exit, rolls back on exception
-    Parameter placeholders are automatically converted from ? to %s.
-    """
-    def __init__(self, conn):
-        self._conn = conn
-        self._cur  = conn.cursor()
-
-    # ---- SQLite-compatible execute ----------------------------------------
-    def execute(self, sql, params=()):
-        sql = sql.replace("?", "%s")
-        self._cur.execute(sql, params)
-        return self._cur
-
-    # ---- SQLite executescript (used only in init_db) ----------------------
-    def executescript(self, sql):
-        for stmt in sql.split(";"):
-            stmt = stmt.strip()
-            if stmt:
-                self._cur.execute(stmt)
-
-    # ---- Context-manager support ------------------------------------------
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is None:
-            self._conn.commit()
-        else:
-            self._conn.rollback()
-        self._cur.close()
-        self._conn.close()
-        return False
-
-    # ---- Allow direct attribute access to the underlying connection -------
-    def commit(self):   self._conn.commit()
-    def rollback(self): self._conn.rollback()
-    def close(self):
-        self._cur.close()
-        self._conn.close()
-
-
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn = psycopg2.connect(DATABASE_URL)
     return _DB(conn)
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 def ts(): return datetime.utcnow().isoformat() + 'Z'
@@ -297,143 +320,166 @@ def send_web_push(subscription_info, payload_dict):
         print(f"[WebPush] Error: {e}")
         return False
 
-def push_notification_to_user(db, user_id, title, body, nav_url="/", tag=None):
-    """Send Web Push to all subscriptions for a given user.
-    Opens its own DB connection so it is safe to call from a background thread.
-    The 'db' parameter is accepted for API compatibility but not used.
-    """
-    payload = {"title": title, "body": body, "url": nav_url, "tag": tag or title}
+def push_notification_to_user(db_ignored, user_id, title, body, nav_url="/", tag=None):
+    """Send Web Push to all subscriptions for a given user (opens its own DB conn for thread safety)."""
     try:
-        with get_db() as _db:
-            subs = _db.execute(
-                "SELECT * FROM push_subscriptions WHERE user_id=?", (user_id,)
-            ).fetchall()
-            dead_ids = []
-            for sub in subs:
-                sub_info = {
-                    "endpoint": sub["endpoint"],
-                    "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
-                }
-                ok = send_web_push(sub_info, payload)
-                if not ok and sub["endpoint"]:
-                    dead_ids.append(sub["id"])
-            if dead_ids:
-                _db.execute(f"DELETE FROM push_subscriptions WHERE id IN ({','.join(['%s']*len(dead_ids))})", dead_ids)
-    except Exception as e:
-        print(f"[WebPush] DB error in push_notification_to_user: {e}")
+        db = get_db()
+    except Exception:
+        return
+    with db:
+        subs = db.execute(
+            "SELECT * FROM push_subscriptions WHERE user_id=?", (user_id,)
+        ).fetchall()
+    payload = {"title": title, "body": body, "url": nav_url, "tag": tag or title}
+    dead_ids = []
+    for sub in subs:
+        sub_info = {
+            "endpoint": sub["endpoint"],
+            "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
+        }
+        ok = send_web_push(sub_info, payload)
+        if not ok and sub["endpoint"]:
+            # If push fails (e.g. subscription expired), mark for cleanup
+            dead_ids.append(sub["id"])
+    if dead_ids:
+        db.execute(f"DELETE FROM push_subscriptions WHERE id IN ({','.join('?'*len(dead_ids))})", dead_ids)
 
 # ── DB Init & Migration ───────────────────────────────────────────────────────
 def init_db():
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     with get_db() as db:
-        # Create all tables (PostgreSQL-compatible)
-        db.execute("""CREATE TABLE IF NOT EXISTS workspaces (
-            id TEXT PRIMARY KEY, name TEXT, invite_code TEXT,
-            owner_id TEXT, ai_api_key TEXT, created TEXT,
-            smtp_server TEXT, smtp_port INTEGER, smtp_username TEXT,
-            smtp_password TEXT, from_email TEXT, email_enabled INTEGER DEFAULT 1)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, email TEXT,
-            password TEXT, role TEXT, avatar TEXT, color TEXT, created TEXT,
-            avatar_data TEXT, plain_password TEXT DEFAULT '')""")
-        db.execute("""CREATE TABLE IF NOT EXISTS projects (
-            id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, description TEXT,
-            owner TEXT, members TEXT DEFAULT '[]', start_date TEXT,
-            target_date TEXT, progress INTEGER DEFAULT 0, color TEXT, created TEXT,
-            team_id TEXT DEFAULT '')""")
-        db.execute("""CREATE TABLE IF NOT EXISTS tasks (
-            id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
-            project TEXT, assignee TEXT, priority TEXT, stage TEXT,
-            created TEXT, due TEXT, pct INTEGER DEFAULT 0, comments TEXT DEFAULT '[]',
-            team_id TEXT DEFAULT '')""")
-        db.execute("""CREATE TABLE IF NOT EXISTS files (
-            id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, size INTEGER,
-            mime TEXT, task_id TEXT, project_id TEXT, uploaded_by TEXT, ts TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS messages (
-            id TEXT PRIMARY KEY, workspace_id TEXT, sender TEXT,
-            project TEXT, content TEXT, ts TEXT, is_system INTEGER DEFAULT 0)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS direct_messages (
-            id TEXT PRIMARY KEY, workspace_id TEXT, sender TEXT,
-            recipient TEXT, content TEXT, read INTEGER DEFAULT 0, ts TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS notifications (
-            id TEXT PRIMARY KEY, workspace_id TEXT, type TEXT, content TEXT,
-            user_id TEXT, read INTEGER DEFAULT 0, ts TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS reminders (
-            id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
-            task_id TEXT, task_title TEXT, remind_at TEXT,
-            minutes_before INTEGER DEFAULT 10, fired INTEGER DEFAULT 0,
-            created TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS call_rooms (
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id TEXT PRIMARY KEY, name TEXT, invite_code TEXT,
+                owner_id TEXT, ai_api_key TEXT, created TEXT,
+                smtp_server TEXT, smtp_port INTEGER, smtp_username TEXT,
+                smtp_password TEXT, from_email TEXT, email_enabled INTEGER DEFAULT 1);
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, email TEXT,
+                password TEXT, role TEXT, avatar TEXT, color TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, description TEXT,
+                owner TEXT, members TEXT DEFAULT '[]', start_date TEXT,
+                target_date TEXT, progress INTEGER DEFAULT 0, color TEXT, created TEXT,
+                team_id TEXT DEFAULT '');
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
+                project TEXT, assignee TEXT, priority TEXT, stage TEXT,
+                created TEXT, due TEXT, pct INTEGER DEFAULT 0, comments TEXT DEFAULT '[]',
+                team_id TEXT DEFAULT '');
+            CREATE TABLE IF NOT EXISTS files (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, size INTEGER,
+                mime TEXT, task_id TEXT, project_id TEXT, uploaded_by TEXT, ts TEXT);
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY, workspace_id TEXT, sender TEXT,
+                project TEXT, content TEXT, ts TEXT);
+            CREATE TABLE IF NOT EXISTS direct_messages (
+                id TEXT PRIMARY KEY, workspace_id TEXT, sender TEXT,
+                recipient TEXT, content TEXT, read INTEGER DEFAULT 0, ts TEXT);
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY, workspace_id TEXT, type TEXT, content TEXT,
+                user_id TEXT, read INTEGER DEFAULT 0, ts TEXT);
+            CREATE TABLE IF NOT EXISTS reminders (
+                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+                task_id TEXT, task_title TEXT, remind_at TEXT,
+                minutes_before INTEGER DEFAULT 10, fired INTEGER DEFAULT 0,
+                created TEXT);
+            CREATE TABLE IF NOT EXISTS call_rooms (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
+                initiator TEXT, participants TEXT DEFAULT '[]',
+                status TEXT DEFAULT 'active', created TEXT);
+            CREATE TABLE IF NOT EXISTS teams (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
+                lead_id TEXT, member_ids TEXT DEFAULT '[]', created TEXT);
+            CREATE TABLE IF NOT EXISTS tickets (
+                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
+                type TEXT DEFAULT 'bug', priority TEXT DEFAULT 'medium',
+                status TEXT DEFAULT 'open', assignee TEXT, reporter TEXT,
+                project TEXT, tags TEXT DEFAULT '[]', created TEXT, updated TEXT,
+                team_id TEXT DEFAULT '');
+            CREATE TABLE IF NOT EXISTS ticket_comments (
+                id TEXT PRIMARY KEY, workspace_id TEXT, ticket_id TEXT,
+                user_id TEXT, content TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS call_signals (
+                id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
+                from_user TEXT, to_user TEXT, type TEXT, data TEXT,
+                consumed INTEGER DEFAULT 0, created TEXT);
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id TEXT PRIMARY KEY, user_id TEXT, workspace_id TEXT,
+                endpoint TEXT UNIQUE, p256dh TEXT, auth TEXT, created TEXT);
+        """)
+        # Add teams table if not exists (migration)
+        try: db.execute('''CREATE TABLE IF NOT EXISTS teams (
             id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
-            initiator TEXT, participants TEXT DEFAULT '[]',
-            status TEXT DEFAULT 'active', created TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS teams (
-            id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
-            lead_id TEXT, member_ids TEXT DEFAULT '[]', created TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS tickets (
-            id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
-            type TEXT DEFAULT 'bug', priority TEXT DEFAULT 'medium',
-            status TEXT DEFAULT 'open', assignee TEXT, reporter TEXT,
-            project TEXT, tags TEXT DEFAULT '[]', created TEXT, updated TEXT,
-            team_id TEXT DEFAULT '')""")
-        db.execute("""CREATE TABLE IF NOT EXISTS ticket_comments (
-            id TEXT PRIMARY KEY, workspace_id TEXT, ticket_id TEXT,
-            user_id TEXT, content TEXT, created TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS call_signals (
-            id TEXT PRIMARY KEY, workspace_id TEXT, room_id TEXT,
-            from_user TEXT, to_user TEXT, type TEXT, data TEXT,
-            consumed INTEGER DEFAULT 0, created TEXT)""")
-        db.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
-            id TEXT PRIMARY KEY, user_id TEXT, workspace_id TEXT,
-            endpoint TEXT UNIQUE, p256dh TEXT, auth TEXT, created TEXT)""")
-        # Column migrations — use DO $ ... $ blocks to suppress duplicate-column errors
-        for migration in [
-            "ALTER TABLE projects ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT ''",
-            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT ''",
-            "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT ''",
-            "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_system INTEGER DEFAULT 0",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT",
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT DEFAULT ''",
-            "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS smtp_server TEXT",
-            "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS smtp_port INTEGER DEFAULT 587",
-            "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS smtp_username TEXT",
-            "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS smtp_password TEXT",
-            "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS from_email TEXT",
-            "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS email_enabled INTEGER DEFAULT 1",
-        ]:
-            try: db.execute(migration)
-            except Exception: db._conn.rollback()
-        # Fix corrupted avatar column: move base64 image data to avatar_data
+            lead_id TEXT, member_ids TEXT DEFAULT '[]', created TEXT)''')
+        except: pass
+        # Add tickets tables if not exists (migration)
+        try: db.executescript('''
+            CREATE TABLE IF NOT EXISTS teams (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
+                lead_id TEXT, member_ids TEXT DEFAULT '[]', created TEXT);
+            CREATE TABLE IF NOT EXISTS tickets (
+                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
+                type TEXT DEFAULT 'bug', priority TEXT DEFAULT 'medium',
+                status TEXT DEFAULT 'open', assignee TEXT, reporter TEXT,
+                project TEXT, tags TEXT DEFAULT '[]', created TEXT, updated TEXT);
+            CREATE TABLE IF NOT EXISTS ticket_comments (
+                id TEXT PRIMARY KEY, workspace_id TEXT, ticket_id TEXT,
+                user_id TEXT, content TEXT, created TEXT);
+        ''')
+        except: pass
+        # Add team_id to projects/tasks/tickets if not exists (migration)
+        try: db.execute("ALTER TABLE projects ADD COLUMN team_id TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE tickets ADD COLUMN team_id TEXT DEFAULT ''")
+        except: pass
+        # Add team_id to tasks if not exists (migration)
+        try: db.execute("ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''")
+        except: pass
+        # Add is_system column to messages if not exists (migration)
+        try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
+        except: pass
+        # Add avatar_data column for profile photos
+        try: db.execute("ALTER TABLE users ADD COLUMN avatar_data TEXT")
+        except: pass
+        try: db.execute("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''")
+        except: pass
+        # Fix corrupted avatar column: if avatar contains base64 image data, move it to avatar_data and reset avatar to initials
         try:
-            _pat_end = "$')"
-            _avatar_sql = "SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%%' OR (length(avatar) > 10 AND avatar !~ '^[A-Z]{1,2}" + _pat_end
-            corrupted = db.execute(_avatar_sql).fetchall()
+            corrupted = db.execute("SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%%' OR (length(avatar) > 10 AND avatar !~ '^[A-Z]{1,2}$')").fetchall()
             for row in corrupted:
                 uid, name, av = row['id'], row['name'] or '', row['avatar'] or ''
                 initials = ''.join(w[0] for w in name.split() if w)[:2].upper() or '?'
                 if av.startswith('data:image'):
-                    db.execute("UPDATE users SET avatar=%s, avatar_data=%s WHERE id=%s", (initials, av, uid))
+                    db.execute("UPDATE users SET avatar=?, avatar_data=? WHERE id=?", (initials, av, uid))
                 else:
-                    db.execute("UPDATE users SET avatar=%s WHERE id=%s", (initials, uid))
+                    db.execute("UPDATE users SET avatar=? WHERE id=?", (initials, uid))
         except Exception as e:
             print(f"Avatar cleanup migration error: {e}")
-            db._conn.rollback()
-        # Seed demo workspace if none exists
+        # Add email configuration columns to workspaces (migration)
+        try: 
+            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_server TEXT")
+            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_port INTEGER DEFAULT 587")
+            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_username TEXT")
+            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_password TEXT")
+            db.execute("ALTER TABLE workspaces ADD COLUMN from_email TEXT")
+            db.execute("ALTER TABLE workspaces ADD COLUMN email_enabled INTEGER DEFAULT 1")
+        except: pass
+        # Migrate legacy data (no workspace_id)
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
+            # Check if legacy users exist (without workspace_id)
             legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
             ws_id = f"ws{int(datetime.now().timestamp()*1000)}"
             invite = secrets.token_hex(4).upper()
-            db.execute(
-                "INSERT INTO workspaces VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
-                (ws_id,"Demo Workspace",invite,"u1",None,ts(),None,587,None,None,None,1))
+            db.execute("INSERT OR IGNORE INTO workspaces VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (ws_id,"Demo Workspace",invite,"u1",None,ts(),None,587,None,None,None,1))
             if legacy_users:
                 for tbl in ["users","projects","tasks","files","messages","direct_messages","notifications"]:
-                    try: db.execute(f"UPDATE {tbl} SET workspace_id=%s WHERE workspace_id IS NULL",(ws_id,))
-                    except Exception: db._conn.rollback()
+                    try: db.execute(f"UPDATE {tbl} SET workspace_id=? WHERE workspace_id IS NULL",(ws_id,))
+                    except: pass
             else:
                 _seed_demo(db, ws_id)
-
 
 def _seed_demo(db, ws_id):
     for u in [
@@ -443,14 +489,14 @@ def _seed_demo(db, ws_id):
         ("u4","David Kim",   "david@dev.io",hash_pw("pass123"),"Developer","DK","#d97706"),
         ("u5","Eva Wilson",  "eva@dev.io",  hash_pw("pass123"),"Viewer",   "EW","#dc2626"),
     ]:
-        try: db.execute("INSERT INTO users VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",(u[0],ws_id,*u[1:],ts(),None,""))
+        try: db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",(u[0],ws_id,*u[1:],ts(),None))
         except: pass
     for p in [
         ("p1","E-Commerce Platform",   "Modern e-commerce with payment integration & inventory.",       "u1",'["u1","u2","u3","u4"]',"2025-01-15","2025-06-30",65,"#7c3aed"),
         ("p2","Mobile Banking App",    "Secure mobile banking with biometric auth & real-time transfers.","u2",'["u1","u2","u5"]',     "2025-02-01","2025-08-15",40,"#2563eb"),
         ("p3","AI Analytics Dashboard","Real-time analytics powered by ML for business intelligence.",   "u1",'["u1","u3","u4"]',     "2025-03-01","2025-09-30",20,"#059669"),
     ]:
-        try: db.execute("INSERT INTO projects VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",(p[0],ws_id,*p[1:],ts(),""))
+        try: db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",(p[0],ws_id,*p[1:],ts()))
         except: pass
     for t in [
         ("T-001","Design system setup",        "Configure design tokens and component library.",       "p1","u2","high",  "completed",  "2025-02-15",100),
@@ -467,7 +513,7 @@ def _seed_demo(db, ws_id):
         ("T-012","Chart components",           "Interactive visualization components.",               "p3","u4","medium","code_review","2025-06-15", 85),
         ("T-013","Data pipeline setup",        "ETL pipeline for real-time data ingestion.",          "p3","u2","high",  "blocked",    "2025-06-01", 30),
     ]:
-        try: db.execute("INSERT INTO tasks VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",(t[0],ws_id,t[1],t[2],t[3],t[4],t[5],t[6],ts(),t[7],t[8],"[]",""))
+        try: db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",(t[0],ws_id,t[1],t[2],t[3],t[4],t[5],t[6],ts(),t[7],t[8],"[]"))
         except: pass
     for m in [
         ("m1","u2","p1","Just pushed the auth API to staging!"),
@@ -475,16 +521,15 @@ def _seed_demo(db, ws_id):
         ("m3","u4","p1","@alice Can you review the product catalog PR?"),
         ("m4","u1","p1","Sure! Checking it after standup."),
     ]:
-        try: db.execute("INSERT INTO messages VALUES (%s,%s,%s,%s,%s,%s,%s)",(m[0],ws_id,m[1],m[2],m[3],ts(),0))
+        try: db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?)",(m[0],ws_id,m[1],m[2],m[3],ts()))
         except: pass
     for n in [
         ("n1","task_assigned","You have been assigned to Cart & checkout flow","u4",0),
         ("n2","status_change","Task Payment gateway moved to Code Review","u2",0),
         ("n3","comment","Bob commented on Product catalog UI","u4",1),
     ]:
-        try: db.execute("INSERT INTO notifications VALUES (%s,%s,%s,%s,%s,%s,%s)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts()))
+        try: db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts()))
         except: pass
-
 
 def login_required(f):
     @wraps(f)
@@ -539,16 +584,16 @@ def register():
         return jsonify({"error":"Invalid mode"}),400
     try:
         with get_db() as db:
-            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (uid,ws_id,d["name"],d["email"],hash_pw(d["password"]),
-                        d.get("role","Developer"),av,c,ts(),None,""))
+                        d.get("role","Developer"),av,c,ts(),None))
             session.permanent=True
             session["user_id"]=uid
             session["workspace_id"]=ws_id
             return jsonify({"id":uid,"workspace_id":ws_id,"name":d["name"],"email":d["email"],
                             "role":d.get("role","Developer"),"avatar":av,"color":c})
     except Exception as e:
-        if "unique" in str(e).lower() or "duplicate" in str(e).lower(): return jsonify({"error":"Email already registered"}),400
+        if "UNIQUE" in str(e): return jsonify({"error":"Email already registered"}),400
         return jsonify({"error":str(e)}),500
 
 @app.route("/api/auth/me")
@@ -669,7 +714,7 @@ def add_user():
             return jsonify({"id":uid,"workspace_id":wid(),"name":d["name"],
                             "email":d["email"],"role":d.get("role","Developer"),"avatar":av,"color":c})
     except Exception as e:
-        if "unique" in str(e).lower() or "duplicate" in str(e).lower(): return jsonify({"error":"Email already in use"}),400
+        if "UNIQUE" in str(e): return jsonify({"error":"Email already in use"}),400
         return jsonify({"error":str(e)}),500
 
 @app.route("/api/users/<uid>",methods=["PUT"])
@@ -856,7 +901,8 @@ def next_task_id(db, ws):
     import time
     base = int(time.time() * 1000)
     # Also embed a sequential number for readability
-    count=db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=?",(ws,)).fetchone()["cnt"]
+    row=db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=?",(ws,)).fetchone()
+    count=row['cnt'] if row else 0
     return f"T-{count+1:03d}-{base % 10000}"
 
 @app.route("/api/tasks",methods=["POST"])
@@ -1498,8 +1544,8 @@ def send_signal(room_id):
                    (sid,wid(),room_id,session["user_id"],d.get("to_user",""),
                     d.get("type",""),json.dumps(d.get("data",{})),0,ts()))
         # Clean up old consumed signals (keep last 200 per room)
-        old=db.execute("SELECT id FROM call_signals WHERE room_id=? AND consumed=1 ORDER BY created DESC OFFSET 200",(room_id,)).fetchall()
-        if old: db.execute(f"DELETE FROM call_signals WHERE id IN ({','.join(['%s']*len(old))})",[r['id'] for r in old])
+        old=db.execute("SELECT id FROM call_signals WHERE room_id=? AND consumed=1 ORDER BY created DESC LIMIT -1 OFFSET 200",(room_id,)).fetchall()
+        if old: db.execute(f"DELETE FROM call_signals WHERE id IN ({','.join('?'*len(old))})",[r['id'] for r in old])
         return jsonify({"ok":True,"id":sid})
 
 @app.route("/api/calls/<room_id>/signals", methods=["GET"])
@@ -1509,7 +1555,7 @@ def get_signals(room_id):
         rows=db.execute("""SELECT * FROM call_signals WHERE workspace_id=? AND room_id=? AND to_user=? AND consumed=0
             ORDER BY created LIMIT 50""",(wid(),room_id,session["user_id"])).fetchall()
         ids=[r["id"] for r in rows]
-        if ids: db.execute(f"UPDATE call_signals SET consumed=1 WHERE id IN ({','.join(['%s']*len(ids))})",ids)
+        if ids: db.execute(f"UPDATE call_signals SET consumed=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
         return jsonify([dict(r) for r in rows])
 
 @app.route("/api/calls/<room_id>/ping", methods=["POST"])
@@ -1531,7 +1577,7 @@ def due_reminders():
             AND fired=0 AND remind_at <= ?""",(wid(),session["user_id"],now)).fetchall()
         ids=[r["id"] for r in rows]
         if ids:
-            db.execute(f"UPDATE reminders SET fired=1 WHERE id IN ({','.join(['%s']*len(ids))})",ids)
+            db.execute(f"UPDATE reminders SET fired=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
         return jsonify([dict(r) for r in rows])
 
 # ── Notifications ─────────────────────────────────────────────────────────────
@@ -1582,14 +1628,13 @@ def push_subscribe():
         return jsonify({"error": "endpoint required"}), 400
     sub_id = f"ps{int(datetime.now().timestamp()*1000)}"
     with get_db() as db:
-        db.execute("""INSERT INTO push_subscriptions
+        db.execute("""INSERT OR REPLACE INTO push_subscriptions
             (id, user_id, workspace_id, endpoint, p256dh, auth, created)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (endpoint) DO UPDATE SET
-                user_id=EXCLUDED.user_id, workspace_id=EXCLUDED.workspace_id,
-                p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, created=EXCLUDED.created
-            """, (sub_id, session["user_id"], wid(),
-                  endpoint, keys.get("p256dh",""), keys.get("auth",""), ts()))
+            VALUES (
+                COALESCE((SELECT id FROM push_subscriptions WHERE endpoint=?), ?),
+                ?, ?, ?, ?, ?, ?
+            )""", (endpoint, sub_id, session["user_id"], wid(),
+                   endpoint, keys.get("p256dh",""), keys.get("auth",""), ts()))
     return jsonify({"ok": True})
 
 @app.route("/api/push/unsubscribe", methods=["POST"])
@@ -1696,11 +1741,11 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
             with get_db() as db:
                 if atype=="create_task":
                     tid=next_task_id(db,wid())
-                    db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                                (tid,wid(),act.get("title","New Task"),act.get("description",""),
                                 act.get("project",""),act.get("assignee",""),
                                 act.get("priority","medium"),act.get("stage","backlog"),
-                                ts(),act.get("due",""),0,"[]",""))
+                                ts(),act.get("due",""),0,"[]"))
                     action_results.append({"type":"create_task","id":tid,"title":act.get("title")})
                 elif atype=="update_task":
                     tid=act.get("task_id","")
@@ -1713,10 +1758,10 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
                 elif atype=="create_project":
                     pid=f"p{int(datetime.now().timestamp()*1000)}"
                     mems=act.get("members",[session["user_id"]])
-                    db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                                (pid,wid(),act.get("name","New Project"),act.get("description",""),
                                 session["user_id"],json.dumps(mems),"",act.get("target_date",""),0,
-                                act.get("color","#aaff00"),ts(),""))
+                                act.get("color","#aaff00"),ts()))
                     action_results.append({"type":"create_project","id":pid,"name":act.get("name")})
                 elif atype=="eod_report":
                     rows=db.execute("SELECT t.*,p.name as pname FROM tasks t LEFT JOIN projects p ON t.project=p.id WHERE t.workspace_id=?",(wid(),)).fetchall()
@@ -1778,9 +1823,9 @@ def import_csv():
                     else:
                         proj_id = f"p{int(datetime.now().timestamp()*1000)+i}"
                         db.execute(
-                            "INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                            "INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                             (proj_id, wid(), proj_name, "", session["user_id"],
-                             json.dumps([session["user_id"]]), "", "", 0, "#aaff00", ts(), "")
+                             json.dumps([session["user_id"]]), "", "", 0, "#aaff00", ts())
                         )
                         created_projects += 1
                 # --- Task creation ---
@@ -1806,9 +1851,9 @@ def import_csv():
                     if u: assignee_id = u["id"]
                     else: assignee_id = ""
                 tid = next_task_id(db, wid())
-                db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                            (tid, wid(), title, row.get("description",""), proj_id,
-                            assignee_id, pri, stage, ts(), due, pct, "[]", ""))
+                            assignee_id, pri, stage, ts(), due, pct, "[]"))
                 created_tasks += 1
             except Exception as e:
                 errors.append(f"Row {i+2}: {e}")
@@ -8526,7 +8571,7 @@ if __name__=="__main__":
         print("  ⚠ Some libraries failed. Check your internet connection.")
     port=find_free_port(5000)
     print(f"\n  ✓ Running at  http://localhost:{port}")
-    print(f"  ✓ Database:   {DATABASE_URL.split('@')[-1]}")
+    print(f"  ✓ Database:   {DB}")
     print(f"  ✓ Uploads:    {UPLOAD_DIR}")
     print(f"\n  Demo: alice@dev.io / pass123 (Admin)")
     print(f"  New company? Click 'Create Account' → 'New Workspace'")
