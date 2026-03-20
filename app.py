@@ -2303,7 +2303,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:56px;display:flex;ali
 .m-card-t{font-size:.66rem;font-weight:500;color:var(--tx);margin-bottom:5px;line-height:1.4;}
 .m-pill{display:inline-block;font-size:.54rem;padding:2px 5px;border-radius:100px;font-weight:600;}
 .pill-h{background:rgba(239,68,68,.08);color:#ef4444;}
-.pill-m{background:rgba(245,158,11,.08);color:#f59e0b;}
+.pill-m{background:rgba(180,83,9,0.10);color:#f59e0b;}
 .pill-d{background:rgba(37,99,235,.08);color:#2563eb;}
 .pill-ok{background:rgba(34,197,94,.08);color:#16a34a;}
 .m-prog{height:2px;background:#f1f5f9;border-radius:100px;margin-top:6px;}
@@ -2409,7 +2409,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
       <li><a href="#features">Features</a></li>
       <li><a href="#modules">Modules</a></li>
       <li><a href="#how">How it works</a></li>
-      <li><a href="/?action=login" class="nav-pill">Admin Login</a></li>
+      
     </ul>
     <div class="nav-cta">
       <a href="/?action=login" class="btn btn-outline">Sign In</a>
@@ -3041,68 +3041,68 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
 /* === DARK THEME (default) — precise HubSpot CRM workspace colours === */
 :root{
-  --bg:#f0f6ff;
+  --bg:#eef2f7;
   --sf:#ffffff;
   --sf2:#f1f5f9;
-  --sf3:#e8f0fe;
-  --bd:rgba(37,99,235,0.14);
-  --bd2:rgba(0,0,0,0.07);
+  --sf3:#e2e8f0;
+  --bd:rgba(15,23,42,0.12);
+  --bd2:rgba(15,23,42,0.08);
   --tx:#0a0f1e;
-  --tx2:#334155;
-  --tx3:#64748b;
+  --tx2:#1e293b;
+  --tx3:#475569;
   --sb:#0f172a;
   --sb2:#1e293b;
   --sb3:#334155;
   --sbt:#94a3b8;
-  --ac:#2563eb;
-  --ac2:#1d4ed8;
-  --ac3:rgba(37,99,235,0.10);
-  --ac4:rgba(37,99,235,0.06);
+  --ac:#1d4ed8;
+  --ac2:#1e40af;
+  --ac3:rgba(29,78,216,0.10);
+  --ac4:rgba(29,78,216,0.06);
   --ac-tx:#ffffff;
-  --rd:#dc2626;
-  --rd2:#ef4444;
-  --gn:#16a34a;
-  --gn2:#22c55e;
-  --am:#d97706;
-  --cy:#0891b2;
-  --pu:#7c3aed;
-  --or:#ea580c;
-  --pk:#db2777;
-  --sh:0 1px 3px rgba(37,99,235,0.08),0 2px 8px rgba(0,0,0,0.06);
-  --sh2:0 4px 16px rgba(37,99,235,0.12),0 8px 32px rgba(0,0,0,0.08);
+  --rd:#b91c1c;
+  --rd2:#dc2626;
+  --gn:#15803d;
+  --gn2:#16a34a;
+  --am:#b45309;
+  --cy:#0e7490;
+  --pu:#6d28d9;
+  --or:#c2410c;
+  --pk:#be185d;
+  --sh:0 1px 3px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.07);
+  --sh2:0 4px 16px rgba(0,0,0,0.12),0 8px 32px rgba(0,0,0,0.08);
   --sh3:0 0 0 1px var(--bd);
 }
 
 /* === LIGHT THEME — via .lm on body. Cards: white on #ebebeb canvas === */
 .lm{
-  --bg:#f0f6ff;
+  --bg:#eef2f7;
   --sf:#ffffff;
   --sf2:#f1f5f9;
-  --sf3:#e8f0fe;
-  --bd:rgba(37,99,235,0.14);
-  --bd2:rgba(0,0,0,0.07);
+  --sf3:#e2e8f0;
+  --bd:rgba(15,23,42,0.12);
+  --bd2:rgba(15,23,42,0.08);
   --tx:#0a0f1e;
-  --tx2:#334155;
-  --tx3:#64748b;
+  --tx2:#1e293b;
+  --tx3:#475569;
   --sb:#0f172a;
   --sb2:#1e293b;
   --sb3:#334155;
   --sbt:#94a3b8;
-  --ac:#2563eb;
-  --ac2:#1d4ed8;
-  --ac3:rgba(37,99,235,0.10);
-  --ac4:rgba(37,99,235,0.06);
+  --ac:#1d4ed8;
+  --ac2:#1e40af;
+  --ac3:rgba(29,78,216,0.10);
+  --ac4:rgba(29,78,216,0.06);
   --ac-tx:#ffffff;
-  --rd:#dc2626;
-  --rd2:#ef4444;
-  --gn:#16a34a;
-  --gn2:#22c55e;
-  --am:#d97706;
-  --cy:#0891b2;
-  --pu:#7c3aed;
-  --or:#ea580c;
-  --pk:#db2777;
-  --sh:0 1px 3px rgba(37,99,235,0.08),0 2px 8px rgba(0,0,0,0.06);
+  --rd:#b91c1c;
+  --rd2:#dc2626;
+  --gn:#15803d;
+  --gn2:#16a34a;
+  --am:#b45309;
+  --cy:#0e7490;
+  --pu:#6d28d9;
+  --or:#c2410c;
+  --pk:#be185d;
+  --sh:0 1px 3px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.07);
   --sh2:0 4px 16px rgba(0,0,0,.10),0 8px 32px rgba(0,0,0,.07);
   --sh3:0 0 0 1px var(--bd);
 }
@@ -3160,9 +3160,9 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.45;f
 .bp:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .bg{background:transparent;color:var(--tx2)!important;border:1px solid var(--bd)}
 .bg:hover{background:var(--sf2);color:var(--tx)!important;border-color:var(--tx3)}
-.brd{background:rgba(255,68,68,.08);color:var(--rd)!important;border:1px solid rgba(255,68,68,.2)}
+.brd{background:rgba(185,28,28,0.10);color:var(--rd)!important;border:1px solid rgba(255,68,68,.2)}
 .brd:hover{background:rgba(255,68,68,.14)}
-.bam{background:rgba(245,158,11,.08);color:var(--am)!important;border:1px solid rgba(245,158,11,.25)}
+.bam{background:rgba(180,83,9,0.10);color:var(--am)!important;border:1px solid rgba(245,158,11,.25)}
 .bam:hover{background:rgba(245,158,11,.16)}
 .bdk{background:var(--sb);color:#fff!important;border:1px solid var(--bd)}
 .bdk:hover{background:var(--sb2);transform:translateY(-1px)}
@@ -3935,7 +3935,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
         <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18,padding:'2px 6px',borderRadius:6,lineHeight:1}} title="Back">←</button>
           <div style=${{flex:1,minWidth:0}}>
-            <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
+            <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
             ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:
               html`<div style=${{fontSize:10,color:'var(--tx3)'}}>${members.length} members</div>`}
           </div>
@@ -4054,7 +4054,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
     <div style=${{width:240,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
       <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
         <div>
-          <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>👥 Teams</span>
+          <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>👥 Teams</span>
           ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',marginTop:2}}>Viewing: <b>${activeTeam.name}</b></div>`:html`<div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>All workspace data</div>`}
         </div>
         <div style=${{display:'flex',gap:5,alignItems:'center'}}>
@@ -4208,7 +4208,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             ${!isAdminManager?html`<span style=${{color:'rgba(255,255,255,.3)',fontWeight:400}}>My Team</span>`:null}
             ${activeTeam.name}
           </div>`
-          :html`<div style=${{fontSize:10,color:'rgba(148,163,184,0.7)'}}>Workspace</div>`}
+          :html`<div style=${{fontSize:10,color:'rgba(203,213,225,0.6)'}}>Workspace</div>`}
         </div>`:null}
       </div>
 
@@ -4225,7 +4225,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
               padding:col?'10px 0':'9px 10px',
               borderRadius:9,border:'none',cursor:'pointer',
               background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent',
-              color:baseView===it.id?'var(--ac)':'rgba(255,255,255,.45)',
+              color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)',
               fontSize:12,fontWeight:baseView===it.id?700:500,
               transition:'all .12s',textAlign:'left',
               borderLeft:baseView===it.id&&!col?'2px solid var(--ac)':'2px solid transparent',
@@ -4264,9 +4264,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             ${!col?html`<span style=${{fontSize:11,fontWeight:700}}>${fmtTime(callState.elapsed||0)}</span>`:null}
           </button>`:null}
         <button title=${dark?'Light Mode':'Dark Mode'} onClick=${()=>{setDark(d=>{const n=!d;try{localStorage.setItem('pf_dark',n?'1':'0');}catch{}return n;})}}
-          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.35)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
+          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(203,213,225,0.65)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
           onMouseEnter=${e=>{e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}>
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.65)';}}>
           <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}}>${themeIcon}</span>
           ${!col?html`<span style=${{fontSize:12}}>${dark?'Light Mode':'Dark Mode'}</span>`:null}
         </button>
@@ -4282,9 +4282,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             ${!col?html`<span style=${{fontSize:12}}>Settings</span>`:null}
           </button>`:null}
         <button title=${col?'Sign out':''} onClick=${onLogout}
-          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.3)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
+          style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(203,213,225,0.55)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
           onMouseEnter=${e=>{e.currentTarget.style.background='rgba(239,68,68,.1)';e.currentTarget.style.color='#f87171';}}
-          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.3)';}}>
+          onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.55)';}}>
           <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>↪</span>
           ${!col?html`<span style=${{fontSize:12}}>Sign out</span>`:null}
         </button>
@@ -4405,7 +4405,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
             ${showNP?html`
               <div style=${{position:'absolute',top:38,right:0,width:320,maxHeight:400,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,boxShadow:'var(--sh2)',zIndex:3000,overflow:'hidden',display:'flex',flexDirection:'column'}}>
                 <div style=${{padding:'10px 13px 8px',borderBottom:'1px solid var(--bd)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
-                  <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Notifications ${unread>0?html`<span style=${{color:'var(--ac)',fontSize:11}}>(${unread})</span>`:null}</span>
+                  <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>Notifications ${unread>0?html`<span style=${{color:'var(--ac)',fontSize:11}}>(${unread})</span>`:null}</span>
                   <div style=${{display:'flex',gap:5}}>
                     ${unread>0?html`<button class="btn bg" style=${{fontSize:10,padding:'2px 7px',height:20}} onClick=${onMarkAllRead}>✓ Mark all read</button>`:null}
                     <button class="btn brd" style=${{fontSize:10,padding:'2px 7px',height:20}} onClick=${()=>{onClearAll&&onClearAll();setShowNP(false);}}>Clear all</button>
@@ -5098,7 +5098,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
                   onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='var(--sh)';}}
                   onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}>
                   <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:7}}>
-                    <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',flex:1,marginRight:6,lineHeight:1.3}}>${p.name}</h3>
+                    <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',flex:1,marginRight:6,lineHeight:1.3}}>${p.name}</h3>
                     <span class="badge" style=${{background:p.color+'22',color:p.color,flexShrink:0,fontSize:9}}>${pt.length} tasks</span>
                   </div>
                   <p style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.5,marginBottom:9,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
@@ -5179,7 +5179,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
                     <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)',flexShrink:0,minWidth:24}}>${pc}%</span>
                   </div>
                   <!-- Stats -->
-                  <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--tx)'}}>${pt.length}</div>
+                  <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>${pt.length}</div>
                   <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--gn)'}}>${done}</div>
                   <div style=${{textAlign:'center',fontSize:13,fontWeight:700,color:'var(--am)'}}>${pt.length-done}</div>
                   <!-- Date -->
@@ -5396,7 +5396,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
           </div>`:null}
           <button class="btn bp" style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}} onClick=${()=>setNewT(true)}>+ New Task</button>
         </div>
-        ${csvResult?html`<div style=${{marginTop:8,padding:'8px 12px',borderRadius:8,fontSize:12,background:csvResult.error?'rgba(255,68,68,.08)':'rgba(62,207,110,.08)',border:'1px solid '+(csvResult.error?'rgba(255,68,68,.2)':'rgba(62,207,110,.2)'),color:csvResult.error?'var(--rd)':'var(--gn)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        ${csvResult?html`<div style=${{marginTop:8,padding:'8px 12px',borderRadius:8,fontSize:12,background:csvResult.error?'rgba(185,28,28,0.10)':'rgba(21,128,61,0.12)',border:'1px solid '+(csvResult.error?'rgba(255,68,68,.2)':'rgba(62,207,110,.2)'),color:csvResult.error?'var(--rd)':'var(--gn)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <span>${csvResult.error?'✕ '+csvResult.error:'✓ Imported '+csvResult.created_tasks+' task(s)'+(csvResult.created_projects>0?' & '+csvResult.created_projects+' project(s)':'')+(csvResult.errors&&csvResult.errors.length?' · '+csvResult.errors.length+' skipped':'')}</span>
           <button class="btn bg" style=${{padding:'3px 8px',fontSize:10}} onClick=${()=>setCsvResult(null)}>✕</button>
         </div>`:null}
@@ -5592,7 +5592,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
   const myT=t.filter(x=>x.assignee===cu.id);
   const myActiveTasks=myT.filter(x=>x.stage!=='completed').sort((a,b)=>new Date(b.created||0)-new Date(a.created||0));
   const done=t.filter(x=>x.stage==='completed').length;
-  const active=t.filter(x=>x.stage!=='completed'&&x.stage!=='backlog').length;
+  const active=t.filter(x=>x.stage!=='completed').length;
   const blocked=t.filter(x=>x.stage==='blocked').length;
   const [tickets,setTickets]=useState([]);
   useEffect(()=>{
@@ -5612,14 +5612,14 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
   ];
   const stats=[
     {label:'Total Projects',val:p.length,color:'var(--ac)',bg:'var(--ac3)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
-    {label:'Active Tasks',val:active,color:'var(--cy)',bg:'rgba(34,211,238,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks:stage:development'},
-    {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(62,207,110,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'},
-    {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(255,68,68,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'},
-    {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(245,158,11,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'},
-    {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(167,139,250,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'},
-    {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(34,211,238,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'},
-    {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(245,158,11,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'},
-    {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(251,146,60,.08)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'},
+    {label:'Active Tasks',val:active,color:'var(--ac)',bg:'var(--ac3)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
+    {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'},
+    {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'},
+    {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'},
+    {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'},
+    {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'},
+    {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'},
+    {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'},
   ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
@@ -5628,7 +5628,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
         <${Av} u=${cu} size=${32}/>
         <div style=${{flex:1,minWidth:0}}>
           <div style=${{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-            <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</span>
+            <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</span>
             ${activeTeam?html`
               <span style=${{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 8px',background:'var(--ac3)',border:'1px solid var(--ac)',borderRadius:20,fontSize:10,fontWeight:600,color:'var(--ac)',flexShrink:0}}>
                 <div style=${{width:5,height:5,borderRadius:1,background:'var(--ac)'}}></div>
@@ -5711,7 +5711,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
       <!-- Priority split + Project Progress + My Tasks -->
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
-          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:11}}>Priority Split</h3>
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
           <${RC.ResponsiveContainer} width="100%" height=${120}>
             <${RC.PieChart}>
               <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4} cursor="pointer"
@@ -5733,7 +5733,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
         </div>
         <div class="card" style=${{display:'flex',flexDirection:'column'}}>
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',margin:0}}>Project Progress</h3>
+            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',margin:0}}>Project Progress</h3>
             <button class="btn bg" style=${{fontSize:10,padding:'2px 9px',height:22}} onClick=${()=>onNav('projects')}>View All</button>
           </div>
           <div style=${{flex:1,overflowY:'auto',maxHeight:220}}>
@@ -5755,7 +5755,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
         </div>
         <div class="card">
           <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',margin:0}}>My Active Tasks</h3>
+            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',margin:0}}>My Active Tasks</h3>
             ${myActiveTasks.filter(x=>x.due&&new Date(x.due)<new Date()).length>0?html`
               <span style=${{fontSize:10,color:'var(--rd)',fontWeight:700,background:'rgba(248,113,113,.1)',padding:'2px 8px',borderRadius:10}}>
                 ⚠ ${myActiveTasks.filter(x=>x.due&&new Date(x.due)<new Date()).length} overdue
@@ -5850,7 +5850,7 @@ function TimelineView({cu,tasks,projects,onNav}){
         <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
           <div>
             <h2 style=${{fontSize:15,fontWeight:800,color:'var(--tx)',display:'flex',alignItems:'center',gap:7,margin:0}}>📅 Project Timeline Tracker</h2>
-            <p style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>Days spent vs. remaining — based on today</p>
+            <p style=${{fontSize:11,color:'var(--tx2)',marginTop:2,fontWeight:500}}>Days spent vs. remaining — based on today</p>
           </div>
           <span style=${{fontSize:11,color:'var(--tx3)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:7,padding:'4px 10px',fontFamily:'monospace',flexShrink:0}}>
             ${now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}
@@ -6168,7 +6168,7 @@ function ProductivityView({cu,tasks,projects,users}){
         ${tab==='chart'&&!selDev?html`
           <div style=${{padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
             <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
-              <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:14}}>Task Distribution per Developer</h3>
+              <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:14}}>Task Distribution per Developer</h3>
               <${RC.ResponsiveContainer} width="100%" height=${Math.max(200,filtered.length*28)}>
                 <${RC.BarChart} data=${chartData} layout="vertical" barSize=${14} margin=${{top:0,right:30,bottom:0,left:60}}>
                   <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" horizontal=${false}/>
@@ -6279,7 +6279,7 @@ function MessagesView({projects,users,cu,tasks}){
     return()=>clearInterval(id);
   },[]);
 
-  const [pid,setPid]=useState((safe(projects)[0]&&safe(projects)[0].id)||'');
+  const [pid,setPid]=useState('');
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
   const [showInfo,setShowInfo]=useState(false);
   const [chanSearch,setChanSearch]=useState('');
@@ -7282,7 +7282,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
             <!-- Info -->
             <div style=${{flex:1,minWidth:0}}>
               <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
-                <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${t.title}</span>
+                <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${t.title}</span>
                 <span style=${{fontSize:10,padding:'1px 7px',borderRadius:5,background:sc.color+'22',color:sc.color,fontWeight:700,flexShrink:0}}>${sc.icon} ${sc.label}</span>
               </div>
               <div style=${{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
@@ -7366,7 +7366,7 @@ function WorkspaceSettings({cu,onReload}){
       <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',marginBottom:20}}>⚙ Workspace Settings</h2>
 
       <div class="card" style=${{marginBottom:16}}>
-        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🎨 Theme & Accent Color</h3>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🎨 Theme & Accent Color</h3>
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Choose a preset or set a custom accent color for the UI.</p>
         <div style=${{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',marginBottom:12}}>
           ${[
@@ -7426,7 +7426,7 @@ function WorkspaceSettings({cu,onReload}){
       </div>
 
       <div class="card" style=${{marginBottom:16}}>
-        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:16}}>🏢 Workspace</h3>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:16}}>🏢 Workspace</h3>
         <div style=${{display:'flex',flexDirection:'column',gap:12}}>
           <div><label class="lbl">Workspace Name</label><input class="inp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>
           <div><label class="lbl">Workspace ID</label><div style=${{fontSize:12,color:'var(--tx3)',fontFamily:'monospace',padding:'8px 12px',background:'var(--sf2)',borderRadius:8}}>${ws.id}</div></div>
@@ -7434,10 +7434,10 @@ function WorkspaceSettings({cu,onReload}){
       </div>
 
       <div class="card" style=${{marginBottom:16}}>
-        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🔗 Invite Code</h3>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🔗 Invite Code</h3>
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Share this code with teammates to join your workspace.</p>
         <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(170,255,0,.12),rgba(167,139,250,.08))',borderRadius:12,border:'1px solid rgba(170,255,0,.18)'}}>
+          <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(170,255,0,.12),rgba(109,40,217,0.10))',borderRadius:12,border:'1px solid rgba(170,255,0,.18)'}}>
             <div style=${{fontSize:28,fontWeight:700,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:4}}>${ws.invite_code}</div>
           </div>
           <div style=${{display:'flex',flexDirection:'column',gap:8}}>
@@ -7448,7 +7448,7 @@ function WorkspaceSettings({cu,onReload}){
       </div>
 
       <div class="card" style=${{marginBottom:16}}>
-        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🤖 AI Assistant</h3>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🤖 AI Assistant</h3>
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Paste your Anthropic API key to enable the AI assistant. The key is stored securely in your workspace only.</p>
         <div><label class="lbl">Anthropic API Key</label>
           <div style=${{position:'relative'}}>
@@ -7464,7 +7464,7 @@ function WorkspaceSettings({cu,onReload}){
 
       <div class="card" style=${{marginBottom:16}}>
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>🔐 Role Permissions</h3>
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>🔐 Role Permissions</h3>
           <button class="btn brd" style=${{fontSize:11,padding:'4px 10px'}} onClick=${resetPerms}>↺ Reset defaults</button>
         </div>
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Click checkboxes to toggle permissions per role. Admin always has full access.</p>
@@ -7503,7 +7503,7 @@ function WorkspaceSettings({cu,onReload}){
       <div class="card" style=${{marginBottom:16}}>
         <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16}}>
           <div style=${{flex:1}}>
-            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🔐 Two-Factor Login (OTP)</h3>
+            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🔐 Two-Factor Login (OTP)</h3>
             <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>When enabled, all workspace members must verify their identity with a 6-digit code sent to their email after entering their password. Requires SMTP to be configured above.</p>
             <div style=${{padding:'9px 13px',background:otpEnabled?'rgba(170,255,0,0.06)':'rgba(255,255,255,0.02)',borderRadius:9,border:otpEnabled?'1px solid rgba(170,255,0,0.2)':'1px solid var(--bd)',fontSize:12,color:'var(--tx2)',display:'flex',flexDirection:'column',gap:5}}>
               <div style=${{display:'flex',alignItems:'center',gap:6}}>
@@ -7975,7 +7975,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
               <div style=${{width:40,height:40,borderRadius:10,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${s.icon}</div>
               <div>
                 <div style=${{fontSize:24,fontWeight:900,color:s.color,lineHeight:1}}>${s.val}</div>
-                <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2,fontWeight:600}}>${s.label}</div>
+                <div style=${{fontSize:11,color:'var(--tx2)',marginTop:2,fontWeight:500,fontWeight:600}}>${s.label}</div>
               </div>
             </div>`;
         })}
@@ -9456,7 +9456,7 @@ function App(){
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
               initialAssignee=${taskFilterType==='assignee'?taskFilterValue:null}
             />`:null}
-            ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks}/>`:null}
+            ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks} key=${'msgs-'+(teamCtx||'all')}/>`:null}
             ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
             ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
@@ -9498,7 +9498,7 @@ function App(){
         <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,rgba(170,255,0,.2),rgba(170,255,0,.05))',border:'1px solid rgba(170,255,0,.35)',
           display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:22}}>🔔</div>
         <div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>Enable desktop notifications</div>
+          <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>Enable desktop notifications</div>
           <div style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.55,marginBottom:10}}>
             Stay informed even when the app is minimised or you're in another tab:
           </div>
