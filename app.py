@@ -3517,7 +3517,7 @@ class ErrorBoundary extends React.Component{
   }
 }
 
-/* ─── AuthScreen — Split Layout with 3D Illustration ──────────────────────── */
+/* ─── AuthScreen — Garden Bee Split Layout ─────────────────────────────────── */
 function AuthScreen({onLogin}){
   const [tab,setTab]=useState('login');
   const [regMode,setRegMode]=useState('create');
@@ -3535,6 +3535,7 @@ function AuthScreen({onLogin}){
   const [otpCode,setOtpCode]=useState('');
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+  const canvasRef=useRef(null);
 
   useEffect(()=>{
     if(otpResendCd<=0)return;
@@ -3544,6 +3545,198 @@ function AuthScreen({onLogin}){
   useEffect(()=>{
     if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
   },[otpStep]);
+
+  // ── Animated bee canvas ──
+  useEffect(()=>{
+    const cv=canvasRef.current;if(!cv)return;
+    const ctx=cv.getContext('2d');
+    let id,frame=0;
+    const resize=()=>{cv.width=cv.offsetWidth;cv.height=cv.offsetHeight;};
+    resize();
+    const ro=new ResizeObserver(resize);ro.observe(cv);
+
+    // Bee flight path — smooth figure-8 Lissajous
+    const beePath=(t,W,H)=>({
+      x: W*.5 + Math.sin(t*.7)*W*.32,
+      y: H*.45 + Math.sin(t*.35)*H*.28,
+    });
+
+    // Honey particles / pollen dots
+    const pollen=Array.from({length:18},(_,i)=>({
+      x:Math.random(),y:.4+Math.random()*.5,
+      r:2+Math.random()*3,
+      ph:Math.random()*Math.PI*2,
+      sp:.012+Math.random()*.01,
+      col:Math.random()>.5?'255,200,0':'255,160,30',
+    }));
+
+    // Sparkle trail from bee
+    const trail=[];
+
+    const drawBee=(cx,cy,wingFrame,scale=1)=>{
+      ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
+
+      // ── Body shadow ──
+      ctx.save();ctx.translate(2,4);ctx.globalAlpha=.18;
+      ctx.fillStyle='rgba(0,0,0,0.4)';
+      ctx.beginPath();ctx.ellipse(0,0,22,14,0,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+
+      // ── Wings ──
+      const wAngle=Math.sin(wingFrame)*0.55;
+      // Left wing
+      ctx.save();ctx.rotate(-wAngle-.15);
+      const lg1=ctx.createRadialGradient(-8,-2,2,-8,-18,22);
+      lg1.addColorStop(0,'rgba(220,240,255,0.85)');
+      lg1.addColorStop(.5,'rgba(180,220,255,0.55)');
+      lg1.addColorStop(1,'rgba(150,200,255,0)');
+      ctx.fillStyle=lg1;
+      ctx.beginPath();ctx.ellipse(-8,-18,14,22,-.4,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(160,200,255,0.6)';ctx.lineWidth=.8;
+      ctx.beginPath();ctx.ellipse(-8,-18,14,22,-.4,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+      // Right wing
+      ctx.save();ctx.rotate(wAngle+.15);
+      const rg1=ctx.createRadialGradient(8,-2,2,8,-18,22);
+      rg1.addColorStop(0,'rgba(220,240,255,0.85)');
+      rg1.addColorStop(.5,'rgba(180,220,255,0.55)');
+      rg1.addColorStop(1,'rgba(150,200,255,0)');
+      ctx.fillStyle=rg1;
+      ctx.beginPath();ctx.ellipse(8,-18,14,22,.4,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(160,200,255,0.6)';ctx.lineWidth=.8;
+      ctx.beginPath();ctx.ellipse(8,-18,14,22,.4,0,Math.PI*2);ctx.stroke();
+      ctx.restore();
+      // Lower wings
+      ctx.save();ctx.rotate(-wAngle*.6-.1);
+      const lg2=ctx.createRadialGradient(-5,2,1,-5,12,14);
+      lg2.addColorStop(0,'rgba(210,235,255,0.7)');lg2.addColorStop(1,'rgba(180,220,255,0)');
+      ctx.fillStyle=lg2;
+      ctx.beginPath();ctx.ellipse(-5,12,9,14,-.3,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+      ctx.save();ctx.rotate(wAngle*.6+.1);
+      const rg2=ctx.createRadialGradient(5,2,1,5,12,14);
+      rg2.addColorStop(0,'rgba(210,235,255,0.7)');rg2.addColorStop(1,'rgba(180,220,255,0)');
+      ctx.fillStyle=rg2;
+      ctx.beginPath();ctx.ellipse(5,12,9,14,.3,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+
+      // ── Abdomen (striped) ──
+      const abdG=ctx.createRadialGradient(-6,-4,2,0,0,24);
+      abdG.addColorStop(0,'#ffe566');abdG.addColorStop(.6,'#f5b800');abdG.addColorStop(1,'#c87800');
+      ctx.fillStyle=abdG;
+      ctx.beginPath();ctx.ellipse(0,0,16,22,.08,0,Math.PI*2);ctx.fill();
+      // stripes
+      for(let s=0;s<4;s++){
+        ctx.fillStyle=s%2===0?'rgba(40,20,0,0.55)':'rgba(255,200,0,0.15)';
+        const sy=-14+s*8;
+        ctx.beginPath();ctx.ellipse(0,sy+2,15-Math.abs(sy)*.15,4,.08,0,Math.PI*2);ctx.fill();
+      }
+      // abdomen highlight
+      const aHL=ctx.createLinearGradient(-8,-20,8,0);
+      aHL.addColorStop(0,'rgba(255,255,200,0.55)');aHL.addColorStop(1,'rgba(255,255,200,0)');
+      ctx.fillStyle=aHL;
+      ctx.beginPath();ctx.ellipse(-3,-8,7,10,.1,0,Math.PI*2);ctx.fill();
+
+      // ── Thorax ──
+      const thG=ctx.createRadialGradient(-4,-28,2,0,-26,14);
+      thG.addColorStop(0,'#8b6914');thG.addColorStop(1,'#4a3508');
+      ctx.fillStyle=thG;
+      ctx.beginPath();ctx.ellipse(0,-26,10,9,0,0,Math.PI*2);ctx.fill();
+      // thorax highlight
+      ctx.fillStyle='rgba(200,160,60,0.4)';
+      ctx.beginPath();ctx.ellipse(-2,-28,5,4,-.2,0,Math.PI*2);ctx.fill();
+      // fuzzy thorax texture
+      ctx.fillStyle='rgba(180,140,30,0.3)';
+      for(let f=0;f<6;f++){
+        ctx.beginPath();ctx.arc(-5+f*2,-25+Math.sin(f)*2,1.5,0,Math.PI*2);ctx.fill();
+      }
+
+      // ── Head ──
+      const hG=ctx.createRadialGradient(-3,-38,2,0,-37,11);
+      hG.addColorStop(0,'#c89830');hG.addColorStop(1,'#6b4c10');
+      ctx.fillStyle=hG;
+      ctx.beginPath();ctx.arc(0,-37,10,0,Math.PI*2);ctx.fill();
+      // head highlight
+      ctx.fillStyle='rgba(255,220,100,0.45)';
+      ctx.beginPath();ctx.ellipse(-3,-40,5,4,-.3,0,Math.PI*2);ctx.fill();
+      // eyes
+      ctx.fillStyle='#1a0a00';
+      ctx.beginPath();ctx.ellipse(-5,-38,3.5,3,0,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.ellipse(5,-38,3.5,3,0,0,Math.PI*2);ctx.fill();
+      // eye shine
+      ctx.fillStyle='rgba(255,255,255,0.8)';
+      ctx.beginPath();ctx.arc(-4,-39,1.2,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(6,-39,1.2,0,Math.PI*2);ctx.fill();
+      // antennae
+      ctx.strokeStyle='#4a3508';ctx.lineWidth=1.5;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(-4,-46);ctx.quadraticCurveTo(-14,-58,-10,-64);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(4,-46);ctx.quadraticCurveTo(14,-58,10,-64);ctx.stroke();
+      // antenna balls
+      ctx.fillStyle='#f5b800';
+      ctx.beginPath();ctx.arc(-10,-64,3,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(10,-64,3,0,Math.PI*2);ctx.fill();
+      // stinger
+      ctx.fillStyle='#4a3508';
+      ctx.beginPath();ctx.moveTo(-2,21);ctx.lineTo(0,28);ctx.lineTo(2,21);ctx.fill();
+      // legs
+      ctx.strokeStyle='#4a3508';ctx.lineWidth=1.2;
+      [[-12,-22],[-14,-15],[-12,-8]].forEach(([lx,ly])=>{
+        ctx.beginPath();ctx.moveTo(lx>0?lx:-lx,ly);ctx.lineTo(lx,ly+10);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(-lx,ly);ctx.lineTo(lx,ly+10);ctx.stroke();
+      });
+
+      ctx.restore();
+    };
+
+    const draw=()=>{
+      const W=cv.width,H=cv.height;
+      frame++;
+      const t=frame*.018;
+
+      ctx.clearRect(0,0,W,H);
+
+      // Pollen dots floating
+      pollen.forEach(p=>{
+        p.ph+=p.sp;
+        const a=.25+Math.sin(p.ph)*.18;
+        const yOff=Math.sin(p.ph*.7)*8;
+        ctx.beginPath();ctx.arc(p.x*W,p.y*H+yOff,p.r,0,Math.PI*2);
+        ctx.fillStyle='rgba('+p.col+','+a+')';ctx.fill();
+        // pollen glow
+        ctx.beginPath();ctx.arc(p.x*W,p.y*H+yOff,p.r*2.5,0,Math.PI*2);
+        ctx.fillStyle='rgba('+p.col+',0.04)';ctx.fill();
+      });
+
+      // Bee position
+      const bp=beePath(t,W,H);
+
+      // Sparkle trail
+      trail.push({x:bp.x,y:bp.y,life:1,r:2+Math.random()*3});
+      if(trail.length>22)trail.shift();
+      trail.forEach((tr,i)=>{
+        tr.life-=.045;
+        if(tr.life<=0)return;
+        const a=tr.life*.5;
+        ctx.beginPath();ctx.arc(tr.x,tr.y,tr.r*tr.life,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,200,0,'+a+')';ctx.fill();
+      });
+
+      // ── Bee tilt based on direction ──
+      const nextBp=beePath(t+.05,W,H);
+      const angle=Math.atan2(nextBp.y-bp.y,nextBp.x-bp.x);
+      ctx.save();ctx.translate(bp.x,bp.y);ctx.rotate(angle*.35);
+      drawBee(0,0,frame*.25,1.15);
+      ctx.restore();
+
+      // ── Motion blur circles ──
+      ctx.beginPath();ctx.arc(bp.x,bp.y,32,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,210,0,0.04)';ctx.fill();
+
+      id=requestAnimationFrame(draw);
+    };
+    draw();
+    return()=>{ro.disconnect();cancelAnimationFrame(id);};
+  },[]);
 
   const go=async()=>{
     setErr('');setBusy(true);
@@ -3588,363 +3781,279 @@ function AuthScreen({onLogin}){
   };
 
   const inpS={width:'100%',padding:'13px 16px',borderRadius:12,fontSize:14,outline:'none',
-    background:'#f7f8fa',border:'1.5px solid #e8eaed',color:'#1a1a2e',
+    background:'#fafbfc',border:'1.5px solid #e8eaed',color:'#1a1a2e',
     fontFamily:'inherit',transition:'border-color .2s',boxSizing:'border-box'};
   const lblS={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07,
     textTransform:'uppercase',color:'#9ca3af',marginBottom:7};
 
-  // ── The SVG illustration — layered correctly back-to-front ──
-  const scene=html`
-    <svg viewBox="0 0 480 460" xmlns="http://www.w3.org/2000/svg" style=${{width:'100%',maxWidth:460,display:'block'}}>
+  // ── Garden scene SVG (static flowers, grass, hive) ──
+  const gardenSVG=html`
+    <svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg" style=${{width:'100%',display:'block',flexShrink:0}}>
       <defs>
-        <filter id="dropshadow">
-          <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(0,80,0,0.2)"/>
-        </filter>
-        <filter id="softshadow">
-          <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="rgba(0,60,0,0.15)"/>
-        </filter>
-        <linearGradient id="wallTop" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#d4f5be"/>
-          <stop offset="100%" stop-color="#aee890"/>
-        </linearGradient>
-        <linearGradient id="floorGrad" x1="0" y1="0" x2="0" y2="1">
+        <radialGradient id="skyG" cx="50%" cy="0%" r="100%">
+          <stop offset="0%" stop-color="#fff9e6"/>
+          <stop offset="100%" stop-color="#ffe680"/>
+        </radialGradient>
+        <radialGradient id="groundG" cx="50%" cy="0%" r="100%">
           <stop offset="0%" stop-color="#5cc048"/>
-          <stop offset="100%" stop-color="#3d9a2c"/>
-        </linearGradient>
-        <linearGradient id="deskTop" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#3a8c28"/>
-          <stop offset="100%" stop-color="#2a6e1c"/>
-        </linearGradient>
-        <linearGradient id="chairBack" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#c8d0dc"/>
-          <stop offset="100%" stop-color="#9aa5b4"/>
-        </linearGradient>
-        <linearGradient id="laptopLid" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#dde3eb"/>
-          <stop offset="100%" stop-color="#b0bac8"/>
-        </linearGradient>
-        <linearGradient id="skinGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#fddbb4"/>
-          <stop offset="100%" stop-color="#f5c48a"/>
-        </linearGradient>
-        <linearGradient id="sweaterGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#5ce040"/>
-          <stop offset="100%" stop-color="#3ab828"/>
-        </linearGradient>
-        <linearGradient id="jeansGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#5b8ee8"/>
-          <stop offset="100%" stop-color="#3a6bc8"/>
-        </linearGradient>
-        <linearGradient id="hairGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#8b4513"/>
-          <stop offset="100%" stop-color="#5c2e0a"/>
-        </linearGradient>
+          <stop offset="100%" stop-color="#2d8020"/>
+        </radialGradient>
+        <radialGradient id="hiveG" cx="35%" cy="25%" r="75%">
+          <stop offset="0%" stop-color="#ffe066"/>
+          <stop offset="60%" stop-color="#e8a800"/>
+          <stop offset="100%" stop-color="#a06000"/>
+        </radialGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="ds">
+          <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="rgba(0,80,0,0.2)"/>
+        </filter>
+        <filter id="ds2">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.15)"/>
+        </filter>
       </defs>
 
-      <!-- ═══ LAYER 1: BACKGROUND WALL ═══ -->
-      <rect x="0" y="0" width="480" height="310" fill="url(#wallTop)"/>
-
-      <!-- ═══ LAYER 2: FLOOR ═══ -->
-      <rect x="0" y="300" width="480" height="160" fill="url(#floorGrad)"/>
-      <!-- floor/wall divide shadow -->
-      <rect x="0" y="298" width="480" height="8" fill="rgba(0,0,0,0.08)" rx="2"/>
-
-      <!-- ═══ LAYER 3: CABINET (back-left) ═══ -->
-      <g filter="url(#softshadow)">
-        <!-- cabinet body -->
-        <rect x="28" y="210" width="78" height="130" rx="8" fill="#f1f5f9"/>
-        <rect x="28" y="210" width="78" height="50" rx="8" fill="#ffffff"/>
-        <rect x="28" y="258" width="78" height="2" fill="#e2e8f0"/>
-        <rect x="28" y="308" width="78" height="2" fill="#e2e8f0"/>
-        <circle cx="67" cy="234" r="5" fill="#cbd5e1"/>
-        <circle cx="67" cy="283" r="5" fill="#cbd5e1"/>
-        <!-- cabinet top shadow -->
-        <rect x="28" y="200" width="78" height="12" rx="4" fill="#e2e8f0"/>
+      <!-- Sky -->
+      <rect x="0" y="0" width="480" height="210" fill="url(#skyG)"/>
+      <!-- Sun -->
+      <circle cx="420" cy="55" r="38" fill="#ffe566" opacity="0.5" filter="url(#glow)"/>
+      <circle cx="420" cy="55" r="26" fill="#ffdd00" opacity="0.8"/>
+      <circle cx="420" cy="55" r="18" fill="#fff176"/>
+      <!-- Sun rays -->
+      <g stroke="#ffe566" stroke-width="2.5" stroke-linecap="round" opacity="0.5">
+        <line x1="420" y1="20" x2="420" y2="10"/>
+        <line x1="420" y1="90" x2="420" y2="100"/>
+        <line x1="385" y1="55" x2="375" y2="55"/>
+        <line x1="455" y1="55" x2="465" y2="55"/>
+        <line x1="395" y1="30" x2="388" y2="23"/>
+        <line x1="445" y1="80" x2="452" y2="87"/>
+        <line x1="445" y1="30" x2="452" y2="23"/>
+        <line x1="395" y1="80" x2="388" y2="87"/>
       </g>
 
-      <!-- ═══ LAYER 4: CACTUS ON CABINET ═══ -->
+      <!-- Clouds -->
+      <g opacity="0.85">
+        <ellipse cx="80" cy="52" rx="42" ry="18" fill="white"/>
+        <ellipse cx="62" cy="58" rx="26" ry="16" fill="white"/>
+        <ellipse cx="100" cy="58" rx="30" ry="15" fill="white"/>
+        <ellipse cx="80" cy="60" rx="44" ry="14" fill="white"/>
+      </g>
+      <g opacity="0.7">
+        <ellipse cx="240" cy="38" rx="32" ry="13" fill="white"/>
+        <ellipse cx="225" cy="43" rx="20" ry="12" fill="white"/>
+        <ellipse cx="258" cy="43" rx="22" ry="11" fill="white"/>
+      </g>
+
+      <!-- Ground -->
+      <rect x="0" y="200" width="480" height="120" fill="url(#groundG)"/>
+      <!-- Ground highlight -->
+      <ellipse cx="240" cy="202" rx="280" ry="14" fill="rgba(255,255,255,0.12)"/>
+      <!-- Ground shade -->
+      <rect x="0" y="198" width="480" height="8" fill="rgba(0,0,0,0.08)" rx="3"/>
+
+      <!-- ── GRASS BLADES ── -->
+      <g fill="#3d9e28" stroke="none">
+        <!-- scattered grass tufts -->
+        <path d="M15 205 Q12 185 10 178 Q14 192 18 205Z" opacity="0.9"/>
+        <path d="M22 204 Q26 182 24 175 Q21 190 20 204Z" opacity="0.8"/>
+        <path d="M55 204 Q52 186 50 180 Q54 193 57 204Z"/>
+        <path d="M62 203 Q66 184 64 177 Q61 191 60 203Z" opacity="0.85"/>
+        <path d="M140 204 Q137 188 135 181 Q139 194 142 204Z"/>
+        <path d="M148 203 Q152 185 150 178 Q147 192 146 203Z" opacity="0.8"/>
+        <path d="M310 204 Q307 188 305 181 Q309 194 312 204Z"/>
+        <path d="M320 203 Q324 186 322 179 Q319 192 318 203Z" opacity="0.85"/>
+        <path d="M400 205 Q397 187 395 180 Q399 194 402 205Z"/>
+        <path d="M408 204 Q412 186 410 179 Q407 193 406 204Z" opacity="0.8"/>
+        <path d="M455 204 Q452 188 450 181 Q454 194 457 204Z"/>
+        <path d="M462 203 Q466 185 464 178 Q461 192 460 203Z" opacity="0.85"/>
+      </g>
+
+      <!-- ── HONEYBEE HIVE (right side) ── -->
+      <g filter="url(#ds)" transform="translate(360,105)">
+        <!-- branch -->
+        <path d="M-10,10 Q5,-15 0,-50" stroke="#7c4e1a" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M0,-50 Q8,-70 5,-90" stroke="#8b5e2a" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <!-- leaves on branch -->
+        <ellipse cx="8" cy="-65" rx="14" ry="7" fill="#3d9e28" transform="rotate(-30,8,-65)"/>
+        <ellipse cx="-5" cy="-75" rx="12" ry="6" fill="#4ab030" transform="rotate(20,-5,-75)"/>
+        <!-- hive body -->
+        <ellipse cx="0" cy="-55" rx="30" ry="36" fill="url(#hiveG)"/>
+        <!-- hive stripes -->
+        <path d="M-29,-50 Q0,-47 29,-50" stroke="rgba(140,80,0,0.3)" stroke-width="2.5" fill="none"/>
+        <path d="M-30,-42 Q0,-39 30,-42" stroke="rgba(140,80,0,0.3)" stroke-width="2.5" fill="none"/>
+        <path d="M-29,-34 Q0,-31 29,-34" stroke="rgba(140,80,0,0.25)" stroke-width="2.5" fill="none"/>
+        <path d="M-26,-26 Q0,-23 26,-26" stroke="rgba(140,80,0,0.2)" stroke-width="2" fill="none"/>
+        <path d="M-20,-18 Q0,-15 20,-18" stroke="rgba(140,80,0,0.15)" stroke-width="2" fill="none"/>
+        <!-- hive hole -->
+        <ellipse cx="0" cy="-38" rx="9" ry="7" fill="#3d1a00"/>
+        <ellipse cx="0" cy="-37" rx="7" ry="5.5" fill="#1a0800"/>
+        <!-- hive highlight -->
+        <ellipse cx="-10" cy="-70" rx="10" ry="14" fill="rgba(255,240,150,0.3)" transform="rotate(-10,-10,-70)"/>
+        <!-- dripping honey -->
+        <path d="M8,-20 Q9,-10 8,0 Q7,8 9,14" stroke="#e8a800" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <circle cx="9" cy="15" r="5" fill="#f5b800"/>
+        <path d="M-5,-19 Q-4,-12 -5,-4" stroke="#e8a800" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <circle cx="-5" cy="-3" r="4" fill="#f5b800"/>
+      </g>
+
+      <!-- ── FLOWER 1 — Sunflower (left) ── -->
+      <g filter="url(#ds2)" transform="translate(60,160)">
+        <!-- stem -->
+        <path d="M0,50 Q-5,20 0,-10" stroke="#2d8020" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <!-- leaf -->
+        <path d="M-3,30 Q-25,22 -20,14 Q-8,20 -2,28Z" fill="#3d9e28"/>
+        <!-- petals -->
+        <g fill="#f5c800">
+          ${[0,1,2,3,4,5,6,7].map(i=>`
+            <ellipse cx="${Math.cos(i*Math.PI/4-Math.PI/8)*22}" cy="${Math.sin(i*Math.PI/4-Math.PI/8)*22}" rx="9" ry="5"
+              transform="rotate(${i*45-22.5},${Math.cos(i*Math.PI/4-Math.PI/8)*22},${Math.sin(i*Math.PI/4-Math.PI/8)*22})"/>`).join('')}
+        </g>
+        <!-- center -->
+        <circle cx="0" cy="0" r="14" fill="#7c3d00"/>
+        <circle cx="0" cy="0" r="11" fill="#5c2a00"/>
+        <!-- seed dots -->
+        <circle cx="-4" cy="-4" r="1.5" fill="#8b4800" opacity="0.7"/>
+        <circle cx="2" cy="-5" r="1.5" fill="#8b4800" opacity="0.7"/>
+        <circle cx="5" cy="0" r="1.5" fill="#8b4800" opacity="0.7"/>
+        <circle cx="2" cy="5" r="1.5" fill="#8b4800" opacity="0.7"/>
+        <circle cx="-4" cy="4" r="1.5" fill="#8b4800" opacity="0.7"/>
+        <circle cx="-6" cy="0" r="1.5" fill="#8b4800" opacity="0.7"/>
+        <!-- center highlight -->
+        <ellipse cx="-4" cy="-5" rx="4" ry="3" fill="rgba(255,200,100,0.2)"/>
+      </g>
+
+      <!-- ── FLOWER 2 — Pink daisy (center-left) ── -->
+      <g filter="url(#ds2)" transform="translate(160,175)">
+        <path d="M0,40 Q3,15 0,-8" stroke="#2d8020" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M2,22 Q18,14 16,6 Q6,14 1,20Z" fill="#3d9e28"/>
+        <g fill="#ff9ec0">
+          ${[0,1,2,3,4,5,6,7,8,9].map(i=>`
+            <ellipse cx="${Math.cos(i*Math.PI/5)*18}" cy="${Math.sin(i*Math.PI/5)*18}" rx="7" ry="4"
+              transform="rotate(${i*36},${Math.cos(i*Math.PI/5)*18},${Math.sin(i*Math.PI/5)*18})"/>`).join('')}
+        </g>
+        <circle cx="0" cy="0" r="10" fill="#ffe566"/>
+        <circle cx="0" cy="0" r="7" fill="#f5c800"/>
+        <circle cx="-3" cy="-3" r="2" fill="rgba(255,255,255,0.4)"/>
+      </g>
+
+      <!-- ── FLOWER 3 — Lavender (center) ── -->
+      <g transform="translate(248,185)">
+        <path d="M0,35 Q-2,18 0,-5" stroke="#2d8020" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M-1,20 Q-16,12 -14,5 Q-5,12 -1,18Z" fill="#3d9e28"/>
+        <!-- lavender florets -->
+        <g fill="#c084fc">
+          <ellipse cx="-4" cy="-12" rx="5" ry="7" transform="rotate(-15,-4,-12)"/>
+          <ellipse cx="4" cy="-15" rx="5" ry="7" transform="rotate(15,4,-15)"/>
+          <ellipse cx="0" cy="-20" rx="5" ry="7"/>
+          <ellipse cx="-7" cy="-5" rx="4" ry="6" transform="rotate(-25,-7,-5)"/>
+          <ellipse cx="7" cy="-5" rx="4" ry="6" transform="rotate(25,7,-5)"/>
+        </g>
+        <g fill="#a855f7" opacity="0.6">
+          <ellipse cx="-3" cy="-13" rx="3" ry="5" transform="rotate(-15,-3,-13)"/>
+          <ellipse cx="4" cy="-16" rx="3" ry="5" transform="rotate(15,4,-16)"/>
+          <ellipse cx="0" cy="-21" rx="3" ry="5"/>
+        </g>
+      </g>
+
+      <!-- ── FLOWER 4 — Red tulip (center-right) ── -->
+      <g filter="url(#ds2)" transform="translate(330,178)">
+        <path d="M0,40 Q2,18 0,-5" stroke="#2d8020" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M1,24 Q16,16 15,8 Q5,15 0,22Z" fill="#3d9e28"/>
+        <!-- tulip petals -->
+        <path d="M0,-30 Q-18,-20 -16,0 Q-8,-8 0,-5Z" fill="#ef4444"/>
+        <path d="M0,-30 Q18,-20 16,0 Q8,-8 0,-5Z" fill="#dc2626"/>
+        <path d="M0,-32 Q-10,-18 -8,2 Q0,-4 0,-5Z" fill="#f87171"/>
+        <path d="M0,-32 Q10,-18 8,2 Q0,-4 0,-5Z" fill="#ef4444"/>
+        <path d="M0,-34 Q0,-20 0,-5Z" fill="#fca5a5" opacity="0.3"/>
+        <!-- inner -->
+        <path d="M0,-24 Q-6,-14 -5,0 Q0,-6 5,0 Q6,-14 0,-24Z" fill="#991b1b" opacity="0.4"/>
+      </g>
+
+      <!-- ── SMALL WILD FLOWERS (scattered) ── -->
       <g>
-        <!-- pot -->
-        <rect x="54" y="170" width="20" height="32" rx="5" fill="#94a3b8"/>
-        <ellipse cx="64" cy="170" rx="12" ry="5" fill="#78909c"/>
-        <!-- main stem -->
-        <rect x="60" y="115" width="9" height="58" rx="4" fill="#4a9e3a"/>
-        <!-- left arm -->
-        <rect x="44" y="132" width="18" height="8" rx="4" fill="#5ab04a"/>
-        <rect x="44" y="118" width="8" height="22" rx="4" fill="#5ab04a"/>
-        <!-- right arm -->
-        <rect x="67" y="138" width="18" height="8" rx="4" fill="#5ab04a"/>
-        <rect x="75" y="124" width="8" height="22" rx="4" fill="#5ab04a"/>
-        <!-- spines -->
-        <line x1="64" y1="120" x2="60" y2="115" stroke="#2d6e20" stroke-width="1"/>
-        <line x1="64" y1="130" x2="68" y2="125" stroke="#2d6e20" stroke-width="1"/>
-        <line x1="64" y1="145" x2="60" y2="140" stroke="#2d6e20" stroke-width="1"/>
+        <!-- tiny white daisies -->
+        <g transform="translate(100,208)">
+          <g fill="white">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*7}" cy="${Math.sin(i*Math.PI/3)*7}" rx="3.5" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
+          <circle cx="0" cy="0" r="4" fill="#ffe566"/>
+        </g>
+        <g transform="translate(210,212)">
+          <g fill="#ffd6f0">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*6}" cy="${Math.sin(i*Math.PI/3)*6}" rx="3" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
+          <circle cx="0" cy="0" r="4" fill="#ffe566"/>
+        </g>
+        <g transform="translate(280,210)">
+          <g fill="#c4b5fd">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*6}" cy="${Math.sin(i*Math.PI/3)*6}" rx="3" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
+          <circle cx="0" cy="0" r="3.5" fill="#fbbf24"/>
+        </g>
+        <g transform="translate(380,212)">
+          <g fill="#fde68a">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*6}" cy="${Math.sin(i*Math.PI/3)*6}" rx="3" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
+          <circle cx="0" cy="0" r="4" fill="#f97316"/>
+        </g>
+        <!-- stems for tiny flowers -->
+        <line x1="100" y1="212" x2="100" y2="225" stroke="#2d8020" stroke-width="2"/>
+        <line x1="210" y1="215" x2="210" y2="228" stroke="#2d8020" stroke-width="2"/>
+        <line x1="280" y1="213" x2="280" y2="226" stroke="#2d8020" stroke-width="2"/>
+        <line x1="380" y1="215" x2="380" y2="228" stroke="#2d8020" stroke-width="2"/>
       </g>
 
-      <!-- ═══ LAYER 5: WALL CLOCK ═══ -->
-      <g filter="url(#softshadow)">
-        <circle cx="240" cy="68" r="36" fill="white"/>
-        <circle cx="240" cy="68" r="32" fill="#fafafa"/>
-        <circle cx="240" cy="68" r="4" fill="#374151"/>
-        <!-- ticks -->
-        <line x1="240" y1="38" x2="240" y2="44" stroke="#9ca3af" stroke-width="2"/>
-        <line x1="240" y1="92" x2="240" y2="98" stroke="#9ca3af" stroke-width="2"/>
-        <line x1="210" y1="68" x2="216" y2="68" stroke="#9ca3af" stroke-width="2"/>
-        <line x1="264" y1="68" x2="270" y2="68" stroke="#9ca3af" stroke-width="2"/>
-        <!-- hour hand (pointing to 12) -->
-        <line x1="240" y1="68" x2="240" y2="46" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/>
-        <!-- minute hand (pointing to 1) -->
-        <line x1="240" y1="68" x2="255" y2="74" stroke="#374151" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- ── BUTTERFLY (small, background) ── -->
+      <g transform="translate(195,130)" opacity="0.75">
+        <path d="M0,0 Q-20,-18 -28,-8 Q-20,4 0,0Z" fill="#fb923c"/>
+        <path d="M0,0 Q20,-18 28,-8 Q20,4 0,0Z" fill="#f97316"/>
+        <path d="M0,0 Q-15,10 -18,20 Q-8,16 0,0Z" fill="#fbbf24"/>
+        <path d="M0,0 Q15,10 18,20 Q8,16 0,0Z" fill="#f59e0b"/>
+        <!-- body -->
+        <ellipse cx="0" cy="0" rx="2.5" ry="8" fill="#7c2d12"/>
+        <circle cx="-1" cy="-9" r="3" fill="#7c2d12"/>
+        <!-- antennae -->
+        <path d="M-1,-8 Q-8,-16 -7,-20" stroke="#7c2d12" stroke-width="1" fill="none"/>
+        <path d="M-1,-8 Q6,-16 7,-20" stroke="#7c2d12" stroke-width="1" fill="none"/>
+        <circle cx="-7" cy="-20" r="1.5" fill="#7c2d12"/>
+        <circle cx="7" cy="-20" r="1.5" fill="#7c2d12"/>
       </g>
 
-      <!-- ═══ LAYER 6: FLOATING UI CARDS ═══ -->
-      <!-- Left card -->
-      <g filter="url(#softshadow)">
-        <rect x="30" y="145" width="115" height="58" rx="12" fill="white" opacity="0.95"/>
-        <circle cx="48" cy="165" r="9" fill="#aaff00"/>
-        <rect x="63" y="157" width="65" height="6" rx="3" fill="#e5e7eb"/>
-        <rect x="63" y="167" width="50" height="5" rx="2" fill="#f3f4f6"/>
-        <rect x="63" y="176" width="55" height="5" rx="2" fill="#f3f4f6"/>
-        <rect x="48" y="178" width="6" height="6" rx="1" fill="#4ade80" opacity="0.6"/>
-      </g>
-      <!-- Right card -->
-      <g filter="url(#softshadow)">
-        <rect x="335" y="125" width="125" height="65" rx="12" fill="white" opacity="0.95"/>
-        <rect x="348" y="138" width="75" height="7" rx="3" fill="#e5e7eb"/>
-        <rect x="348" y="150" width="60" height="5" rx="2" fill="#f3f4f6"/>
-        <rect x="348" y="160" width="85" height="5" rx="2" fill="#f3f4f6"/>
-        <rect x="348" y="170" width="50" height="5" rx="2" fill="#f3f4f6"/>
-        <circle cx="442" cy="141" r="6" fill="#4ade80"/>
-      </g>
-
-      <!-- ═══ LAYER 7: CHAIR (behind person) ═══ -->
-      <g filter="url(#softshadow)">
-        <!-- chair back -->
-        <rect x="200" y="195" width="80" height="90" rx="12" fill="url(#chairBack)"/>
-        <rect x="207" y="202" width="66" height="76" rx="9" fill="#d4dce8"/>
-        <!-- armrests -->
-        <rect x="180" y="255" width="26" height="9" rx="5" fill="#b0bac8"/>
-        <rect x="174" y="264" width="8" height="32" rx="4" fill="#9aa5b4"/>
-        <rect x="294" y="255" width="26" height="9" rx="5" fill="#b0bac8"/>
-        <rect x="318" y="264" width="8" height="32" rx="4" fill="#9aa5b4"/>
-        <!-- seat -->
-        <ellipse cx="240" cy="295" rx="62" ry="18" fill="#b0bac8" filter="url(#softshadow)"/>
-        <ellipse cx="240" cy="292" rx="58" ry="15" fill="#c8d0dc"/>
-        <!-- pole -->
-        <rect x="232" y="310" width="16" height="55" rx="6" fill="#8899aa"/>
-        <!-- base -->
-        <ellipse cx="240" cy="375" rx="55" ry="12" fill="#7888a0" opacity="0.8"/>
-        <line x1="240" y1="365" x2="188" y2="380" stroke="#7888a0" stroke-width="8" stroke-linecap="round"/>
-        <line x1="240" y1="365" x2="292" y2="380" stroke="#7888a0" stroke-width="8" stroke-linecap="round"/>
-        <line x1="240" y1="365" x2="240" y2="385" stroke="#7888a0" stroke-width="8" stroke-linecap="round"/>
-        <circle cx="188" cy="381" r="7" fill="#9aa5b4"/>
-        <circle cx="292" cy="381" r="7" fill="#9aa5b4"/>
-        <circle cx="240" cy="386" r="7" fill="#9aa5b4"/>
-      </g>
-
-      <!-- ═══ LAYER 8: PERSON — LOWER BODY (legs/feet behind desk) ═══ -->
-      <!-- Legs (sitting, bent forward) -->
-      <!-- left leg -->
-      <rect x="214" y="278" width="22" height="55" rx="9" fill="url(#jeansGrad)"/>
-      <!-- right leg -->
-      <rect x="244" y="278" width="22" height="55" rx="9" fill="url(#jeansGrad)"/>
-      <!-- shoes -->
-      <ellipse cx="225" cy="336" rx="18" ry="11" fill="#7c3aed"/>
-      <ellipse cx="255" cy="336" rx="18" ry="11" fill="#7c3aed"/>
-      <!-- shoe highlight -->
-      <ellipse cx="228" cy="332" rx="8" ry="4" fill="rgba(255,255,255,0.3)"/>
-      <ellipse cx="258" cy="332" rx="8" ry="4" fill="rgba(255,255,255,0.3)"/>
-      <!-- laces -->
-      <line x1="220" y1="334" x2="230" y2="334" stroke="white" stroke-width="1.5" opacity="0.6"/>
-      <line x1="250" y1="334" x2="260" y2="334" stroke="white" stroke-width="1.5" opacity="0.6"/>
-
-      <!-- ═══ LAYER 9: DESK (in front of legs) ═══ -->
-      <g filter="url(#dropshadow)">
-        <!-- desk shadow on floor -->
-        <ellipse cx="258" cy="372" rx="160" ry="18" fill="rgba(0,0,0,0.12)"/>
-        <!-- desk top surface -->
-        <rect x="88" y="295" width="304" height="20" rx="7" fill="url(#deskTop)"/>
-        <!-- desk top highlight -->
-        <rect x="88" y="296" width="304" height="7" rx="5" fill="rgba(255,255,255,0.18)"/>
-        <!-- desk left panel -->
-        <rect x="88" y="315" width="20" height="70" rx="5" fill="#256818"/>
-        <!-- desk right panel -->
-        <rect x="372" y="315" width="20" height="70" rx="5" fill="#256818"/>
-        <!-- desk crossbar -->
-        <rect x="108" y="360" width="264" height="10" rx="5" fill="#1e5513"/>
-        <!-- desk legs -->
-        <rect x="100" y="370" width="16" height="40" rx="5" fill="#1e5513"/>
-        <rect x="364" y="370" width="16" height="40" rx="5" fill="#1e5513"/>
-        <!-- desk feet -->
-        <ellipse cx="108" cy="412" rx="20" ry="6" fill="rgba(0,0,0,0.15)"/>
-        <ellipse cx="372" cy="412" rx="20" ry="6" fill="rgba(0,0,0,0.15)"/>
-      </g>
-
-      <!-- ═══ LAYER 10: DESK ITEMS ═══ -->
-      <!-- Laptop on desk — FLAT open on desk surface -->
-      <g filter="url(#softshadow)">
-        <!-- Laptop base/keyboard -->
-        <rect x="148" y="278" width="140" height="20" rx="5" fill="url(#laptopLid)"/>
-        <!-- keyboard keys -->
-        <rect x="153" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="161" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="169" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="177" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="185" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="193" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="201" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="209" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="217" y="281" width="6" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="155" y="287" width="38" height="4" rx="1" fill="#9aa5b4"/>
-        <rect x="197" y="287" width="36" height="4" rx="1" fill="#9aa5b4"/>
-        <!-- trackpad -->
-        <rect x="196" y="291" width="24" height="5" rx="2" fill="#b0bac8"/>
-        <!-- Laptop screen (angled up, behind keyboard) -->
-        <rect x="148" y="210" width="140" height="72" rx="8" fill="url(#laptopLid)"/>
-        <!-- hinge line -->
-        <rect x="148" y="277" width="140" height="4" rx="2" fill="#9aa5b4"/>
-        <!-- screen content -->
-        <rect x="155" y="217" width="126" height="60" rx="4" fill="#1e3a5f"/>
-        <!-- screen glow -->
-        <rect x="155" y="217" width="126" height="60" rx="4" fill="url(#screenContent)" opacity="0.8"/>
-        <!-- code lines on screen -->
-        <rect x="162" y="224" width="55" height="4" rx="2" fill="#4fc3f7" opacity="0.9"/>
-        <rect x="162" y="232" width="40" height="3" rx="2" fill="#81d4fa" opacity="0.7"/>
-        <rect x="170" y="239" width="70" height="3" rx="2" fill="#4ade80" opacity="0.8"/>
-        <rect x="170" y="246" width="55" height="3" rx="2" fill="#4ade80" opacity="0.6"/>
-        <rect x="162" y="253" width="80" height="3" rx="2" fill="#4fc3f7" opacity="0.6"/>
-        <rect x="162" y="260" width="60" height="3" rx="2" fill="#fbbf24" opacity="0.7"/>
-        <rect x="162" y="267" width="45" height="3" rx="2" fill="#81d4fa" opacity="0.5"/>
-        <!-- camera dot -->
-        <circle cx="218" cy="220" r="2" fill="#374151"/>
-      </g>
-
-      <!-- Coffee mug -->
-      <g filter="url(#softshadow)">
-        <rect x="350" y="270" width="34" height="28" rx="6" fill="#5b8dee"/>
-        <rect x="354" y="273" width="26" height="8" rx="3" fill="rgba(255,255,255,0.35)"/>
-        <path d="M384 276 Q396 276 396 283 Q396 291 384 291" stroke="#4878d4" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-        <!-- steam wisps -->
-        <path d="M360 264 Q357 258 360 252" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <path d="M368 262 Q365 255 368 248" stroke="rgba(255,255,255,0.4)" stroke-width="2" fill="none" stroke-linecap="round"/>
-        <path d="M376 264 Q373 257 376 251" stroke="rgba(255,255,255,0.35)" stroke-width="2" fill="none" stroke-linecap="round"/>
-      </g>
-
-      <!-- Sticky note -->
-      <g transform="rotate(-6,340,280)">
-        <rect x="328" y="272" width="26" height="22" rx="2" fill="#fef08a"/>
-        <rect x="332" y="277" width="18" height="2" rx="1" fill="#ca8a04" opacity="0.6"/>
-        <rect x="332" y="282" width="14" height="2" rx="1" fill="#ca8a04" opacity="0.45"/>
-        <rect x="332" y="287" width="16" height="2" rx="1" fill="#ca8a04" opacity="0.35"/>
-      </g>
-
-      <!-- ═══ LAYER 11: PERSON — UPPER BODY (in front of desk) ═══ -->
-      <!-- Sweater/torso -->
-      <g filter="url(#softshadow)">
-        <rect x="210" y="215" width="60" height="75" rx="14" fill="url(#sweaterGrad)"/>
-        <!-- sweater texture/highlight -->
-        <rect x="216" y="220" width="48" height="60" rx="10" fill="rgba(255,255,255,0.12)"/>
-        <!-- collar shirt -->
-        <rect x="228" y="215" width="24" height="16" rx="5" fill="#60a5fa"/>
-        <rect x="233" y="215" width="14" height="10" rx="3" fill="#3b82f6"/>
-      </g>
-
-      <!-- Left arm (reaching toward laptop) -->
-      <rect x="175" y="228" width="40" height="18" rx="9" fill="url(#sweaterGrad)" transform="rotate(22,175,228)"/>
-      <rect x="172" y="250" width="35" height="16" rx="8" fill="url(#skinGrad)" transform="rotate(28,172,250)"/>
-      <!-- left hand -->
-      <ellipse cx="192" cy="272" rx="13" ry="10" fill="url(#skinGrad)"/>
-      <rect x="182" y="265" width="7" height="13" rx="3" fill="url(#skinGrad)"/>
-      <rect x="190" y="263" width="7" height="14" rx="3" fill="url(#skinGrad)"/>
-      <rect x="198" y="264" width="7" height="13" rx="3" fill="url(#skinGrad)"/>
-
-      <!-- Right arm (resting on desk) -->
-      <rect x="265" y="228" width="40" height="18" rx="9" fill="url(#sweaterGrad)" transform="rotate(-18,265,228)"/>
-      <rect x="278" y="248" width="35" height="16" rx="8" fill="url(#skinGrad)" transform="rotate(-22,278,248)"/>
-      <!-- right hand -->
-      <ellipse cx="308" cy="272" rx="13" ry="10" fill="url(#skinGrad)"/>
-      <rect x="302" y="264" width="7" height="13" rx="3" fill="url(#skinGrad)"/>
-      <rect x="310" y="263" width="7" height="14" rx="3" fill="url(#skinGrad)"/>
-
-      <!-- ═══ LAYER 12: HEAD (topmost) ═══ -->
-      <!-- neck -->
-      <rect x="232" y="185" width="16" height="32" rx="7" fill="url(#skinGrad)"/>
-      <!-- head -->
-      <ellipse cx="240" cy="162" rx="38" ry="42" fill="url(#skinGrad)" filter="url(#softshadow)"/>
-      <!-- ears -->
-      <ellipse cx="202" cy="162" rx="10" ry="13" fill="#f5c48a"/>
-      <ellipse cx="278" cy="162" rx="10" ry="13" fill="#f5c48a"/>
-      <ellipse cx="202" cy="162" rx="6" ry="9" fill="#f0b070" opacity="0.5"/>
-      <!-- hair top -->
-      <ellipse cx="240" cy="126" rx="36" ry="20" fill="url(#hairGrad)"/>
-      <ellipse cx="224" cy="138" rx="14" ry="20" fill="url(#hairGrad)"/>
-      <ellipse cx="256" cy="138" rx="14" ry="20" fill="url(#hairGrad)"/>
-      <!-- hair highlight -->
-      <ellipse cx="235" cy="120" rx="20" ry="10" fill="#a0522d" opacity="0.5"/>
-      <!-- glasses -->
-      <rect x="216" y="152" width="24" height="18" rx="7" fill="rgba(147,197,253,0.25)" stroke="#374151" stroke-width="2.2"/>
-      <rect x="244" y="152" width="24" height="18" rx="7" fill="rgba(147,197,253,0.25)" stroke="#374151" stroke-width="2.2"/>
-      <line x1="240" y1="161" x2="244" y2="161" stroke="#374151" stroke-width="2"/>
-      <line x1="202" y1="158" x2="216" y2="156" stroke="#374151" stroke-width="2"/>
-      <line x1="268" y1="156" x2="278" y2="158" stroke="#374151" stroke-width="2"/>
-      <!-- eyebrows -->
-      <path d="M218 148 Q228 143 238 147" stroke="#5c2e0a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <path d="M246 147 Q256 143 266 147" stroke="#5c2e0a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <!-- eyes -->
-      <circle cx="228" cy="160" r="5" fill="#1f2937"/>
-      <circle cx="256" cy="160" r="5" fill="#1f2937"/>
-      <circle cx="230" cy="158" r="2" fill="white"/>
-      <circle cx="258" cy="158" r="2" fill="white"/>
-      <!-- nose -->
-      <ellipse cx="240" cy="173" rx="5" ry="3.5" fill="#e8a860"/>
-      <!-- smile -->
-      <path d="M227 181 Q240 192 253 181" stroke="#c07830" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <!-- beard -->
-      <ellipse cx="240" cy="188" rx="26" ry="13" fill="#7c3d12"/>
-      <ellipse cx="240" cy="186" rx="22" ry="10" fill="#9a4e1a"/>
-      <!-- beard highlight streak -->
-      <path d="M226 182 Q240 188 254 182" stroke="#b86030" stroke-width="1.5" fill="none" opacity="0.4"/>
-
-      <!-- ═══ LAYER 13: PLANT (far right, partially behind desk) ═══ -->
-      <g filter="url(#softshadow)">
-        <!-- pot -->
-        <rect x="400" y="310" width="44" height="52" rx="10" fill="#94a3b8"/>
-        <rect x="404" y="314" width="36" height="44" rx="8" fill="#b0bac4"/>
-        <rect x="400" y="308" width="44" height="10" rx="5" fill="#7888a0"/>
-        <!-- leaves -->
-        <path d="M422 308 Q392 262 372 230 Q400 248 422 290" fill="#256818" opacity="0.95"/>
-        <path d="M422 308 Q452 255 468 225 Q442 248 422 286" fill="#2d7820"/>
-        <path d="M422 305 Q408 268 400 244 Q418 262 422 288" fill="#3d8c2e"/>
-        <path d="M422 305 Q436 268 444 242 Q428 262 422 285" fill="#2d7820"/>
-        <path d="M422 300 Q412 270 406 248 Q420 264 422 284" fill="#4a9e3a" opacity="0.8"/>
+      <!-- ── HONEYCOMB pattern (decorative bottom) ── -->
+      <g opacity="0.12" transform="translate(420,230)">
+        ${[0,1,2].map(row=>[0,1,2].map(col=>{
+          const hx=col*26+(row%2)*13,hy=row*22;
+          const pts=Array.from({length:6},(_,i)=>`${hx+12*Math.cos(i*Math.PI/3-Math.PI/6)},${hy+12*Math.sin(i*Math.PI/3-Math.PI/6)}`).join(' ');
+          return `<polygon points="${pts}" fill="none" stroke="#f5c800" stroke-width="1.5"/>`;
+        }).join('')).join('')}
       </g>
     </svg>`;
 
   // ── Left panel ──
   const leftPanel=html`
     <div style=${{
-      width:'48%',flexShrink:0,minHeight:'100vh',
-      background:'linear-gradient(160deg,#c8f0a8 0%,#8dd870 35%,#5ab04a 100%)',
-      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-      padding:'28px 24px 20px',position:'relative',overflow:'hidden',
+      width:'50%',flexShrink:0,minHeight:'100vh',
+      background:'linear-gradient(175deg,#fff9e0 0%,#fef3c7 30%,#d4edaa 65%,#7dd95a 100%)',
+      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',
+      padding:'20px 16px 0',position:'relative',overflow:'hidden',
     }}>
-      <!-- Radial light overlay -->
-      <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 40% 35%,rgba(255,255,255,0.22) 0%,transparent 60%)',pointerEvents:'none'}}></div>
-      <!-- Top-left brand -->
-      <div style=${{position:'absolute',top:22,left:24,display:'flex',alignItems:'center',gap:8,zIndex:2}}>
-        <div style=${{width:30,height:30,borderRadius:8,background:'rgba(255,255,255,0.9)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 10px rgba(0,0,0,0.12)'}}>
+      <!-- Ambient glow top -->
+      <div style=${{position:'absolute',top:0,left:0,right:0,height:'40%',background:'radial-gradient(ellipse at 70% 10%,rgba(255,230,80,0.25) 0%,transparent 65%)',pointerEvents:'none'}}></div>
+
+      <!-- Brand top-left -->
+      <div style=${{position:'absolute',top:22,left:22,display:'flex',alignItems:'center',gap:8,zIndex:10}}>
+        <div style=${{width:30,height:30,borderRadius:8,background:'rgba(255,255,255,0.92)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 10px rgba(0,0,0,0.12)'}}>
           <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#2d7020"/><circle cx="32" cy="11" r="6" fill="#2d7020"/><circle cx="51" cy="43" r="6" fill="#2d7020"/><circle cx="13" cy="43" r="6" fill="#2d7020"/><line x1="32" y1="17" x2="32" y2="23" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
         <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1a4010',letterSpacing:-.3}}>ProjectFlow</span>
       </div>
-      <!-- Scene -->
-      <div style=${{position:'relative',zIndex:2,width:'100%',marginTop:32}}>
-        ${scene}
+
+      <!-- Animated bee canvas (fills the sky area) -->
+      <canvas ref=${canvasRef} style=${{position:'absolute',top:0,left:0,width:'100%',height:'65%',zIndex:2,pointerEvents:'none'}}></canvas>
+
+      <!-- Garden scene SVG (bottom) -->
+      <div style=${{position:'relative',zIndex:3,width:'100%'}}>
+        ${gardenSVG}
       </div>
+
       <!-- Caption -->
-      <div style=${{position:'relative',zIndex:2,textAlign:'center',marginTop:4}}>
-        <p style=${{fontSize:14,fontWeight:700,color:'#1a4010',fontFamily:"'Syne',sans-serif",marginBottom:4}}>Your team's command center</p>
-        <p style=${{fontSize:12,color:'rgba(26,64,16,0.6)'}}>Tasks · AI assistant · Huddles · Timeline · Tickets</p>
+      <div style=${{position:'relative',zIndex:4,textAlign:'center',padding:'10px 0 18px',background:'linear-gradient(to top,rgba(125,217,90,0.9),transparent)'}}>
+        <p style=${{fontSize:14,fontWeight:700,color:'#1a4010',fontFamily:"'Syne',sans-serif",marginBottom:3}}>Productivity in full bloom 🌸</p>
+        <p style=${{fontSize:12,color:'rgba(26,64,16,0.65)'}}>Tasks · AI assistant · Huddles · Timeline · Tickets</p>
       </div>
     </div>`;
 
@@ -3962,18 +4071,18 @@ function AuthScreen({onLogin}){
       ${leftPanel}
       ${rightPanel(html`
         <div style=${{textAlign:'center',marginBottom:28}}>
-          <div style=${{width:58,height:58,borderRadius:16,background:'#f0fdf4',border:'2px solid #bbf7d0',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:26}}>🔐</div>
+          <div style=${{width:58,height:58,borderRadius:16,background:'#fffbeb',border:'2px solid #fde68a',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:26}}>🔐</div>
           <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:21,fontWeight:800,color:'#111827',marginBottom:7}}>Verify your identity</h2>
           <p style=${{fontSize:13.5,color:'#6b7280',marginBottom:3}}>6-digit code sent to</p>
-          <p style=${{fontSize:14,fontWeight:700,color:'#16a34a'}}>${otpEmail}</p>
+          <p style=${{fontSize:14,fontWeight:700,color:'#d97706'}}>${otpEmail}</p>
         </div>
         <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:22}} onPaste=${handleOtpPaste}>
           ${[0,1,2,3,4,5].map(i=>html`
             <input key=${i} ref=${otpRefs[i]}
               style=${{width:50,height:56,borderRadius:12,textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',outline:'none',boxSizing:'border-box',transition:'all .18s',
-                background:otpCode[i]?'#f0fdf4':'#f9fafb',
-                border:'2px solid '+(otpCode[i]?'#4ade80':'#e5e7eb'),
-                color:'#111827',boxShadow:otpCode[i]?'0 0 0 3px rgba(74,222,128,0.12)':'none'}}
+                background:otpCode[i]?'#fffbeb':'#f9fafb',
+                border:'2px solid '+(otpCode[i]?'#f5c800':'#e5e7eb'),
+                color:'#111827',boxShadow:otpCode[i]?'0 0 0 3px rgba(245,200,0,0.15)':'none'}}
               maxLength=1 value=${otpCode[i]||''}
               onInput=${e=>handleOtpInput(i,e.target.value)}
               onKeyDown=${e=>handleOtpKey(i,e)}
@@ -3983,17 +4092,17 @@ function AuthScreen({onLogin}){
         ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',marginBottom:14,textAlign:'center'}}>${err}</div>`:null}
         <button onClick=${submitOtp} disabled=${busy||otpCode.length!==6}
           style=${{width:'100%',height:48,borderRadius:13,border:'none',fontFamily:'inherit',
-            background:otpCode.length===6?'#aaff00':'#e5e7eb',
-            color:otpCode.length===6?'#14380a':'#9ca3af',
+            background:otpCode.length===6?'#f5c800':'#e5e7eb',
+            color:otpCode.length===6?'#3d2000':'#9ca3af',
             fontSize:14,fontWeight:700,cursor:otpCode.length===6?'pointer':'default',
             transition:'all .2s',marginBottom:14,
-            boxShadow:otpCode.length===6?'0 4px 18px rgba(170,255,0,0.32)':'none'}}>
+            boxShadow:otpCode.length===6?'0 4px 18px rgba(245,200,0,0.4)':'none'}}>
           ${busy?'Verifying...':'Verify & Sign In →'}
         </button>
         <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:10}}>
           <span style=${{fontSize:13,color:'#9ca3af'}}>Didn't receive it?</span>
           <button onClick=${resendOtp} disabled=${otpResendCd>0}
-            style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'#d1d5db':'#16a34a',fontSize:13,fontWeight:600,padding:0}}>
+            style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'#d1d5db':'#d97706',fontSize:13,fontWeight:600,padding:0}}>
             ${otpResendCd>0?`Resend in ${otpResendCd}s`:'Resend code'}
           </button>
         </div>
@@ -4011,21 +4120,18 @@ function AuthScreen({onLogin}){
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
-        <!-- Logo -->
         <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:26}}>
-          <div style=${{width:28,height:28,borderRadius:7,background:'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(170,255,0,0.35)'}}>
-            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00"/><circle cx="51" cy="43" r="6" fill="#0a1a00"/><circle cx="13" cy="43" r="6" fill="#0a1a00"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
+          <div style=${{width:28,height:28,borderRadius:7,background:'#f5c800',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(245,200,0,0.4)'}}>
+            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#3d2000"/><circle cx="32" cy="11" r="6" fill="#3d2000"/><circle cx="51" cy="43" r="6" fill="#3d2000"/><circle cx="13" cy="43" r="6" fill="#3d2000"/><line x1="32" y1="17" x2="32" y2="23" stroke="#3d2000" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#3d2000" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#3d2000" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
           <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#111827',letterSpacing:-.3}}>ProjectFlow</span>
         </div>
-        <!-- Heading -->
         <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.55rem,2.4vw,2rem)',fontWeight:800,color:'#111827',marginBottom:7,letterSpacing:-.03,lineHeight:1.12}}>
-          ${tab==='login'?'Welcome back':'Create account'}
+          ${tab==='login'?'Welcome back 🍯':'Create account'}
         </h1>
         <p style=${{fontSize:13.5,color:'#6b7280',marginBottom:24,lineHeight:1.6}}>
           ${tab==='login'?'Sign in to your ProjectFlow workspace':'Get your team up and running today'}
         </p>
-        <!-- Tabs -->
         <div style=${{display:'flex',background:'#f3f4f6',borderRadius:12,padding:3,marginBottom:22}}>
           ${['login','register'].map(tp=>html`
             <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
@@ -4049,13 +4155,12 @@ function AuthScreen({onLogin}){
           </div>
           ${regMode==='create'?html`
             <div style=${{marginBottom:14}}><label style=${lblS}>Workspace Name</label>
-              <input style=${inpS} placeholder="e.g. Acme Corp, Five Star" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
+              <input style=${inpS} placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
           ${regMode==='join'?html`
-            <div style=${{marginBottom:14,padding:'12px 14px',background:'#f0fdf4',borderRadius:12,border:'1px solid #bbf7d0'}}>
+            <div style=${{marginBottom:14,padding:'12px 14px',background:'#fffbeb',borderRadius:12,border:'1px solid #fde68a'}}>
               <label style=${lblS}>Invite Code</label>
               <input style=${{...inpS,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center',background:'#fff'}} placeholder="XXXXXXXX"
                 value=${inviteCode} onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
-              <p style=${{fontSize:11.5,color:'#9ca3af',marginTop:6,textAlign:'center'}}>Get this from your workspace Admin</p>
             </div>`:null}`:null}
         <div style=${{display:'flex',flexDirection:'column',gap:13}}>
           ${tab==='register'?html`
@@ -4086,17 +4191,17 @@ function AuthScreen({onLogin}){
             </div>`:null}
           <button onClick=${go} disabled=${busy}
             style=${{height:50,borderRadius:13,border:'none',cursor:busy?'default':'pointer',fontFamily:'inherit',
-              background:busy?'#dcfce7':'#aaff00',
-              color:busy?'#6b7280':'#14380a',
+              background:busy?'#fef9c3':'#f5c800',
+              color:busy?'#9ca3af':'#3d2000',
               fontSize:14.5,fontWeight:700,transition:'all .18s',marginTop:2,
-              boxShadow:busy?'none':'0 4px 18px rgba(170,255,0,0.35),inset 0 1px 0 rgba(255,255,255,0.5)'}}>
+              boxShadow:busy?'none':'0 4px 18px rgba(245,200,0,0.45),inset 0 1px 0 rgba(255,255,255,0.5)'}}>
             ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
           </button>
         </div>
         <p style=${{fontSize:13,color:'#9ca3af',marginTop:18,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#16a34a',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
-            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#16a34a',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
+            ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#d97706',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#d97706',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
       `)}
     </div>`;
