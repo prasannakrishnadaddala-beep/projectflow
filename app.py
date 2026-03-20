@@ -2866,7 +2866,7 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>ProjectFlowProPro</title>
 <link rel="manifest" href="/manifest.json"/>
-<meta name="theme-color" content="#aaff00"/>
+<meta name="theme-color" content="#2563eb"/>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
 <script>
 (function(){
@@ -3041,60 +3041,26 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
 /* === DARK THEME (default) — precise HubSpot CRM workspace colours === */
 :root{
-  --bg:#111111;
-  --sf:#1c1c1c;
-  --sf2:#242424;
-  --sf3:#2c2c2c;
-  --bd:#2e2e2e;
-  --bd2:#252525;
-  --tx:#f5f5f5;
-  --tx2:#888888;
-  --tx3:#444444;
-  --sb:#0d0d0d;
-  --sb2:#161616;
-  --sb3:#1e1e1e;
-  --sbt:#505050;
-  --ac:#aaff00;
-  --ac2:#99ee00;
-  --ac3:rgba(170,255,0,.10);
-  --ac4:rgba(170,255,0,.06);
-  --ac-tx:#0d1f00;
-  --rd:#ff4444;
-  --rd2:#ff7070;
-  --gn:#3ecf6e;
-  --gn2:#22c55e;
-  --am:#f59e0b;
-  --cy:#22d3ee;
-  --pu:#a78bfa;
-  --or:#fb923c;
-  --pk:#f472b6;
-  --sh:0 1px 2px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
-  --sh2:0 4px 16px rgba(0,0,0,.6),0 8px 32px rgba(0,0,0,.4);
-  --sh3:0 0 0 1px var(--bd);
-}
-
-/* === LIGHT THEME — via .lm on body. Cards: white on #ebebeb canvas === */
-.lm{
-  --bg:#ebebeb;
+  --bg:#f0f6ff;
   --sf:#ffffff;
-  --sf2:#f5f5f5;
-  --sf3:#eeeeee;
-  --bd:#dedede;
-  --bd2:#e8e8e8;
-  --tx:#111111;
-  --tx2:#444444;
-  --tx3:#666666;
-  --sb:#111111;
-  --sb2:#1a1a1a;
-  --sb3:#222222;
-  --sbt:#777777;
-  --ac:#aaff00;
-  --ac2:#99ee00;
-  --ac3:rgba(170,255,0,.15);
-  --ac4:rgba(170,255,0,.08);
-  --ac-tx:#0d1f00;
-  --rd:#e53535;
-  --rd2:#f87171;
+  --sf2:#f1f5f9;
+  --sf3:#e8f0fe;
+  --bd:rgba(37,99,235,0.14);
+  --bd2:rgba(0,0,0,0.07);
+  --tx:#0a0f1e;
+  --tx2:#334155;
+  --tx3:#64748b;
+  --sb:#0f172a;
+  --sb2:#1e293b;
+  --sb3:#334155;
+  --sbt:#94a3b8;
+  --ac:#2563eb;
+  --ac2:#1d4ed8;
+  --ac3:rgba(37,99,235,0.10);
+  --ac4:rgba(37,99,235,0.06);
+  --ac-tx:#ffffff;
+  --rd:#dc2626;
+  --rd2:#ef4444;
   --gn:#16a34a;
   --gn2:#22c55e;
   --am:#d97706;
@@ -3102,7 +3068,41 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --pu:#7c3aed;
   --or:#ea580c;
   --pk:#db2777;
-  --sh:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.05);
+  --sh:0 1px 3px rgba(37,99,235,0.08),0 2px 8px rgba(0,0,0,0.06);
+  --sh2:0 4px 16px rgba(37,99,235,0.12),0 8px 32px rgba(0,0,0,0.08);
+  --sh3:0 0 0 1px var(--bd);
+}
+
+/* === LIGHT THEME — via .lm on body. Cards: white on #ebebeb canvas === */
+.lm{
+  --bg:#f0f6ff;
+  --sf:#ffffff;
+  --sf2:#f1f5f9;
+  --sf3:#e8f0fe;
+  --bd:rgba(37,99,235,0.14);
+  --bd2:rgba(0,0,0,0.07);
+  --tx:#0a0f1e;
+  --tx2:#334155;
+  --tx3:#64748b;
+  --sb:#0f172a;
+  --sb2:#1e293b;
+  --sb3:#334155;
+  --sbt:#94a3b8;
+  --ac:#2563eb;
+  --ac2:#1d4ed8;
+  --ac3:rgba(37,99,235,0.10);
+  --ac4:rgba(37,99,235,0.06);
+  --ac-tx:#ffffff;
+  --rd:#dc2626;
+  --rd2:#ef4444;
+  --gn:#16a34a;
+  --gn2:#22c55e;
+  --am:#d97706;
+  --cy:#0891b2;
+  --pu:#7c3aed;
+  --or:#ea580c;
+  --pk:#db2777;
+  --sh:0 1px 3px rgba(37,99,235,0.08),0 2px 8px rgba(0,0,0,0.06);
   --sh2:0 4px 16px rgba(0,0,0,.10),0 8px 32px rgba(0,0,0,.07);
   --sh3:0 0 0 1px var(--bd);
 }
@@ -3190,7 +3190,7 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .ai-action{background:var(--ac3);border:1px solid rgba(170,255,0,.2);border-radius:8px;padding:7px 10px;font-size:10px;color:var(--ac);font-family:monospace;margin-top:4px}
 
 .snb{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--sbt);transition:all .12s;flex-shrink:0}
-.snb:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.65)}
+.snb:hover{background:rgba(37,99,235,0.12);color:#93c5fd}
 .snb.act{background:var(--ac)}
 .snb.act svg{stroke:var(--ac-tx)!important}
 
@@ -3307,7 +3307,7 @@ function Av({u,size=32}){
     return html`<img src=${imgSrc} class="av" style=${{width:size,height:size,objectFit:'cover',borderRadius:'50%',border:'2px solid rgba(0,0,0,.06)'}}/>`;
   }
   const initials=(u&&u.avatar&&u.avatar.length<=4)?u.avatar:(u&&u.name?u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase():'?');
-  return html`<div class="av" style=${{width:size,height:size,background:(u&&u.color)||'#aaff00',color:'#fff',fontSize:Math.max(9,Math.floor(size*.33))}}>
+  return html`<div class="av" style=${{width:size,height:size,background:(u&&u.color)||'#2563eb',color:'#fff',fontSize:Math.max(9,Math.floor(size*.33))}}>
     ${initials}
   </div>`;
 }
@@ -4149,10 +4149,10 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
   return html`
     <aside style=${{
       width:W,minWidth:W,maxWidth:W,
-      background:'#0f0f0f',
+      background:'#0f172a',
       display:'flex',flexDirection:'column',
       height:'100vh',flexShrink:0,overflow:'visible',
-      borderRight:'1px solid rgba(255,255,255,.06)',
+      borderRight:'1px solid rgba(37,99,235,0.15)',
       transition:'width .2s ease,min-width .2s ease,max-width .2s ease',
       position:'relative'
     }}>
@@ -4162,20 +4162,20 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         padding:col?'14px 0':'12px 14px',
         display:'flex',alignItems:'center',
         gap:8,flexShrink:0,
-        borderBottom:'1px solid rgba(255,255,255,.06)',
+        borderBottom:'1px solid rgba(37,99,235,0.15)',
         justifyContent:col?'center':'flex-start',
         minHeight:52
       }}>
-        <div style=${{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <div style=${{width:28,height:28,borderRadius:8,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 2px 8px rgba(37,99,235,0.4)'}}>
           <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity=".9"/><circle cx="51" cy="43" r="6" fill="white" opacity=".9"/><circle cx="13" cy="43" r="6" fill="white" opacity=".9"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
         </div>
         ${!col?html`<div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.85)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlowPro'}</div>
+          <div style=${{fontSize:12,fontWeight:700,color:'#ffffff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlowPro'}</div>
           ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4}}>
             ${!isAdminManager?html`<span style=${{color:'rgba(255,255,255,.3)',fontWeight:400}}>My Team</span>`:null}
             ${activeTeam.name}
           </div>`
-          :html`<div style=${{fontSize:10,color:'rgba(255,255,255,.3)'}}>Workspace</div>`}
+          :html`<div style=${{fontSize:10,color:'rgba(148,163,184,0.7)'}}>Workspace</div>`}
         </div>`:null}
       </div>
 
@@ -4199,7 +4199,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
               justifyContent:col?'center':'flex-start',
               position:'relative'
             }}
-            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}}
+            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
             onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}> 
             <span style=${{flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center',opacity:.85}}>${NAV_ICONS[it.id]||null}</span>
             ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
@@ -4223,7 +4223,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
       </nav>
 
       <!-- ── Bottom actions ── -->
-      <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
+      <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
         ${inCall?html`
           <button title="In Huddle" onClick=${()=>onCallAction&&onCallAction('show')}
             style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'rgba(34,197,94,.1)',color:'#22c55e',justifyContent:col?'center':'flex-start'}}>
@@ -4232,7 +4232,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           </button>`:null}
         <button title=${dark?'Light Mode':'Dark Mode'} onClick=${()=>{setDark(d=>{const n=!d;try{localStorage.setItem('pf_dark',n?'1':'0');}catch{}return n;})}}
           style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(255,255,255,.35)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}
           onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}>
           <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}}>${themeIcon}</span>
           ${!col?html`<span style=${{fontSize:12}}>${dark?'Light Mode':'Dark Mode'}</span>`:null}
@@ -4243,7 +4243,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
               background:baseView==='settings'?'rgba(170,255,0,.12)':'transparent',
               color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)',
               transition:'all .12s',justifyContent:col?'center':'flex-start'}}
-            onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}}
+            onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
             onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}> 
             <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>⚙️</span>
             ${!col?html`<span style=${{fontSize:12}}>Settings</span>`:null}
@@ -4279,7 +4279,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           padding:0,
         }}
         onMouseEnter=${e=>{e.currentTarget.style.background='#1a1a1a';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
-        onMouseLeave=${e=>{e.currentTarget.style.background='#0f0f0f';e.currentTarget.style.color='rgba(255,255,255,.35)';}}>
+        onMouseLeave=${e=>{e.currentTarget.style.background='#0f172a';e.currentTarget.style.color='rgba(148,163,184,0.5)';}}>
         <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           ${col
             ?html`<polyline points="2 2 6 6 2 10"/>`
@@ -4315,27 +4315,27 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
     document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
   },[showProfile]);
   return html`
-    <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd2)'}}>
+    <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd2)',backdropFilter:'blur(8px)'}}>
       <div style=${{padding:'0 18px',height:54,display:'flex',alignItems:'center',gap:10}}>
         <!-- Your Schedule pill -->
-        <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#111111',borderRadius:100,cursor:'pointer',border:'1px solid rgba(255,255,255,.06)',transition:'all .14s'}} onClick=${onViewReminders}>
-          <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#aaff00"/><circle cx="32" cy="13" r="4" fill="#aaff00" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#aaff00" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#aaff00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/></svg>
-          <span style=${{fontSize:11,fontWeight:700,color:'rgba(255,255,255,.9)',letterSpacing:'.3px'}}>Your Schedule</span>
+        <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#1e3a5f',borderRadius:100,cursor:'pointer',border:'1px solid rgba(37,99,235,0.25)',transition:'all .14s'}} onClick=${onViewReminders}>
+          <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#60a5fa"/><circle cx="32" cy="13" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/></svg>
+          <span style=${{fontSize:11,fontWeight:700,color:'#bfdbfe',letterSpacing:'.3px'}}>Your Schedule</span>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
         <!-- team pill removed -->
         <!-- Schedule timeline -->
         <div style=${{flex:1,overflowX:'auto',scrollbarWidth:'none',msOverflowStyle:'none'}}>
-          <div style=${{height:40,background:'#111111',borderRadius:100,display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden',border:'1px solid rgba(255,255,255,.05)'}}>
+          <div style=${{height:40,background:'#0f172a',borderRadius:100,display:'flex',alignItems:'center',padding:'0 14px',gap:0,position:'relative',minWidth:0,overflow:'hidden',border:'1px solid rgba(37,99,235,0.15)'}}>
             ${upcoming.length===0?html`
               <div style=${{display:'flex',alignItems:'center',gap:10,width:'100%',justifyContent:'center'}}>
-                <span style=${{fontSize:11,color:'rgba(255,255,255,.28)',fontStyle:'italic',letterSpacing:'.2px'}}>No reminders today</span>
+                <span style=${{fontSize:11,color:'rgba(148,163,184,0.8)',fontStyle:'italic',letterSpacing:'.2px'}}>No reminders today</span>
                 <button onClick=${onViewReminders} style=${{fontSize:10,padding:'3px 12px',height:22,borderRadius:100,background:'var(--ac)',color:'var(--ac-tx)',border:'none',cursor:'pointer',fontWeight:700,letterSpacing:'.2px'}}>+ Add</button>
               </div>
             `:html`
               <div style=${{display:'flex',alignItems:'center',gap:0,width:'100%',overflowX:'auto',scrollbarWidth:'none',position:'relative'}}>
-                <div style=${{position:'absolute',top:'50%',left:0,right:40,height:1,background:'linear-gradient(90deg,rgba(170,255,0,.08) 0%,rgba(170,255,0,.35) 55%,rgba(170,255,0,.08) 100%)',transform:'translateY(-50%)',borderRadius:2,zIndex:0}}></div>
+                <div style=${{position:'absolute',top:'50%',left:0,right:40,height:1,background:'linear-gradient(90deg,rgba(37,99,235,0.08) 0%,rgba(96,165,250,0.4) 55%,rgba(37,99,235,0.08) 100%)',transform:'translateY(-50%)',borderRadius:2,zIndex:0}}></div>
                 ${upcoming.map((r,i)=>{
                   const isNow=Math.abs(new Date(r.remind_at)-new Date())<1800000;
                   const abbr=(r.task_title||'').split(' ').slice(0,2).join(' ');
@@ -4345,7 +4345,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                       <div style=${{position:'relative'}}>
                         ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
                           html`<img src=${cu.avatar_data} style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',objectFit:'cover',border:isNow?'2px solid #22c55e':'2px solid rgba(170,255,0,.4)',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'none',transition:'all .18s'}}/>`:
-                          html`<div style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#aaff00,#88cc00)',border:isNow?'2px solid #22c55e':'2px solid rgba(170,255,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?10:8,fontWeight:700,color:isNow?'#fff':'#0a1a00',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'0 0 8px rgba(170,255,0,.25)',transition:'all .18s'}}>
+                          html`<div style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#3b82f6,#2563eb)',border:isNow?'2px solid #22c55e':'2px solid rgba(96,165,250,0.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?10:8,fontWeight:700,color:isNow?'#fff':'#fff',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'0 0 8px rgba(59,130,246,.3)',transition:'all .18s'}}>
                             ${(r.task_title||'?').charAt(0).toUpperCase()}
                           </div>`}
                         ${isNow?html`<div style=${{position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:'#22c55e',border:'1.5px solid #111',boxShadow:'0 0 4px #22c55e'}}></div>`:null}
@@ -4940,7 +4940,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
   },[initialProjectId]); // intentionally only depends on initialProjectId
   const [name,setName]=useState('');const [desc,setDesc]=useState('');
   const [sDate,setSDate]=useState('');const [tDate,setTDate]=useState('');
-  const [color,setColor]=useState('#aaff00');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
+  const [color,setColor]=useState('#2563eb');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
   const [search,setSearch]=useState('');
   const [sortBy,setSortBy]=useState('newest');
   const [viewMode,setViewMode]=useState('grid');
@@ -4965,7 +4965,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
       const newProj=await api.post('/api/projects',{name:name.trim(),description:desc,startDate:sDate,targetDate:tDate,color,members:mems,team_id:projTeam||''});
       if(newProj&&newProj.error){setErr(newProj.error);return;}
       if(!newProj||!newProj.id){setErr('Failed to create project. Please try again.');return;}
-      setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#aaff00');setMembers([]);setProjTeam('');
+      setShowNew(false);setName('');setDesc('');setSDate('');setTDate('');setColor('#2563eb');setMembers([]);setProjTeam('');
       // Reload with small delay to ensure DB write is committed before read
       await new Promise(r=>setTimeout(r,300));
       await reload();
@@ -7565,7 +7565,7 @@ function AIAssistant({cu,projects,tasks,users}){
     ${open?html`
       <div class="ai-panel">
         <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
-          <div style=${{width:32,height:32,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>🤖</div>
+          <div style=${{width:32,height:32,background:'#2563eb',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>🤖</div>
           <div style=${{flex:1}}>
             <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>AI Assistant</div>
             <div style=${{fontSize:10,color:'var(--tx3)'}}>Powered by Claude</div>
@@ -8876,7 +8876,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 ${[['People',showParticipants,()=>{setShowParticipants(true);setShowInvite(false);}],
                    ['Invite',showInvite,()=>{setShowInvite(true);setShowParticipants(false);}]
                 ].map(([lbl,active,fn])=>html`
-                  <button key=${lbl} onClick=${fn} style=${{flex:1,padding:'9px 4px',background:active?'rgba(170,255,0,.12)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:active?'#99ee00':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,borderBottom:active?'2px solid #99ee00':'2px solid transparent',transition:'all .15s'}}>
+                  <button key=${lbl} onClick=${fn} style=${{flex:1,padding:'9px 4px',background:active?'rgba(37,99,235,.12)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:active?'#99ee00':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,borderBottom:active?'2px solid #99ee00':'2px solid transparent',transition:'all .15s'}}>
                     ${lbl}
                   </button>`)}
               </div>
@@ -8902,7 +8902,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             </div>`)}
           <!-- Video -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(170,255,0,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(170,255,0,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#99ee00':'#fff',transition:'all .15s'}}>
+            <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(37,99,235,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(170,255,0,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#99ee00':'#fff',transition:'all .15s'}}>
               ${videoOn?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
               html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
             </button>
@@ -8910,7 +8910,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           </div>
           <!-- Screen Share -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13,background:screenSharing?'rgba(170,255,0,.25)':'rgba(255,255,255,.09)',border:'1.5px solid '+(screenSharing?'rgba(170,255,0,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:screenSharing?'#99ee00':'#fff',transition:'all .15s'}}>
+            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13,background:screenSharing?'rgba(37,99,235,.25)':'rgba(255,255,255,.09)',border:'1.5px solid '+(screenSharing?'rgba(170,255,0,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:screenSharing?'#99ee00':'#fff',transition:'all .15s'}}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
             </button>
             <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>Share</span>
@@ -8946,7 +8946,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <!-- Invite / People -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
             <button onClick=${()=>{setShowInvite(p=>!p||showParticipants);setShowParticipants(false);}}
-              style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(170,255,0,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(170,255,0,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#99ee00':'#fff',transition:'all .15s',position:'relative'}}>
+              style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(37,99,235,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(170,255,0,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#99ee00':'#fff',transition:'all .15s',position:'relative'}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <span style=${{position:'absolute',top:-2,right:-2,width:15,height:15,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',border:'1.5px solid #0d0d1a'}}>${participants.length}</span>
             </button>
