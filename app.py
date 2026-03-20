@@ -4457,7 +4457,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
               ${unread>0?html`<div style=${{position:'absolute',top:-3,right:-3,width:15,height:15,borderRadius:'50%',background:'#ef4444',border:'2px solid var(--sf)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:'#fff'}}>${unread>9?'9+':unread}</div>`:null}
             </button>
             ${showNP?html`
-              <div style=${{position:'absolute',top:38,right:0,width:320,maxHeight:400,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,boxShadow:'var(--sh2)',zIndex:3000,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+              <div style=${{position:'fixed',top:58,right:14,width:350,maxHeight:460,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,boxShadow:'0 12px 48px rgba(0,0,0,0.22)',zIndex:9500,overflow:'hidden',display:'flex',flexDirection:'column'}}>
                 <div style=${{padding:'10px 13px 8px',borderBottom:'1px solid var(--bd)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
                   <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>Notifications ${unread>0?html`<span style=${{color:'var(--ac)',fontSize:11}}>(${unread})</span>`:null}</span>
                   <div style=${{display:'flex',gap:5}}>
@@ -4492,7 +4492,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
               </div>
             </div>
             ${showProfile?html`
-              <div style=${{position:'absolute',top:38,right:0,width:290,background:'#fff',border:'none',borderRadius:18,boxShadow:'0 8px 40px rgba(0,0,0,.15)',zIndex:3000,overflow:'hidden'}}>
+              <div style=${{position:'fixed',top:60,right:16,width:290,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:18,boxShadow:'0 8px 40px rgba(0,0,0,.15)',zIndex:9500,overflow:'hidden'}}>
                 <div style=${{padding:'20px 16px',background:'linear-gradient(135deg,rgba(170,255,0,.12),rgba(184,224,32,.04))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
                   <div style=${{position:'relative',cursor:'pointer'}} title="Click to change photo"
                     onClick=${e=>{e.stopPropagation();prImgRef.current&&prImgRef.current.click();}}>
@@ -6381,7 +6381,7 @@ function MessagesView({projects,users,cu,tasks}){
           });
         }
       });
-    },4000);
+    },2000);
     return()=>clearInterval(id);
   },[pid]);
 
@@ -8394,6 +8394,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [targetUser,setTargetUser]=useState(null);
   const [speaking,setSpeaking]=useState({});
   const [handRaised,setHandRaised]=useState(false);
+  const [raisedHands,setRaisedHands]=useState({}); // {uid: true} for remote participants
   const [screenSharing,setScreenSharing]=useState(false);
   const [remoteScreenUid,setRemoteScreenUid]=useState(null);
   const remoteScreenRef=useRef(null);
@@ -8700,16 +8701,19 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
           } else if(sig.type==='hand'){
             const hid='hand-'+from;
+            // Update per-participant raised hands state for tile indicator
+            setRaisedHands(prev=>({...prev,[from]:data.raised||false}));
             if(data.raised){
-              setFloatingReactions(prev=>[...prev.filter(r=>r.id!==hid),{id:hid,emoji:'✋',x:10+Math.random()*30,label:data.from}]);
-              setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==hid)),6000);
+              // Show floating notification
+              setFloatingReactions(prev=>[...prev.filter(r=>r.id!==hid),{id:hid,emoji:'✋',x:10+Math.random()*30,label:(data.from||'Someone')+' raised hand'}]);
+              setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==hid)),5000);
             } else {
               setFloatingReactions(prev=>prev.filter(r=>r.id!==hid));
             }
           }
         }
       }catch(e){}
-    },1500);
+    },600);
   };
 
   const startPing=rid=>{
@@ -8800,7 +8804,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(roomIdRef.current)try{await api.post('/api/calls/'+roomIdRef.current+'/leave',{});}catch(e){}
     setRoomId(null);setRoomName('');setParticipants([]);
     setPhase('idle');setMuted(false);setVideoOn(false);setElapsed(0);
-    setHandRaised(false);setScreenSharing(false);setSpeaking({});
+    setHandRaised(false);setRaisedHands({});setScreenSharing(false);setSpeaking({});
     if(chatPollRef.current)clearInterval(chatPollRef.current);
     setChatMsgs([]);setChatTxt('');setChatUnread(0);lastChatCountRef.current=0;setShowChat(false);
     setRemoteScreenUid(null);setFloatingReactions([]);setMeetUrl(null);
@@ -8815,7 +8819,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
       const other=getOther();if(!other)return;
       try{const d=await api.get('/api/dm/'+other);if(Array.isArray(d)){setChatMsgs(d);if(d.length>lastChatCountRef.current){if(!showChat)setChatUnread(p=>p+(d.length-lastChatCountRef.current));lastChatCountRef.current=d.length;}}}catch(e){}
     };
-    doFetch();chatPollRef.current=setInterval(doFetch,3000);
+    doFetch();chatPollRef.current=setInterval(doFetch,1500);
   };
   const sendChatMsg=async()=>{
     const txt=chatTxt.trim();if(!txt)return;
@@ -9191,6 +9195,9 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                     ${speaking[u.id]?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',flexShrink:0,animation:'pulse .8s infinite'}}></div>`:null}
                     <span style=${{fontSize:11,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}${u.id===cu.id?' (you)':''}</span>
                   </div>
+                  ${(u.id===cu.id?handRaised:raisedHands[u.id])?html`
+                    <div style=${{background:'rgba(251,191,36,.9)',borderRadius:7,padding:'3px 6px',fontSize:14,lineHeight:1,animation:'pulse .9s infinite',flexShrink:0}}
+                      title="${u.name} raised hand">✋</div>`:null}
                 </div>
               </div>`;})}
           </div>
@@ -9300,57 +9307,26 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             <button onClick=${()=>{
               const nv=!handRaised;setHandRaised(nv);
               const room=roomIdRef.current;if(!room)return;
+              // Broadcast to ALL participants including self-notification
               participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
-                api.post('/api/calls/'+room+'/signal',{to_user:uid,type:'hand',data:{raised:nv,from:cu.name}}).catch(()=>{});
+                api.post('/api/calls/'+room+'/signal',{to_user:uid,type:'hand',data:{raised:nv,from:cu.name||'You'}}).catch(()=>{});
               });
-            }} style=${{width:44,height:44,borderRadius:13,background:handRaised?'rgba(251,191,36,.25)':'rgba(255,255,255,.09)',border:'1.5px solid '+(handRaised?'rgba(251,191,36,.6)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,transition:'all .15s',boxShadow:handRaised?'0 0 14px rgba(251,191,36,.5)':'none'}}>
+              // Auto-lower hand after 30 seconds
+              if(nv){
+                setTimeout(()=>{
+                  setHandRaised(false);
+                  const r=roomIdRef.current;if(!r)return;
+                  participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
+                    api.post('/api/calls/'+r+'/signal',{to_user:uid,type:'hand',data:{raised:false,from:cu.name}}).catch(()=>{});
+                  });
+                },30000);
+              }
+            }} style=${{width:44,height:44,borderRadius:13,background:handRaised?'rgba(251,191,36,.3)':'rgba(255,255,255,.09)',border:'1.5px solid '+(handRaised?'rgba(251,191,36,.8)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,transition:'all .15s',boxShadow:handRaised?'0 0 16px rgba(251,191,36,.6)':'none',animation:handRaised?'pulse 1s infinite':'none'}}>
               ${handRaised?'✋':'🖐'}
             </button>
-            <span style=${{fontSize:8,color:handRaised?'rgba(251,191,36,.9)':'rgba(255,255,255,.35)',lineHeight:1}}>Hand</span>
+            <span style=${{fontSize:8,color:handRaised?'rgba(251,191,36,.95)':'rgba(255,255,255,.35)',lineHeight:1,fontWeight:handRaised?700:400}}>Hand</span>
           </div>
-          <!-- Emoji React -->
-          <div ref=${emojiPickerRef} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1,position:'relative'}}>
-            <button onClick=${(e)=>{e.stopPropagation();setShowEmojiPicker(p=>!p);}}
-              style=${{width:44,height:44,borderRadius:13,
-                background:showEmojiPicker?'rgba(251,191,36,.2)':'rgba(255,255,255,.09)',
-                border:'1.5px solid '+(showEmojiPicker?'rgba(251,191,36,.5)':'rgba(255,255,255,.12)'),
-                cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
-                fontSize:18,transition:'all .15s'}}>
-              😊
-            </button>
-            <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>React</span>
-            ${showEmojiPicker?html`
-              <div style=${{
-                position:'absolute',
-                bottom:'calc(100% + 12px)',
-                left:'50%',
-                transform:'translateX(-50%)',
-                background:'#1a1625',
-                border:'1.5px solid rgba(255,255,255,.18)',
-                borderRadius:16,
-                padding:'8px 12px',
-                display:'flex',
-                gap:6,
-                flexWrap:'wrap',
-                maxWidth:220,
-                boxShadow:'0 -8px 32px rgba(0,0,0,.8),0 2px 8px rgba(0,0,0,.4)',
-                zIndex:10000,
-                whiteSpace:'nowrap'
-              }}>
-                ${['👍','❤️','😂','🎉','🔥','👏','💯','😮','🙌','✅','🚀','😍'].map(em=>html`
-                  <button key=${em}
-                    onMouseDown=${(e)=>{e.stopPropagation();}}
-                    onClick=${(e)=>{e.stopPropagation();sendReaction(em);setShowEmojiPicker(false);}}
-                    style=${{background:'rgba(255,255,255,.06)',border:'none',cursor:'pointer',
-                      fontSize:20,padding:'6px',borderRadius:9,transition:'all .12s',
-                      display:'flex',alignItems:'center',justifyContent:'center',
-                      width:36,height:36}}
-                    onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.15)';e.currentTarget.style.transform='scale(1.25)';}}
-                    onMouseLeave=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.transform='scale(1)';}}>
-                    ${em}
-                  </button>`)}
-              </div>`:null}
-          </div>
+          <!-- React — floating panel trigger (bottom-right corner style) -->
           <!-- Invite / People -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
             <button onClick=${()=>{setShowInvite(p=>!p||showParticipants);setShowParticipants(false);}}
