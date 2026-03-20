@@ -20,7 +20,7 @@ KEY_FILE   = os.path.join(DATA_DIR, ".pf_secret")
 
 # ── PostgreSQL via pg8000 (pure Python — no libpq/system deps needed) ────────
 import pg8000.native
-import urllib.parse
+import urllib.parse, re as _re
 
 DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("PGURL") or ""
 
@@ -28,106 +28,101 @@ def _parse_db_url(url):
     """Parse postgres://user:pass@host:port/dbname into pg8000 kwargs."""
     if not url:
         raise RuntimeError("DATABASE_URL environment variable is not set")
-    # Railway sometimes uses postgres:// prefix
     url = url.replace("postgres://", "postgresql://", 1)
     p = urllib.parse.urlparse(url)
-    kwargs = dict(
-        host=p.hostname,
-        port=p.port or 5432,
-        user=p.username,
-        password=p.password,
-        database=p.path.lstrip("/"),
-        ssl_context=True,   # Railway Postgres requires SSL
-    )
-    return kwargs
+    return dict(host=p.hostname, port=p.port or 5432, user=p.username,
+                password=p.password, database=p.path.lstrip("/"),
+                ssl_context=True)
+
+def _sql_compat(sql):
+    """Convert SQLite SQL to PostgreSQL compatible SQL."""
+    # INSERT OR IGNORE → ON CONFLICT DO NOTHING
+    if "INSERT OR IGNORE INTO" in sql:
+        sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO").rstrip()
+        sql += " ON CONFLICT DO NOTHING"
+    # INSERT OR REPLACE for push_subscriptions
+    if "INSERT OR REPLACE INTO push_subscriptions" in sql:
+        sql = sql.replace("INSERT OR REPLACE INTO push_subscriptions",
+                          "INSERT INTO push_subscriptions").rstrip()
+        sql += (" ON CONFLICT (endpoint) DO UPDATE SET "
+                "p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, "
+                "created=EXCLUDED.created")
+    # Convert ? to $1, $2 ... (pg8000 native positional style)
+    idx = [0]
+    def _rep(m):
+        idx[0] += 1
+        return f"${idx[0]}"
+    sql = _re.sub(r"\?", _rep, sql)
+    return sql
 
 class _Row(dict):
-    """dict subclass that supports row['col'] and row[index] access."""
-    def __init__(self, columns, row):
-        super().__init__(zip(columns, row))
-        self._list = list(row)
+    """dict subclass: supports row['col'] and row[int_index] like sqlite3.Row."""
+    def __init__(self, columns, values):
+        super().__init__(zip(columns, values))
+        self._list = list(values)
     def __getitem__(self, key):
         if isinstance(key, int): return self._list[key]
         return super().__getitem__(key)
     def keys(self): return list(super().keys())
 
 class _Cursor:
-    """Wraps pg8000 connection to match sqlite3 cursor interface."""
+    """Thin wrapper so our code can call .execute()/.fetchone()/.fetchall()."""
     def __init__(self, conn):
         self._conn = conn
         self._rows = []
-        self._columns = []
+        self._cols = []
         self.rowcount = 0
-    def _convert_sql(self, sql, params):
-        """Convert SQLite ? placeholders → pg8000 $1 $2 style and fix SQLite-isms."""
-        import re
-        # INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
-        if "INSERT OR IGNORE INTO" in sql:
-            sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO")
-            sql = sql.rstrip() + " ON CONFLICT DO NOTHING"
-        # INSERT OR REPLACE for push_subscriptions
-        if "INSERT OR REPLACE INTO push_subscriptions" in sql:
-            sql = sql.replace("INSERT OR REPLACE INTO push_subscriptions",
-                              "INSERT INTO push_subscriptions")
-            sql = sql.rstrip() + " ON CONFLICT (endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, created=EXCLUDED.created"
-        # Convert ? to $1, $2, ... (pg8000 native positional style)
-        idx = [0]
-        def replacer(m):
-            idx[0] += 1
-            return f"${idx[0]}"
-        sql = re.sub(r'\?', replacer, sql)
-        return sql, list(params)
     def execute(self, sql, params=()):
-        sql, params = self._convert_sql(sql, params)
-        result = self._conn.run(sql, *params) if params else self._conn.run(sql)
-        self._rows = result if result else []
-        self._columns = [c["name"] for c in (self._conn.columns or [])]
+        sql = _sql_compat(sql)
+        # pg8000 native: pass params as keyword arg `args`
+        result = self._conn.run(sql, args=list(params)) if params else self._conn.run(sql)
+        self._rows = result or []
+        # conn.columns is a list of dicts with key "name"
+        self._cols = [c["name"] for c in (self._conn.columns or [])]
         self.rowcount = self._conn.row_count or 0
         return self
     def fetchone(self):
-        if not self._rows: return None
-        return _Row(self._columns, self._rows[0])
+        return _Row(self._cols, self._rows[0]) if self._rows else None
     def fetchall(self):
-        return [_Row(self._columns, r) for r in self._rows]
+        return [_Row(self._cols, r) for r in self._rows]
     def __iter__(self):
         return iter(self.fetchall())
 
 class _DB:
-    """Wraps pg8000 connection to match 'with get_db() as db:' pattern."""
+    """Context-manager wrapper matching 'with get_db() as db:' pattern."""
     def __init__(self, conn):
         self._conn = conn
     def execute(self, sql, params=()):
-        cur = _Cursor(self._conn)
-        cur.execute(sql, params)
-        return cur
+        return _Cursor(self._conn).execute(sql, params)
     def executescript(self, sql):
-        """Run multiple semicolon-separated statements (SQLite compat)."""
-        # Split on semicolons, skip empty/whitespace-only statements
-        stmts = [s.strip() for s in sql.split(';') if s.strip()]
+        """Run semicolon-separated DDL statements (used by init_db)."""
+        stmts = [s.strip() for s in sql.split(";") if s.strip()]
         for stmt in stmts:
             try:
                 self._conn.run(stmt)
-                self._conn.commit()  # DDL must be committed immediately in PG
             except Exception as e:
-                self._conn.rollback()
-                # Ignore safe errors: table/column/index already exists
                 msg = str(e).lower()
-                if any(x in msg for x in ['already exists', 'duplicate column', 
-                                           'duplicate table', 'column already',
-                                           'relation already']):
+                safe = ["already exists", "duplicate", "column already",
+                        "relation already", "index already"]
+                if any(x in msg for x in safe):
                     continue
-                # Re-raise unexpected errors
+                print(f"  executescript error on: {stmt[:80]!r}: {e}")
                 raise
-    def commit(self): self._conn.commit()
-    def close(self): self._conn.close()
-    def __enter__(self): return self
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            if exc_type: self._conn.rollback()
-            else: self._conn.commit()
-        except Exception: pass
+    def commit(self):
+        if not getattr(self._conn, 'autocommit', False):
+            try: self._conn.run("COMMIT")
+            except Exception: pass
+    def close(self):
         try: self._conn.close()
         except Exception: pass
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not getattr(self._conn, 'autocommit', False):
+            try:
+                if exc_type: self._conn.run("ROLLBACK")
+                else: self._conn.run("COMMIT")
+            except Exception: pass
+        self.close()
         return False
 
 def get_secret_key():
@@ -158,7 +153,7 @@ CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#aa
 
 def get_db(autocommit=False):
     conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
-    conn.autocommit = autocommit
+    conn.autocommit = autocommit  # pg8000 supports autocommit property
     return _DB(conn)
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 def ts(): return datetime.utcnow().isoformat() + 'Z'
@@ -3216,7 +3211,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
   const inCall=callState&&callState.status==='in-call';
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
-  const baseView=view.split(':')[0];
+  const baseView=(view||'dashboard').split(':')[0];
 
   // Nav items per role
   const NAV_ICONS={
@@ -8440,7 +8435,7 @@ function App(){
     tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'},
   };
 
-  const baseView=view.split(':')[0];
+  const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
   const taskFilterType=viewParts[1]||null;
   const taskFilterValue=viewParts[2]||null;
@@ -8572,7 +8567,9 @@ try:
     os.makedirs(JS_DIR, exist_ok=True)
     init_db()
 except Exception as _ie:
+    import traceback
     print(f"  ⚠ Init error: {_ie}")
+    traceback.print_exc()
 def find_free_port(preferred=5000):
     for port in range(preferred, preferred+10):
         try:
