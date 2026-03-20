@@ -609,30 +609,64 @@ def login():
 @app.route("/api/auth/logout",methods=["POST"])
 def logout(): session.clear(); return jsonify({"ok":True})
 
-# ── ONE-TIME SQLite → PostgreSQL Migration Route ──────────────────────────────
-# Visit /migrate-sqlite-to-pg-xk29 once to migrate data, then remove this route
-@app.route("/migrate-sqlite-to-pg-xk29")
-def migrate_sqlite_to_pg():
-    import sqlite3, ssl as _ssl2, urllib.parse as _up2
-    results = []
+# ── ONE-TIME Full Migration Routes ────────────────────────────────────────────
+# Step 1: Visit /inspect-sqlite-xk29      → see SQLite vs PostgreSQL data
+# Step 2: Visit /full-reset-migrate-xk29  → wipe demo data, import real data
+# Remove both routes after migration is confirmed working.
 
-    # Find SQLite file on the volume
+@app.route("/inspect-sqlite-xk29")
+def inspect_sqlite():
+    import sqlite3
+    result = {"sqlite": {}, "postgres": {}}
     sqlite_path = None
     for candidate in ["/data/projectflow.db", "/data/pf.db", "/data/app.db", "/data/database.db"]:
         if os.path.exists(candidate):
             sqlite_path = candidate
             break
-
     if not sqlite_path:
-        files = os.listdir("/data") if os.path.isdir("/data") else ["no /data dir"]
-        return jsonify({"error": "No SQLite file found in /data/", "files_in_data": files})
-
-    results.append(f"Found SQLite: {sqlite_path}")
-
+        files = os.listdir("/data") if os.path.isdir("/data") else []
+        return jsonify({"error": "No SQLite found", "files": files})
+    result["sqlite_path"] = sqlite_path
     try:
         src = sqlite3.connect(sqlite_path)
         src.row_factory = sqlite3.Row
+        ws = src.execute("SELECT id, name, invite_code, owner_id FROM workspaces").fetchall()
+        result["sqlite"]["workspaces"] = [dict(r) for r in ws]
+        us = src.execute("SELECT id, name, email, workspace_id, role FROM users").fetchall()
+        result["sqlite"]["users"] = [dict(r) for r in us]
+        src.close()
+    except Exception as e:
+        result["sqlite"]["error"] = str(e)
+    try:
+        with get_db() as db:
+            ws2 = db.execute("SELECT id, name, invite_code, owner_id FROM workspaces").fetchall()
+            result["postgres"]["workspaces"] = [dict(r) for r in ws2]
+            us2 = db.execute("SELECT id, name, email, workspace_id, role FROM users").fetchall()
+            result["postgres"]["users"] = [dict(r) for r in us2]
+    except Exception as e:
+        result["postgres"]["error"] = str(e)
+    return jsonify(result)
 
+
+@app.route("/full-reset-migrate-xk29")
+def full_reset_migrate():
+    import sqlite3, ssl as _ssl2, urllib.parse as _up2
+    results = []
+    sqlite_path = None
+    for candidate in ["/data/projectflow.db", "/data/pf.db", "/data/app.db", "/data/database.db"]:
+        if os.path.exists(candidate):
+            sqlite_path = candidate
+            break
+    if not sqlite_path:
+        return jsonify({"error": "No SQLite found in /data/"})
+    results.append(f"Found SQLite: {sqlite_path}")
+    TABLES_REVERSE = ["push_subscriptions","call_signals","ticket_comments","tickets",
+                      "teams","call_rooms","reminders","notifications","direct_messages",
+                      "messages","files","tasks","projects","users","workspaces"]
+    TABLES_FORWARD = list(reversed(TABLES_REVERSE))
+    try:
+        src = sqlite3.connect(sqlite_path)
+        src.row_factory = sqlite3.Row
         url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         p = _up2.urlparse(url)
         ssl_ctx = _ssl2.create_default_context()
@@ -643,43 +677,48 @@ def migrate_sqlite_to_pg():
             user=p.username, password=p.password,
             database=p.path.lstrip("/"), ssl_context=ssl_ctx
         )
-
-        TABLES = ["workspaces","users","projects","tasks","files",
-                  "messages","direct_messages","notifications","reminders",
-                  "call_rooms","teams","tickets","ticket_comments",
-                  "call_signals","push_subscriptions"]
-
-        for table in TABLES:
+        results.append("Clearing PostgreSQL tables...")
+        for table in TABLES_REVERSE:
+            try:
+                dst.run(f"DELETE FROM {table}")
+                dst.run("COMMIT")
+                results.append(f"  cleared: {table}")
+            except Exception as e:
+                results.append(f"  skip {table}: {e}")
+                try: dst.run("ROLLBACK")
+                except: pass
+        results.append("Importing from SQLite...")
+        for table in TABLES_FORWARD:
             try:
                 rows = src.execute(f"SELECT * FROM {table}").fetchall()
                 if not rows:
-                    results.append(f"  {table}: empty, skipped")
+                    results.append(f"  {table}: empty")
                     continue
                 cols = list(rows[0].keys())
-                placeholders = ", ".join(f"${i+1}" for i in range(len(cols)))
+                placeholders = ", ".join(f":p{i}" for i in range(len(cols)))
                 col_names = ", ".join(cols)
                 sql = f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
-                count = 0
-                errors = 0
+                count = 0; errs = 0
                 for row in rows:
                     try:
-                        dst.run(sql, parameters=list(row))
+                        kwargs = {f"p{i}": row[i] for i in range(len(cols))}
+                        dst.run(sql, **kwargs)
                         count += 1
                     except Exception as re:
-                        errors += 1
+                        errs += 1
                 dst.run("COMMIT")
-                results.append(f"✅ {table}: {count} rows migrated, {errors} skipped")
+                results.append(f"  OK {table}: {count} inserted, {errs} errors")
             except Exception as e:
-                results.append(f"❌ {table}: {str(e)}")
-
+                results.append(f"  FAIL {table}: {e}")
+                try: dst.run("ROLLBACK")
+                except: pass
         src.close()
         dst.close()
-        results.append("🎉 Migration complete! Remove this route and redeploy.")
+        results.append("DONE! Your real data is now in PostgreSQL. Log in with your real credentials.")
         return jsonify({"status": "done", "results": results})
-
     except Exception as e:
         return jsonify({"status": "error", "error": str(e), "results": results})
-# ── End Migration Route ───────────────────────────────────────────────────────
+# ── End Migration Routes ───────────────────────────────────────────────────────
 
 @app.route("/api/auth/register",methods=["POST"])
 def register():
