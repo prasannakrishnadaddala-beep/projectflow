@@ -3377,7 +3377,12 @@ class ErrorBoundary extends React.Component{
 /* ─── AuthScreen — Professional Tech Design ───────────────────────────────── */
 function AuthScreen({onLogin}){
   const _initTab=(()=>{try{const p=new URLSearchParams(window.location.search);return p.get('action')==='register'?'register':'login';}catch{return 'login';}})();
-  const [tab,setTab]=useState(_initTab);
+  const _setTab=(t)=>{
+    setTabRaw(t);
+    setEmail('');setPw('');setErr('');setName('');setWsName('');setInviteCode('');
+    try{history.replaceState(null,'','/?action='+t);}catch{}
+  };
+  const [tab,setTabRaw]=useState(_initTab);const setTab=_setTab;
   const [regMode,setRegMode]=useState('create');
   const [wsName,setWsName]=useState('');
   const [inviteCode,setInviteCode]=useState('');
@@ -3812,13 +3817,13 @@ function AuthScreen({onLogin}){
               <input style=${inp} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
 
           <div><label style=${lbl}>Email Address</label>
-            <input style=${inp} type="email" placeholder="you@company.com" value=${email}
+            <input style=${inp} type="email" placeholder="you@company.com" value=${email} autoComplete="username"
               onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
 
           <div><label style=${lbl}>Password</label>
             <div style=${{position:'relative'}}>
               <input style=${{...inp,paddingRight:42}} type=${showPw?'text':'password'}
-                placeholder="••••••••••" value=${pw}
+                placeholder="••••••••••" value=${pw} autoComplete="current-password"
                 onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
               <button onClick=${()=>setShowPw(!showPw)}
                 style=${{position:'absolute',right:13,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:14,padding:0,lineHeight:1}}>
@@ -3853,8 +3858,8 @@ function AuthScreen({onLogin}){
 
         <p style=${{fontSize:12.5,color:'#94a3b8',marginTop:18,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to ProjectFlowPro? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
-            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
+            ?html`New to ProjectFlowPro? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');try{history.replaceState(null,'','/?action=login');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
       `)}
     </div>`;
