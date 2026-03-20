@@ -2233,7 +2233,7 @@ LANDING_HTML = """<!DOCTYPE html>
 :root{
   --bg:#ffffff;--sf:#f8fafc;--sf2:#f1f5f9;--bd:rgba(37,99,235,0.12);--bd2:rgba(0,0,0,0.06);
   --ac:#2563eb;--ac2:#1d4ed8;--ac3:rgba(37,99,235,0.08);
-  --tx:#0f172a;--tx2:#475569;--tx3:#94a3b8;
+  --tx:#0a0f1e;--tx2:#475569;--tx3:#94a3b8;
   --ocean1:#e0f2fe;--ocean2:#bae6fd;--ocean3:#7dd3fc;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -2316,7 +2316,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:56px;display:flex;ali
 .stats-grid{max-width:1160px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e2e8f0;border-radius:12px;overflow:hidden;}
 .stat-item{background:#f8fafc;text-align:center;padding:24px 16px;}
 .stat-num{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;line-height:1;margin-bottom:5px;color:var(--ac);}
-.stat-lbl{font-size:.8rem;color:var(--tx3);}
+.stat-lbl{font-size:.82rem;color:#475569;font-weight:500;}
 
 /* SECTIONS */
 section{padding:80px 0;}
@@ -2333,10 +2333,10 @@ section{padding:80px 0;}
 .bc.span2{grid-column:span 2;}
 .bc.featured{border-color:rgba(37,99,235,0.15);background:linear-gradient(135deg,rgba(37,99,235,0.03) 0%,#fff 60%);}
 .b-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:13px;background:var(--ac3);border:1px solid var(--bd);}
-.bc h3{font-size:.92rem;font-weight:700;margin-bottom:6px;color:var(--tx);}
-.bc p{font-size:.84rem;color:var(--tx2);line-height:1.65;}
-.feat-list{list-style:none;margin-top:11px;display:flex;flex-direction:column;gap:5px;}
-.feat-list li{display:flex;align-items:flex-start;gap:8px;font-size:.81rem;color:var(--tx2);}
+.bc h3{font-size:1rem;font-weight:700;margin-bottom:8px;color:#0a0f1e;}
+.bc p{font-size:.88rem;color:#334155;line-height:1.68;}
+.feat-list{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.feat-list li{display:flex;align-items:flex-start;gap:8px;font-size:.84rem;color:#334155;}
 .feat-list li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:7px;}
 .role-badge{font-size:.64rem;background:rgba(37,99,235,.08);color:var(--ac);padding:2px 8px;border-radius:100px;margin-left:5px;border:1px solid var(--bd);font-weight:600;}
 
@@ -2345,15 +2345,15 @@ section{padding:80px 0;}
 .mod-card{background:#fff;border:1.5px solid #f1f5f9;border-radius:11px;padding:16px 14px;text-align:center;transition:all .2s;}
 .mod-card:hover{border-color:rgba(37,99,235,.15);transform:translateY(-1px);box-shadow:0 4px 16px rgba(37,99,235,.07);}
 .mod-ico{font-size:1.6rem;margin-bottom:8px;}
-.mod-n{font-size:.8rem;font-weight:700;margin-bottom:3px;color:var(--tx);}
-.mod-d{font-size:.72rem;color:var(--tx3);line-height:1.5;}
+.mod-n{font-size:.84rem;font-weight:700;margin-bottom:3px;color:#0a0f1e;}
+.mod-d{font-size:.76rem;color:#475569;line-height:1.5;}
 
 /* HOW IT WORKS */
 .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:44px;}
 .step{text-align:center;}
 .step-num{width:44px;height:44px;border-radius:50%;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-family:'Syne',sans-serif;font-weight:800;font-size:.9rem;color:var(--ac);background:var(--ac3);}
-.step h3{font-size:.9rem;font-weight:700;margin-bottom:6px;color:var(--tx);}
-.step p{font-size:.82rem;color:var(--tx2);}
+.step h3{font-size:.95rem;font-weight:700;margin-bottom:6px;color:#0a0f1e;}
+.step p{font-size:.86rem;color:#334155;}
 
 /* CTA */
 .cta-section{padding:80px 0;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 50%,#e0f2fe 100%);}
@@ -2384,6 +2384,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
 .ticker{display:flex;animation:ticker 32s linear infinite;}
 .ticker-item{display:flex;align-items:center;gap:8px;padding:0 28px;font-size:.76rem;color:var(--tx3);white-space:nowrap;flex-shrink:0;}
 .ticker-item .hi{color:var(--ac);font-weight:600;}
+.ticker-sep{color:#e2e8f0;margin-left:20px;}
 @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 
 /* ANIMATIONS */
@@ -2460,7 +2461,12 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
               <div class="m-tabs"><div class="m-tab act">Board</div><div class="m-tab">List</div><div class="m-tab">Timeline</div></div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;">
-              <div style="display:flex;">${['#2563eb','#7c3aed','#059669','#d97706'].map(c=>`<div style="width:20px;height:20px;border-radius:50%;background:${c};border:2px solid #fff;margin-left:-5px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff"></div>`).join('')}</div>
+              <div style="display:flex;">
+                <div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:2px solid #fff;margin-left:0;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">A</div>
+                <div style="width:20px;height:20px;border-radius:50%;background:#7c3aed;border:2px solid #fff;margin-left:-5px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">B</div>
+                <div style="width:20px;height:20px;border-radius:50%;background:#059669;border:2px solid #fff;margin-left:-5px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">C</div>
+                <div style="width:20px;height:20px;border-radius:50%;background:#d97706;border:2px solid #fff;margin-left:-5px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">D</div>
+              </div>
               <div style="font-size:.62rem;color:var(--ac);background:var(--ac3);padding:3px 8px;border-radius:100px;border:1px solid var(--bd);cursor:pointer;">+ Add Task</div>
             </div>
           </div>
@@ -2479,9 +2485,26 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
 <!-- TICKER -->
 <div class="ticker-wrap">
   <div class="ticker">
-    ${['📋 Smart Task Boards','🤖 <span class="hi">AI Assistant</span>','📅 Timeline Tracker','📞 <span class="hi">Voice Huddles</span>','💬 Real-time Messaging','✉️ Direct DMs','🎫 Support Tickets','👩‍💻 <span class="hi">Dev Analytics</span>','⏰ Smart Reminders','🔔 Push Notifications',
-       '📋 Smart Task Boards','🤖 <span class="hi">AI Assistant</span>','📅 Timeline Tracker','📞 <span class="hi">Voice Huddles</span>','💬 Real-time Messaging','✉️ Direct DMs','🎫 Support Tickets','👩‍💻 <span class="hi">Dev Analytics</span>','⏰ Smart Reminders','🔔 Push Notifications']
-      .map(t=>`<div class="ticker-item">${t}<span style="margin-left:28px;color:#e2e8f0">·</span></div>`).join('')}
+    <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Voice Huddles</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Voice Huddles</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
   </div>
 </div>
 
@@ -2512,7 +2535,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
       <div class="bc"><div class="b-ico">💬</div><h3>Messaging & DMs</h3><p>Per-project channels plus private one-on-one direct messages with unread badges.</p><ul class="feat-list"><li>Per-project message channels</li><li>Private direct messages</li><li>Start huddle directly from DMs</li></ul></div>
       <div class="bc"><div class="b-ico">📞</div><h3>Huddle Calls</h3><p>Instant in-app voice huddles. Start from sidebar or DMs, invite mid-call.</p><ul class="feat-list"><li>One-click room creation</li><li>Invite participants mid-call</li><li>Mute/unmute controls</li></ul></div>
       <div class="bc"><div class="b-ico">🎫</div><h3>Support Tickets</h3><p>Built-in bug tracking & support ticketing separate from project tasks.</p><ul class="feat-list"><li>Bug, feature-request & incident types</li><li>Status: Open · In Progress · Resolved</li><li>Threaded comments per ticket</li></ul></div>
-      <div class="bc"><div class="b-ico">🔔</div><h3>Notifications</h3><p>In-app toasts, browser push (VAPID), and email via per-workspace SMTP configuration.</p><ul class="feat-list"><li>Task assigned, status change, comments</li><li>Desktop push via Web Push standard</li><li>Email via per-workspace SMTP</li></ul></div>
+
     </div>
   </div>
 </section>
@@ -3076,20 +3099,28 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .team-switch-enter{animation:teamSwitch .25s ease forwards}
 </style></head><body>
 
-<div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column">
-  <div style="width:88px;height:88px;background:linear-gradient(135deg,#aaff00,#9b8ef4);border-radius:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(170,255,0,.45);animation:sp .9s linear infinite">
-    <svg width="46" height="46" viewBox="0 0 64 64" fill="none">
-      <circle cx="32" cy="32" r="9" fill="white"/>
-      <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
-      <circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/>
-      <circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/>
-      <line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      <line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      <line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-    </svg>
+<div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#ffffff;">
+  <!-- Ocean wave bg -->
+  <div style="position:fixed;inset:0;z-index:0;background:linear-gradient(180deg,#ffffff 0%,#f0f9ff 40%,#dbeafe 70%,#bfdbfe 100%);"></div>
+  <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;">
+    <div style="width:80px;height:80px;background:#2563eb;border-radius:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(37,99,235,0.35);animation:sp .9s linear infinite">
+      <svg width="42" height="42" viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="32" r="9" fill="white"/>
+        <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
+        <circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/>
+        <circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/>
+        <line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <p style="color:#475569;font-size:13px;margin-top:18px;font-family:'DM Sans',sans-serif;letter-spacing:.3px;font-weight:500">Loading ProjectFlowPro...</p>
+    <div style="margin-top:12px;width:120px;height:3px;background:#e2e8f0;border-radius:100px;overflow:hidden;">
+      <div style="height:100%;background:#2563eb;border-radius:100px;animation:loadBar 1.4s ease-in-out infinite;"></div>
+    </div>
   </div>
-  <p style="color:var(--tx2);font-size:13px;margin-top:22px;font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:.3px">Loading ProjectFlow...</p>
-  <div id="LE" style="display:none;color:var(--rd);font-size:12px;margin-top:14px;max-width:360px;padding:12px 16px;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:10px;text-align:center"></div>
+  <div id="LE" style="display:none;color:#dc2626;font-size:12px;margin-top:14px;max-width:360px;padding:12px 16px;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);border-radius:10px;text-align:center;position:relative;z-index:1;"></div>
+  <style>@keyframes loadBar{0%{width:0%;margin-left:0}60%{width:80%}100%{width:100%;margin-left:100%}}</style>
 </div>
 <script>
 window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
@@ -3187,7 +3218,8 @@ class ErrorBoundary extends React.Component{
 
 /* ─── AuthScreen — Professional Tech Design ───────────────────────────────── */
 function AuthScreen({onLogin}){
-  const [tab,setTab]=useState('login');
+  const _initTab=(()=>{try{const p=new URLSearchParams(window.location.search);return p.get('action')==='register'?'register':'login';}catch{return 'login';}})();
+  const [tab,setTab]=useState(_initTab);
   const [regMode,setRegMode]=useState('create');
   const [wsName,setWsName]=useState('');
   const [inviteCode,setInviteCode]=useState('');
@@ -9174,7 +9206,7 @@ function App(){
         <svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
       </div>
     </div>
-    <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlow...</p>
+    <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlowPro...</p>
   </div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
