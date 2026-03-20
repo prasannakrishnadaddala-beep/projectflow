@@ -3920,12 +3920,14 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
 /* ─── ProjectsView ────────────────────────────────────────────────────────── */
 function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,activeTeam,initialProjectId}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
-  // Auto-open project detail if routed from Timeline Tracker
+  // Auto-open project detail if routed from Timeline Tracker (fires once, then clears)
+  const didOpenRef=useRef(false);
   useEffect(()=>{
-    if(initialProjectId&&safe(projects).length>0){
-      const p=safe(projects).find(p=>p.id===initialProjectId);
-      if(p)setDetail(p);
+    if(initialProjectId&&safe(projects).length>0&&!didOpenRef.current){
+      const p=safe(projects).find(proj=>proj.id===initialProjectId);
+      if(p){setDetail(p);didOpenRef.current=true;}
     }
+    if(!initialProjectId){didOpenRef.current=false;}
   },[initialProjectId,projects]);
   const [name,setName]=useState('');const [desc,setDesc]=useState('');
   const [sDate,setSDate]=useState('');const [tDate,setTDate]=useState('');
@@ -7928,6 +7930,15 @@ function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
   const [initialProjectId,setInitialProjectId]=useState(null);
+  // Clear initialProjectId whenever view changes (except when timeline sets it)
+  const prevViewRef=useRef(null);
+  useEffect(()=>{
+    const base=view.split(':')[0];
+    if(prevViewRef.current&&prevViewRef.current!=='timeline'&&base==='projects'){
+      setInitialProjectId(null);
+    }
+    prevViewRef.current=base;
+  },[view]);
   // Restore saved accent color on mount
   useEffect(()=>{
     try{
