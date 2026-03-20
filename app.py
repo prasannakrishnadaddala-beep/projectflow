@@ -2865,11 +2865,7 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 </script>
 </body>
-</html>"""'''
-
-print(NEW_LANDING[:100])
-print("Length:", len(NEW_LANDING))
-
+</html>"""
 
 
 HTML = r"""<!DOCTYPE html>
