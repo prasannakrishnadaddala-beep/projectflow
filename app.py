@@ -30,9 +30,13 @@ def _parse_db_url(url):
         raise RuntimeError("DATABASE_URL environment variable is not set")
     url = url.replace("postgres://", "postgresql://", 1)
     p = urllib.parse.urlparse(url)
+    import ssl as _ssl
+    ssl_ctx = _ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = _ssl.CERT_NONE
     return dict(host=p.hostname, port=p.port or 5432, user=p.username,
                 password=p.password, database=p.path.lstrip("/"),
-                ssl_context=True)
+                ssl_context=ssl_ctx)
 
 def _sql_compat(sql):
     """Convert SQLite SQL to PostgreSQL compatible SQL."""
@@ -74,9 +78,9 @@ class _Cursor:
         self.rowcount = 0
     def execute(self, sql, params=()):
         sql = _sql_compat(sql)
-        # pg8000 native: run(sql, val1, val2, ...) — pass params as positional args
+        # pg8000 native requires parameters as a list via keyword arg, not *args
         if params:
-            result = self._conn.run(sql, *params)
+            result = self._conn.run(sql, parameters=list(params))
         else:
             result = self._conn.run(sql)
         self._rows = result or []
