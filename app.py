@@ -5611,8 +5611,8 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     {name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)',priKey:'low'}
   ];
   const stats=[
-    {label:'Total Projects',val:p.length,color:'var(--ac)',bg:'var(--ac3)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
-    {label:'Active Tasks',val:active,color:'var(--ac)',bg:'var(--ac3)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
+    {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'},
+    {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'},
     {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'},
     {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'},
     {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'},
@@ -5859,7 +5859,7 @@ function TimelineView({cu,tasks,projects,onNav}){
 
         <!-- Health tab cards -->
         <div style=${{display:'flex',gap:7,marginBottom:10,flexWrap:'wrap'}}>
-          ${[['all','All','var(--ac)','rgba(170,255,0,.08)',counts.total],
+          ${[['all','All','#1d4ed8','rgba(29,78,216,0.08)',counts.total],
              ['on-track','On Track','var(--gn)','rgba(74,222,128,.1)',counts['on-track']],
              ['warning','At Risk','var(--am)','rgba(251,191,36,.1)',counts['warning']],
              ['at-risk','Needs Attn','var(--rd)','rgba(248,113,113,.1)',counts['at-risk']],
@@ -5927,16 +5927,16 @@ function TimelineView({cu,tasks,projects,onNav}){
               ${proj.totalDays!==null?html`
                 <div style=${{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
                   <div style=${{display:'flex',alignItems:'center',gap:10}}>
-                    <span style=${{fontSize:10,color:'var(--tx3)',width:90,flexShrink:0}}>⏱ Time elapsed</span>
-                    <div style=${{flex:1,height:7,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
+                    <span style=${{fontSize:10,color:'var(--tx2)',fontWeight:600,width:90,flexShrink:0}}>⏱ Time elapsed</span>
+                    <div style=${{flex:1,height:7,background:'var(--sf3)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
                       <div style=${{height:'100%',width:proj.timeProgress+'%',borderRadius:100,
                         background:proj.isOverdue?'var(--rd)':proj.timeProgress>70?'var(--am)':'var(--cy)'}}></div>
                     </div>
                     <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',width:34,textAlign:'right',fontWeight:700}}>${proj.timeProgress}%</span>
                   </div>
                   <div style=${{display:'flex',alignItems:'center',gap:10}}>
-                    <span style=${{fontSize:10,color:'var(--tx3)',width:90,flexShrink:0}}>✅ Tasks done</span>
-                    <div style=${{flex:1,height:7,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
+                    <span style=${{fontSize:10,color:'var(--tx2)',fontWeight:600,width:90,flexShrink:0}}>✅ Tasks done</span>
+                    <div style=${{flex:1,height:7,background:'var(--sf3)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
                       <div style=${{height:'100%',width:proj.taskProgress+'%',borderRadius:100,background:proj.color}}></div>
                     </div>
                     <span style=${{fontSize:10,fontFamily:'monospace',color:'var(--tx2)',width:34,textAlign:'right',fontWeight:700}}>${proj.taskProgress}%</span>
@@ -5952,7 +5952,7 @@ function TimelineView({cu,tasks,projects,onNav}){
                     proj.gap!==null?{lbl:'Gap',val:(proj.gap>0?'+':'')+proj.gap+'%',c:proj.gap>15?'var(--rd)':proj.gap>0?'var(--am)':'var(--gn)'}:null,
                   ].filter(Boolean).map((ch,i)=>html`
                     <div key=${i} style=${{padding:'3px 8px',background:'var(--sf2)',borderRadius:6,border:'1px solid var(--bd)'}}>
-                      <span style=${{fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.4}}>${ch.lbl} </span>
+                      <span style=${{fontSize:9,color:'var(--tx2)',fontWeight:600,textTransform:'uppercase',letterSpacing:.4}}>${ch.lbl} </span>
                       <span style=${{fontSize:10,fontWeight:700,color:ch.c,fontFamily:'monospace'}}>${ch.val}</span>
                     </div>`)}
                 </div>`:html`
@@ -7976,7 +7976,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
     {label:'Upcoming',val:upcoming.length,color:'var(--cy)',bg:'rgba(34,211,238,.1)',icon:'⚡'},
     {label:'Overdue',val:overdue.length,color:'var(--rd)',bg:'rgba(248,113,113,.1)',icon:'🚨'},
     {label:'Completed',val:completed.length,color:'var(--gn)',bg:'rgba(74,222,128,.1)',icon:'✅'},
-    {label:'Today',val:active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'var(--ac)',bg:'rgba(170,255,0,.1)',icon:'📅'},
+    {label:'Today',val:active.filter(r=>{const d=new Date(r.remind_at);return d.toDateString()===now.toDateString();}).length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:'📅'},
   ];
 
   return html`
