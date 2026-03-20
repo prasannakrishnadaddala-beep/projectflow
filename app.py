@@ -167,7 +167,81 @@ def get_db(autocommit=False):
     conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
     conn.autocommit = autocommit  # pg8000 supports autocommit property
     return _DB(conn)
-def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
+def hash_pw(p):
+    """Hash password with bcrypt (falls back to sha256 for legacy check)."""
+    try:
+        import bcrypt
+        return bcrypt.hashpw(p.encode(), bcrypt.gensalt(rounds=12)).decode()
+    except ImportError:
+        return hashlib.sha256(p.encode()).hexdigest()
+
+def verify_pw(plain, hashed):
+    """Verify password — supports both bcrypt and legacy sha256 hashes."""
+    try:
+        import bcrypt
+        if hashed.startswith("$2b$") or hashed.startswith("$2a$"):
+            return bcrypt.checkpw(plain.encode(), hashed.encode())
+        # Legacy sha256 hash — verify then silently upgrade to bcrypt
+        return hashed == hashlib.sha256(plain.encode()).hexdigest()
+    except ImportError:
+        return hashed == hashlib.sha256(plain.encode()).hexdigest()
+
+# ── OTP Store (in-memory, auto-expiring) ─────────────────────────────────────
+import threading as _threading
+_otp_store = {}   # {email: {"code": "123456", "expires": timestamp, "user_id": ..., "workspace_id": ...}}
+_otp_lock = _threading.Lock()
+
+def _otp_cleanup():
+    """Remove expired OTPs every 2 minutes."""
+    while True:
+        import time as _time
+        _time.sleep(120)
+        now = _time.time()
+        with _otp_lock:
+            expired = [k for k, v in _otp_store.items() if v["expires"] < now]
+            for k in expired:
+                del _otp_store[k]
+
+_threading.Thread(target=_otp_cleanup, daemon=True).start()
+
+def generate_otp():
+    """Generate a 6-digit OTP."""
+    return str(secrets.randbelow(900000) + 100000)  # always 6 digits
+
+def send_otp_email(to_email, otp_code, user_name):
+    """Send OTP verification email."""
+    subject = "ProjectFlow — Your Login Code"
+    body = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
+      <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <div style="background:#0a1a00;padding:24px 32px;text-align:center;">
+          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">ProjectFlow</h1>
+        </div>
+        <div style="padding:32px;">
+          <h2 style="color:#111;margin:0 0 8px;">Hi {user_name},</h2>
+          <p style="color:#555;margin:0 0 28px;">Use the code below to complete your sign-in. It expires in <b>10 minutes</b>.</p>
+          <div style="text-align:center;margin:0 0 28px;">
+            <div style="display:inline-block;background:#f0fff0;border:2px solid #aaff00;border-radius:12px;padding:18px 36px;">
+              <span style="font-size:38px;font-weight:800;letter-spacing:10px;color:#0a1a00;font-family:monospace;">{otp_code}</span>
+            </div>
+          </div>
+          <p style="color:#888;font-size:13px;margin:0;">If you didn't request this code, you can safely ignore this email. Do not share this code with anyone.</p>
+        </div>
+        <div style="background:#f9f9f9;padding:14px 32px;text-align:center;border-top:1px solid #eee;">
+          <p style="color:#aaa;font-size:11px;margin:0;">ProjectFlow · Team Project Management</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    # Try workspace SMTP first, then fallback to global
+    try:
+        send_email(to_email, subject, body)
+        return True
+    except Exception as e:
+        print(f"[OTP] Email send error: {e}")
+        return False
 def ts(): return datetime.utcnow().isoformat() + 'Z'
 
 # ── Email Configuration & Function ────────────────────────────────────────────
@@ -406,7 +480,8 @@ def init_db():
                 id TEXT PRIMARY KEY, name TEXT, invite_code TEXT,
                 owner_id TEXT, ai_api_key TEXT, created TEXT,
                 smtp_server TEXT, smtp_port INTEGER, smtp_username TEXT,
-                smtp_password TEXT, from_email TEXT, email_enabled INTEGER DEFAULT 1);
+                smtp_password TEXT, from_email TEXT, email_enabled INTEGER DEFAULT 1,
+                otp_enabled INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, email TEXT,
                 password TEXT, role TEXT, avatar TEXT, color TEXT, created TEXT);
@@ -510,6 +585,8 @@ def init_db():
         except Exception as e:
             print(f"Avatar cleanup migration error: {e}")
         # Add email configuration columns to workspaces (migration)
+        try: db.execute("ALTER TABLE workspaces ADD COLUMN otp_enabled INTEGER DEFAULT 0")
+        except: pass
         try: 
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_server TEXT")
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_port INTEGER DEFAULT 587")
@@ -597,14 +674,93 @@ def wid(): return session.get("workspace_id","")
 @app.route("/api/auth/login",methods=["POST"])
 def login():
     d=request.json or {}
+    email=d.get("email","").strip().lower()
+    password=d.get("password","")
     with get_db() as db:
-        u=db.execute("SELECT * FROM users WHERE email=? AND password=?",
-                     (d.get("email",""),hash_pw(d.get("password","")))).fetchone()
+        u=db.execute("SELECT * FROM users WHERE email=?",(email,)).fetchone()
         if not u: return jsonify({"error":"Invalid email or password"}),401
+        if not verify_pw(password, u["password"]):
+            return jsonify({"error":"Invalid email or password"}),401
+        # If password was legacy sha256, silently upgrade to bcrypt
+        if not (u["password"].startswith("$2b$") or u["password"].startswith("$2a$")):
+            try:
+                new_hash = hash_pw(password)
+                db.execute("UPDATE users SET password=? WHERE id=?",(new_hash, u["id"]))
+            except Exception: pass
+        # Check if OTP is enabled for this workspace
+        ws = db.execute("SELECT * FROM workspaces WHERE id=?",(u["workspace_id"],)).fetchone()
+        otp_enabled = ws and ws.get("otp_enabled", 0)
+        if otp_enabled:
+            # Check if SMTP is configured
+            smtp_ok = ws.get("smtp_username") and ws.get("smtp_password")
+            if smtp_ok:
+                import time as _time
+                code = generate_otp()
+                with _otp_lock:
+                    _otp_store[email] = {
+                        "code": code,
+                        "expires": _time.time() + 600,  # 10 minutes
+                        "user_id": u["id"],
+                        "workspace_id": u["workspace_id"],
+                        "name": u["name"]
+                    }
+                sent = send_otp_email(email, code, u["name"])
+                if sent:
+                    return jsonify({"otp_required": True, "email": email, "name": u["name"]}), 200
+                # If email fails, fall through to direct login
+        # No OTP — log in directly
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
         return jsonify(dict(u))
+
+@app.route("/api/auth/verify-otp",methods=["POST"])
+def verify_otp():
+    d=request.json or {}
+    email=d.get("email","").strip().lower()
+    code=d.get("code","").strip()
+    import time as _time
+    with _otp_lock:
+        entry = _otp_store.get(email)
+        if not entry:
+            return jsonify({"error":"OTP expired or not found. Please log in again."}),400
+        if _time.time() > entry["expires"]:
+            del _otp_store[email]
+            return jsonify({"error":"OTP has expired. Please log in again."}),400
+        if entry["code"] != code:
+            return jsonify({"error":"Invalid OTP code. Please try again."}),401
+        # Valid — clear OTP and create session
+        del _otp_store[email]
+    with get_db() as db:
+        u=db.execute("SELECT * FROM users WHERE id=?",(entry["user_id"],)).fetchone()
+        if not u: return jsonify({"error":"User not found"}),404
+        session.permanent=True
+        session["user_id"]=u["id"]
+        session["workspace_id"]=u["workspace_id"]
+        return jsonify(dict(u))
+
+@app.route("/api/auth/resend-otp",methods=["POST"])
+def resend_otp():
+    d=request.json or {}
+    email=d.get("email","").strip().lower()
+    import time as _time
+    with _otp_lock:
+        entry = _otp_store.get(email)
+        if not entry:
+            return jsonify({"error":"Session expired. Please log in again."}),400
+        # Rate limit — don't resend if < 60 seconds since last
+        last_sent = entry.get("last_sent", 0)
+        if _time.time() - last_sent < 60:
+            wait = int(60 - (_time.time() - last_sent))
+            return jsonify({"error":f"Please wait {wait}s before resending."}),429
+        code = generate_otp()
+        entry["code"] = code
+        entry["expires"] = _time.time() + 600
+        entry["last_sent"] = _time.time()
+    sent = send_otp_email(email, code, entry["name"])
+    if sent:
+        return jsonify({"ok": True, "message": "New OTP sent to your email."})
+    return jsonify({"error":"Failed to send email. Check SMTP settings."}),500
 
 @app.route("/api/auth/logout",methods=["POST"])
 def logout(): session.clear(); return jsonify({"ok":True})
@@ -681,6 +837,7 @@ def update_workspace():
         if "smtp_password" in d: db.execute("UPDATE workspaces SET smtp_password=? WHERE id=?",(d["smtp_password"],wid()))
         if "from_email" in d: db.execute("UPDATE workspaces SET from_email=? WHERE id=?",(d["from_email"],wid()))
         if "email_enabled" in d: db.execute("UPDATE workspaces SET email_enabled=? WHERE id=?",(1 if d["email_enabled"] else 0,wid()))
+        if "otp_enabled" in d: db.execute("UPDATE workspaces SET otp_enabled=? WHERE id=?",(1 if d["otp_enabled"] else 0,wid()))
         ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
         return jsonify(dict(ws))
 
@@ -3360,10 +3517,10 @@ class ErrorBoundary extends React.Component{
   }
 }
 
-/* ─── AuthScreen with Workspace ──────────────────────────────────────────── */
+/* ─── AuthScreen with Workspace + OTP ────────────────────────────────────── */
 function AuthScreen({onLogin}){
   const [tab,setTab]=useState('login');
-  const [regMode,setRegMode]=useState('create'); // 'create' or 'join'
+  const [regMode,setRegMode]=useState('create');
   const [wsName,setWsName]=useState('');
   const [inviteCode,setInviteCode]=useState('');
   const [name,setName]=useState('');
@@ -3373,12 +3530,37 @@ function AuthScreen({onLogin}){
   const [showPw,setShowPw]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
+  // OTP state
+  const [otpStep,setOtpStep]=useState(false);  // true = show OTP entry screen
+  const [otpEmail,setOtpEmail]=useState('');
+  const [otpName,setOtpName]=useState('');
+  const [otpCode,setOtpCode]=useState('');
+  const [otpResendCd,setOtpResendCd]=useState(0); // countdown seconds
+  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+
+  // Resend countdown timer
+  useEffect(()=>{
+    if(otpResendCd<=0)return;
+    const t=setTimeout(()=>setOtpResendCd(c=>c-1),1000);
+    return()=>clearTimeout(t);
+  },[otpResendCd]);
+
+  // Auto-focus first OTP box when entering OTP step
+  useEffect(()=>{
+    if(otpStep && otpRefs[0].current) otpRefs[0].current.focus();
+  },[otpStep]);
 
   const go=async()=>{
     setErr('');setBusy(true);
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
-      if(r.error)setErr(r.error); else onLogin(r);
+      if(r.error){setErr(r.error);}
+      else if(r.otp_required){
+        setOtpEmail(r.email);
+        setOtpName(r.name);
+        setOtpStep(true);
+        setOtpResendCd(60);
+      } else {onLogin(r);}
     } else {
       if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
       if(regMode==='create'&&!wsName){setErr('Workspace name required.');setBusy(false);return;}
@@ -3389,14 +3571,101 @@ function AuthScreen({onLogin}){
     setBusy(false);
   };
 
+  const submitOtp=async()=>{
+    if(otpCode.length!==6){setErr('Enter the 6-digit code.');return;}
+    setErr('');setBusy(true);
+    const r=await api.post('/api/auth/verify-otp',{email:otpEmail,code:otpCode});
+    if(r.error){setErr(r.error);setOtpCode('');}
+    else onLogin(r);
+    setBusy(false);
+  };
+
+  const resendOtp=async()=>{
+    if(otpResendCd>0)return;
+    setErr('');
+    const r=await api.post('/api/auth/resend-otp',{email:otpEmail});
+    if(r.error)setErr(r.error);
+    else{setOtpResendCd(60);setOtpCode('');}
+  };
+
+  // Handle OTP digit boxes — auto-advance on input
+  const handleOtpInput=(i,val)=>{
+    const digits=otpCode.split('');
+    digits[i]=val.slice(-1);
+    const newCode=digits.join('');
+    setOtpCode(newCode);
+    if(val&&i<5&&otpRefs[i+1].current)otpRefs[i+1].current.focus();
+    if(newCode.length===6&&digits.every(d=>d))setTimeout(submitOtp,80);
+  };
+
+  const handleOtpKey=(i,e)=>{
+    if(e.key==='Backspace'&&!otpCode[i]&&i>0)otpRefs[i-1].current.focus();
+    if(e.key==='Enter')submitOtp();
+  };
+
+  const handleOtpPaste=(e)=>{
+    const pasted=e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+    if(pasted.length===6){setOtpCode(pasted);setTimeout(submitOtp,80);}
+  };
+
+  const logo=html`
+    <div style=${{textAlign:'center',marginBottom:24}}>
+      <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:64,height:64,background:'var(--ac)',borderRadius:20,marginBottom:14,boxShadow:'0 4px 24px rgba(170,255,0,.35)'}}><svg width="34" height="34" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg></div>
+      <h1 style=${{fontSize:26,fontWeight:700,color:'var(--tx)',letterSpacing:-1,fontFamily:"'Space Grotesk',sans-serif"}}>ProjectFlow</h1>
+      <p style=${{color:'var(--tx2)',fontSize:12,marginTop:4}}>Team project management, your way</p>
+    </div>`;
+
+  // ── OTP Entry Screen ─────────────────────────────────────────────────────
+  if(otpStep) return html`
+    <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div class="fi" style=${{width:'100%',maxWidth:420}}>
+        ${logo}
+        <div class="card" style=${{padding:28,textAlign:'center'}}>
+          <div style=${{width:56,height:56,borderRadius:16,background:'rgba(170,255,0,0.1)',border:'1px solid rgba(170,255,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:26}}>🔐</div>
+          <h2 style=${{fontSize:18,fontWeight:700,marginBottom:8,color:'var(--tx)'}}>Check your email</h2>
+          <p style=${{fontSize:13,color:'var(--tx2)',marginBottom:4}}>We sent a 6-digit code to</p>
+          <p style=${{fontSize:13,fontWeight:600,color:'var(--ac)',marginBottom:24}}>${otpEmail}</p>
+
+          <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
+            ${[0,1,2,3,4,5].map(i=>html`
+              <input key=${i} ref=${otpRefs[i]}
+                style=${{width:44,height:52,borderRadius:10,border:'2px solid '+(otpCode[i]?'var(--ac)':'var(--bd)'),background:'var(--sf2)',color:'var(--tx)',fontSize:22,fontWeight:700,textAlign:'center',fontFamily:'monospace',outline:'none',transition:'border-color .15s'}}
+                maxLength=1 value=${otpCode[i]||''}
+                onInput=${e=>handleOtpInput(i,e.target.value)}
+                onKeyDown=${e=>handleOtpKey(i,e)}
+                onFocus=${e=>e.target.select()}
+              />`)}
+          </div>
+
+          ${err?html`<div style=${{color:'var(--rd)',fontSize:12,padding:'8px 12px',background:'rgba(248,113,113,.07)',borderRadius:8,border:'1px solid rgba(248,113,113,.2)',marginBottom:12}}>${err}</div>`:null}
+
+          <button class="btn bp" style=${{justifyContent:'center',height:42,width:'100%',marginBottom:12}} onClick=${submitOtp} disabled=${busy||otpCode.length!==6}>
+            ${busy?html`<span class="spin"></span>`:'Verify & Sign In →'}
+          </button>
+
+          <div style=${{display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:16}}>
+            <span style=${{fontSize:12,color:'var(--tx3)'}}>Didn't receive it?</span>
+            <button onClick=${resendOtp} disabled=${otpResendCd>0}
+              style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',
+                color:otpResendCd>0?'var(--tx3)':'var(--ac)',fontSize:12,fontWeight:600,padding:0}}>
+              ${otpResendCd>0?'Resend in '+otpResendCd+'s':'Resend code'}
+            </button>
+          </div>
+
+          <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
+            style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:12}}>
+            ← Back to login
+          </button>
+        </div>
+        <p style=${{textAlign:'center',fontSize:11,color:'var(--tx3)',marginTop:12}}>Code expires in 10 minutes · Do not share this code</p>
+      </div>
+    </div>`;
+
+  // ── Normal Login/Register Screen ─────────────────────────────────────────
   return html`
     <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
       <div class="fi" style=${{width:'100%',maxWidth:460}}>
-        <div style=${{textAlign:'center',marginBottom:24}}>
-          <div style=${{display:'inline-flex',alignItems:'center',justifyContent:'center',width:64,height:64,background:'var(--ac)',borderRadius:20,marginBottom:14,boxShadow:'0 4px 24px rgba(170,255,0,.35)'}}><svg width="34" height="34" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-          <h1 style=${{fontSize:26,fontWeight:700,color:'var(--tx)',letterSpacing:-1,fontFamily:"'Space Grotesk',sans-serif"}}>ProjectFlow</h1>
-          <p style=${{color:'var(--tx2)',fontSize:12,marginTop:4}}>Team project management, your way</p>
-        </div>
+        ${logo}
         <div class="card" style=${{padding:28}}>
           <div style=${{display:'flex',gap:4,background:'var(--sf2)',borderRadius:10,padding:4,marginBottom:20}}>
             ${['login','register'].map(t=>html`
@@ -3418,7 +3687,7 @@ function AuthScreen({onLogin}){
             ${regMode==='join'?html`
               <div style=${{marginBottom:12,padding:'10px 13px',background:'rgba(99,102,241,.07)',borderRadius:9,border:'1px solid rgba(170,255,0,.18)'}}>
                 <label class="lbl">Invite Code</label>
-                <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode} 
+                <input class="inp" placeholder="Enter 8-character invite code" value=${inviteCode}
                   onInput=${e=>setInviteCode(e.target.value.toUpperCase())}
                   style=${{fontFamily:'monospace',letterSpacing:2,fontSize:15,textAlign:'center'}}/>
                 <p style=${{fontSize:11,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Get this code from your workspace admin</p>
@@ -3450,11 +3719,6 @@ function AuthScreen({onLogin}){
               ${busy?html`<span class="spin"></span>`:(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join & Create Account →')}
             </button>
           </div>
-          ${tab==='login'?html`
-            <div style=${{marginTop:16,padding:'10px 13px',background:'var(--sf2)',borderRadius:9,fontSize:11,fontFamily:'monospace',color:'var(--tx3)',lineHeight:2.1,border:'1px solid var(--bd)'}}>
-              <b style=${{color:'var(--tx2)',display:'block',marginBottom:2}}>Demo Accounts</b>
-              alice@dev.io / pass123 (Admin) &nbsp; bob@dev.io / pass123 (Dev)
-            </div>`:null}
         </div>
       </div>
     </div>`;
@@ -6904,7 +7168,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
 /* ─── WorkspaceSettings ───────────────────────────────────────────────────── */
 function WorkspaceSettings({cu,onReload}){
   const [ws,setWs]=useState(null);const [wsName,setWsName]=useState('');const [aiKey,setAiKey]=useState('');const [showKey,setShowKey]=useState(false);const [saving,setSaving]=useState(false);const [saved,setSaved]=useState(false);
-  const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);
+  const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);const [otpEnabled,setOtpEnabled]=useState(false);
   const PERM_DEFAULTS={
     'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
     'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
@@ -6930,11 +7194,11 @@ function WorkspaceSettings({cu,onReload}){
   };
   const resetPerms=()=>{setPerms(PERM_DEFAULTS);localStorage.removeItem('pf_perms');};
 
-  useEffect(()=>{api.get('/api/workspace').then(d=>{if(!d.error){setWs(d);setWsName(d.name||'');setAiKey(d.ai_api_key?'•'.repeat(20):'');setEmailEnabled(d.email_enabled!==0);setSmtpServer(d.smtp_server||'smtp.gmail.com');setSmtpPort(d.smtp_port||587);setSmtpUsername(d.smtp_username||'');setSmtpPassword(d.smtp_password?'•'.repeat(16):'');setFromEmail(d.from_email||'');}});},[]);
+  useEffect(()=>{api.get('/api/workspace').then(d=>{if(!d.error){setWs(d);setWsName(d.name||'');setAiKey(d.ai_api_key?'•'.repeat(20):'');setEmailEnabled(d.email_enabled!==0);setSmtpServer(d.smtp_server||'smtp.gmail.com');setSmtpPort(d.smtp_port||587);setSmtpUsername(d.smtp_username||'');setSmtpPassword(d.smtp_password?'•'.repeat(16):'');setFromEmail(d.from_email||'');setOtpEnabled(!!d.otp_enabled);}});},[]);
 
   const save=async()=>{
     setSaving(true);
-    const payload={name:wsName,email_enabled:emailEnabled,smtp_server:smtpServer,smtp_port:smtpPort,smtp_username:smtpUsername,from_email:fromEmail};
+    const payload={name:wsName,email_enabled:emailEnabled,smtp_server:smtpServer,smtp_port:smtpPort,smtp_username:smtpUsername,from_email:fromEmail,otp_enabled:otpEnabled};
     if(aiKey&&!aiKey.startsWith('•'))payload.ai_api_key=aiKey;
     if(smtpPassword&&!smtpPassword.startsWith('•'))payload.smtp_password=smtpPassword;
     await api.put('/api/workspace',payload);
@@ -7097,6 +7361,47 @@ function WorkspaceSettings({cu,onReload}){
         </div>
         <div style=${{marginTop:12,padding:'9px 13px',background:'rgba(170,255,0,.05)',borderRadius:9,border:'1px solid rgba(170,255,0,.15)',fontSize:12,color:'var(--tx3)'}}>
           💡 Changes save automatically. Assign roles in the <b style=${{color:'var(--tx2)'}}>Team</b> tab.
+        </div>
+      </div>
+
+      <div class="card" style=${{marginBottom:16}}>
+        <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16}}>
+          <div style=${{flex:1}}>
+            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:4}}>🔐 Two-Factor Login (OTP)</h3>
+            <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>When enabled, all workspace members must verify their identity with a 6-digit code sent to their email after entering their password. Requires SMTP to be configured above.</p>
+            <div style=${{padding:'9px 13px',background:otpEnabled?'rgba(170,255,0,0.06)':'rgba(255,255,255,0.02)',borderRadius:9,border:otpEnabled?'1px solid rgba(170,255,0,0.2)':'1px solid var(--bd)',fontSize:12,color:'var(--tx2)',display:'flex',flexDirection:'column',gap:5}}>
+              <div style=${{display:'flex',alignItems:'center',gap:6}}>
+                <span>${otpEnabled?'✅':'⬜'}</span>
+                <span style=${{fontWeight:600,color:otpEnabled?'var(--ac)':'var(--tx2)'}}>OTP is ${otpEnabled?'ENABLED':'DISABLED'}</span>
+              </div>
+              ${otpEnabled?html`<div style=${{fontSize:11,color:'var(--tx3)'}}>📧 A 6-digit code will be emailed to each user on every login · Code expires in 10 minutes · Resend available after 60s</div>`:null}
+              ${!otpEnabled?html`<div style=${{fontSize:11,color:'var(--tx3)'}}>Users log in with email + password only. Enable OTP to add email verification on every login.</div>`:null}
+            </div>
+            ${otpEnabled&&!smtpUsername?html`<div style=${{marginTop:8,padding:'7px 12px',background:'rgba(239,68,68,0.07)',borderRadius:8,border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:'#f87171'}}>⚠️ Warning: SMTP is not configured. OTP emails will fail. Configure SMTP above before enabling OTP.</div>`:null}
+          </div>
+          <div style=${{flexShrink:0,paddingTop:4}}>
+            <label style=${{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
+              <div onClick=${()=>setOtpEnabled(!otpEnabled)} style=${{
+                width:44,height:24,borderRadius:100,
+                background:otpEnabled?'var(--ac)':'rgba(255,255,255,0.1)',
+                border:otpEnabled?'1px solid var(--ac)':'1px solid var(--bd)',
+                position:'relative',cursor:'pointer',transition:'all .2s',
+                flexShrink:0
+              }}>
+                <div style=${{
+                  position:'absolute',top:2,
+                  left:otpEnabled?'22px':'2px',
+                  width:18,height:18,borderRadius:'50%',
+                  background:otpEnabled?'#040506':'var(--tx3)',
+                  transition:'left .2s',
+                  boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
+                }}></div>
+              </div>
+              <span style=${{fontSize:12,fontWeight:600,color:otpEnabled?'var(--ac)':'var(--tx3)'}}>
+                ${otpEnabled?'On':'Off'}
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
