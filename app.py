@@ -3546,198 +3546,171 @@ function AuthScreen({onLogin}){
     if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
   },[otpStep]);
 
-  // ── Animated bee canvas ──
+  // ── Ocean Waves on White canvas ──
   useEffect(()=>{
     const cv=canvasRef.current;if(!cv)return;
     const ctx=cv.getContext('2d');
     let id,frame=0;
-    const resize=()=>{cv.width=cv.offsetWidth;cv.height=cv.offsetHeight;};
+    const resize=()=>{cv.width=cv.offsetWidth||600;cv.height=cv.offsetHeight||900;};
     resize();
     const ro=new ResizeObserver(resize);ro.observe(cv);
 
-    // Bee flight path — smooth figure-8 Lissajous
-    const beePath=(t,W,H)=>({
-      x: W*.5 + Math.sin(t*.7)*W*.32,
-      y: H*.45 + Math.sin(t*.35)*H*.28,
-    });
+    // Wave layers — soft ocean on white
+    const waves=[
+      {speed:.00038,amp:.055,freq:2.1,phase:0,     color:'rgba(56,189,248,',  base:.52},
+      {speed:.00028,amp:.045,freq:1.7,phase:2.1,   color:'rgba(14,165,233,',  base:.58},
+      {speed:.00045,amp:.038,freq:2.6,phase:4.2,   color:'rgba(2,132,199,',   base:.63},
+      {speed:.00022,amp:.032,freq:1.4,phase:1.1,   color:'rgba(7,89,133,',    base:.68},
+      {speed:.00052,amp:.028,freq:3.0,phase:3.3,   color:'rgba(12,74,110,',   base:.72},
+    ];
 
-    // Honey particles / pollen dots
-    const pollen=Array.from({length:18},(_,i)=>({
+    // Floating bubbles
+    const bubbles=Array.from({length:22},()=>({
       x:Math.random(),y:.4+Math.random()*.5,
-      r:2+Math.random()*3,
-      ph:Math.random()*Math.PI*2,
-      sp:.012+Math.random()*.01,
-      col:Math.random()>.5?'255,200,0':'255,160,30',
+      r:2+Math.random()*5,vy:-.0003-Math.random()*.0004,
+      ph:Math.random()*Math.PI*2,sp:.008+Math.random()*.006,
+      alpha:.08+Math.random()*.12,
     }));
 
-    // Sparkle trail from bee
-    const trail=[];
-
-    const drawBee=(cx,cy,wingFrame,scale=1)=>{
-      ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
-
-      // ── Body shadow ──
-      ctx.save();ctx.translate(2,4);ctx.globalAlpha=.18;
-      ctx.fillStyle='rgba(0,0,0,0.4)';
-      ctx.beginPath();ctx.ellipse(0,0,22,14,0,0,Math.PI*2);ctx.fill();
-      ctx.restore();
-
-      // ── Wings ──
-      const wAngle=Math.sin(wingFrame)*0.55;
-      // Left wing
-      ctx.save();ctx.rotate(-wAngle-.15);
-      const lg1=ctx.createRadialGradient(-8,-2,2,-8,-18,22);
-      lg1.addColorStop(0,'rgba(220,240,255,0.85)');
-      lg1.addColorStop(.5,'rgba(180,220,255,0.55)');
-      lg1.addColorStop(1,'rgba(150,200,255,0)');
-      ctx.fillStyle=lg1;
-      ctx.beginPath();ctx.ellipse(-8,-18,14,22,-.4,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='rgba(160,200,255,0.6)';ctx.lineWidth=.8;
-      ctx.beginPath();ctx.ellipse(-8,-18,14,22,-.4,0,Math.PI*2);ctx.stroke();
-      ctx.restore();
-      // Right wing
-      ctx.save();ctx.rotate(wAngle+.15);
-      const rg1=ctx.createRadialGradient(8,-2,2,8,-18,22);
-      rg1.addColorStop(0,'rgba(220,240,255,0.85)');
-      rg1.addColorStop(.5,'rgba(180,220,255,0.55)');
-      rg1.addColorStop(1,'rgba(150,200,255,0)');
-      ctx.fillStyle=rg1;
-      ctx.beginPath();ctx.ellipse(8,-18,14,22,.4,0,Math.PI*2);ctx.fill();
-      ctx.strokeStyle='rgba(160,200,255,0.6)';ctx.lineWidth=.8;
-      ctx.beginPath();ctx.ellipse(8,-18,14,22,.4,0,Math.PI*2);ctx.stroke();
-      ctx.restore();
-      // Lower wings
-      ctx.save();ctx.rotate(-wAngle*.6-.1);
-      const lg2=ctx.createRadialGradient(-5,2,1,-5,12,14);
-      lg2.addColorStop(0,'rgba(210,235,255,0.7)');lg2.addColorStop(1,'rgba(180,220,255,0)');
-      ctx.fillStyle=lg2;
-      ctx.beginPath();ctx.ellipse(-5,12,9,14,-.3,0,Math.PI*2);ctx.fill();
-      ctx.restore();
-      ctx.save();ctx.rotate(wAngle*.6+.1);
-      const rg2=ctx.createRadialGradient(5,2,1,5,12,14);
-      rg2.addColorStop(0,'rgba(210,235,255,0.7)');rg2.addColorStop(1,'rgba(180,220,255,0)');
-      ctx.fillStyle=rg2;
-      ctx.beginPath();ctx.ellipse(5,12,9,14,.3,0,Math.PI*2);ctx.fill();
-      ctx.restore();
-
-      // ── Abdomen (striped) ──
-      const abdG=ctx.createRadialGradient(-6,-4,2,0,0,24);
-      abdG.addColorStop(0,'#ffe566');abdG.addColorStop(.6,'#f5b800');abdG.addColorStop(1,'#c87800');
-      ctx.fillStyle=abdG;
-      ctx.beginPath();ctx.ellipse(0,0,16,22,.08,0,Math.PI*2);ctx.fill();
-      // stripes
-      for(let s=0;s<4;s++){
-        ctx.fillStyle=s%2===0?'rgba(40,20,0,0.55)':'rgba(255,200,0,0.15)';
-        const sy=-14+s*8;
-        ctx.beginPath();ctx.ellipse(0,sy+2,15-Math.abs(sy)*.15,4,.08,0,Math.PI*2);ctx.fill();
-      }
-      // abdomen highlight
-      const aHL=ctx.createLinearGradient(-8,-20,8,0);
-      aHL.addColorStop(0,'rgba(255,255,200,0.55)');aHL.addColorStop(1,'rgba(255,255,200,0)');
-      ctx.fillStyle=aHL;
-      ctx.beginPath();ctx.ellipse(-3,-8,7,10,.1,0,Math.PI*2);ctx.fill();
-
-      // ── Thorax ──
-      const thG=ctx.createRadialGradient(-4,-28,2,0,-26,14);
-      thG.addColorStop(0,'#8b6914');thG.addColorStop(1,'#4a3508');
-      ctx.fillStyle=thG;
-      ctx.beginPath();ctx.ellipse(0,-26,10,9,0,0,Math.PI*2);ctx.fill();
-      // thorax highlight
-      ctx.fillStyle='rgba(200,160,60,0.4)';
-      ctx.beginPath();ctx.ellipse(-2,-28,5,4,-.2,0,Math.PI*2);ctx.fill();
-      // fuzzy thorax texture
-      ctx.fillStyle='rgba(180,140,30,0.3)';
-      for(let f=0;f<6;f++){
-        ctx.beginPath();ctx.arc(-5+f*2,-25+Math.sin(f)*2,1.5,0,Math.PI*2);ctx.fill();
-      }
-
-      // ── Head ──
-      const hG=ctx.createRadialGradient(-3,-38,2,0,-37,11);
-      hG.addColorStop(0,'#c89830');hG.addColorStop(1,'#6b4c10');
-      ctx.fillStyle=hG;
-      ctx.beginPath();ctx.arc(0,-37,10,0,Math.PI*2);ctx.fill();
-      // head highlight
-      ctx.fillStyle='rgba(255,220,100,0.45)';
-      ctx.beginPath();ctx.ellipse(-3,-40,5,4,-.3,0,Math.PI*2);ctx.fill();
-      // eyes
-      ctx.fillStyle='#1a0a00';
-      ctx.beginPath();ctx.ellipse(-5,-38,3.5,3,0,0,Math.PI*2);ctx.fill();
-      ctx.beginPath();ctx.ellipse(5,-38,3.5,3,0,0,Math.PI*2);ctx.fill();
-      // eye shine
-      ctx.fillStyle='rgba(255,255,255,0.8)';
-      ctx.beginPath();ctx.arc(-4,-39,1.2,0,Math.PI*2);ctx.fill();
-      ctx.beginPath();ctx.arc(6,-39,1.2,0,Math.PI*2);ctx.fill();
-      // antennae
-      ctx.strokeStyle='#4a3508';ctx.lineWidth=1.5;ctx.lineCap='round';
-      ctx.beginPath();ctx.moveTo(-4,-46);ctx.quadraticCurveTo(-14,-58,-10,-64);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(4,-46);ctx.quadraticCurveTo(14,-58,10,-64);ctx.stroke();
-      // antenna balls
-      ctx.fillStyle='#f5b800';
-      ctx.beginPath();ctx.arc(-10,-64,3,0,Math.PI*2);ctx.fill();
-      ctx.beginPath();ctx.arc(10,-64,3,0,Math.PI*2);ctx.fill();
-      // stinger
-      ctx.fillStyle='#4a3508';
-      ctx.beginPath();ctx.moveTo(-2,21);ctx.lineTo(0,28);ctx.lineTo(2,21);ctx.fill();
-      // legs
-      ctx.strokeStyle='#4a3508';ctx.lineWidth=1.2;
-      [[-12,-22],[-14,-15],[-12,-8]].forEach(([lx,ly])=>{
-        ctx.beginPath();ctx.moveTo(lx>0?lx:-lx,ly);ctx.lineTo(lx,ly+10);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(-lx,ly);ctx.lineTo(lx,ly+10);ctx.stroke();
-      });
-
-      ctx.restore();
-    };
+    // Soft sparkles on water surface
+    const sparkles=Array.from({length:30},()=>({
+      x:Math.random(),yBase:.45+Math.random()*.2,
+      ph:Math.random()*Math.PI*2,sp:.02+Math.random()*.015,
+      size:.8+Math.random()*1.4,
+    }));
 
     const draw=()=>{
       const W=cv.width,H=cv.height;
       frame++;
-      const t=frame*.018;
-
+      const t=frame*.016;
       ctx.clearRect(0,0,W,H);
 
-      // Pollen dots floating
-      pollen.forEach(p=>{
-        p.ph+=p.sp;
-        const a=.25+Math.sin(p.ph)*.18;
-        const yOff=Math.sin(p.ph*.7)*8;
-        ctx.beginPath();ctx.arc(p.x*W,p.y*H+yOff,p.r,0,Math.PI*2);
-        ctx.fillStyle='rgba('+p.col+','+a+')';ctx.fill();
-        // pollen glow
-        ctx.beginPath();ctx.arc(p.x*W,p.y*H+yOff,p.r*2.5,0,Math.PI*2);
-        ctx.fillStyle='rgba('+p.col+',0.04)';ctx.fill();
+      // White-to-light-blue gradient background
+      const bg=ctx.createLinearGradient(0,0,0,H);
+      bg.addColorStop(0,'#ffffff');
+      bg.addColorStop(.38,'#f0f9ff');
+      bg.addColorStop(.65,'#e0f2fe');
+      bg.addColorStop(1,'#bae6fd');
+      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+      // Soft radial light from top-center (sun diffuse)
+      const sun=ctx.createRadialGradient(W*.5,0,0,W*.5,0,H*.7);
+      sun.addColorStop(0,'rgba(255,255,240,0.35)');
+      sun.addColorStop(.4,'rgba(224,242,254,0.15)');
+      sun.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=sun;ctx.fillRect(0,0,W,H);
+
+      // Horizon glow line
+      const horizY=H*.48;
+      const hg=ctx.createLinearGradient(0,horizY-8,0,horizY+8);
+      hg.addColorStop(0,'rgba(255,255,255,0)');
+      hg.addColorStop(.5,'rgba(186,230,253,0.5)');
+      hg.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=hg;ctx.fillRect(0,horizY-8,W,16);
+
+      // Draw waves back to front
+      waves.forEach((w,wi)=>{
+        const phaseShift=t*w.speed*1000+w.phase;
+
+        // Filled wave body
+        ctx.beginPath();
+        ctx.moveTo(0,H);
+        for(let x=0;x<=W;x+=2){
+          const xn=x/W;
+          const y=H*(w.base
+            +Math.sin(xn*Math.PI*w.freq+phaseShift)*w.amp
+            +Math.sin(xn*Math.PI*w.freq*1.6+phaseShift*.7)*(w.amp*.35)
+            +Math.sin(xn*Math.PI*w.freq*.8+phaseShift*1.3)*(w.amp*.2)
+          );
+          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+        }
+        ctx.lineTo(W,H);ctx.closePath();
+        const alphaFill=[.13,.12,.11,.10,.09][wi];
+        ctx.fillStyle=w.color+alphaFill+')';ctx.fill();
+
+        // Wave crest highlight line
+        ctx.beginPath();
+        for(let x=0;x<=W;x+=2){
+          const xn=x/W;
+          const y=H*(w.base
+            +Math.sin(xn*Math.PI*w.freq+phaseShift)*w.amp
+            +Math.sin(xn*Math.PI*w.freq*1.6+phaseShift*.7)*(w.amp*.35)
+            +Math.sin(xn*Math.PI*w.freq*.8+phaseShift*1.3)*(w.amp*.2)
+          );
+          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+        }
+        ctx.strokeStyle=w.color+(.06+wi*.008)+')';
+        ctx.lineWidth=1.2;ctx.stroke();
+
+        // Foam/crest white highlights on top wave only
+        if(wi===0){
+          for(let fx=0;fx<W;fx+=W*.07+Math.sin(fx)*.02*W){
+            const xn=fx/W;
+            const fy=H*(w.base
+              +Math.sin(xn*Math.PI*w.freq+phaseShift)*w.amp
+              +Math.sin(xn*Math.PI*w.freq*1.6+phaseShift*.7)*(w.amp*.35)
+            );
+            const foamA=.12+Math.sin(t*.8+fx)*.06;
+            const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,18+Math.sin(t+fx)*6);
+            fg.addColorStop(0,'rgba(255,255,255,'+foamA+')');
+            fg.addColorStop(1,'rgba(255,255,255,0)');
+            ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(fx,fy,22,6,0,0,Math.PI*2);ctx.fill();
+          }
+        }
       });
 
-      // Bee position
-      const bp=beePath(t,W,H);
+      // Water reflection shimmer
+      for(let sx=0;sx<W;sx+=W*.06){
+        const sy=H*(.5+Math.sin(t*.4+sx*.01)*.06);
+        const shimA=.04+Math.sin(t*.9+sx)*.025;
+        const sg=ctx.createLinearGradient(sx,sy,sx+W*.04,sy+4);
+        sg.addColorStop(0,'rgba(255,255,255,0)');
+        sg.addColorStop(.5,'rgba(255,255,255,'+shimA+')');
+        sg.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=sg;ctx.fillRect(sx,sy,W*.04,3);
+      }
 
-      // Sparkle trail
-      trail.push({x:bp.x,y:bp.y,life:1,r:2+Math.random()*3});
-      if(trail.length>22)trail.shift();
-      trail.forEach((tr,i)=>{
-        tr.life-=.045;
-        if(tr.life<=0)return;
-        const a=tr.life*.5;
-        ctx.beginPath();ctx.arc(tr.x,tr.y,tr.r*tr.life,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,200,0,'+a+')';ctx.fill();
+      // Bubbles rising
+      bubbles.forEach(b=>{
+        b.y+=b.vy;b.ph+=b.sp;
+        if(b.y<-.05)b.y=.5+Math.random()*.4;
+        const bx=b.x*W+Math.sin(b.ph)*8;
+        const by=b.y*H;
+        const ba=b.alpha*(0.5+Math.sin(b.ph)*.5);
+        // bubble ring
+        ctx.beginPath();ctx.arc(bx,by,b.r,0,Math.PI*2);
+        ctx.strokeStyle='rgba(56,189,248,'+ba+')';ctx.lineWidth=.8;ctx.stroke();
+        // bubble highlight
+        ctx.beginPath();ctx.arc(bx-b.r*.3,by-b.r*.3,b.r*.3,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,'+(ba*.6)+')';ctx.fill();
       });
 
-      // ── Bee tilt based on direction ──
-      const nextBp=beePath(t+.05,W,H);
-      const angle=Math.atan2(nextBp.y-bp.y,nextBp.x-bp.x);
-      ctx.save();ctx.translate(bp.x,bp.y);ctx.rotate(angle*.35);
-      drawBee(0,0,frame*.25,1.15);
-      ctx.restore();
-
-      // ── Motion blur circles ──
-      ctx.beginPath();ctx.arc(bp.x,bp.y,32,0,Math.PI*2);
-      ctx.fillStyle='rgba(255,210,0,0.04)';ctx.fill();
+      // Surface sparkles
+      sparkles.forEach(s=>{
+        s.ph+=s.sp;
+        const sx=s.x*W+Math.sin(s.ph*.5)*12;
+        const sy=H*(s.yBase+Math.sin(s.ph*.3)*.02);
+        const sa=(Math.sin(s.ph)+1)/2;
+        if(sa>.4){
+          const star=sa*.25;
+          ctx.save();ctx.translate(sx,sy);
+          ctx.fillStyle='rgba(255,255,255,'+star+')';
+          // 4-point star
+          ctx.beginPath();
+          ctx.moveTo(0,-s.size*2);ctx.lineTo(s.size*.4,-s.size*.4);
+          ctx.lineTo(s.size*2,0);ctx.lineTo(s.size*.4,s.size*.4);
+          ctx.lineTo(0,s.size*2);ctx.lineTo(-s.size*.4,s.size*.4);
+          ctx.lineTo(-s.size*2,0);ctx.lineTo(-s.size*.4,-s.size*.4);
+          ctx.closePath();ctx.fill();
+          ctx.restore();
+        }
+      });
 
       id=requestAnimationFrame(draw);
     };
     draw();
     return()=>{ro.disconnect();cancelAnimationFrame(id);};
   },[]);
-
   const go=async()=>{
     setErr('');setBusy(true);
     if(tab==='login'){
@@ -4027,19 +4000,19 @@ function AuthScreen({onLogin}){
   const leftPanel=html`
     <div style=${{
       width:'50%',flexShrink:0,minHeight:'100vh',
-      background:'linear-gradient(175deg,#fff9e0 0%,#fef3c7 30%,#d4edaa 65%,#7dd95a 100%)',
+      background:'linear-gradient(180deg,#ffffff 0%,#f0f9ff 40%,#e0f2fe 70%,#bae6fd 100%)',
       display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',
       padding:'20px 16px 0',position:'relative',overflow:'hidden',
     }}>
       <!-- Ambient glow top -->
-      <div style=${{position:'absolute',top:0,left:0,right:0,height:'40%',background:'radial-gradient(ellipse at 70% 10%,rgba(255,230,80,0.25) 0%,transparent 65%)',pointerEvents:'none'}}></div>
+      <div style=${{position:'absolute',top:0,left:0,right:0,height:'40%',background:'radial-gradient(ellipse at 50% 0%,rgba(186,230,253,0.6) 0%,transparent 65%)',pointerEvents:'none'}}></div>
 
       <!-- Brand top-left -->
       <div style=${{position:'absolute',top:22,left:22,display:'flex',alignItems:'center',gap:8,zIndex:10}}>
-        <div style=${{width:30,height:30,borderRadius:8,background:'rgba(255,255,255,0.92)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 10px rgba(0,0,0,0.12)'}}>
+        <div style=${{width:30,height:30,borderRadius:8,background:'rgba(255,255,255,0.95)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 10px rgba(0,0,0,0.12)'}}>
           <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#2d7020"/><circle cx="32" cy="11" r="6" fill="#2d7020"/><circle cx="51" cy="43" r="6" fill="#2d7020"/><circle cx="13" cy="43" r="6" fill="#2d7020"/><line x1="32" y1="17" x2="32" y2="23" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1a4010',letterSpacing:-.3}}>ProjectFlow</span>
+        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#0c4a6e',letterSpacing:-.3}}>ProjectFlow</span>
       </div>
 
       <!-- Animated bee canvas (fills the sky area) -->
@@ -4051,9 +4024,9 @@ function AuthScreen({onLogin}){
       </div>
 
       <!-- Caption -->
-      <div style=${{position:'relative',zIndex:4,textAlign:'center',padding:'10px 0 18px',background:'linear-gradient(to top,rgba(125,217,90,0.9),transparent)'}}>
-        <p style=${{fontSize:14,fontWeight:700,color:'#1a4010',fontFamily:"'Syne',sans-serif",marginBottom:3}}>Productivity in full bloom 🌸</p>
-        <p style=${{fontSize:12,color:'rgba(26,64,16,0.65)'}}>Tasks · AI assistant · Huddles · Timeline · Tickets</p>
+      <div style=${{position:'relative',zIndex:4,textAlign:'center',padding:'10px 0 18px',background:'linear-gradient(to top,rgba(186,230,253,0.9),transparent)'}}>
+        <p style=${{fontSize:14,fontWeight:700,color:'#0c4a6e',fontFamily:"'Syne',sans-serif",marginBottom:3}}>Ride the wave of productivity 🌊</p>
+        <p style=${{fontSize:12,color:'rgba(12,74,110,0.65)'}}>Tasks · AI assistant · Huddles · Timeline · Tickets</p>
       </div>
     </div>`;
 
