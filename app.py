@@ -3602,32 +3602,156 @@ function AuthScreen({onLogin}){
     if(pasted.length===6){setOtpCode(pasted);setTimeout(submitOtp,80);}
   };
 
+  // Animated canvas background for right panel
+  const canvasRef=useRef(null);
+  useEffect(()=>{
+    const canvas=canvasRef.current;
+    if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    let animId;
+    const resize=()=>{canvas.width=canvas.offsetWidth;canvas.height=canvas.offsetHeight;};
+    resize();
+    window.addEventListener('resize',resize);
+
+    // Floating orbs
+    const orbs=[
+      {x:0.2,y:0.3,r:120,vx:0.00018,vy:0.00012,color:'rgba(170,255,0,0.06)'},
+      {x:0.7,y:0.6,r:160,vx:-0.00014,vy:0.00016,color:'rgba(99,102,241,0.07)'},
+      {x:0.5,y:0.1,r:90,vx:0.00022,vy:-0.00010,color:'rgba(59,130,246,0.06)'},
+      {x:0.85,y:0.2,r:70,vx:-0.00016,vy:0.00020,color:'rgba(170,255,0,0.04)'},
+      {x:0.1,y:0.8,r:110,vx:0.00012,vy:-0.00014,color:'rgba(139,92,246,0.05)'},
+    ];
+
+    // Floating particles
+    const particles=Array.from({length:28},()=>({
+      x:Math.random(),y:Math.random(),
+      vx:(Math.random()-0.5)*0.00015,
+      vy:(Math.random()-0.5)*0.00015,
+      r:Math.random()*2+0.8,
+      alpha:Math.random()*0.4+0.1,
+      color:Math.random()>0.5?'170,255,0':'99,102,241',
+    }));
+
+    // Grid lines
+    const drawGrid=(w,h)=>{
+      ctx.strokeStyle='rgba(170,255,0,0.03)';
+      ctx.lineWidth=1;
+      const spacing=60;
+      for(let x=0;x<w;x+=spacing){
+        ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();
+      }
+      for(let y=0;y<h;y+=spacing){
+        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+      }
+    };
+
+    let t=0;
+    const draw=()=>{
+      const w=canvas.width,h=canvas.height;
+      ctx.clearRect(0,0,w,h);
+
+      // Background
+      ctx.fillStyle='#f8f9fc';
+      ctx.fillRect(0,0,w,h);
+
+      // Grid
+      drawGrid(w,h);
+
+      // Orbs
+      orbs.forEach(o=>{
+        o.x+=o.vx;o.y+=o.vy;
+        if(o.x<-0.1||o.x>1.1)o.vx*=-1;
+        if(o.y<-0.1||o.y>1.1)o.vy*=-1;
+        const grd=ctx.createRadialGradient(o.x*w,o.y*h,0,o.x*w,o.y*h,o.r*1.5);
+        grd.addColorStop(0,o.color);
+        grd.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=grd;
+        ctx.beginPath();ctx.arc(o.x*w,o.y*h,o.r*1.5,0,Math.PI*2);ctx.fill();
+      });
+
+      // Particles
+      particles.forEach(p=>{
+        p.x+=p.vx;p.y+=p.vy;
+        if(p.x<0)p.x=1;if(p.x>1)p.x=0;
+        if(p.y<0)p.y=1;if(p.y>1)p.y=0;
+        ctx.beginPath();
+        ctx.arc(p.x*w,p.y*h,p.r,0,Math.PI*2);
+        ctx.fillStyle='rgba('+p.color+','+p.alpha+')';
+        ctx.fill();
+      });
+
+      // Floating rings
+      const rings=[
+        {cx:0.15,cy:0.25,baseR:30,speed:0.0008},
+        {cx:0.82,cy:0.55,baseR:22,speed:0.0012},
+        {cx:0.45,cy:0.85,baseR:18,speed:0.0010},
+        {cx:0.68,cy:0.15,baseR:25,speed:0.0007},
+      ];
+      rings.forEach(ring=>{
+        const pulse=Math.sin(t*ring.speed*1000)*8;
+        ctx.beginPath();
+        ctx.arc(ring.cx*w,ring.cy*h,ring.baseR+pulse,0,Math.PI*2);
+        ctx.strokeStyle='rgba(170,255,0,0.12)';
+        ctx.lineWidth=1;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(ring.cx*w,ring.cy*h,(ring.baseR+pulse)*1.5,0,Math.PI*2);
+        ctx.strokeStyle='rgba(170,255,0,0.05)';
+        ctx.lineWidth=1;
+        ctx.stroke();
+      });
+
+      // Connecting lines between nearby particles
+      ctx.lineWidth=0.5;
+      for(let i=0;i<particles.length;i++){
+        for(let j=i+1;j<particles.length;j++){
+          const dx=(particles[i].x-particles[j].x)*w;
+          const dy=(particles[i].y-particles[j].y)*h;
+          const dist=Math.sqrt(dx*dx+dy*dy);
+          if(dist<100){
+            ctx.strokeStyle='rgba(170,255,0,'+(0.08*(1-dist/100))+')';
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x*w,particles[i].y*h);
+            ctx.lineTo(particles[j].x*w,particles[j].y*h);
+            ctx.stroke();
+          }
+        }
+      }
+
+      t=Date.now();
+      animId=requestAnimationFrame(draw);
+    };
+    draw();
+    return()=>{window.removeEventListener('resize',resize);cancelAnimationFrame(animId);};
+  },[]);
+
   const leftPanel=html`
     <div style=${{
-      flex:'0 0 42%',background:'linear-gradient(145deg,#080e1a 0%,#0b1800 55%,#080e1a 100%)',
+      flex:'0 0 42%',background:'linear-gradient(150deg,#0a1220 0%,#0d1f00 45%,#0a1220 100%)',
       display:'flex',flexDirection:'column',justifyContent:'space-between',
       padding:'48px 44px',position:'relative',overflow:'hidden',
-      borderRight:'1px solid rgba(170,255,0,0.07)'
+      borderRight:'1px solid rgba(170,255,0,0.10)'
     }}>
-      <div style=${{position:'absolute',width:400,height:400,borderRadius:'50%',background:'rgba(170,255,0,0.05)',filter:'blur(90px)',top:-120,left:-100,pointerEvents:'none'}}></div>
-      <div style=${{position:'absolute',width:280,height:280,borderRadius:'50%',background:'rgba(59,130,246,0.06)',filter:'blur(80px)',bottom:40,right:-60,pointerEvents:'none'}}></div>
+      <div style=${{position:'absolute',width:500,height:500,borderRadius:'50%',background:'rgba(170,255,0,0.07)',filter:'blur(100px)',top:-160,left:-120,pointerEvents:'none'}}></div>
+      <div style=${{position:'absolute',width:350,height:350,borderRadius:'50%',background:'rgba(59,130,246,0.08)',filter:'blur(80px)',bottom:20,right:-80,pointerEvents:'none'}}></div>
+      <div style=${{position:'absolute',width:200,height:200,borderRadius:'50%',background:'rgba(139,92,246,0.07)',filter:'blur(60px)',top:'40%',left:'30%',pointerEvents:'none'}}></div>
 
       <div style=${{position:'relative',zIndex:1}}>
-        <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:52}}>
-          <div style=${{width:36,height:36,borderRadius:10,background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 18px rgba(170,255,0,0.3)'}}>
+        <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:48}}>
+          <div style=${{width:36,height:36,borderRadius:10,background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 20px rgba(170,255,0,0.4)'}}>
             <svg width="19" height="19" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="51" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><circle cx="13" cy="43" r="6" fill="#0a1a00" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:17,color:'var(--tx)',letterSpacing:-0.4}}>ProjectFlow</span>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:17,color:'#ffffff',letterSpacing:-0.4}}>ProjectFlow</span>
         </div>
 
-        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.8vw,2.1rem)',fontWeight:800,color:'var(--tx)',lineHeight:1.18,marginBottom:14,letterSpacing:-0.5}}>
-          The workspace<br/>your team<br/><span style=${{color:'var(--ac)'}}>actually uses.</span>
+        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.6rem,2.9vw,2.2rem)',fontWeight:800,color:'#ffffff',lineHeight:1.18,marginBottom:14,letterSpacing:-0.5,textShadow:'0 2px 20px rgba(0,0,0,0.5)'}}>
+          The workspace<br/>your team<br/><span style=${{color:'var(--ac)',textShadow:'0 0 20px rgba(170,255,0,0.4)'}}>actually uses.</span>
         </h2>
-        <p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.75,maxWidth:300,marginBottom:36}}>
-          Tasks, AI assistant, huddle calls, tickets, and timeline tracking all in one place.
+        <p style=${{fontSize:13,color:'rgba(255,255,255,0.65)',lineHeight:1.75,maxWidth:300,marginBottom:36}}>
+          Tasks, AI assistant, huddle calls, tickets, and timeline tracking — all in one place.
         </p>
 
-        <div style=${{display:'flex',flexDirection:'column',gap:10}}>
+        <div style=${{display:'flex',flexDirection:'column',gap:9}}>
           ${[
             ['📋','Smart task boards with custom stages'],
             ['🤖','AI assistant with workspace context'],
@@ -3637,17 +3761,17 @@ function AuthScreen({onLogin}){
             ['🎫','Support tickets and bug tracking'],
           ].map(([ico,txt])=>html`
             <div key=${txt} style=${{display:'flex',alignItems:'center',gap:10}}>
-              <div style=${{width:26,height:26,borderRadius:7,background:'rgba(170,255,0,0.07)',border:'1px solid rgba(170,255,0,0.11)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>${ico}</div>
-              <span style=${{fontSize:12,color:'var(--tx2)'}}>${txt}</span>
+              <div style=${{width:26,height:26,borderRadius:7,background:'rgba(170,255,0,0.10)',border:'1px solid rgba(170,255,0,0.18)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>${ico}</div>
+              <span style=${{fontSize:12,color:'rgba(255,255,255,0.75)',fontWeight:400}}>${txt}</span>
             </div>
           `)}
         </div>
       </div>
 
       <div style=${{position:'relative',zIndex:1,marginTop:36}}>
-        <div style=${{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(170,255,0,0.06)',border:'1px solid rgba(170,255,0,0.13)',padding:'6px 13px',borderRadius:100}}>
-          <div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',boxShadow:'0 0 6px var(--ac)'}}></div>
-          <span style=${{fontSize:10,color:'var(--ac)',fontWeight:600,letterSpacing:.04}}>v4.0 · Railway · PostgreSQL · bcrypt</span>
+        <div style=${{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(170,255,0,0.08)',border:'1px solid rgba(170,255,0,0.18)',padding:'6px 13px',borderRadius:100}}>
+          <div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',boxShadow:'0 0 8px var(--ac)',animation:'pulse 2s ease-in-out infinite'}}></div>
+          <span style=${{fontSize:10,color:'#aaff00',fontWeight:600,letterSpacing:.04}}>v4.0 · Railway · PostgreSQL · bcrypt</span>
         </div>
       </div>
     </div>`;
@@ -3655,8 +3779,9 @@ function AuthScreen({onLogin}){
   if(otpStep) return html`
     <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex'}}>
       ${leftPanel}
-      <div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
-        <div style=${{width:'100%',maxWidth:400}}>
+      <div style=${{flex:1,position:'relative',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
+        <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',zIndex:0}}></canvas>
+        <div style=${{position:'relative',zIndex:1,width:'100%',maxWidth:400}}>
           <div style=${{textAlign:'center',marginBottom:28}}>
             <div style=${{width:58,height:58,borderRadius:16,background:'rgba(170,255,0,0.1)',border:'1px solid rgba(170,255,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:26}}>🔐</div>
             <h2 style=${{fontSize:20,fontWeight:700,color:'var(--tx)',marginBottom:6}}>Check your email</h2>
@@ -3700,8 +3825,9 @@ function AuthScreen({onLogin}){
   return html`
     <div style=${{minHeight:'100vh',background:'var(--bg)',display:'flex'}}>
       ${leftPanel}
-      <div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
-        <div style=${{width:'100%',maxWidth:460}}>
+      <div style=${{flex:1,position:'relative',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
+        <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',zIndex:0}}></canvas>
+        <div style=${{position:'relative',zIndex:1,width:'100%',maxWidth:460}}>
           <div style=${{marginBottom:24}}>
             <h2 style=${{fontSize:22,fontWeight:700,color:'var(--tx)',marginBottom:5,letterSpacing:-0.3}}>
               ${tab==='login'?'Welcome back':'Create your account'}
