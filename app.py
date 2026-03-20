@@ -18,17 +18,33 @@ JS_DIR     = os.path.join(BASE_DIR, "pf_static")
 UPLOAD_DIR = os.path.join(DATA_DIR, "pf_uploads")
 KEY_FILE   = os.path.join(DATA_DIR, ".pf_secret")
 
-# ── PostgreSQL via psycopg2 ──────────────────────────────────────────────────
-import psycopg2
-import psycopg2.extras
+# ── PostgreSQL via pg8000 (pure Python — no libpq/system deps needed) ────────
+import pg8000.native
+import urllib.parse
 
 DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("PGURL") or ""
 
+def _parse_db_url(url):
+    """Parse postgres://user:pass@host:port/dbname into pg8000 kwargs."""
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+    # Railway sometimes uses postgres:// prefix
+    url = url.replace("postgres://", "postgresql://", 1)
+    p = urllib.parse.urlparse(url)
+    kwargs = dict(
+        host=p.hostname,
+        port=p.port or 5432,
+        user=p.username,
+        password=p.password,
+        database=p.path.lstrip("/"),
+        ssl_context=True,   # Railway Postgres requires SSL
+    )
+    return kwargs
+
 class _Row(dict):
-    """dict subclass that supports both row['col'] and row[index] access,
-    matching the sqlite3.Row interface used throughout the codebase."""
-    def __init__(self, cursor, row):
-        super().__init__(zip([d[0] for d in cursor.description], row))
+    """dict subclass that supports row['col'] and row[index] access."""
+    def __init__(self, columns, row):
+        super().__init__(zip(columns, row))
         self._list = list(row)
     def __getitem__(self, key):
         if isinstance(key, int): return self._list[key]
@@ -36,54 +52,64 @@ class _Row(dict):
     def keys(self): return list(super().keys())
 
 class _Cursor:
-    """Wraps psycopg2 cursor to match sqlite3 cursor interface."""
-    def __init__(self, pg_cursor):
-        self._c = pg_cursor
-        self.lastrowid = None
+    """Wraps pg8000 connection to match sqlite3 cursor interface."""
+    def __init__(self, conn):
+        self._conn = conn
+        self._rows = []
+        self._columns = []
         self.rowcount = 0
-    def execute(self, sql, params=()):
-        # Convert ? placeholders to %s for PostgreSQL
-        sql = sql.replace("?", "%s")
-        # Convert INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
-        sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO").rstrip()
-        if "INSERT OR IGNORE" in sql:
-            sql = sql + " ON CONFLICT DO NOTHING"
-        # Convert INSERT OR REPLACE → INSERT ... ON CONFLICT DO UPDATE
+    def _convert_sql(self, sql, params):
+        """Convert SQLite ? placeholders → pg8000 :1 :2 style and fix SQLite-isms."""
+        # INSERT OR IGNORE → INSERT ... ON CONFLICT DO NOTHING
+        if "INSERT OR IGNORE INTO" in sql:
+            sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO")
+            sql = sql.rstrip() + " ON CONFLICT DO NOTHING"
+        # INSERT OR REPLACE for push_subscriptions
         if "INSERT OR REPLACE INTO push_subscriptions" in sql:
             sql = sql.replace("INSERT OR REPLACE INTO push_subscriptions",
                               "INSERT INTO push_subscriptions")
-            sql = sql + " ON CONFLICT (workspace_id, endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, created=EXCLUDED.created"
-        self._c.execute(sql, params)
-        self.rowcount = self._c.rowcount
+            sql = sql.rstrip() + " ON CONFLICT (endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, created=EXCLUDED.created"
+        # Convert ? to :1, :2, ... (pg8000 native uses :n style)
+        idx = [0]
+        def replacer(m):
+            idx[0] += 1
+            return f":{idx[0]}"
+        import re
+        sql = re.sub(r'\?', replacer, sql)
+        return sql, list(params)
+    def execute(self, sql, params=()):
+        sql, params = self._convert_sql(sql, params)
+        result = self._conn.run(sql, *params) if params else self._conn.run(sql)
+        self._rows = result if result else []
+        self._columns = [c["name"] for c in (self._conn.columns or [])]
+        self.rowcount = self._conn.row_count or 0
         return self
     def fetchone(self):
-        row = self._c.fetchone()
-        if row is None: return None
-        return _Row(self._c, row)
+        if not self._rows: return None
+        return _Row(self._columns, self._rows[0])
     def fetchall(self):
-        rows = self._c.fetchall()
-        return [_Row(self._c, r) for r in rows]
+        return [_Row(self._columns, r) for r in self._rows]
     def __iter__(self):
-        for row in self._c.fetchall():
-            yield _Row(self._c, row)
+        return iter(self.fetchall())
 
 class _DB:
-    """Wraps psycopg2 connection to match 'with get_db() as db:' pattern."""
+    """Wraps pg8000 connection to match 'with get_db() as db:' pattern."""
     def __init__(self, conn):
         self._conn = conn
     def execute(self, sql, params=()):
-        cur = _Cursor(self._conn.cursor())
+        cur = _Cursor(self._conn)
         cur.execute(sql, params)
         return cur
     def commit(self): self._conn.commit()
     def close(self): self._conn.close()
     def __enter__(self): return self
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type:
-            self._conn.rollback()
-        else:
-            self._conn.commit()
-        self._conn.close()
+        try:
+            if exc_type: self._conn.rollback()
+            else: self._conn.commit()
+        except Exception: pass
+        try: self._conn.close()
+        except Exception: pass
         return False
 
 def get_secret_key():
@@ -113,7 +139,8 @@ CORS(app, supports_credentials=True)
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#aaff00"]
 
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+    conn.autocommit = False
     return _DB(conn)
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 def ts(): return datetime.utcnow().isoformat() + 'Z'
@@ -324,7 +351,8 @@ def push_notification_to_user(db_ignored, user_id, title, body, nav_url="/", tag
     """Send Web Push to all subscriptions for a given user (opens its own DB conn for thread safety)."""
     try:
         db = get_db()
-    except Exception:
+    except Exception as e:
+        print(f"push_notification DB error: {e}")
         return
     with db:
         subs = db.execute(
