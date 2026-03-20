@@ -587,6 +587,8 @@ def init_db():
         # Add email configuration columns to workspaces (migration)
         try: db.execute("ALTER TABLE workspaces ADD COLUMN otp_enabled INTEGER DEFAULT 0")
         except: pass
+        try: db.execute("ALTER TABLE workspaces ADD COLUMN dm_enabled INTEGER DEFAULT 1")
+        except: pass
         try: 
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_server TEXT")
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_port INTEGER DEFAULT 587")
@@ -838,6 +840,7 @@ def update_workspace():
         if "from_email" in d: db.execute("UPDATE workspaces SET from_email=? WHERE id=?",(d["from_email"],wid()))
         if "email_enabled" in d: db.execute("UPDATE workspaces SET email_enabled=? WHERE id=?",(1 if d["email_enabled"] else 0,wid()))
         if "otp_enabled" in d: db.execute("UPDATE workspaces SET otp_enabled=? WHERE id=?",(1 if d["otp_enabled"] else 0,wid()))
+        if "dm_enabled" in d: db.execute("UPDATE workspaces SET dm_enabled=? WHERE id=?",(1 if d["dm_enabled"] else 0,wid()))
         ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
         return jsonify(dict(ws))
 
@@ -6633,7 +6636,15 @@ const playSound=(type='notif')=>{
     }
   }catch(e){}
 };
-function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle}){
+function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true}){
+  const isAdminOrManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
+  // Show disabled state for non-admin when DMs are turned off
+  if(!dmEnabled&&!isAdminOrManager) return html`
+    <div style=${{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'var(--tx3)'}}>
+      <div style=${{fontSize:40}}>💬</div>
+      <div style=${{fontSize:14,fontWeight:700,color:'var(--tx2)'}}>Direct Messages Disabled</div>
+      <div style=${{fontSize:13,color:'var(--tx3)',textAlign:'center',maxWidth:280,lineHeight:1.6}}>Your workspace admin has disabled direct messages. Contact your admin to enable them.</div>
+    </div>`;
   const others=safe(users).filter(u=>u.id!==cu.id);
   const [toId,setToId]=useState(others[0]&&others[0].id||'');const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const [search,setSearch]=useState('');const ref=useRef(null);
   const prevMsgCount=useRef(0);
@@ -7374,6 +7385,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
 function WorkspaceSettings({cu,onReload}){
   const [ws,setWs]=useState(null);const [wsName,setWsName]=useState('');const [aiKey,setAiKey]=useState('');const [showKey,setShowKey]=useState(false);const [saving,setSaving]=useState(false);const [saved,setSaved]=useState(false);
   const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);const [otpEnabled,setOtpEnabled]=useState(false);
+  const [dmEnabled,setDmEnabled]=useState(true);
   const PERM_DEFAULTS={
     'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
     'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
@@ -7399,11 +7411,11 @@ function WorkspaceSettings({cu,onReload}){
   };
   const resetPerms=()=>{setPerms(PERM_DEFAULTS);localStorage.removeItem('pf_perms');};
 
-  useEffect(()=>{api.get('/api/workspace').then(d=>{if(!d.error){setWs(d);setWsName(d.name||'');setAiKey(d.ai_api_key?'•'.repeat(20):'');setEmailEnabled(d.email_enabled!==0);setSmtpServer(d.smtp_server||'smtp.gmail.com');setSmtpPort(d.smtp_port||587);setSmtpUsername(d.smtp_username||'');setSmtpPassword(d.smtp_password?'•'.repeat(16):'');setFromEmail(d.from_email||'');setOtpEnabled(!!d.otp_enabled);}});},[]);
+  useEffect(()=>{api.get('/api/workspace').then(d=>{if(!d.error){setWs(d);setWsName(d.name||'');setAiKey(d.ai_api_key?'•'.repeat(20):'');setEmailEnabled(d.email_enabled!==0);setSmtpServer(d.smtp_server||'smtp.gmail.com');setSmtpPort(d.smtp_port||587);setSmtpUsername(d.smtp_username||'');setSmtpPassword(d.smtp_password?'•'.repeat(16):'');setFromEmail(d.from_email||'');setOtpEnabled(!!d.otp_enabled);setDmEnabled(d.dm_enabled!==0);}});},[]);
 
   const save=async()=>{
     setSaving(true);
-    const payload={name:wsName,email_enabled:emailEnabled,smtp_server:smtpServer,smtp_port:smtpPort,smtp_username:smtpUsername,from_email:fromEmail,otp_enabled:otpEnabled};
+    const payload={name:wsName,email_enabled:emailEnabled,smtp_server:smtpServer,smtp_port:smtpPort,smtp_username:smtpUsername,from_email:fromEmail,otp_enabled:otpEnabled,dm_enabled:dmEnabled};
     if(aiKey&&!aiKey.startsWith('•'))payload.ai_api_key=aiKey;
     if(smtpPassword&&!smtpPassword.startsWith('•'))payload.smtp_password=smtpPassword;
     await api.put('/api/workspace',payload);
@@ -7604,6 +7616,48 @@ function WorkspaceSettings({cu,onReload}){
               </div>
               <span style=${{fontSize:12,fontWeight:600,color:otpEnabled?'var(--ac)':'var(--tx3)'}}>
                 ${otpEnabled?'On':'Off'}
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- DM Enable/Disable -->
+      <div class="card" style=${{marginBottom:0}}>
+        <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16}}>
+          <div style=${{flex:1}}>
+            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>💬 Direct Messages (DMs)</h3>
+            <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>Control whether workspace members can send private direct messages to each other. When disabled, DMs are hidden for all non-admin users.</p>
+            <div style=${{padding:'9px 13px',background:dmEnabled?'rgba(29,78,216,0.06)':'rgba(255,255,255,0.02)',borderRadius:9,border:dmEnabled?'1px solid rgba(29,78,216,0.2)':'1px solid var(--bd)',fontSize:12,color:'var(--tx2)',display:'flex',flexDirection:'column',gap:5}}>
+              <div style=${{display:'flex',alignItems:'center',gap:6}}>
+                <span>${dmEnabled?'✅':'⬜'}</span>
+                <span style=${{fontWeight:600,color:dmEnabled?'var(--ac)':'var(--tx2)'}}>Direct Messages are ${dmEnabled?'ENABLED':'DISABLED'}</span>
+              </div>
+              <div style=${{fontSize:11,color:'var(--tx3)'}}>
+                ${dmEnabled?'Members can send private messages to each other.':'Members cannot send or view DMs. Admins & Managers can still access DMs.'}
+              </div>
+            </div>
+          </div>
+          <div style=${{flexShrink:0,paddingTop:4}}>
+            <label style=${{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
+              <div onClick=${()=>setDmEnabled(!dmEnabled)} style=${{
+                width:44,height:24,borderRadius:100,
+                background:dmEnabled?'var(--ac)':'rgba(255,255,255,0.1)',
+                border:dmEnabled?'1px solid var(--ac)':'1px solid var(--bd)',
+                position:'relative',cursor:'pointer',transition:'all .2s',
+                flexShrink:0
+              }}>
+                <div style=${{
+                  position:'absolute',top:2,
+                  left:dmEnabled?'22px':'2px',
+                  width:18,height:18,borderRadius:'50%',
+                  background:dmEnabled?'#fff':'var(--tx3)',
+                  transition:'left .2s',
+                  boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
+                }}></div>
+              </div>
+              <span style=${{fontSize:12,fontWeight:600,color:dmEnabled?'var(--ac)':'var(--tx3)'}}>
+                ${dmEnabled?'On':'Off'}
               </span>
             </label>
           </div>
@@ -8343,6 +8397,17 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [popupPos,setPopupPos]=useState({x:null,y:null});
   const [dragging,setDragging]=useState(false);
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
+  const emojiPickerRef=useRef(null);
+  // Close emoji picker on outside click
+  useEffect(()=>{
+    if(!showEmojiPicker)return;
+    const handler=(e)=>{
+      if(emojiPickerRef.current&&!emojiPickerRef.current.contains(e.target))
+        setShowEmojiPicker(false);
+    };
+    document.addEventListener('mousedown',handler,true);
+    return()=>document.removeEventListener('mousedown',handler,true);
+  },[showEmojiPicker]);
   const [showChat,setShowChat]=useState(false);
   const [chatMsgs,setChatMsgs]=useState([]);
   const [chatTxt,setChatTxt]=useState('');
@@ -8357,6 +8422,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const localStream=useRef(null);
   const localVideoRef=useRef(null);
   const screenStream=useRef(null);
+  const pendingScreenUidsRef=useRef(new Set()); // tracks who sent screen-start before ontrack fired
   const screenVideoRef=useRef(null);
   const pcs=useRef({});
   const audioEls=useRef({});
@@ -8390,7 +8456,18 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     };
   }
 
-  const STUN={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+  const STUN={
+    iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'},
+      {urls:'stun:stun.relay.metered.ca:80'},
+      // Free Open Relay TURN — handles symmetric NAT / corporate firewalls
+      {urls:'turn:a.relay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+      {urls:'turn:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+      {urls:'turns:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+    ],
+    iceCandidatePoolSize:10,
+  };
   const fmtTime=s=>{const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const centerPos=(w,h)=>({x:Math.max(40,(window.innerWidth-w)/2),y:Math.max(40,(window.innerHeight-h)/2)});
 
@@ -8497,7 +8574,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     pc.ontrack=e=>{
       const stream=e.streams[0]||new MediaStream([e.track]);
       if(e.track.kind==='audio'){
-        // Create or reuse audio element
         if(!audioEls.current[remoteUid]){
           const el=document.createElement('audio');
           el.autoplay=true;el.playsInline=true;
@@ -8509,20 +8585,42 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         audioEls.current[remoteUid].play().catch(()=>{});
         detectSpeaking(remoteUid,stream);
       } else if(e.track.kind==='video'){
-        // Detect screen share: browsers set contentHint on display capture tracks
+        // Determine if screen share using multiple signals:
+        // 1. contentHint (Chrome sets this reliably for getDisplayMedia)
+        // 2. track label (fallback)
+        // 3. screen-start signal from peer (most reliable — handled in signaling poll)
         const lbl=(e.track.label||'').toLowerCase();
-        const isScreen=e.track.contentHint==='detail'||e.track.contentHint==='text'||
-          lbl.includes('screen')||lbl.includes('display')||lbl.includes('monitor')||lbl.includes('entire');
+        const isScreenByHint=e.track.contentHint==='detail'||e.track.contentHint==='text';
+        const isScreenByLabel=lbl.includes('screen')||lbl.includes('display')||lbl.includes('monitor')||
+          lbl.includes('entire')||lbl.includes('window')||lbl.includes('tab');
+        // pendingScreenTrack: if screen-start arrived before track, apply immediately
+        const isScreen=isScreenByHint||isScreenByLabel||pendingScreenUidsRef.current.has(remoteUid);
+
         if(isScreen){
           setRemoteScreenUid(remoteUid);
-          setTimeout(()=>{
-            if(remoteScreenRef.current){remoteScreenRef.current.srcObject=stream;remoteScreenRef.current.play().catch(()=>{});}
-          },80);
-          e.track.onended=()=>{setRemoteScreenUid(null);if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;};
+          // Use rAF to ensure remoteScreenRef DOM element is mounted
+          const tryAttach=(attempts)=>{
+            if(remoteScreenRef.current){
+              remoteScreenRef.current.srcObject=stream;
+              remoteScreenRef.current.play().catch(()=>{});
+            } else if(attempts<10){
+              setTimeout(()=>tryAttach(attempts+1),100);
+            }
+          };
+          requestAnimationFrame(()=>tryAttach(0));
+          e.track.onended=()=>{
+            setRemoteScreenUid(null);
+            if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;
+            pendingScreenUidsRef.current.delete(remoteUid);
+          };
         } else {
-          const el=remoteVideoRefs.current[remoteUid];
-          if(el){el.srcObject=stream;el.play().catch(()=>{});}
-          else{setTimeout(()=>{const el2=remoteVideoRefs.current[remoteUid];if(el2){el2.srcObject=stream;el2.play().catch(()=>{});}},500);}
+          // Camera video
+          const tryAttachCam=(attempts)=>{
+            const el=remoteVideoRefs.current[remoteUid];
+            if(el){el.srcObject=stream;el.play().catch(()=>{});}
+            else if(attempts<10){setTimeout(()=>tryAttachCam(attempts+1),100);}
+          };
+          requestAnimationFrame(()=>tryAttachCam(0));
         }
       }
     };
@@ -8565,13 +8663,33 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           } else if(sig.type==='ice'){
             const pc=pcs.current[from];
             if(pc&&pc.remoteDescription){try{await pc.addIceCandidate(new RTCIceCandidate(data));}catch(ex){}}          } else if(sig.type==='screen-start'){
+            // Mark this uid as a screen sharer — in case ontrack fires after this signal
+            pendingScreenUidsRef.current.add(from);
             setRemoteScreenUid(from);
+            // If we already have a video track from this peer, attach it to screen ref now
+            setTimeout(()=>{
+              if(remoteScreenRef.current&&!remoteScreenRef.current.srcObject){
+                // Try to find stream from peer connections
+                const pc=pcs.current[from];
+                if(pc){
+                  const receivers=pc.getReceivers();
+                  const vr=receivers.find(r=>r.track&&r.track.kind==='video'&&r.track.readyState==='live');
+                  if(vr){
+                    const ms=new MediaStream([vr.track]);
+                    remoteScreenRef.current.srcObject=ms;
+                    remoteScreenRef.current.play().catch(()=>{});
+                  }
+                }
+              }
+            },200);
           } else if(sig.type==='screen-stop'){
             setRemoteScreenUid(null);
+            pendingScreenUidsRef.current.delete(from);
             if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;
           } else if(sig.type==='reaction'){
-            const id=Date.now();
-            setFloatingReactions(prev=>[...prev,{id,emoji:data.emoji,x:20+Math.random()*60,label:data.from}]);
+            const id=Date.now()+Math.random();
+            setFloatingReactions(prev=>[...prev,{id,emoji:data.emoji,x:15+Math.random()*70,label:data.from||''}]);
+            setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
             setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
           } else if(sig.type==='hand'){
             const hid='hand-'+from;
@@ -8718,17 +8836,30 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(!videoOn){
       try{
         const vs=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'}});
-        vs.getVideoTracks().forEach(t=>{
-          if(localStream.current)localStream.current.addTrack(t);
-        });
-        // Update local video element
+        const camTrack=vs.getVideoTracks()[0];
+        if(!camTrack)return;
+        // Add to local stream
+        if(localStream.current){
+          // Remove any existing video tracks first
+          localStream.current.getVideoTracks().forEach(t=>{t.stop();localStream.current.removeTrack(t);});
+          localStream.current.addTrack(camTrack);
+        }
+        // Update local video preview
         if(localVideoRef.current&&localStream.current){
           localVideoRef.current.srcObject=localStream.current;
           localVideoRef.current.play().catch(()=>{});
         }
-        // Renegotiate with all peers
+        // Renegotiate with all peers using replaceTrack when possible
         for(const [uid,pc] of Object.entries(pcs.current)){
-          vs.getVideoTracks().forEach(t=>pc.addTrack(t,localStream.current));
+          const senders=pc.getSenders();
+          const vs2=senders.find(s=>s.track&&s.track.kind==='video');
+          if(vs2){
+            await vs2.replaceTrack(camTrack).catch(async()=>{
+              pc.addTrack(camTrack,localStream.current);
+            });
+          } else {
+            pc.addTrack(camTrack,localStream.current);
+          }
           try{
             const offer=await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -8742,6 +8873,12 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         localStream.current.getVideoTracks().forEach(t=>{t.stop();try{localStream.current.removeTrack(t);}catch(ex){}});
       }
       if(localVideoRef.current)localVideoRef.current.srcObject=null;
+      // Notify peers — remove video sender
+      for(const [uid,pc] of Object.entries(pcs.current)){
+        const senders=pc.getSenders();
+        const vs=senders.find(s=>s.track&&s.track.kind==='video');
+        if(vs)vs.replaceTrack(null).catch(()=>{});
+      }
       setVideoOn(false);
     }
   };
@@ -8749,35 +8886,114 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const toggleScreenShare=async()=>{
     if(!screenSharing){
       try{
-        const ss=await navigator.mediaDevices.getDisplayMedia({video:{cursor:'always',width:{ideal:1920},height:{ideal:1080}},audio:false});
+        const ss=await navigator.mediaDevices.getDisplayMedia({
+          video:{cursor:'always',displaySurface:'monitor',width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}},
+          audio:false
+        });
         screenStream.current=ss;
-        setScreenSharing(true); // MUST be first — renders <video ref={screenVideoRef}>
-        setTimeout(async()=>{
-          if(screenVideoRef.current){screenVideoRef.current.srcObject=ss;screenVideoRef.current.play().catch(()=>{});}
-          // Send to peers after state settles
-          for(const [uid,pc] of Object.entries(pcs.current)){
-            ss.getTracks().forEach(t=>pc.addTrack(t,ss));
-            try{
-              const offer=await pc.createOffer();
-              await pc.setLocalDescription(offer);
-              await api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
-            }catch(ex){}
-            // Explicit signal so receiver shows overlay even if contentHint not set
-            api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'screen-start',data:{from:cu.id,name:cu.name}}).catch(()=>{});
-          }
-        },80);
-        ss.getVideoTracks()[0].onended=()=>{
-          setScreenSharing(false);screenStream.current=null;
-          if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
-          if(roomIdRef.current)Object.keys(pcs.current).forEach(uid=>{
-            api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'screen-stop',data:{}}).catch(()=>{});
+
+        // Show local preview immediately — no setTimeout race
+        setScreenSharing(true);
+        // Use requestAnimationFrame to ensure DOM has rendered screenVideoRef
+        requestAnimationFrame(()=>{
+          requestAnimationFrame(()=>{
+            if(screenVideoRef.current){
+              screenVideoRef.current.srcObject=ss;
+              screenVideoRef.current.play().catch(()=>{});
+            }
           });
+        });
+
+        // Renegotiate with each peer properly
+        const renegotiate=async(uid,pc)=>{
+          // Replace existing video sender or add new track
+          const senders=pc.getSenders();
+          const screenTrack=ss.getVideoTracks()[0];
+          if(!screenTrack)return;
+          // Check if there's already a video sender we can replace
+          const videoSender=senders.find(s=>s.track&&s.track.kind==='video'&&
+            (s.track.label.toLowerCase().includes('camera')||s.track===localStream.current?.getVideoTracks()[0]));
+          if(videoSender){
+            // Replace camera track with screen track
+            await videoSender.replaceTrack(screenTrack).catch(()=>{
+              // replaceTrack failed — add as new track instead
+              pc.addTrack(screenTrack,ss);
+            });
+          } else {
+            pc.addTrack(screenTrack,ss);
+          }
+          // Create and send offer
+          try{
+            const offer=await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await api.post('/api/calls/'+roomIdRef.current+'/signal',{
+              to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}
+            });
+          }catch(ex){console.warn('Screen share renegotiate failed:',ex);}
+          // Always send explicit screen-start signal — don't rely on contentHint
+          api.post('/api/calls/'+roomIdRef.current+'/signal',{
+            to_user:uid,type:'screen-start',data:{from:cu.id,name:cu.name||'Someone'}
+          }).catch(()=>{});
         };
-      }catch(e){}
+
+        for(const [uid,pc] of Object.entries(pcs.current)){
+          await renegotiate(uid,pc);
+        }
+
+        // When user clicks "Stop sharing" in browser toolbar
+        ss.getVideoTracks()[0].onended=async()=>{
+          setScreenSharing(false);
+          if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
+          screenStream.current=null;
+          // Restore camera tracks on senders if video was on
+          if(localStream.current){
+            const camTrack=localStream.current.getVideoTracks()[0];
+            if(camTrack){
+              for(const [uid,pc] of Object.entries(pcs.current)){
+                const senders=pc.getSenders();
+                const vs=senders.find(s=>s.track&&s.track.kind==='video');
+                if(vs)vs.replaceTrack(camTrack).catch(()=>{});
+              }
+            }
+          }
+          // Notify peers
+          if(roomIdRef.current){
+            Object.keys(pcs.current).forEach(uid=>{
+              api.post('/api/calls/'+roomIdRef.current+'/signal',{
+                to_user:uid,type:'screen-stop',data:{}
+              }).catch(()=>{});
+            });
+          }
+        };
+      }catch(e){
+        // User cancelled picker or permission denied — reset cleanly
+        if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
+        setScreenSharing(false);
+        if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
+      }
     } else {
+      // Stop screen share
       if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
       if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
       setScreenSharing(false);
+      // Restore camera if it was on, notify peers
+      if(localStream.current){
+        const camTrack=localStream.current.getVideoTracks()[0];
+        if(camTrack){
+          for(const [uid,pc] of Object.entries(pcs.current)){
+            const senders=pc.getSenders();
+            const vs=senders.find(s=>s.track&&s.track.kind==='video');
+            if(vs)vs.replaceTrack(camTrack).catch(()=>{});
+          }
+        }
+      }
+      if(roomIdRef.current){
+        Object.keys(pcs.current).forEach(uid=>{
+          api.post('/api/calls/'+roomIdRef.current+'/signal',{
+            to_user:uid,type:'screen-stop',data:{}
+          }).catch(()=>{});
+        });
+      }
     }
   };
 
@@ -9004,7 +9220,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             </div>`)}
           <!-- Video -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(37,99,235,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(170,255,0,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#99ee00':'#fff',transition:'all .15s'}}>
+            <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(37,99,235,.22)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(59,130,246,.6)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#93c5fd':'#fff',transition:'all .15s',boxShadow:videoOn?'0 0 10px rgba(59,130,246,.3)':'none'}}>
               ${videoOn?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
               html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
             </button>
@@ -9012,10 +9228,17 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           </div>
           <!-- Screen Share -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13,background:screenSharing?'rgba(37,99,235,.25)':'rgba(255,255,255,.09)',border:'1.5px solid '+(screenSharing?'rgba(170,255,0,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:screenSharing?'#99ee00':'#fff',transition:'all .15s'}}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13,
+              background:screenSharing?'rgba(37,99,235,.35)':'rgba(255,255,255,.09)',
+              border:'1.5px solid '+(screenSharing?'rgba(59,130,246,.7)':'rgba(255,255,255,.12)'),
+              cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+              color:screenSharing?'#93c5fd':'#fff',transition:'all .15s',
+              boxShadow:screenSharing?'0 0 12px rgba(59,130,246,.4)':'none'}}>
+              ${screenSharing
+                ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" fill="rgba(59,130,246,.3)"/><path d="M8 21h8M12 17v4"/><line x1="8" y1="10" x2="16" y2="10" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/></svg>`
+                :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`}
             </button>
-            <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>Share</span>
+            <span style=${{fontSize:8,color:screenSharing?'#93c5fd':'rgba(255,255,255,.35)',lineHeight:1}}>${screenSharing?'Sharing':'Share'}</span>
           </div>
           <!-- Raise Hand -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
@@ -9031,16 +9254,44 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             <span style=${{fontSize:8,color:handRaised?'rgba(251,191,36,.9)':'rgba(255,255,255,.35)',lineHeight:1}}>Hand</span>
           </div>
           <!-- Emoji React -->
-          <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1,position:'relative'}}>
-            <button onClick=${()=>setShowEmojiPicker(p=>!p)} style=${{width:44,height:44,borderRadius:13,background:showEmojiPicker?'rgba(251,191,36,.2)':'rgba(255,255,255,.09)',border:'1.5px solid '+(showEmojiPicker?'rgba(251,191,36,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,transition:'all .15s'}}>😊</button>
+          <div ref=${emojiPickerRef} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1,position:'relative'}}>
+            <button onClick=${(e)=>{e.stopPropagation();setShowEmojiPicker(p=>!p);}}
+              style=${{width:44,height:44,borderRadius:13,
+                background:showEmojiPicker?'rgba(251,191,36,.2)':'rgba(255,255,255,.09)',
+                border:'1.5px solid '+(showEmojiPicker?'rgba(251,191,36,.5)':'rgba(255,255,255,.12)'),
+                cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+                fontSize:18,transition:'all .15s'}}>
+              😊
+            </button>
             <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>React</span>
             ${showEmojiPicker?html`
-              <div onMouseDown=${e=>{e.stopPropagation();e.preventDefault();}} style=${{position:'absolute',bottom:60,left:'50%',transform:'translateX(-50%)',background:'#1e1b30',border:'1.5px solid rgba(255,255,255,.2)',borderRadius:16,padding:'10px 14px',display:'flex',gap:10,boxShadow:'0 16px 48px rgba(0,0,0,.95)',zIndex:9999,whiteSpace:'nowrap'}}>
-                ${['👍','❤️','😂','🎉','🔥','👏','💯','😮'].map(em=>html`
-                  <button key=${em} onClick=${e=>{e.stopPropagation();e.preventDefault();sendReaction(em);setShowEmojiPicker(false);}}
-                    style=${{background:'none',border:'none',cursor:'pointer',fontSize:22,padding:'4px',borderRadius:8,transition:'transform .1s'}}
-                    onMouseEnter=${e=>e.currentTarget.style.transform='scale(1.3)'}
-                    onMouseLeave=${e=>e.currentTarget.style.transform='scale(1)'}>
+              <div style=${{
+                position:'absolute',
+                bottom:'calc(100% + 12px)',
+                left:'50%',
+                transform:'translateX(-50%)',
+                background:'#1a1625',
+                border:'1.5px solid rgba(255,255,255,.18)',
+                borderRadius:16,
+                padding:'8px 12px',
+                display:'flex',
+                gap:6,
+                flexWrap:'wrap',
+                maxWidth:220,
+                boxShadow:'0 -8px 32px rgba(0,0,0,.8),0 2px 8px rgba(0,0,0,.4)',
+                zIndex:10000,
+                whiteSpace:'nowrap'
+              }}>
+                ${['👍','❤️','😂','🎉','🔥','👏','💯','😮','🙌','✅','🚀','😍'].map(em=>html`
+                  <button key=${em}
+                    onMouseDown=${(e)=>{e.stopPropagation();}}
+                    onClick=${(e)=>{e.stopPropagation();sendReaction(em);setShowEmojiPicker(false);}}
+                    style=${{background:'rgba(255,255,255,.06)',border:'none',cursor:'pointer',
+                      fontSize:20,padding:'6px',borderRadius:9,transition:'all .12s',
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      width:36,height:36}}
+                    onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.15)';e.currentTarget.style.transform='scale(1.25)';}}
+                    onMouseLeave=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.transform='scale(1)';}}>
                     ${em}
                   </button>`)}
               </div>`:null}
@@ -9048,7 +9299,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <!-- Invite / People -->
           <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
             <button onClick=${()=>{setShowInvite(p=>!p||showParticipants);setShowParticipants(false);}}
-              style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(37,99,235,.18)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(170,255,0,.35)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#99ee00':'#fff',transition:'all .15s',position:'relative'}}>
+              style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(37,99,235,.22)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(59,130,246,.6)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#93c5fd':'#fff',transition:'all .15s',position:'relative'}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               <span style=${{position:'absolute',top:-2,right:-2,width:15,height:15,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',border:'1.5px solid #0d0d1a'}}>${participants.length}</span>
             </button>
@@ -9065,11 +9316,28 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     </div>`:null;
 
   const reactionsOverlay=floatingReactions.length>0?html`
-    <div style=${{position:'fixed',bottom:130,left:popupPos&&popupPos.x?popupPos.x+'px':'50%',zIndex:9200,pointerEvents:'none',width:300}}>
+    <div style=${{
+      position:'fixed',
+      bottom:popupPos?Math.max(120,(window.innerHeight-(popupPos.y||0))-540+120)+'px':'140px',
+      left:popupPos?popupPos.x+'px':'50%',
+      transform:popupPos?'none':'translateX(-50%)',
+      zIndex:9300,pointerEvents:'none',width:320,height:200,overflow:'hidden'
+    }}>
       ${floatingReactions.map(r=>html`
-        <div key=${r.id} style=${{position:'absolute',left:r.x+'%',bottom:0,display:'flex',flexDirection:'column',alignItems:'center',gap:2,animation:'floatUp 2.5s ease-out forwards',pointerEvents:'none'}}>
-          <span style=${{fontSize:28}}>${r.emoji}</span>
-          ${r.label&&r.label!=='You'?html`<span style=${{fontSize:10,fontWeight:700,color:'#fff',background:'rgba(0,0,0,.7)',borderRadius:6,padding:'1px 6px',whiteSpace:'nowrap'}}>${r.label}</span>`:null}
+        <div key=${r.id} style=${{
+          position:'absolute',
+          left:r.x+'%',
+          bottom:0,
+          display:'flex',flexDirection:'column',alignItems:'center',gap:3,
+          animation:'floatUp 2.8s cubic-bezier(.2,.8,.4,1) forwards',
+          pointerEvents:'none'
+        }}>
+          <span style=${{fontSize:32,filter:'drop-shadow(0 2px 4px rgba(0,0,0,.5))'}}>${r.emoji}</span>
+          ${r.label&&r.label!=='You'?html`
+            <span style=${{fontSize:10,fontWeight:700,color:'#fff',
+              background:'rgba(0,0,0,.75)',borderRadius:6,
+              padding:'2px 7px',whiteSpace:'nowrap',
+              backdropFilter:'blur(4px)'}}>${r.label}</span>`:null}
         </div>`)}
     </div>`:null;
 
@@ -9114,7 +9382,7 @@ function App(){
     setTeamCtxRaw(id);
     try{localStorage.setItem('pf_team_ctx',id||'');}catch{}
   },[cu]);
-  const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');
+  const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
   const [toasts,setToasts]=useState([]);
@@ -9184,6 +9452,7 @@ function App(){
       setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
       if(ws&&ws.name)setWsName(ws.name);
+      if(ws)setWsDmEnabled(ws.dm_enabled!==0);
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
     }catch(e){console.error(e);}
@@ -9533,7 +9802,7 @@ function App(){
               initialAssignee=${taskFilterType==='assignee'?taskFilterValue:null}
             />`:null}
             ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks} key=${'msgs-'+(teamCtx||'all')}/>`:null}
-            ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
+            ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} dmEnabled=${wsDmEnabled} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
             ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam} initialAssignee=${ticketFilterType==='assignee'?ticketFilterValue:null} initialStatus=${ticketFilterType==='status'?ticketFilterValue:null}/>`:null}
