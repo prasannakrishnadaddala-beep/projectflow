@@ -4355,7 +4355,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#60a5fa"/><circle cx="32" cy="13" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/></svg>
           <span style=${{fontSize:11,fontWeight:700,color:'#bfdbfe',letterSpacing:'.3px'}}>Your Reminders</span>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
+          <span style=${{fontSize:11,color:'#93c5fd',fontWeight:700}}>${todayStr}</span>
         </div>
         <!-- team pill removed -->
         <!-- Schedule timeline -->
@@ -4364,7 +4364,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
             ${upcoming.length===0?html`
               <div style=${{display:'flex',alignItems:'center',gap:10,width:'100%',justifyContent:'center'}}>
                 <span style=${{fontSize:11,color:'rgba(148,163,184,0.8)',fontStyle:'italic',letterSpacing:'.2px'}}>No reminders today</span>
-                <button onClick=${onViewReminders} style=${{fontSize:10,padding:'3px 12px',height:22,borderRadius:100,background:'var(--ac)',color:'var(--ac-tx)',border:'none',cursor:'pointer',fontWeight:700,letterSpacing:'.2px'}}>+ Add</button>
+                <button onClick=${onViewReminders} style=${{fontSize:10,padding:'3px 12px',height:22,borderRadius:100,background:'#1d4ed8',color:'#ffffff',border:'none',cursor:'pointer',fontWeight:700,letterSpacing:'.2px'}}>+ Add</button>
               </div>
             `:html`
               <div style=${{display:'flex',alignItems:'center',gap:0,width:'100%',overflowX:'auto',scrollbarWidth:'none',position:'relative'}}>
@@ -5121,7 +5121,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
                       ${mems.slice(0,5).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-6:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:5-i}}><${Av} u=${m} size=${20}/></div>`)}
                     </div>
                     <div style=${{display:'flex',alignItems:'center',gap:5}}>
-                      ${(()=>{const pt=safe(teams).find(t=>t.id===p.team_id);return pt?html`<span style=${{fontSize:9,color:'var(--ac)',background:'rgba(170,255,0,.1)',border:'1px solid rgba(170,255,0,.25)',padding:'1px 6px',borderRadius:4,fontWeight:600}}>${pt.name}</span>`:
+                      ${(()=>{const pt=safe(teams).find(t=>t.id===p.team_id);return pt?html`<span style=${{fontSize:9,color:'var(--tx2)',background:'var(--sf2)',border:'1px solid var(--bd)',padding:'1px 6px',borderRadius:4,fontWeight:600}}>${pt.name}</span>`:
                         cu&&(cu.role==='Admin'||cu.role==='Manager')&&safe(teams).length>0?html`<select style=${{fontSize:9,padding:'1px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx3)',cursor:'pointer'}}
                           value="" onChange=${async e=>{if(!e.target.value)return;await api.post('/api/projects/bulk-assign-team',{team_id:e.target.value,project_ids:[p.id]});reload();}}
                           onClick=${e=>e.stopPropagation()}>
@@ -5368,7 +5368,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
           ${assF!=='all'&&assF===cu.id?html`
             <div style=${{display:'flex',alignItems:'center',gap:6,padding:'5px 10px 5px 8px',background:'var(--ac3)',border:'1px solid var(--ac)',borderRadius:20,flexShrink:0}}>
               <div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0}}></div>
-              <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)'}}>My Tasks</span>
+              <span style=${{fontSize:11,fontWeight:700,color:'var(--tx2)'}}>My Tasks</span>
               <button onClick=${()=>setAssF('all')}
                 style=${{background:'none',border:'none',cursor:'pointer',color:'var(--ac)',fontSize:14,lineHeight:1,padding:'0 2px'}}>×</button>
             </div>`:null}
@@ -5630,7 +5630,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
           <div style=${{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>Good day, ${(cu&&cu.name||'there').split(' ')[0]}! 👋</span>
             ${activeTeam?html`
-              <span style=${{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 8px',background:'var(--ac3)',border:'1px solid var(--ac)',borderRadius:20,fontSize:10,fontWeight:600,color:'var(--ac)',flexShrink:0}}>
+              <span style=${{display:'inline-flex',alignItems:'center',gap:5,padding:'2px 8px',background:'rgba(29,78,216,0.08)',border:'1px solid rgba(29,78,216,0.2)',borderRadius:20,fontSize:10,fontWeight:600,color:'#1d4ed8',flexShrink:0}}>
                 <div style=${{width:5,height:5,borderRadius:1,background:'var(--ac)'}}></div>
                 ${activeTeam.name}
               </span>`:null}
@@ -5920,7 +5920,7 @@ function TimelineView({cu,tasks,projects,onNav}){
               onMouseEnter=${e=>{e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.3)';e.currentTarget.style.borderColor=proj.color;}}
               onMouseLeave=${e=>{e.currentTarget.style.boxShadow='';e.currentTarget.style.borderColor='var(--bd)';}}>
               <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:proj.totalDays!==null?10:4}}>
-                <span style=${{fontSize:13,fontWeight:700,color:'var(--ac)',flex:1,textDecoration:'underline',textDecorationStyle:'dotted',textUnderlineOffset:3}}>${proj.name}</span>
+                <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',flex:1,cursor:'pointer'}}>${proj.name}</span>
                 <span style=${{fontSize:10,fontWeight:700,padding:'3px 10px',borderRadius:100,background:hc.bg,color:hc.color}}>${hc.label}</span>
                 <span style=${{fontSize:10,color:'var(--tx3)'}}>📋 ${proj.doneTasks}/${proj.taskCount}</span>
               </div>
@@ -5947,7 +5947,7 @@ function TimelineView({cu,tasks,projects,onNav}){
                     {lbl:'Start',val:fmtD(proj.start),c:'var(--tx2)'},
                     {lbl:'End',val:fmtD(proj.end),c:proj.isOverdue?'var(--rd)':'var(--tx2)'},
                     {lbl:'Total',val:proj.totalDays+' days',c:'var(--tx2)'},
-                    {lbl:'Spent',val:proj.daysSpent+' days',c:'var(--ac)'},
+                    {lbl:'Spent',val:proj.daysSpent+' days',c:'var(--tx2)'},
                     {lbl:proj.isOverdue?'Overdue by':'Remaining',val:Math.abs(proj.daysLeft)+' days',c:proj.isOverdue?'var(--rd)':'var(--gn)'},
                     proj.gap!==null?{lbl:'Gap',val:(proj.gap>0?'+':'')+proj.gap+'%',c:proj.gap>15?'var(--rd)':proj.gap>0?'var(--am)':'var(--gn)'}:null,
                   ].filter(Boolean).map((ch,i)=>html`
@@ -6121,7 +6121,7 @@ function ProductivityView({cu,tasks,projects,users}){
                       <${Av} u=${dev} size=${28}/>
                       <div>
                         <div style=${{fontWeight:600,color:'var(--tx)',fontSize:12,lineHeight:1.2,whiteSpace:'nowrap'}}>${dev.name}</div>
-                        ${dev.id===cu.id?html`<div style=${{fontSize:9,color:'var(--ac)',fontWeight:700}}>YOU</div>`:null}
+                        ${dev.id===cu.id?html`<div style=${{fontSize:9,color:'#1d4ed8',fontWeight:700}}>YOU</div>`:null}
                       </div>
                     </div>
                   </td>
@@ -8106,7 +8106,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
               </div>
               <div style=${{marginTop:12,background:'rgba(170,255,0,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(170,255,0,.15)',display:'flex',alignItems:'center',gap:8}}>
                 <span style=${{fontSize:16}}>🔔</span>
-                <span>You'll get a browser notification + sound <b style=${{color:'var(--ac)'}}>${addMins} min</b> before the reminder time.</span>
+                <span>You'll get a browser notification + sound <b style=${{color:'#1d4ed8'}}>${addMins} min</b> before the reminder time.</span>
               </div>
             </div>
 
