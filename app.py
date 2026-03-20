@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ProjectFlow v4.0
+ProjectFlowPro v4.0
 Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 """
 import os, sys, json, hashlib, secrets, random, urllib.request, urllib.error
@@ -216,7 +216,7 @@ def send_otp_email(to_email, otp_code, user_name):
     <body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
       <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
         <div style="background:#0a1a00;padding:24px 32px;text-align:center;">
-          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">ProjectFlow</h1>
+          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">ProjectFlowPro</h1>
         </div>
         <div style="padding:32px;">
           <h2 style="color:#111;margin:0 0 8px;">Hi {user_name},</h2>
@@ -2126,7 +2126,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('push', e => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch(err) {}
-  const title  = data.title  || 'ProjectFlow';
+  const title  = data.title  || 'ProjectFlowPro';
   const body   = data.body   || '';
   const tag    = data.tag    || 'pf-notif';
   const url    = data.url    || '/';
@@ -2198,8 +2198,8 @@ async function pollNotifications() {
 def serve_manifest():
     """PWA manifest for installability."""
     manifest = {
-        "name": "ProjectFlow",
-        "short_name": "ProjectFlow",
+        "name": "ProjectFlowPro",
+        "short_name": "ProjectFlowPro",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#111111",
@@ -2225,8 +2225,8 @@ LANDING_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>ProjectFlow — Team Project Management & AI Assistant</title>
-<meta name="description" content="ProjectFlow v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, direct messages, huddle calls, timeline tracking, and developer productivity analytics."/>
+<title>ProjectFlowProPro — Team Project Management & AI Assistant</title>
+<meta name="description" content="ProjectFlowPro v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, direct messages, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <style>
@@ -2482,7 +2482,7 @@ footer{padding:52px 0 36px;border-top:1px solid var(--bd3);}
 <!-- NAV -->
 <nav>
   <div class="wrap nav-inner">
-    <a href="/" class="logo"><span class="logo-dot"></span>ProjectFlow</a>
+    <a href="/" class="logo"><span class="logo-dot"></span>ProjectFlowPro</a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#modules">Modules</a></li>
@@ -2500,7 +2500,7 @@ footer{padding:52px 0 36px;border-top:1px solid var(--bd3);}
 <!-- HERO -->
 <section class="hero">
   <div class="wrap">
-    <div class="hero-badge a1"><span class="hero-badge-dot"></span>ProjectFlow v4.0 — AI-Powered Team OS</div>
+    <div class="hero-badge a1"><span class="hero-badge-dot"></span>ProjectFlowPro v4.0 — AI-Powered Team OS</div>
     <h1 class="a2"><span class="grad">The complete workspace</span><br>for teams that <span class="ac">ship.</span></h1>
     <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, voice huddles, timeline tracking, support tickets, and developer productivity analytics — all in one platform.</p>
     <div class="hero-actions a4">
@@ -2953,7 +2953,7 @@ footer{padding:52px 0 36px;border-top:1px solid var(--bd3);}
   <div class="wrap">
     <div class="footer-top">
       <div class="footer-brand">
-        <a href="/" class="logo"><span class="logo-dot"></span>ProjectFlow</a>
+        <a href="/" class="logo"><span class="logo-dot"></span>ProjectFlowPro</a>
         <p>The all-in-one project management platform built for engineering teams. AI-powered, real-time, and fully multi-tenant.</p>
       </div>
       <div class="footer-col">
@@ -2984,7 +2984,7 @@ footer{padding:52px 0 36px;border-top:1px solid var(--bd3);}
       </div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-copy">© 2025 ProjectFlow v4.0 — Hosted on Railway</div>
+      <div class="footer-copy">© 2025 ProjectFlowProPro v4.0 — Hosted on Railway</div>
       <div class="footer-badges">
         <div class="footer-badge">v4.0</div>
         <div class="footer-badge">PostgreSQL</div>
@@ -3028,7 +3028,7 @@ window.addEventListener('scroll', () => {
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>ProjectFlow</title>
+<title>ProjectFlowProPro</title>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#aaff00"/>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
@@ -3788,7 +3788,7 @@ function AuthScreen({onLogin}){
         <div style=${{width:32,height:32,borderRadius:9,background:'white',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(59,130,246,0.2)'}}>
           <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#1d4ed8"/><circle cx="32" cy="11" r="6" fill="#1d4ed8"/><circle cx="51" cy="43" r="6" fill="#1d4ed8"/><circle cx="13" cy="43" r="6" fill="#1d4ed8"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>ProjectFlow</span>
+        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>ProjectFlowPro</span>
       </div>
 
       <!-- Center tagline -->
@@ -3901,7 +3901,7 @@ function AuthScreen({onLogin}){
           <div style=${{width:28,height:28,borderRadius:7,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
             <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>ProjectFlow</span>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>ProjectFlowPro</span>
         </div>
 
         <!-- Heading -->
@@ -3909,7 +3909,7 @@ function AuthScreen({onLogin}){
           ${tab==='login'?'Welcome back':'Create account'}
         </h1>
         <p style=${{fontSize:13.5,color:'#64748b',marginBottom:24,lineHeight:1.6}}>
-          ${tab==='login'?'Sign in to your ProjectFlow workspace':'Set up your workspace and start shipping'}
+          ${tab==='login'?'Sign in to your ProjectFlowPro workspace':'Set up your workspace and start shipping'}
         </p>
 
         <!-- Tab switcher -->
@@ -3995,7 +3995,7 @@ function AuthScreen({onLogin}){
 
         <p style=${{fontSize:12.5,color:'#94a3b8',marginTop:18,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            ?html`New to ProjectFlowPro? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
             :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
       `)}
@@ -4345,7 +4345,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
           <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity=".9"/><circle cx="51" cy="43" r="6" fill="white" opacity=".9"/><circle cx="13" cy="43" r="6" fill="white" opacity=".9"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
         </div>
         ${!col?html`<div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.85)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlow'}</div>
+          <div style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.85)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlowPro'}</div>
           ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4}}>
             ${!isAdminManager?html`<span style=${{color:'rgba(255,255,255,.3)',fontWeight:400}}>My Team</span>`:null}
             ${activeTeam.name}
@@ -7809,7 +7809,7 @@ function updateBadge(count){
       const links=document.querySelectorAll("link[rel*='icon']");
       links.forEach(l=>{l.href=canvas.toDataURL();});
       // Also update document title
-      document.title=count>0?'('+count+') ProjectFlow':'ProjectFlow';
+      document.title=count>0?'('+count+') ProjectFlow':'ProjectFlowPro';
     };
     img.src=NOTIF_ICON;
   }catch(e){}
@@ -7821,7 +7821,7 @@ async function requestNotifPermission(){
       const {isPermissionGranted,requestPermission,sendNotification}=window.__TAURI__.notification;
       let ok=await isPermissionGranted();
       if(!ok){const p=await requestPermission();ok=(p==='granted');}
-      if(ok)await sendNotification({title:'ProjectFlow',body:'Notifications enabled.'});
+      if(ok)await sendNotification({title:'ProjectFlowPro',body:'Notifications enabled.'});
       return;
     }catch(e){}
   }
@@ -7846,7 +7846,7 @@ async function requestNotifPermission(){
           }
         }catch(e){}
       }
-      new Notification('ProjectFlow',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
+      new Notification('ProjectFlowPro',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
     }
   }
 }
@@ -9358,7 +9358,7 @@ function App(){
         const brandNew=d.filter(n=>!prevNotifIdsRef.current.has(n.id));
         brandNew.forEach(n=>{
           if(n.type==='dm'||n.type==='call')return;
-          const title=NTITLES[n.type]||'ProjectFlow';
+          const title=NTITLES[n.type]||'ProjectFlowPro';
           const nav=NNAV[n.type]||'notifs';
           addToast(n.type,title,n.content||'');
           showBrowserNotif(title,n.content||'',()=>setView(nav),{tag:'notif-'+n.id,requireInteraction:n.type==='call'});
@@ -9714,7 +9714,7 @@ def open_browser(port):
     webbrowser.open(f"http://localhost:{port}")
 
 if __name__=="__main__":
-    print("\n⚡ ProjectFlow v4.0 — Multi-Tenant | AI | Workspaces")
+    print("\n⚡ ProjectFlowPro v4.0 — Multi-Tenant | AI | Workspaces")
     print("="*54)
     print("  Initializing database...")
     init_db()
