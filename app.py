@@ -609,117 +609,6 @@ def login():
 @app.route("/api/auth/logout",methods=["POST"])
 def logout(): session.clear(); return jsonify({"ok":True})
 
-# ── ONE-TIME Full Migration Routes ────────────────────────────────────────────
-# Step 1: Visit /inspect-sqlite-xk29      → see SQLite vs PostgreSQL data
-# Step 2: Visit /full-reset-migrate-xk29  → wipe demo data, import real data
-# Remove both routes after migration is confirmed working.
-
-@app.route("/inspect-sqlite-xk29")
-def inspect_sqlite():
-    import sqlite3
-    result = {"sqlite": {}, "postgres": {}}
-    sqlite_path = None
-    for candidate in ["/data/projectflow.db", "/data/pf.db", "/data/app.db", "/data/database.db"]:
-        if os.path.exists(candidate):
-            sqlite_path = candidate
-            break
-    if not sqlite_path:
-        files = os.listdir("/data") if os.path.isdir("/data") else []
-        return jsonify({"error": "No SQLite found", "files": files})
-    result["sqlite_path"] = sqlite_path
-    try:
-        src = sqlite3.connect(sqlite_path)
-        src.row_factory = sqlite3.Row
-        ws = src.execute("SELECT id, name, invite_code, owner_id FROM workspaces").fetchall()
-        result["sqlite"]["workspaces"] = [dict(r) for r in ws]
-        us = src.execute("SELECT id, name, email, workspace_id, role FROM users").fetchall()
-        result["sqlite"]["users"] = [dict(r) for r in us]
-        src.close()
-    except Exception as e:
-        result["sqlite"]["error"] = str(e)
-    try:
-        with get_db() as db:
-            ws2 = db.execute("SELECT id, name, invite_code, owner_id FROM workspaces").fetchall()
-            result["postgres"]["workspaces"] = [dict(r) for r in ws2]
-            us2 = db.execute("SELECT id, name, email, workspace_id, role FROM users").fetchall()
-            result["postgres"]["users"] = [dict(r) for r in us2]
-    except Exception as e:
-        result["postgres"]["error"] = str(e)
-    return jsonify(result)
-
-
-@app.route("/full-reset-migrate-xk29")
-def full_reset_migrate():
-    import sqlite3, ssl as _ssl2, urllib.parse as _up2
-    results = []
-    sqlite_path = None
-    for candidate in ["/data/projectflow.db", "/data/pf.db", "/data/app.db", "/data/database.db"]:
-        if os.path.exists(candidate):
-            sqlite_path = candidate
-            break
-    if not sqlite_path:
-        return jsonify({"error": "No SQLite found in /data/"})
-    results.append(f"Found SQLite: {sqlite_path}")
-    TABLES_REVERSE = ["push_subscriptions","call_signals","ticket_comments","tickets",
-                      "teams","call_rooms","reminders","notifications","direct_messages",
-                      "messages","files","tasks","projects","users","workspaces"]
-    TABLES_FORWARD = list(reversed(TABLES_REVERSE))
-    try:
-        src = sqlite3.connect(sqlite_path)
-        src.row_factory = sqlite3.Row
-        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-        p = _up2.urlparse(url)
-        ssl_ctx = _ssl2.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = _ssl2.CERT_NONE
-        dst = pg8000.native.Connection(
-            host=p.hostname, port=p.port or 5432,
-            user=p.username, password=p.password,
-            database=p.path.lstrip("/"), ssl_context=ssl_ctx
-        )
-        results.append("Clearing PostgreSQL tables...")
-        for table in TABLES_REVERSE:
-            try:
-                dst.run(f"DELETE FROM {table}")
-                dst.run("COMMIT")
-                results.append(f"  cleared: {table}")
-            except Exception as e:
-                results.append(f"  skip {table}: {e}")
-                try: dst.run("ROLLBACK")
-                except: pass
-        results.append("Importing from SQLite...")
-        for table in TABLES_FORWARD:
-            try:
-                rows = src.execute(f"SELECT * FROM {table}").fetchall()
-                if not rows:
-                    results.append(f"  {table}: empty")
-                    continue
-                cols = list(rows[0].keys())
-                placeholders = ", ".join(f":p{i}" for i in range(len(cols)))
-                col_names = ", ".join(cols)
-                sql = f"INSERT INTO {table} ({col_names}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
-                count = 0; errs = 0
-                for row in rows:
-                    try:
-                        kwargs = {f"p{i}": row[i] for i in range(len(cols))}
-                        dst.run(sql, **kwargs)
-                        count += 1
-                    except Exception as re:
-                        errs += 1
-                dst.run("COMMIT")
-                results.append(f"  OK {table}: {count} inserted, {errs} errors")
-            except Exception as e:
-                results.append(f"  FAIL {table}: {e}")
-                try: dst.run("ROLLBACK")
-                except: pass
-        src.close()
-        dst.close()
-        results.append("DONE! Your real data is now in PostgreSQL. Log in with your real credentials.")
-        return jsonify({"status": "done", "results": results})
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e), "results": results})
-# ── End Migration Routes ───────────────────────────────────────────────────────
-
 @app.route("/api/auth/register",methods=["POST"])
 def register():
     d=request.json or {}
@@ -2180,288 +2069,806 @@ LANDING_HTML = """<!DOCTYPE html>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>ProjectFlow — Team Project Management & AI Assistant</title>
-<meta name="description" content="ProjectFlow v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, direct messages, huddle calls, and smart task management."/>
+<meta name="description" content="ProjectFlow v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, direct messages, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <style>
-:root{--bg:#080b10;--sf:#0d1117;--sf2:#141a24;--bd:rgba(170,255,0,0.12);--bd2:rgba(255,255,255,0.06);--ac:#aaff00;--ac2:#7cff47;--tx:#f0f4f8;--tx2:#8899aa;--tx3:#4a5a6a;}
+:root{--bg:#080b10;--sf:#0d1117;--sf2:#0f1520;--sf3:#141c28;--bd:rgba(170,255,0,0.12);--bd2:rgba(255,255,255,0.07);--bd3:rgba(255,255,255,0.04);--ac:#aaff00;--ac2:#7cff47;--ac3:rgba(170,255,0,0.15);--tx:#f0f4f8;--tx2:#8899aa;--tx3:#4a5568;--blue:#3b82f6;--purple:#8b5cf6;--pink:#ec4899;--orange:#f59e0b;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
 body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.65;overflow-x:hidden;}
-h1,h2,h3{font-family:'Syne',sans-serif;line-height:1.15;}
+h1,h2,h3,h4{font-family:'Syne',sans-serif;line-height:1.15;}
+
+/* NOISE + BLOBS */
 body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");opacity:.4;}
-.blob{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
-.blob-1{width:600px;height:600px;background:rgba(170,255,0,0.06);top:-200px;left:-200px;}
-.blob-2{width:500px;height:500px;background:rgba(59,130,246,0.07);bottom:10%;right:-150px;}
-.blob-3{width:400px;height:400px;background:rgba(139,92,246,0.06);top:40%;left:30%;}
-.wrap{max-width:1120px;margin:0 auto;padding:0 28px;position:relative;z-index:1;}
-nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 0;background:rgba(8,11,16,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--bd2);}
+.blob{position:fixed;border-radius:50%;filter:blur(140px);pointer-events:none;z-index:0;animation:blobFloat 12s ease-in-out infinite;}
+.blob-1{width:700px;height:700px;background:rgba(170,255,0,0.055);top:-250px;left:-250px;animation-delay:0s;}
+.blob-2{width:600px;height:600px;background:rgba(59,130,246,0.065);bottom:5%;right:-200px;animation-delay:-4s;}
+.blob-3{width:500px;height:500px;background:rgba(139,92,246,0.055);top:35%;left:25%;animation-delay:-8s;}
+@keyframes blobFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-20px) scale(1.03)}66%{transform:translate(-20px,15px) scale(.97)}}
+
+.wrap{max-width:1160px;margin:0 auto;padding:0 28px;position:relative;z-index:1;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;padding:14px 0;background:rgba(8,11,16,0.8);backdrop-filter:blur(24px);border-bottom:1px solid rgba(255,255,255,0.05);transition:background .3s;}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;}
-.logo{font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--tx);text-decoration:none;display:flex;align-items:center;gap:10px;}
-.logo-dot{width:10px;height:10px;background:var(--ac);border-radius:50%;display:inline-block;box-shadow:0 0 14px var(--ac);}
-.nav-links{display:flex;align-items:center;gap:28px;list-style:none;}
-.nav-links a{color:var(--tx2);text-decoration:none;font-size:.92rem;transition:color .2s;}
-.nav-links a:hover{color:var(--tx);}
-.btn{display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;transition:all .2s;text-decoration:none;white-space:nowrap;}
-.btn-primary{background:var(--ac);color:#040506;padding:11px 24px;border-radius:10px;font-size:.92rem;font-weight:600;box-shadow:0 0 30px rgba(170,255,0,0.2);}
-.btn-primary:hover{background:var(--ac2);box-shadow:0 0 40px rgba(170,255,0,0.35);transform:translateY(-1px);}
-.btn-outline{background:transparent;color:var(--tx);padding:11px 24px;border-radius:10px;font-size:.92rem;border:1px solid var(--bd2);}
-.btn-outline:hover{border-color:rgba(255,255,255,0.2);background:rgba(255,255,255,0.04);}
-.nav-cta{display:flex;gap:10px;}
-.hero{padding:155px 0 90px;text-align:center;}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(170,255,0,0.08);border:1px solid rgba(170,255,0,0.2);padding:6px 16px;border-radius:100px;font-size:.78rem;font-weight:600;color:var(--ac);margin-bottom:32px;letter-spacing:.05em;text-transform:uppercase;}
-.hero h1{font-size:clamp(2.6rem,6vw,4.8rem);font-weight:800;max-width:760px;margin:0 auto 22px;background:linear-gradient(160deg,#ffffff 40%,#667788);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.02em;}
-.hero h1 .ac{background:linear-gradient(120deg,var(--ac),var(--ac2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.hero-sub{font-size:1.1rem;color:var(--tx2);max-width:540px;margin:0 auto 44px;font-weight:300;}
-.hero-actions{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;}
-.btn-lg{padding:15px 32px!important;font-size:1rem!important;border-radius:12px!important;}
-.hero-visual{margin-top:68px;position:relative;}
-.hero-visual-inner{background:var(--sf2);border:1px solid var(--bd);border-radius:20px;overflow:hidden;box-shadow:0 0 0 1px rgba(170,255,0,0.05),0 40px 120px rgba(0,0,0,0.8);}
-.app-mockup{display:flex;height:420px;}
-.mock-sidebar{width:200px;flex-shrink:0;background:rgba(255,255,255,0.02);border-right:1px solid var(--bd2);padding:16px 12px;display:flex;flex-direction:column;gap:5px;}
-.mock-ws{display:flex;align-items:center;gap:9px;padding:8px;margin-bottom:6px;}
-.mock-ws-av{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--ac),#50cc00);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#040506;font-family:'Syne',sans-serif;}
-.mock-ws-name{font-size:.8rem;font-weight:600;}
-.mock-ws-sub{font-size:.68rem;color:var(--tx3);}
-.mock-nav{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;font-size:.78rem;color:var(--tx2);}
+.logo{font-family:'Syne',sans-serif;font-size:1.25rem;font-weight:800;color:var(--tx);text-decoration:none;display:flex;align-items:center;gap:9px;}
+.logo-dot{width:9px;height:9px;background:var(--ac);border-radius:50%;display:inline-block;box-shadow:0 0 12px var(--ac);}
+.nav-links{display:flex;align-items:center;gap:6px;list-style:none;}
+.nav-links a{color:var(--tx2);text-decoration:none;font-size:.88rem;padding:6px 14px;border-radius:8px;transition:all .2s;}
+.nav-links a:hover{color:var(--tx);background:rgba(255,255,255,0.05);}
+.nav-pill{background:var(--ac3);color:var(--ac)!important;font-size:.75rem!important;font-weight:600;border:1px solid var(--bd);}
+.nav-pill:hover{background:rgba(170,255,0,0.2)!important;}
+.btn{display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;transition:all .22s;text-decoration:none;white-space:nowrap;}
+.btn-primary{background:var(--ac);color:#040506;padding:10px 22px;border-radius:9px;font-size:.88rem;font-weight:700;box-shadow:0 0 28px rgba(170,255,0,0.18);}
+.btn-primary:hover{background:var(--ac2);box-shadow:0 0 40px rgba(170,255,0,0.32);transform:translateY(-1px);}
+.btn-outline{background:transparent;color:var(--tx);padding:10px 22px;border-radius:9px;font-size:.88rem;border:1px solid var(--bd2);}
+.btn-outline:hover{border-color:rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);}
+.btn-ghost{background:transparent;color:var(--tx2);padding:10px 22px;border-radius:9px;font-size:.88rem;}
+.btn-ghost:hover{color:var(--tx);background:rgba(255,255,255,0.04);}
+.nav-cta{display:flex;gap:8px;align-items:center;}
+
+/* HERO */
+.hero{padding:160px 0 80px;text-align:center;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(170,255,0,0.07);border:1px solid rgba(170,255,0,0.18);padding:5px 14px;border-radius:100px;font-size:.75rem;font-weight:700;color:var(--ac);margin-bottom:28px;letter-spacing:.06em;text-transform:uppercase;}
+.hero-badge-dot{width:6px;height:6px;background:var(--ac);border-radius:50%;animation:pulse 2s ease-in-out infinite;}
+.hero h1{font-size:clamp(2.8rem,6.5vw,5.2rem);font-weight:800;max-width:820px;margin:0 auto 20px;letter-spacing:-.03em;line-height:1.08;}
+.hero h1 .grad{background:linear-gradient(160deg,#ffffff 30%,#556677);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero h1 .ac{background:linear-gradient(120deg,var(--ac) 0%,var(--ac2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero-sub{font-size:1.05rem;color:var(--tx2);max-width:560px;margin:0 auto 40px;font-weight:300;line-height:1.75;}
+.hero-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+.btn-xl{padding:14px 30px!important;font-size:.96rem!important;border-radius:11px!important;}
+.hero-note{font-size:.78rem;color:var(--tx3);}
+.hero-note span{color:var(--ac);font-weight:600;}
+
+/* HERO MOCKUP */
+.hero-visual{margin-top:64px;position:relative;max-width:960px;margin-left:auto;margin-right:auto;}
+.hero-visual::before{content:'';position:absolute;inset:-1px;border-radius:21px;background:linear-gradient(135deg,rgba(170,255,0,0.15),rgba(59,130,246,0.1),rgba(139,92,246,0.1));z-index:0;}
+.hero-visual-inner{position:relative;z-index:1;background:var(--sf2);border-radius:20px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,0.06),0 60px 160px rgba(0,0,0,0.9);}
+.mock-topbar{height:38px;background:rgba(255,255,255,0.02);border-bottom:1px solid var(--bd3);display:flex;align-items:center;padding:0 16px;gap:6px;}
+.mock-dot{width:10px;height:10px;border-radius:50%;}
+.mock-url{flex:1;margin:0 12px;height:20px;background:rgba(255,255,255,0.04);border-radius:5px;display:flex;align-items:center;padding:0 10px;}
+.mock-url-text{font-size:.6rem;color:var(--tx3);}
+.app-mockup{display:flex;height:400px;}
+.mock-sidebar{width:195px;flex-shrink:0;background:rgba(255,255,255,0.015);border-right:1px solid var(--bd3);padding:14px 10px;display:flex;flex-direction:column;gap:3px;}
+.mock-ws{display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:8px;border-radius:8px;background:rgba(255,255,255,0.03);}
+.mock-ws-av{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--ac),#50cc00);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#040506;font-family:'Syne',sans-serif;flex-shrink:0;}
+.mock-ws-name{font-size:.75rem;font-weight:700;}
+.mock-ws-sub{font-size:.62rem;color:var(--tx3);}
+.mock-section-label{font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);padding:10px 9px 4px;}
+.mock-nav{display:flex;align-items:center;gap:7px;padding:6px 9px;border-radius:6px;font-size:.73rem;color:var(--tx2);cursor:default;}
 .mock-nav.active{background:rgba(170,255,0,0.1);color:var(--ac);}
-.mock-badge{margin-left:auto;background:var(--ac);color:#040506;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:100px;}
+.mock-nav:hover{background:rgba(255,255,255,0.03);}
+.mock-badge{margin-left:auto;background:var(--ac);color:#040506;font-size:.55rem;font-weight:700;padding:1px 5px;border-radius:100px;min-width:16px;text-align:center;}
+.mock-badge-blue{background:#3b82f6!important;color:#fff!important;}
 .mock-main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
-.mock-header{padding:14px 18px;border-bottom:1px solid var(--bd2);display:flex;align-items:center;justify-content:space-between;}
-.mock-title{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700;}
-.mock-body{flex:1;padding:16px;overflow:hidden;}
-.mock-board{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
-.mock-col{background:rgba(255,255,255,0.02);border:1px solid var(--bd2);border-radius:9px;padding:10px;}
-.mock-col-hd{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin-bottom:8px;}
-.mock-card{background:var(--bg);border:1px solid var(--bd2);border-radius:7px;padding:9px;margin-bottom:7px;}
-.mock-card-title{font-size:.72rem;font-weight:500;margin-bottom:5px;}
-.mock-pill{display:inline-block;font-size:.58rem;padding:2px 6px;border-radius:100px;font-weight:600;}
+.mock-header{padding:12px 18px;border-bottom:1px solid var(--bd3);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.mock-title{font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;}
+.mock-tabs{display:flex;gap:2px;}
+.mock-tab{font-size:.65rem;padding:4px 10px;border-radius:5px;color:var(--tx2);}
+.mock-tab.active{background:rgba(170,255,0,0.1);color:var(--ac);}
+.mock-avatars{display:flex;}
+.mock-av{width:24px;height:24px;border-radius:50%;border:2px solid var(--sf2);display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;margin-left:-6px;}
+.mock-av:first-child{margin-left:0;}
+.mock-body{flex:1;padding:14px 16px;overflow:hidden;}
+.mock-board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;height:100%;}
+.mock-col{background:rgba(255,255,255,0.02);border:1px solid var(--bd3);border-radius:8px;padding:9px;display:flex;flex-direction:column;gap:7px;}
+.mock-col-hd{font-size:.62rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx3);display:flex;justify-content:space-between;align-items:center;}
+.mock-col-count{width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--tx2);}
+.mock-card{background:var(--bg);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:8px;}
+.mock-card-title{font-size:.68rem;font-weight:500;margin-bottom:6px;line-height:1.4;}
+.mock-card-meta{display:flex;align-items:center;justify-content:space-between;}
+.mock-pill{display:inline-block;font-size:.55rem;padding:2px 6px;border-radius:100px;font-weight:600;}
 .pill-high{background:rgba(239,68,68,0.15);color:#f87171;}
 .pill-med{background:rgba(245,158,11,0.15);color:#fbbf24;}
 .pill-low{background:rgba(16,185,129,0.15);color:#34d399;}
-.mock-prog{height:3px;background:rgba(255,255,255,0.06);border-radius:100px;margin-top:7px;}
-.mock-prog-fill{height:100%;border-radius:100px;background:var(--ac);}
-.mock-ai{position:absolute;right:18px;bottom:18px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--ac) 0%,#50cc00 100%);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 28px rgba(170,255,0,0.4),0 8px 24px rgba(0,0,0,0.5);}
-.glow-ring{position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(170,255,0,0.2);animation:pulse 2.5s ease-in-out infinite;}
-@keyframes pulse{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.8;transform:scale(1.07)}}
+.pill-done{background:rgba(170,255,0,0.12);color:var(--ac);}
+.mock-prog{height:2px;background:rgba(255,255,255,0.05);border-radius:100px;margin-top:7px;}
+.mock-prog-fill{height:100%;border-radius:100px;}
+.mock-prog-green{background:var(--ac);}
+.mock-prog-blue{background:#3b82f6;}
+.mock-prog-orange{background:#f59e0b;}
+.mock-ai{position:absolute;right:14px;bottom:14px;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--ac) 0%,#50cc00 100%);display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 0 28px rgba(170,255,0,0.45),0 8px 24px rgba(0,0,0,0.6);cursor:pointer;z-index:10;}
+.mock-ai-ring{position:absolute;inset:-5px;border-radius:50%;border:2px solid rgba(170,255,0,0.25);animation:pulse 2.5s ease-in-out infinite;}
+.mock-ai-ping{position:absolute;inset:-10px;border-radius:50%;border:1px solid rgba(170,255,0,0.1);animation:pulse 2.5s ease-in-out infinite;animation-delay:.5s;}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.7;transform:scale(1.08)}}
+
+/* TICKER */
+.ticker-wrap{overflow:hidden;border-top:1px solid var(--bd3);border-bottom:1px solid var(--bd3);padding:12px 0;background:rgba(255,255,255,0.01);}
+.ticker{display:flex;gap:0;animation:ticker 28s linear infinite;}
+.ticker-item{display:flex;align-items:center;gap:10px;padding:0 32px;font-size:.78rem;color:var(--tx3);white-space:nowrap;flex-shrink:0;}
+.ticker-item span{color:var(--ac);font-weight:600;}
+.ticker-sep{color:var(--bd);}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* STATS */
+.stats-section{padding:60px 0;}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--bd3);border:1px solid var(--bd3);border-radius:16px;overflow:hidden;}
+.stat-item{background:var(--sf2);text-align:center;padding:28px 20px;}
+.stat-num{font-family:'Syne',sans-serif;font-size:2.4rem;font-weight:800;line-height:1;margin-bottom:6px;}
+.stat-num-ac{color:var(--ac);}
+.stat-num-blue{color:#60a5fa;}
+.stat-num-purple{color:#a78bfa;}
+.stat-num-orange{color:#fbbf24;}
+.stat-label{font-size:.8rem;color:var(--tx3);}
+
+/* SECTION COMMONS */
 section{padding:90px 0;}
-.section-tag{display:inline-block;font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
-.section-title{font-size:clamp(1.7rem,3.5vw,2.4rem);font-weight:800;max-width:560px;margin-bottom:14px;letter-spacing:-.02em;}
-.section-sub{color:var(--tx2);font-size:1rem;max-width:500px;margin-bottom:48px;font-weight:300;}
+.section-tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:12px;background:var(--ac3);padding:4px 12px;border-radius:100px;border:1px solid var(--bd);}
+.section-title{font-size:clamp(1.8rem,3.5vw,2.6rem);font-weight:800;max-width:580px;margin-bottom:12px;letter-spacing:-.025em;}
+.section-sub{color:var(--tx2);font-size:.96rem;max-width:520px;margin-bottom:52px;font-weight:300;line-height:1.75;}
 .centered{text-align:center;}
 .centered .section-title,.centered .section-sub{margin-left:auto;margin-right:auto;}
-.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.bento-card{background:var(--sf2);border:1px solid var(--bd2);border-radius:14px;padding:28px;transition:border-color .25s,box-shadow .25s;position:relative;overflow:hidden;}
-.bento-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .3s;background:radial-gradient(circle at 50% 0%,rgba(170,255,0,0.06) 0%,transparent 70%);}
-.bento-card:hover{border-color:rgba(170,255,0,0.2);box-shadow:0 12px 40px rgba(0,0,0,0.4);}
-.bento-card:hover::before{opacity:1;}
+
+/* FEATURES BENTO */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.bento-card{background:var(--sf2);border:1px solid var(--bd3);border-radius:16px;padding:26px;transition:border-color .3s,box-shadow .3s,transform .3s;position:relative;overflow:hidden;cursor:default;}
+.bento-card::after{content:'';position:absolute;inset:0;opacity:0;transition:opacity .35s;background:radial-gradient(circle at 50% 0%,rgba(170,255,0,0.055) 0%,transparent 65%);}
+.bento-card:hover{border-color:rgba(170,255,0,0.18);box-shadow:0 16px 48px rgba(0,0,0,0.5);transform:translateY(-2px);}
+.bento-card:hover::after{opacity:1;}
 .bento-card.span2{grid-column:span 2;}
-.bento-ico{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);}
-.bento-card h3{font-size:1rem;font-weight:700;margin-bottom:8px;font-family:'Syne',sans-serif;}
-.bento-card p{font-size:.88rem;color:var(--tx2);line-height:1.6;}
-.feat-list{list-style:none;margin-top:14px;display:flex;flex-direction:column;gap:7px;}
-.feat-list li{display:flex;align-items:center;gap:9px;font-size:.84rem;color:var(--tx2);}
-.feat-list li::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--ac);flex-shrink:0;}
-.stats{padding:50px 0;border-top:1px solid var(--bd2);border-bottom:1px solid var(--bd2);}
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;}
-.stat-item{text-align:center;padding:18px;border-right:1px solid var(--bd2);}
-.stat-item:last-child{border-right:none;}
-.stat-num{font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:800;color:var(--ac);}
-.stat-label{font-size:.83rem;color:var(--tx2);margin-top:3px;}
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:48px;}
-.step{text-align:center;}
-.step-num{width:48px;height:48px;border-radius:50%;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;color:var(--ac);background:rgba(170,255,0,0.05);}
-.step h3{font-size:.95rem;font-weight:700;margin-bottom:7px;}
-.step p{font-size:.83rem;color:var(--tx2);}
-.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:48px;}
-.admin-card{background:var(--sf2);border:1px solid var(--bd2);border-radius:14px;padding:24px;}
-.admin-card h3{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:9px;}
-.admin-card p{font-size:.87rem;color:var(--tx2);}
-.cta-box{text-align:center;border:1px solid rgba(170,255,0,0.2);border-radius:22px;padding:72px 40px;background:radial-gradient(ellipse at 50% 0%,rgba(170,255,0,0.07) 0%,transparent 70%),var(--sf2);}
-.cta-box h2{font-size:clamp(1.7rem,3vw,2.3rem);font-weight:800;margin-bottom:14px;}
-.cta-box p{color:var(--tx2);margin-bottom:36px;font-size:1rem;}
-.cta-actions{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;}
-footer{padding:48px 0;border-top:1px solid var(--bd2);}
-.footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px;}
-.footer-links{display:flex;gap:22px;flex-wrap:wrap;}
-.footer-links a{color:var(--tx3);font-size:.83rem;text-decoration:none;transition:color .2s;}
-.footer-links a:hover{color:var(--tx2);}
-.footer-copy{color:var(--tx3);font-size:.8rem;}
-@keyframes slideUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+.bento-card.featured{border-color:rgba(170,255,0,0.15);background:linear-gradient(135deg,rgba(170,255,0,0.04) 0%,var(--sf2) 60%);}
+.bento-ico{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);}
+.bento-card h3{font-size:.95rem;font-weight:700;margin-bottom:7px;}
+.bento-card p{font-size:.85rem;color:var(--tx2);line-height:1.65;}
+.feat-list{list-style:none;margin-top:13px;display:flex;flex-direction:column;gap:6px;}
+.feat-list li{display:flex;align-items:flex-start;gap:9px;font-size:.82rem;color:var(--tx2);}
+.feat-list li::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:7px;}
+.badge-role{font-size:.65rem;background:rgba(170,255,0,.12);color:var(--ac);padding:2px 8px;border-radius:100px;margin-left:6px;border:1px solid var(--bd);font-weight:600;}
+
+/* WORKFLOW SECTION */
+.workflow-section{padding:90px 0;background:linear-gradient(180deg,transparent,rgba(255,255,255,0.01),transparent);}
+.workflow-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;margin-top:52px;}
+.workflow-steps{display:flex;flex-direction:column;gap:0;}
+.workflow-step{display:flex;gap:18px;padding:20px 0;border-bottom:1px solid var(--bd3);position:relative;}
+.workflow-step:last-child{border-bottom:none;}
+.ws-num{width:36px;height:36px;border-radius:50%;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:var(--ac);background:rgba(170,255,0,0.05);flex-shrink:0;margin-top:2px;}
+.ws-content h4{font-size:.95rem;font-weight:700;margin-bottom:5px;}
+.ws-content p{font-size:.84rem;color:var(--tx2);line-height:1.65;}
+.workflow-visual{position:relative;}
+.roles-card{background:var(--sf2);border:1px solid var(--bd3);border-radius:16px;padding:22px;overflow:hidden;}
+.roles-card-title{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);margin-bottom:16px;}
+.role-row{display:flex;align-items:center;gap:12px;padding:10px;border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
+.role-av{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;font-family:'Syne',sans-serif;flex-shrink:0;}
+.role-info{flex:1;}
+.role-name{font-size:.8rem;font-weight:600;}
+.role-title{font-size:.7rem;color:var(--tx3);}
+.role-badge{font-size:.65rem;padding:2px 8px;border-radius:100px;font-weight:600;}
+.rb-admin{background:rgba(239,68,68,0.15);color:#f87171;}
+.rb-manager{background:rgba(245,158,11,0.15);color:#fbbf24;}
+.rb-dev{background:rgba(59,130,246,0.15);color:#93c5fd;}
+.rb-lead{background:rgba(139,92,246,0.15);color:#c4b5fd;}
+.rb-viewer{background:rgba(107,114,128,0.15);color:#9ca3af;}
+.rb-tester{background:rgba(16,185,129,0.15);color:#6ee7b7;}
+
+/* INTEGRATIONS / MODULES */
+.modules-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:48px;}
+.module-card{background:var(--sf2);border:1px solid var(--bd3);border-radius:12px;padding:18px 16px;text-align:center;transition:all .25s;}
+.module-card:hover{border-color:rgba(170,255,0,0.15);transform:translateY(-2px);}
+.module-ico{font-size:1.8rem;margin-bottom:10px;}
+.module-name{font-size:.82rem;font-weight:700;margin-bottom:4px;}
+.module-desc{font-size:.74rem;color:var(--tx3);line-height:1.5;}
+
+/* NOTIFICATION DEMO */
+.notif-demo{display:flex;flex-direction:column;gap:8px;}
+.notif-item{display:flex;align-items:flex-start;gap:10px;background:var(--sf3);border:1px solid var(--bd3);border-radius:10px;padding:11px 13px;animation:slideInRight .5s ease both;}
+.notif-item:nth-child(2){animation-delay:.15s;}
+.notif-item:nth-child(3){animation-delay:.3s;}
+@keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.notif-ico{font-size:1rem;flex-shrink:0;margin-top:1px;}
+.notif-text{flex:1;}
+.notif-title{font-size:.78rem;font-weight:600;margin-bottom:2px;}
+.notif-body{font-size:.73rem;color:var(--tx2);}
+.notif-time{font-size:.67rem;color:var(--tx3);flex-shrink:0;margin-top:2px;}
+.notif-unread{width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:5px;}
+
+/* CTA SECTION */
+.cta-section{padding:90px 0;}
+.cta-box{text-align:center;border:1px solid rgba(170,255,0,0.15);border-radius:24px;padding:80px 40px;background:radial-gradient(ellipse at 50% 0%,rgba(170,255,0,0.06) 0%,transparent 65%),var(--sf2);position:relative;overflow:hidden;}
+.cta-box::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:300px;height:1px;background:linear-gradient(90deg,transparent,var(--ac),transparent);}
+.cta-box h2{font-size:clamp(1.9rem,3.5vw,2.8rem);font-weight:800;margin-bottom:14px;letter-spacing:-.025em;}
+.cta-box p{color:var(--tx2);margin-bottom:36px;font-size:1rem;max-width:480px;margin-left:auto;margin-right:auto;}
+.cta-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
+.cta-trust{display:flex;justify-content:center;align-items:center;gap:20px;flex-wrap:wrap;}
+.trust-item{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--tx3);}
+.trust-item span{color:var(--ac);}
+
+/* FOOTER */
+footer{padding:52px 0 36px;border-top:1px solid var(--bd3);}
+.footer-top{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px;}
+.footer-brand p{font-size:.84rem;color:var(--tx3);margin-top:10px;line-height:1.7;max-width:240px;}
+.footer-col h4{font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx2);margin-bottom:14px;}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:8px;}
+.footer-col a{color:var(--tx3);font-size:.83rem;text-decoration:none;transition:color .2s;}
+.footer-col a:hover{color:var(--tx2);}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:24px;border-top:1px solid var(--bd3);flex-wrap:wrap;gap:12px;}
+.footer-copy{color:var(--tx3);font-size:.78rem;}
+.footer-badges{display:flex;gap:8px;}
+.footer-badge{font-size:.7rem;padding:3px 10px;border-radius:100px;border:1px solid var(--bd3);color:var(--tx3);}
+
+/* ANIMATIONS */
+@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .a1{animation:slideUp .7s .1s both;}
-.a2{animation:slideUp .7s .25s both;}
-.a3{animation:slideUp .7s .4s both;}
-.a4{animation:slideUp .7s .55s both;}
-.a5{animation:slideUp .7s .7s both;}
-@media(max-width:900px){.bento{grid-template-columns:1fr 1fr;}.bento-card.span2{grid-column:span 1;}.steps{grid-template-columns:1fr 1fr;}.admin-grid{grid-template-columns:1fr;}.app-mockup{height:320px;}.mock-sidebar{width:160px;}.mock-board{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:620px){.nav-links,.nav-cta{display:none;}.bento{grid-template-columns:1fr;}.steps{grid-template-columns:1fr;}.stats-grid{grid-template-columns:1fr 1fr;}}
+.a2{animation:slideUp .7s .2s both;}
+.a3{animation:slideUp .7s .35s both;}
+.a4{animation:slideUp .7s .5s both;}
+.a5{animation:slideUp .7s .65s both;}
+.a6{animation:slideUp .7s .8s both;}
+
+/* RESPONSIVE */
+@media(max-width:960px){
+  .bento{grid-template-columns:1fr 1fr;}
+  .bento-card.span2{grid-column:span 1;}
+  .workflow-grid{grid-template-columns:1fr;}
+  .modules-grid{grid-template-columns:repeat(2,1fr);}
+  .footer-top{grid-template-columns:1fr 1fr;}
+  .stats-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media(max-width:680px){
+  .nav-links,.nav-cta .btn-ghost{display:none;}
+  .bento{grid-template-columns:1fr;}
+  .modules-grid{grid-template-columns:repeat(2,1fr);}
+  .footer-top{grid-template-columns:1fr;}
+  .stats-grid{grid-template-columns:1fr 1fr;}
+  .app-mockup{height:280px;}
+  .mock-sidebar{width:150px;}
+  .mock-board{grid-template-columns:repeat(2,1fr);}
+}
 </style>
 </head>
 <body>
-<div class="blob blob-1"></div><div class="blob blob-2"></div><div class="blob blob-3"></div>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
 
+<!-- NAV -->
 <nav>
   <div class="wrap nav-inner">
     <a href="/" class="logo"><span class="logo-dot"></span>ProjectFlow</a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
-      <li><a href="#admin">Analytics</a></li>
+      <li><a href="#modules">Modules</a></li>
+      <li><a href="#roles">Roles</a></li>
       <li><a href="#how">How it works</a></li>
+      <li><a href="#admin" class="nav-pill">Admin Tools</a></li>
     </ul>
     <div class="nav-cta">
-      <a href="/?action=login" class="btn btn-outline">Sign In</a>
+      <a href="/?action=login" class="btn btn-ghost">Sign In</a>
       <a href="/?action=register" class="btn btn-primary">Get Started Free</a>
     </div>
   </div>
 </nav>
 
+<!-- HERO -->
 <section class="hero">
   <div class="wrap">
-    <div class="hero-badge a1">⚡ ProjectFlow v4.0 — Now with AI Assistant &amp; Analytics</div>
-    <h1 class="a2">Manage projects.<br><span class="ac">Ship faster.</span><br>Together.</h1>
-    <p class="hero-sub a3">The all-in-one project management platform with multi-tenant workspaces, AI assistant, real-time messaging, huddle calls, timeline tracking, and developer productivity analytics.</p>
+    <div class="hero-badge a1"><span class="hero-badge-dot"></span>ProjectFlow v4.0 — AI-Powered Team OS</div>
+    <h1 class="a2"><span class="grad">The complete workspace</span><br>for teams that <span class="ac">ship.</span></h1>
+    <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, voice huddles, timeline tracking, support tickets, and developer productivity analytics — all in one platform.</p>
     <div class="hero-actions a4">
-      <a href="/?action=register" class="btn btn-primary btn-lg">🚀 Create Your Workspace</a>
-      <a href="/?action=login" class="btn btn-outline btn-lg">Sign In</a>
+      <a href="/?action=register" class="btn btn-primary btn-xl">🚀 Create Your Workspace</a>
+      <a href="/?action=login" class="btn btn-outline btn-xl">Sign In →</a>
     </div>
+    <p class="hero-note a4">✓ Free to start &nbsp;·&nbsp; <span>No credit card required</span> &nbsp;·&nbsp; Up and running in 2 minutes</p>
+
+    <!-- APP MOCKUP -->
     <div class="hero-visual a5">
       <div class="hero-visual-inner">
+        <div class="mock-topbar">
+          <div class="mock-dot" style="background:#ff5f57;"></div>
+          <div class="mock-dot" style="background:#febc2e;"></div>
+          <div class="mock-dot" style="background:#28c840;"></div>
+          <div class="mock-url"><span class="mock-url-text">projectflow-production.up.railway.app</span></div>
+        </div>
         <div class="app-mockup">
           <div class="mock-sidebar">
             <div class="mock-ws">
               <div class="mock-ws-av">PF</div>
-              <div><div class="mock-ws-name">Acme Corp</div><div class="mock-ws-sub">12 members</div></div>
+              <div><div class="mock-ws-name">Acme Corp</div><div class="mock-ws-sub">14 members</div></div>
             </div>
-            <div class="mock-nav active">📋 Tasks <span class="mock-badge">5</span></div>
+            <div class="mock-section-label">Workspace</div>
+            <div class="mock-nav active">📋 Tasks <span class="mock-badge">7</span></div>
             <div class="mock-nav">📁 Projects</div>
-            <div class="mock-nav">💬 Channels <span class="mock-badge">3</span></div>
-            <div class="mock-nav">✉️ Direct DMs <span class="mock-badge">2</span></div>
+            <div class="mock-nav">💬 Messages <span class="mock-badge">3</span></div>
+            <div class="mock-nav">✉️ Direct DMs <span class="mock-badge mock-badge-blue">2</span></div>
             <div class="mock-nav">🔔 Notifications</div>
+            <div class="mock-section-label">Tools</div>
             <div class="mock-nav">⏰ Reminders</div>
             <div class="mock-nav">🎫 Tickets</div>
             <div class="mock-nav">📅 Timeline</div>
             <div class="mock-nav">👩‍💻 Dev Analytics</div>
+            <div class="mock-nav">📞 Huddle</div>
           </div>
           <div class="mock-main">
             <div class="mock-header">
-              <div class="mock-title">Sprint Board</div>
-              <div style="display:flex;">
-                <div style="width:26px;height:26px;border-radius:50%;background:#7c3aed;border:2px solid var(--bg);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;">AL</div>
-                <div style="width:26px;height:26px;border-radius:50%;background:#2563eb;border:2px solid var(--bg);margin-left:-7px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;">BM</div>
-                <div style="width:26px;height:26px;border-radius:50%;background:#059669;border:2px solid var(--bg);margin-left:-7px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;">CR</div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="mock-title">Sprint Board</div>
+                <div class="mock-tabs">
+                  <div class="mock-tab active">Board</div>
+                  <div class="mock-tab">List</div>
+                  <div class="mock-tab">Timeline</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="mock-avatars">
+                  <div class="mock-av" style="background:#7c3aed;">AL</div>
+                  <div class="mock-av" style="background:#2563eb;">BM</div>
+                  <div class="mock-av" style="background:#059669;">CS</div>
+                  <div class="mock-av" style="background:#d97706;">DK</div>
+                </div>
+                <div style="font-size:.6rem;color:var(--ac);background:var(--ac3);padding:3px 8px;border-radius:100px;border:1px solid var(--bd);">+ Add Task</div>
               </div>
             </div>
             <div class="mock-body">
               <div class="mock-board">
-                <div class="mock-col"><div class="mock-col-hd">Backlog</div><div class="mock-card"><div class="mock-card-title">API rate limiting</div><span class="mock-pill pill-med">Medium</span><div class="mock-prog"><div class="mock-prog-fill" style="width:20%"></div></div></div></div>
-                <div class="mock-col"><div class="mock-col-hd">In Progress</div><div class="mock-card"><div class="mock-card-title">Auth flow redesign</div><span class="mock-pill pill-high">High</span><div class="mock-prog"><div class="mock-prog-fill" style="width:65%"></div></div></div></div>
-                <div class="mock-col"><div class="mock-col-hd">Code Review</div><div class="mock-card"><div class="mock-card-title">Payment gateway</div><span class="mock-pill pill-high">High</span><div class="mock-prog"><div class="mock-prog-fill" style="width:90%"></div></div></div></div>
-                <div class="mock-col"><div class="mock-col-hd">Done</div><div class="mock-card"><div class="mock-card-title">User onboarding</div><span class="mock-pill pill-low">Done ✓</span><div class="mock-prog"><div class="mock-prog-fill" style="width:100%"></div></div></div></div>
+                <div class="mock-col">
+                  <div class="mock-col-hd">Backlog <div class="mock-col-count">3</div></div>
+                  <div class="mock-card"><div class="mock-card-title">API rate limiting setup</div><div class="mock-card-meta"><span class="mock-pill pill-med">Medium</span><span style="font-size:.58rem;color:var(--tx3);">DK</span></div><div class="mock-prog"><div class="mock-prog-fill mock-prog-orange" style="width:15%"></div></div></div>
+                  <div class="mock-card"><div class="mock-card-title">Write unit tests</div><div class="mock-card-meta"><span class="mock-pill pill-low">Low</span></div><div class="mock-prog"><div class="mock-prog-fill mock-prog-green" style="width:0%"></div></div></div>
+                </div>
+                <div class="mock-col">
+                  <div class="mock-col-hd">In Progress <div class="mock-col-count">2</div></div>
+                  <div class="mock-card"><div class="mock-card-title">Auth flow redesign</div><div class="mock-card-meta"><span class="mock-pill pill-high">High</span><span style="font-size:.58rem;color:var(--tx3);">AL</span></div><div class="mock-prog"><div class="mock-prog-fill mock-prog-blue" style="width:65%"></div></div></div>
+                  <div class="mock-card"><div class="mock-card-title">Dashboard charts</div><div class="mock-card-meta"><span class="mock-pill pill-med">Medium</span></div><div class="mock-prog"><div class="mock-prog-fill mock-prog-green" style="width:40%"></div></div></div>
+                </div>
+                <div class="mock-col">
+                  <div class="mock-col-hd">Code Review <div class="mock-col-count">2</div></div>
+                  <div class="mock-card"><div class="mock-card-title">Payment gateway</div><div class="mock-card-meta"><span class="mock-pill pill-high">High</span><span style="font-size:.58rem;color:var(--tx3);">BM</span></div><div class="mock-prog"><div class="mock-prog-fill mock-prog-orange" style="width:90%"></div></div></div>
+                </div>
+                <div class="mock-col">
+                  <div class="mock-col-hd">Done <div class="mock-col-count">5</div></div>
+                  <div class="mock-card"><div class="mock-card-title">User onboarding</div><div class="mock-card-meta"><span class="mock-pill pill-done">Done ✓</span></div><div class="mock-prog"><div class="mock-prog-fill mock-prog-green" style="width:100%"></div></div></div>
+                  <div class="mock-card"><div class="mock-card-title">CI/CD pipeline</div><div class="mock-card-meta"><span class="mock-pill pill-done">Done ✓</span></div><div class="mock-prog"><div class="mock-prog-fill mock-prog-green" style="width:100%"></div></div></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <div class="mock-ai"><div class="glow-ring"></div>🤖</div>
+        <div class="mock-ai"><div class="mock-ai-ring"></div><div class="mock-ai-ping"></div>🤖</div>
       </div>
     </div>
   </div>
 </section>
 
-<div class="stats">
+<!-- TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker">
+    <div class="ticker-item">📋 Smart Task Management <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span>AI Assistant</span> — ask anything about your workspace <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker with health badges <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span>Voice Huddle</span> calls <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time project messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ <span>Direct Messages</span> between teammates <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets + bug tracking <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span>Developer Productivity</span> scores 0–100 <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Task Reminders with desktop alerts <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Desktop push + email notifications <span class="ticker-sep">·</span></div>
+    <!-- duplicate for seamless loop -->
+    <div class="ticker-item">📋 Smart Task Management <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span>AI Assistant</span> — ask anything about your workspace <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker with health badges <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span>Voice Huddle</span> calls <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time project messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ <span>Direct Messages</span> between teammates <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets + bug tracking <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span>Developer Productivity</span> scores 0–100 <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Task Reminders with desktop alerts <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Desktop push + email notifications <span class="ticker-sep">·</span></div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-section">
   <div class="wrap">
     <div class="stats-grid">
-      <div class="stat-item"><div class="stat-num">∞</div><div class="stat-label">Workspaces supported</div></div>
-      <div class="stat-item"><div class="stat-num">9+</div><div class="stat-label">Core modules</div></div>
-      <div class="stat-item"><div class="stat-num">5</div><div class="stat-label">User roles</div></div>
-      <div class="stat-item"><div class="stat-num">150MB</div><div class="stat-label">Max file upload</div></div>
+      <div class="stat-item"><div class="stat-num stat-num-ac">∞</div><div class="stat-label">Multi-tenant workspaces</div></div>
+      <div class="stat-item"><div class="stat-num stat-num-blue">11+</div><div class="stat-label">Built-in modules</div></div>
+      <div class="stat-item"><div class="stat-num stat-num-purple">6</div><div class="stat-label">User roles &amp; permissions</div></div>
+      <div class="stat-item"><div class="stat-num stat-num-orange">150MB</div><div class="stat-label">Max file upload size</div></div>
     </div>
   </div>
 </div>
 
+<!-- FEATURES -->
 <section id="features">
   <div class="wrap">
     <div class="centered">
       <div class="section-tag">Features</div>
-      <h2 class="section-title">Everything your team needs</h2>
-      <p class="section-sub">From task boards to AI assistant to real-time huddles — the operating system for your engineering team.</p>
+      <h2 class="section-title">Everything your engineering team needs</h2>
+      <p class="section-sub">One platform replaces your task tracker, chat tool, ticketing system, and analytics dashboard.</p>
     </div>
     <div class="bento">
-      <div class="bento-card"><div class="bento-ico">📋</div><h3>Smart Task Management</h3><p>Create, assign and track tasks with priorities, stages, due dates and progress tracking.</p><ul class="feat-list"><li>Custom stage workflows</li><li>Priority levels: Low, Medium, High, Critical</li><li>Inline comments per task</li><li>File attachments up to 150 MB</li></ul></div>
-      <div class="bento-card"><div class="bento-ico">📁</div><h3>Project Workspaces</h3><p>Organise work into projects with start &amp; end dates, member access and progress visibility.</p><ul class="feat-list"><li>Start date + end date planning</li><li>Visual progress tracking</li><li>Color-coded project cards</li><li>Project-level member access</li></ul></div>
-      <div class="bento-card"><div class="bento-ico">🤖</div><h3>AI Assistant</h3><p>Built-in AI that understands your workspace — projects, tasks and team — to help you plan smarter.</p><ul class="feat-list"><li>Ask questions about tasks &amp; projects</li><li>Smart summaries and status reports</li><li>Use your own API key</li><li>Floating, accessible from anywhere</li></ul></div>
-      <div class="bento-card span2"><div class="bento-ico">📅</div><h3>Timeline Tracker <span style="font-size:.7rem;background:rgba(170,255,0,.15);color:var(--ac);padding:2px 8px;border-radius:100px;margin-left:6px;">Admin/Manager</span></h3><p>Visual project timeline showing days spent vs. days remaining based on today's date. Dual progress bars compare time elapsed against actual task completion so you catch at-risk projects instantly.</p><ul class="feat-list"><li>Days spent &amp; days remaining per project</li><li>Health badges: On Track / At Risk / Overdue</li><li>Filter by health status, project, sort by days left</li></ul></div>
-      <div class="bento-card"><div class="bento-ico">👩‍💻</div><h3>Dev Productivity <span style="font-size:.7rem;background:rgba(170,255,0,.15);color:var(--ac);padding:2px 8px;border-radius:100px;margin-left:6px;">Admin/Manager</span></h3><p>Productivity score, task distribution chart and developer drill-down — supports 20+ developers.</p><ul class="feat-list"><li>Score 0–100 per developer</li><li>Table + Chart tabs</li><li>Filter by role &amp; project</li></ul></div>
-      <div class="bento-card"><div class="bento-ico">📞</div><h3>Huddle Voice Calls</h3><p>Start instant voice huddles from the sidebar or DMs. Invite teammates mid-call.</p><ul class="feat-list"><li>Instant room creation</li><li>Invite participants mid-call</li><li>Mute / unmute controls</li></ul></div>
-      <div class="bento-card"><div class="bento-ico">🔔</div><h3>Real-Time Notifications</h3><p>In-app toasts, desktop push (VAPID) and email via configurable SMTP per workspace.</p><ul class="feat-list"><li>Task assigned, status change, comments</li><li>Desktop push notifications</li><li>Email via SMTP</li></ul></div>
-      <div class="bento-card"><div class="bento-ico">🎫</div><h3>Support Tickets</h3><p>Built-in ticketing to track bugs and requests separate from project tasks.</p><ul class="feat-list"><li>Project-linked tickets</li><li>Status &amp; priority tracking</li><li>Assignee management</li></ul></div>
-      <div class="bento-card"><div class="bento-ico">⏰</div><h3>Reminders</h3><p>Set reminders for tasks with configurable lead times. Upcoming, Overdue, Completed and Today tabs.</p><ul class="feat-list"><li>Per-task reminder scheduling</li><li>4 tab views: Upcoming / Overdue / Completed / Today</li><li>Desktop sound alerts</li></ul></div>
+      <div class="bento-card featured">
+        <div class="bento-ico">📋</div>
+        <h3>Smart Task Management</h3>
+        <p>Create, assign, and track tasks across fully customisable stage workflows. Priority levels, due dates, inline comments, and per-task file attachments.</p>
+        <ul class="feat-list">
+          <li>Custom stages: Backlog → Planning → Dev → Review → Done</li>
+          <li>Priority levels: Low, Medium, High, Critical</li>
+          <li>Inline comments &amp; threaded discussions per task</li>
+          <li>File attachments up to 150 MB per task</li>
+          <li>Assignee management with avatar display</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">📁</div>
+        <h3>Project Workspaces</h3>
+        <p>Organise all work into colour-coded projects with start &amp; end dates, per-member access control, and live progress bars.</p>
+        <ul class="feat-list">
+          <li>Start date + target date planning</li>
+          <li>Visual progress calculated from task completion</li>
+          <li>Color-coded project cards for quick scanning</li>
+          <li>Per-project team member access control</li>
+          <li>12-project dashboard card view</li>
+        </ul>
+      </div>
+      <div class="bento-card featured">
+        <div class="bento-ico">🤖</div>
+        <h3>AI Assistant</h3>
+        <p>Floating AI panel with full workspace context — projects, tasks, team. Bring your own API key and ask anything.</p>
+        <ul class="feat-list">
+          <li>Ask questions about tasks, projects &amp; blockers</li>
+          <li>Smart status summaries &amp; sprint reports</li>
+          <li>Bring your own Anthropic / OpenAI API key</li>
+          <li>Always-accessible floating button</li>
+          <li>Context-aware answers using live workspace data</li>
+        </ul>
+      </div>
+      <div class="bento-card span2">
+        <div class="bento-ico">📅</div>
+        <h3>Timeline Tracker <span class="badge-role">Admin / Manager</span></h3>
+        <p>Visual project timeline showing exact days spent vs. days remaining. Dual progress bars compare time elapsed against actual task completion percentage so you catch at-risk projects the moment they slip.</p>
+        <ul class="feat-list">
+          <li>Days spent &amp; days remaining — calculated from today</li>
+          <li>Dual progress bars: time elapsed vs task completion %</li>
+          <li>Auto health badges: On Track · At Risk · Needs Attention · Overdue</li>
+          <li>Filter by health status or project name, sort by days left</li>
+          <li>Click any project to jump straight to its task board</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">👩‍💻</div>
+        <h3>Dev Productivity <span class="badge-role">Admin / Manager</span></h3>
+        <p>Full leaderboard ranking every developer by productivity score 0–100. Table + chart views with drill-down per developer.</p>
+        <ul class="feat-list">
+          <li>Score 0–100 per developer automatically</li>
+          <li>Switch between Table view and Chart view</li>
+          <li>Filter by role, project, or time range</li>
+          <li>Click any developer for full task breakdown</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">💬</div>
+        <h3>Project Messaging</h3>
+        <p>Real-time channel-style messaging per project. System messages for task events, team announcements, and casual chat.</p>
+        <ul class="feat-list">
+          <li>Per-project message channels</li>
+          <li>Auto system messages for task updates</li>
+          <li>Unread message badges on sidebar</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">✉️</div>
+        <h3>Direct Messages</h3>
+        <p>Private one-on-one DMs between any two team members. Unread count badges and instant delivery.</p>
+        <ul class="feat-list">
+          <li>One-on-one private conversations</li>
+          <li>Unread count per conversation</li>
+          <li>Start huddle call directly from DM</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">📞</div>
+        <h3>Huddle Voice Calls</h3>
+        <p>Instant in-app voice huddles. Start from the sidebar or from a DM — invite teammates mid-call.</p>
+        <ul class="feat-list">
+          <li>One-click room creation</li>
+          <li>Invite participants mid-call</li>
+          <li>Mute / unmute controls</li>
+          <li>Participant list with status indicators</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">🎫</div>
+        <h3>Support Tickets</h3>
+        <p>Built-in ticketing system separate from tasks — for bugs, requests, and incidents linked to projects.</p>
+        <ul class="feat-list">
+          <li>Bug, feature-request, and incident types</li>
+          <li>Status: Open · In Progress · Resolved · Closed</li>
+          <li>Priority and assignee management</li>
+          <li>Threaded comments per ticket</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">⏰</div>
+        <h3>Smart Reminders</h3>
+        <p>Set reminders for any task with configurable lead times. Four-tab view with desktop sound alerts.</p>
+        <ul class="feat-list">
+          <li>Configurable minutes-before reminder</li>
+          <li>Tabs: Upcoming · Today · Overdue · Completed</li>
+          <li>Desktop sound &amp; push notification on trigger</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">🔔</div>
+        <h3>Notification System</h3>
+        <p>In-app toasts, browser push (VAPID), and email via configurable SMTP — all fully controllable per workspace.</p>
+        <ul class="feat-list">
+          <li>Task assigned, status change, comments, mentions</li>
+          <li>Desktop push via VAPID Web Push standard</li>
+          <li>Email via per-workspace SMTP configuration</li>
+        </ul>
+      </div>
+      <div class="bento-card">
+        <div class="bento-ico">🏢</div>
+        <h3>Multi-Tenant Workspaces</h3>
+        <p>Create isolated workspaces for different companies or teams. Join via invite code, manage members and billing separately.</p>
+        <ul class="feat-list">
+          <li>Fully isolated per-workspace data</li>
+          <li>Invite code sharing for instant onboarding</li>
+          <li>Per-workspace AI key &amp; SMTP config</li>
+        </ul>
+      </div>
     </div>
   </div>
 </section>
 
+<!-- MODULES GRID -->
+<section id="modules" style="padding-top:0;">
+  <div class="wrap centered">
+    <div class="section-tag">All Modules</div>
+    <h2 class="section-title">11 modules, one platform</h2>
+    <p class="section-sub">Every module works together — data flows between tasks, tickets, messages, and analytics automatically.</p>
+    <div class="modules-grid">
+      <div class="module-card"><div class="module-ico">📋</div><div class="module-name">Task Board</div><div class="module-desc">Kanban-style board with custom stages</div></div>
+      <div class="module-card"><div class="module-ico">📁</div><div class="module-name">Projects</div><div class="module-desc">Multi-project workspace management</div></div>
+      <div class="module-card"><div class="module-ico">🤖</div><div class="module-name">AI Assistant</div><div class="module-desc">Workspace-aware AI with your API key</div></div>
+      <div class="module-card"><div class="module-ico">📅</div><div class="module-name">Timeline</div><div class="module-desc">Visual health tracking per project</div></div>
+      <div class="module-card"><div class="module-ico">👩‍💻</div><div class="module-name">Dev Analytics</div><div class="module-desc">Productivity scores &amp; leaderboard</div></div>
+      <div class="module-card"><div class="module-ico">💬</div><div class="module-name">Messaging</div><div class="module-desc">Per-project real-time channels</div></div>
+      <div class="module-card"><div class="module-ico">✉️</div><div class="module-name">Direct DMs</div><div class="module-desc">Private one-on-one conversations</div></div>
+      <div class="module-card"><div class="module-ico">📞</div><div class="module-name">Huddle Calls</div><div class="module-desc">Instant in-app voice rooms</div></div>
+      <div class="module-card"><div class="module-ico">🎫</div><div class="module-name">Tickets</div><div class="module-desc">Bug tracking &amp; support requests</div></div>
+      <div class="module-card"><div class="module-ico">⏰</div><div class="module-name">Reminders</div><div class="module-desc">Per-task alerts with lead time</div></div>
+      <div class="module-card"><div class="module-ico">🔔</div><div class="module-name">Notifications</div><div class="module-desc">Push, email &amp; in-app toasts</div></div>
+      <div class="module-card" style="border-color:rgba(170,255,0,0.12);background:rgba(170,255,0,0.03);"><div class="module-ico">⚙️</div><div class="module-name">Workspace Settings</div><div class="module-desc">SMTP, AI key, invite codes, roles</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ROLES + HOW IT WORKS -->
+<section id="roles" class="workflow-section">
+  <div class="wrap">
+    <div class="workflow-grid">
+      <div>
+        <div class="section-tag">How it works</div>
+        <h2 class="section-title">Up and running in 4 steps</h2>
+        <p class="section-sub">No DevOps required. Create a workspace, configure it once, and your whole team is onboarded in minutes.</p>
+        <div class="workflow-steps">
+          <div class="workflow-step">
+            <div class="ws-num">1</div>
+            <div class="ws-content">
+              <h4>Create Account &amp; Workspace</h4>
+              <p>Sign up and create a new workspace with your company or team name. An invite code is auto-generated immediately.</p>
+            </div>
+          </div>
+          <div class="workflow-step">
+            <div class="ws-num">2</div>
+            <div class="ws-content">
+              <h4>Configure Your Workspace</h4>
+              <p>Add your AI API key for the assistant, set up SMTP for email notifications, and customise your workspace settings.</p>
+            </div>
+          </div>
+          <div class="workflow-step">
+            <div class="ws-num">3</div>
+            <div class="ws-content">
+              <h4>Invite Your Team</h4>
+              <p>Share the auto-generated invite code. Team members join instantly and are assigned their role: Admin, Manager, TeamLead, Developer, Tester, or Viewer.</p>
+            </div>
+          </div>
+          <div class="workflow-step">
+            <div class="ws-num">4</div>
+            <div class="ws-content">
+              <h4>Create Projects &amp; Start Shipping</h4>
+              <p>Create projects, assign tasks, chat in channels, start huddles, file tickets, and let the AI assistant keep your team on track.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="workflow-visual">
+        <div class="roles-card">
+          <div class="roles-card-title">👥 User Roles &amp; Permissions</div>
+          <div class="role-row">
+            <div class="role-av" style="background:linear-gradient(135deg,#ef4444,#dc2626);">AD</div>
+            <div class="role-info"><div class="role-name">Admin</div><div class="role-title">Full workspace control</div></div>
+            <div class="role-badge rb-admin">Full Access</div>
+          </div>
+          <div class="role-row">
+            <div class="role-av" style="background:linear-gradient(135deg,#f59e0b,#d97706);">MG</div>
+            <div class="role-info"><div class="role-name">Manager</div><div class="role-title">Analytics + team management</div></div>
+            <div class="role-badge rb-manager">Analytics</div>
+          </div>
+          <div class="role-row">
+            <div class="role-av" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">TL</div>
+            <div class="role-info"><div class="role-name">Team Lead</div><div class="role-title">Team oversight + settings</div></div>
+            <div class="role-badge rb-lead">Lead Access</div>
+          </div>
+          <div class="role-row">
+            <div class="role-av" style="background:linear-gradient(135deg,#3b82f6,#2563eb);">DV</div>
+            <div class="role-info"><div class="role-name">Developer</div><div class="role-title">Tasks, projects, messages</div></div>
+            <div class="role-badge rb-dev">Developer</div>
+          </div>
+          <div class="role-row">
+            <div class="role-av" style="background:linear-gradient(135deg,#10b981,#059669);">TS</div>
+            <div class="role-info"><div class="role-name">Tester</div><div class="role-title">Tasks + tickets</div></div>
+            <div class="role-badge rb-tester">Tester</div>
+          </div>
+          <div class="role-row">
+            <div class="role-av" style="background:linear-gradient(135deg,#6b7280,#4b5563);">VW</div>
+            <div class="role-info"><div class="role-name">Viewer</div><div class="role-title">Read-only workspace access</div></div>
+            <div class="role-badge rb-viewer">View Only</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <div class="roles-card-title" style="color:var(--tx2);font-size:.75rem;margin-bottom:10px;padding:0 2px;">📬 Live Notifications</div>
+          <div class="notif-demo">
+            <div class="notif-item">
+              <div class="notif-ico">📋</div>
+              <div class="notif-text"><div class="notif-title">Task Assigned</div><div class="notif-body">Alice assigned you to "Payment gateway integration"</div></div>
+              <div class="notif-time">just now</div>
+              <div class="notif-unread"></div>
+            </div>
+            <div class="notif-item">
+              <div class="notif-ico">🔄</div>
+              <div class="notif-text"><div class="notif-title">Status Changed</div><div class="notif-body">Auth flow redesign → Code Review</div></div>
+              <div class="notif-time">2m ago</div>
+              <div class="notif-unread"></div>
+            </div>
+            <div class="notif-item">
+              <div class="notif-ico">💬</div>
+              <div class="notif-text"><div class="notif-title">New Comment</div><div class="notif-body">Bob: "PR is ready for review, lgtm!"</div></div>
+              <div class="notif-time">5m ago</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ADMIN TOOLS -->
 <section id="admin" style="padding-top:0;">
   <div class="wrap centered">
     <div class="section-tag">Admin &amp; Manager Tools</div>
     <h2 class="section-title">Powerful analytics for leaders</h2>
-    <p class="section-sub">Exclusive to Admin and Manager roles — visible directly in the sidebar.</p>
-    <div class="admin-grid">
-      <div class="admin-card">
-        <h3>📅 Timeline Tracker</h3>
-        <p>See exactly how many days have been spent on each project vs. how many remain. Dual progress bars compare time elapsed against task completion. Health badges (On Track, At Risk, Needs Attention, Overdue) are calculated automatically. Filter by health or project, sort by days left.</p>
+    <p class="section-sub">Exclusive to Admin and Manager roles — visible directly in the sidebar. No extra setup.</p>
+    <div class="bento" style="grid-template-columns:1fr 1fr;">
+      <div class="bento-card featured" style="text-align:left;">
+        <div class="bento-ico">📅</div>
+        <h3>Timeline Tracker</h3>
+        <p style="margin-bottom:16px;">See exactly how many days have been spent on each project vs. how many remain. Dual progress bars compare <strong>time elapsed</strong> against <strong>task completion %</strong>.</p>
+        <ul class="feat-list">
+          <li>Health badges auto-calculated: <strong>On Track</strong> · <strong>At Risk</strong> · <strong>Needs Attention</strong> · <strong>Overdue</strong></li>
+          <li>Filter by health status or project name</li>
+          <li>Sort by days remaining — catch the most at-risk projects first</li>
+          <li>Click any project row to jump to its task board</li>
+        </ul>
       </div>
-      <div class="admin-card">
-        <h3>👩‍💻 Developer Productivity</h3>
-        <p>Full leaderboard ranking every developer by productivity score (0–100). Switch between Table view and Chart view. Filter by role or project. Click any developer to drill down into their full task list. Supports 20+ developers with full scroll — sticky column headers keep context as you scroll.</p>
+      <div class="bento-card featured" style="text-align:left;">
+        <div class="bento-ico">👩‍💻</div>
+        <h3>Developer Productivity</h3>
+        <p style="margin-bottom:16px;">Full leaderboard ranking every developer by <strong>productivity score 0–100</strong>. Switch between Table and Chart views. Supports 20+ developers with sticky column headers.</p>
+        <ul class="feat-list">
+          <li>Score 0–100 computed automatically per developer</li>
+          <li>Table view + Bar Chart view toggle</li>
+          <li>Filter by role or project to narrow comparisons</li>
+          <li>Click any developer to drill into their full task list</li>
+        </ul>
       </div>
     </div>
   </div>
 </section>
 
-<section id="how">
-  <div class="wrap centered">
-    <div class="section-tag">How it works</div>
-    <h2 class="section-title">Up and running in minutes</h2>
-    <p class="section-sub">No complex setup. Create your workspace, invite your team, and start shipping.</p>
-    <div class="steps">
-      <div class="step"><div class="step-num">1</div><h3>Create Account</h3><p>Sign up and create a new workspace or join an existing one with an invite code.</p></div>
-      <div class="step"><div class="step-num">2</div><h3>Set Up Workspace</h3><p>Name your workspace, configure email notifications, and add your AI API key.</p></div>
-      <div class="step"><div class="step-num">3</div><h3>Invite Your Team</h3><p>Share the auto-generated invite code. Team members join instantly.</p></div>
-      <div class="step"><div class="step-num">4</div><h3>Start Shipping</h3><p>Create projects, assign tasks, chat, huddle, and use AI to move fast together.</p></div>
-    </div>
-  </div>
-</section>
-
-<section style="padding-top:0;">
+<!-- CTA -->
+<section class="cta-section">
   <div class="wrap">
     <div class="cta-box">
       <h2>Ready to ship faster, together?</h2>
-      <p>Create your free workspace in under 2 minutes. No credit card required.</p>
+      <p>Create your free workspace in under 2 minutes. Invite your whole team with a single code. No credit card required.</p>
       <div class="cta-actions">
-        <a href="/?action=register" class="btn btn-primary btn-lg">🚀 Create Your Workspace</a>
-        <a href="/?action=login" class="btn btn-outline btn-lg">Sign In to Existing Workspace</a>
+        <a href="/?action=register" class="btn btn-primary btn-xl">🚀 Create Your Workspace</a>
+        <a href="/?action=login" class="btn btn-outline btn-xl">Sign In to Existing Workspace</a>
+      </div>
+      <div class="cta-trust">
+        <div class="trust-item"><span>✓</span> Free to start</div>
+        <div class="trust-item"><span>✓</span> No credit card</div>
+        <div class="trust-item"><span>✓</span> Multi-tenant</div>
+        <div class="trust-item"><span>✓</span> Hosted on Railway</div>
+        <div class="trust-item"><span>✓</span> Bring your own AI key</div>
       </div>
     </div>
   </div>
 </section>
 
+<!-- FOOTER -->
 <footer>
-  <div class="wrap footer-inner">
-    <a href="/" class="logo"><span class="logo-dot"></span>ProjectFlow</a>
-    <div class="footer-links">
-      <a href="#features">Features</a>
-      <a href="#admin">Analytics</a>
-      <a href="#how">How it works</a>
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="/" class="logo"><span class="logo-dot"></span>ProjectFlow</a>
+        <p>The all-in-one project management platform built for engineering teams. AI-powered, real-time, and fully multi-tenant.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#modules">All Modules</a></li>
+          <li><a href="#admin">Admin Tools</a></li>
+          <li><a href="#roles">User Roles</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Platform</h4>
+        <ul>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="/?action=register">Create Workspace</a></li>
+          <li><a href="/?action=login">Sign In</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Capabilities</h4>
+        <ul>
+          <li><a href="#features">AI Assistant</a></li>
+          <li><a href="#features">Voice Huddles</a></li>
+          <li><a href="#features">Notifications</a></li>
+          <li><a href="#features">File Uploads</a></li>
+        </ul>
+      </div>
     </div>
-    <div class="footer-copy">© 2025 ProjectFlow v4.0 — Hosted on Railway</div>
+    <div class="footer-bottom">
+      <div class="footer-copy">© 2025 ProjectFlow v4.0 — Hosted on Railway</div>
+      <div class="footer-badges">
+        <div class="footer-badge">v4.0</div>
+        <div class="footer-badge">PostgreSQL</div>
+        <div class="footer-badge">AI-Powered</div>
+        <div class="footer-badge">Multi-Tenant</div>
+      </div>
+    </div>
   </div>
 </footer>
 
 <script>
-const observer=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='translateY(0)';}});},{threshold:.1,rootMargin:'0px 0px -40px 0px'});
-document.querySelectorAll('.bento-card,.step,.admin-card').forEach((el,i)=>{el.style.opacity='0';el.style.transform='translateY(22px)';el.style.transition=`opacity .5s ${i*.07}s ease,transform .5s ${i*.07}s ease`;observer.observe(el);});
+// Scroll animations
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.opacity = '1';
+      e.target.style.transform = 'translateY(0)';
+    }
+  });
+}, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+
+document.querySelectorAll('.bento-card,.module-card,.workflow-step,.role-row,.notif-item,.stat-item').forEach((el, i) => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(18px)';
+  el.style.transition = `opacity .5s ${i * 0.055}s ease, transform .5s ${i * 0.055}s ease`;
+  observer.observe(el);
+});
+
+// Nav background on scroll
+const nav = document.querySelector('nav');
+window.addEventListener('scroll', () => {
+  nav.style.background = window.scrollY > 40
+    ? 'rgba(8,11,16,0.97)'
+    : 'rgba(8,11,16,0.80)';
+}, { passive: true });
 </script>
 </body>
-</html>"""
+</html>"""'''
+
+print(NEW_LANDING[:100])
+print("Length:", len(NEW_LANDING))
 
 
 
