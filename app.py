@@ -2409,7 +2409,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
       <li><a href="#features">Features</a></li>
       <li><a href="#modules">Modules</a></li>
       <li><a href="#how">How it works</a></li>
-      <li><a href="#admin" class="nav-pill">Admin Tools</a></li>
+      <li><a href="/?action=login" class="nav-pill">Admin Login</a></li>
     </ul>
     <div class="nav-cta">
       <a href="/?action=login" class="btn btn-outline">Sign In</a>
@@ -2449,7 +2449,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
       <!-- Top bar -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
-          <div style="width:20px;height:20px;border-radius:5px;background:#aaff00;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
           <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
@@ -2539,7 +2539,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
       <!-- Top bar -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
-          <div style="width:20px;height:20px;border-radius:5px;background:#aaff00;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
           <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
@@ -3105,6 +3105,39 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --sh:0 1px 3px rgba(37,99,235,0.08),0 2px 8px rgba(0,0,0,0.06);
   --sh2:0 4px 16px rgba(0,0,0,.10),0 8px 32px rgba(0,0,0,.07);
   --sh3:0 0 0 1px var(--bd);
+}
+/* === DARK THEME — .dm class === */
+.dm{
+  --bg:#0d1117;
+  --sf:#161b22;
+  --sf2:#21262d;
+  --sf3:#2d333b;
+  --bd:rgba(255,255,255,0.08);
+  --bd2:rgba(255,255,255,0.05);
+  --tx:#e6edf3;
+  --tx2:#8b949e;
+  --tx3:#484f58;
+  --sb:#0d1117;
+  --sb2:#161b22;
+  --sb3:#21262d;
+  --sbt:#6e7681;
+  --ac:#3b82f6;
+  --ac2:#2563eb;
+  --ac3:rgba(59,130,246,0.15);
+  --ac4:rgba(59,130,246,0.08);
+  --ac-tx:#ffffff;
+  --rd:#f85149;
+  --rd2:#ff7b72;
+  --gn:#3fb950;
+  --gn2:#56d364;
+  --am:#d29922;
+  --cy:#39c5cf;
+  --pu:#bc8cff;
+  --or:#ffa657;
+  --pk:#ff7eb3;
+  --sh:0 1px 3px rgba(0,0,0,0.4),0 2px 8px rgba(0,0,0,0.3);
+  --sh2:0 4px 16px rgba(0,0,0,0.5),0 8px 32px rgba(0,0,0,0.4);
+  --sh3:0 0 0 1px rgba(255,255,255,0.08);
 }
 
 ::-webkit-scrollbar{width:3px;height:3px}
@@ -4115,7 +4148,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
     tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,
     timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`,
     productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
-    reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+    reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   };
   const adminNav=[
@@ -4191,7 +4224,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
               width:'100%',
               padding:col?'10px 0':'9px 10px',
               borderRadius:9,border:'none',cursor:'pointer',
-              background:baseView===it.id?'rgba(170,255,0,.12)':'transparent',
+              background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent',
               color:baseView===it.id?'var(--ac)':'rgba(255,255,255,.45)',
               fontSize:12,fontWeight:baseView===it.id?700:500,
               transition:'all .12s',textAlign:'left',
@@ -4240,7 +4273,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
         ${(cu&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead'))?html`
           <button title=${col?'Settings':''} onClick=${()=>setView('settings')}
             style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',
-              background:baseView==='settings'?'rgba(170,255,0,.12)':'transparent',
+              background:baseView==='settings'?'rgba(37,99,235,0.18)':'transparent',
               color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)',
               transition:'all .12s',justifyContent:col?'center':'flex-start'}}
             onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
@@ -4320,7 +4353,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
         <!-- Your Schedule pill -->
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#1e3a5f',borderRadius:100,cursor:'pointer',border:'1px solid rgba(37,99,235,0.25)',transition:'all .14s'}} onClick=${onViewReminders}>
           <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#60a5fa"/><circle cx="32" cy="13" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/></svg>
-          <span style=${{fontSize:11,fontWeight:700,color:'#bfdbfe',letterSpacing:'.3px'}}>Your Schedule</span>
+          <span style=${{fontSize:11,fontWeight:700,color:'#bfdbfe',letterSpacing:'.3px'}}>Your Reminders</span>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'var(--ac)',fontWeight:700}}>${todayStr}</span>
         </div>
@@ -9111,7 +9144,7 @@ function App(){
     return()=>clearInterval(id);
   },[cu,teamCtx]);
   useEffect(()=>{
-    document.body.className=dark?'':'lm';
+    document.body.className=dark?'dm':'';
     try{
       const saved=JSON.parse(localStorage.getItem('pf_accent')||'null');
       if(saved&&saved.ac){
