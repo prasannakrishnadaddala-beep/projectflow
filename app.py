@@ -38,8 +38,10 @@ def _parse_db_url(url):
                 password=p.password, database=p.path.lstrip("/"),
                 ssl_context=ssl_ctx)
 
-def _sql_compat(sql):
-    """Convert SQLite SQL to PostgreSQL compatible SQL."""
+def _sql_compat(sql, params=()):
+    """Convert SQLite SQL + params to PostgreSQL named-param style for pg8000.
+    Returns (pg_sql, params_dict) — pg8000 run() accepts **kwargs for params.
+    """
     # INSERT OR IGNORE → ON CONFLICT DO NOTHING
     if "INSERT OR IGNORE INTO" in sql:
         sql = sql.replace("INSERT OR IGNORE INTO", "INSERT INTO").rstrip()
@@ -51,13 +53,17 @@ def _sql_compat(sql):
         sql += (" ON CONFLICT (endpoint) DO UPDATE SET "
                 "p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth, "
                 "created=EXCLUDED.created")
-    # Convert ? to $1, $2 ... (pg8000 native positional style)
+    # Convert ? → :p0, :p1, ... and build named params dict
+    params_dict = {}
     idx = [0]
     def _rep(m):
+        key = f"p{idx[0]}"
+        if idx[0] < len(params):
+            params_dict[key] = params[idx[0]]
         idx[0] += 1
-        return f"${idx[0]}"
+        return f":{key}"
     sql = _re.sub(r"\?", _rep, sql)
-    return sql
+    return sql, params_dict
 
 class _Row(dict):
     """dict subclass: supports row['col'] and row[int_index] like sqlite3.Row."""
@@ -77,12 +83,12 @@ class _Cursor:
         self._cols = []
         self.rowcount = 0
     def execute(self, sql, params=()):
-        sql = _sql_compat(sql)
-        # pg8000 native requires parameters as a list via keyword arg, not *args
-        if params:
-            result = self._conn.run(sql, parameters=list(params))
+        pg_sql, params_dict = _sql_compat(sql, params)
+        # pg8000 native: pass named params as **kwargs (:p0, :p1, ...)
+        if params_dict:
+            result = self._conn.run(pg_sql, **params_dict)
         else:
-            result = self._conn.run(sql)
+            result = self._conn.run(pg_sql)
         self._rows = result or []
         self._cols = [c["name"] for c in (self._conn.columns or [])]
         self.rowcount = self._conn.row_count or 0
