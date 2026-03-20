@@ -3661,7 +3661,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                     ${Object.entries(STAGES).map(([k,v])=>html`<option key=${k} value=${k}>${v.label}</option>`)}
                   </select></div>
                 <div><label class="lbl">Due Date</label>
-                  <input class="inp" type="date" value=${due} onChange=${e=>setDue(e.target.value)}/></div>
+                  <input class="inp" type="date" value=${due} min="" onChange=${e=>setDue(e.target.value)} onFocus=${e=>{if(!e.target.value)e.target.value=new Date().toISOString().split('T')[0];}}/></div>
               </div>
               <div><label class="lbl">Completion: ${pct}%</label>
                 <div style=${{display:'flex',alignItems:'center',gap:12}}>
@@ -3687,7 +3687,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                     <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
                       <div>
                         <label class="lbl" style=${{fontSize:10,marginBottom:3}}>Reminder Date</label>
-                        <input class="inp" type="date" value=${rmDate} onChange=${e=>setRmDate(e.target.value)} min=${new Date().toISOString().split('T')[0]} style=${{fontSize:12}}/>
+                        <input class="inp" type="date" value=${rmDate} onChange=${e=>setRmDate(e.target.value)} min=${new Date().toISOString().split('T')[0]} onFocus=${e=>{if(!e.target.value)e.target.value=new Date().toISOString().split('T')[0];}} style=${{fontSize:12}}/>
                       </div>
                       <div>
                         <label class="lbl" style=${{fontSize:10,marginBottom:3}}>Reminder Time</label>
@@ -3814,7 +3814,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
             <div style=${{display:'flex',flexDirection:'column',gap:11,marginBottom:12}}>
               <textarea class="inp" rows="2" value=${desc} onInput=${e=>setDesc(e.target.value)}>${desc}</textarea>
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-                <div><label class="lbl">Target Date</label><input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)}/></div>
+                <div><label class="lbl">Target Date</label><input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)} onFocus=${e=>{if(!e.target.value){e.target.value=new Date().toISOString().split('T')[0];}}}/></div>
                 <div><label class="lbl">Color</label>
                   <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
                     ${PAL.map(c=>html`<button key=${c} onClick=${()=>setColor(c)} style=${{width:26,height:26,borderRadius:6,background:c,border:'3px solid '+(color===c?'#fff':'transparent'),cursor:'pointer',transform:color===c?'scale(1.15)':'none'}}></button>`)}
@@ -4143,9 +4143,9 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
                 <textarea class="inp" rows="3" placeholder="What is this project about?" onInput=${e=>setDesc(e.target.value)}>${desc}</textarea></div>
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
                 <div><label class="lbl">Start Date</label>
-                  <input class="inp" type="date" value=${sDate} onChange=${e=>setSDate(e.target.value)}/></div>
+                  <input class="inp" type="date" value=${sDate} onChange=${e=>setSDate(e.target.value)} onFocus=${e=>{if(!e.target.value)e.target.value=new Date().toISOString().split('T')[0];}}/></div>
                 <div><label class="lbl">End Date</label>
-                  <input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)}/></div>
+                  <input class="inp" type="date" value=${tDate} onChange=${e=>setTDate(e.target.value)} onFocus=${e=>{if(!e.target.value){e.target.value=new Date().toISOString().split('T')[0];}}}/></div>
               </div>
               <div><label class="lbl">Color</label>
                 <div style=${{display:'flex',gap:7,flexWrap:'wrap',marginTop:4}}>
@@ -4725,7 +4725,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
 }
 
 /* ─── TimelineView (Admin/Manager only) ───────────────────────────────────── */
-function TimelineView({cu,tasks,projects}){
+function TimelineView({cu,tasks,projects,onNav}){
   const t=safe(tasks);const p=safe(projects);
   const now=new Date();now.setHours(0,0,0,0);
   const [filterHealth,setFilterHealth]=useState('all');
@@ -4853,11 +4853,12 @@ function TimelineView({cu,tasks,projects}){
           const hc=HC[proj.health];
           return html`
             <div key=${proj.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,
-              padding:'13px 17px',borderLeft:'4px solid '+proj.color,transition:'box-shadow .15s'}}
-              onMouseEnter=${e=>e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.3)'}
-              onMouseLeave=${e=>e.currentTarget.style.boxShadow=''}>
+              padding:'13px 17px',borderLeft:'4px solid '+proj.color,transition:'all .15s',cursor:'pointer'}}
+              onClick=${()=>onNav&&onNav('projects')}
+              onMouseEnter=${e=>{e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.3)';e.currentTarget.style.borderColor=proj.color;}}
+              onMouseLeave=${e=>{e.currentTarget.style.boxShadow='';e.currentTarget.style.borderColor='var(--bd)';}}>
               <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:proj.totalDays!==null?10:4}}>
-                <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',flex:1}}>${proj.name}</span>
+                <span style=${{fontSize:13,fontWeight:700,color:'var(--ac)',flex:1,textDecoration:'underline',textDecorationStyle:'dotted',textUnderlineOffset:3}}>${proj.name}</span>
                 <span style=${{fontSize:10,fontWeight:700,padding:'3px 10px',borderRadius:100,background:hc.bg,color:hc.color}}>${hc.label}</span>
                 <span style=${{fontSize:10,color:'var(--tx3)'}}>📋 ${proj.doneTasks}/${proj.taskCount}</span>
               </div>
@@ -6959,7 +6960,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
                 <div>
                   <label class="lbl">Date <span style=${{color:'var(--rd)',fontWeight:600}}>*</span></label>
-                  <input class="inp" type="date" value=${addDate} onChange=${e=>setAddDate(e.target.value)} min=${new Date().toISOString().split('T')[0]}/>
+                  <input class="inp" type="date" value=${addDate} onChange=${e=>setAddDate(e.target.value)} min=${new Date().toISOString().split('T')[0]} onFocus=${e=>{if(!e.target.value)e.target.value=new Date().toISOString().split('T')[0];}}/>
                 </div>
                 <div>
                   <label class="lbl">Time <span style=${{color:'var(--rd)',fontWeight:600}}>*</span></label>
@@ -7081,7 +7082,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
                 <div>
                   <label class="lbl">Date *</label>
-                  <input class="inp" type="date" value=${editDate} onChange=${e=>setEditDate(e.target.value)}/>
+                  <input class="inp" type="date" value=${editDate} onChange=${e=>setEditDate(e.target.value)} onFocus=${e=>{if(!e.target.value)e.target.value=new Date().toISOString().split('T')[0];}}/>
                 </div>
                 <div>
                   <label class="lbl">Time *</label>
@@ -8353,7 +8354,7 @@ function App(){
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam} initialAssignee=${ticketFilterType==='assignee'?ticketFilterValue:null} initialStatus=${ticketFilterType==='status'?ticketFilterValue:null}/>`:null}
             ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
-            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects}/>`:null}
+            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${setView}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             </div>
           <//>
