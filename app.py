@@ -3918,17 +3918,18 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
 }
 
 /* ─── ProjectsView ────────────────────────────────────────────────────────── */
-function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,activeTeam,initialProjectId}){
+function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,activeTeam,initialProjectId,onClearInitial}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
-  // Auto-open project detail if routed from Timeline Tracker (fires once, then clears)
-  const didOpenRef=useRef(false);
+  // Auto-open project detail if routed from Timeline Tracker (fires once, then clears immediately)
   useEffect(()=>{
-    if(initialProjectId&&safe(projects).length>0&&!didOpenRef.current){
+    if(initialProjectId&&safe(projects).length>0){
       const p=safe(projects).find(proj=>proj.id===initialProjectId);
-      if(p){setDetail(p);didOpenRef.current=true;}
+      if(p){
+        setDetail(p);
+        onClearInitial&&onClearInitial(); // clear immediately so re-visits don't re-open
+      }
     }
-    if(!initialProjectId){didOpenRef.current=false;}
-  },[initialProjectId,projects]);
+  },[initialProjectId]); // intentionally only depends on initialProjectId
   const [name,setName]=useState('');const [desc,setDesc]=useState('');
   const [sDate,setSDate]=useState('');const [tDate,setTDate]=useState('');
   const [color,setColor]=useState('#aaff00');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
@@ -7930,15 +7931,7 @@ function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
   const [initialProjectId,setInitialProjectId]=useState(null);
-  // Clear initialProjectId whenever view changes (except when timeline sets it)
-  const prevViewRef=useRef(null);
-  useEffect(()=>{
-    const base=view.split(':')[0];
-    if(prevViewRef.current&&prevViewRef.current!=='timeline'&&base==='projects'){
-      setInitialProjectId(null);
-    }
-    prevViewRef.current=base;
-  },[view]);
+  // initialProjectId cleared immediately by onClearInitial callback in ProjectsView
   // Restore saved accent color on mount
   useEffect(()=>{
     try{
@@ -8371,7 +8364,7 @@ function App(){
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
             ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
-            ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId}/>`:null}
+            ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId} onClearInitial=${()=>setInitialProjectId(null)}/>`:null}
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
