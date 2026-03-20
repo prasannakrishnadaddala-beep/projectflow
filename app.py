@@ -2433,54 +2433,199 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
   </div>
   <!-- App mockup -->
   <div class="hero-mockup a5">
-    <div class="mockup-frame">
+    <!-- Tab switcher above mockup -->
+    <div style="display:flex;justify-content:center;gap:6px;margin-bottom:12px;">
+      <button onclick="showTab('dash')" id="tab-dash" style="padding:6px 16px;border-radius:8px;border:1.5px solid #2563eb;background:#2563eb;color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;">Dashboard</button>
+      <button onclick="showTab('proj')" id="tab-proj" style="padding:6px 16px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;">Projects</button>
+    </div>
+
+    <div class="mockup-frame" id="mock-dash">
       <div class="mockup-topbar">
         <div class="m-dot" style="background:#ff5f57"></div>
         <div class="m-dot" style="background:#febc2e"></div>
         <div class="m-dot" style="background:#28c840"></div>
         <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app</span></div>
       </div>
-      <div class="mockup-body">
+      <!-- Top bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:20px;height:20px;border-radius:5px;background:#aaff00;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
+          <span style="font-size:.6rem;color:#94a3b8;background:#1e293b;padding:2px 8px;border-radius:100px;">No reminders today</span>
+          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">A</div>
+        </div>
+      </div>
+      <div class="mockup-body" style="height:320px;">
         <div class="m-sidebar">
-          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">14 members</div></div></div>
+          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">12 members</div></div></div>
           <div class="m-sec">Workspace</div>
-          <div class="m-nav act">📋 Tasks <span class="m-badge">7</span></div>
+          <div class="m-nav act">📊 Dashboard</div>
           <div class="m-nav">📁 Projects</div>
-          <div class="m-nav">💬 Messages <span class="m-badge">3</span></div>
-          <div class="m-nav">✉️ Direct DMs</div>
+          <div class="m-nav">✅ Tasks</div>
+          <div class="m-nav">💬 Messages</div>
           <div class="m-sec">Tools</div>
           <div class="m-nav">📅 Timeline</div>
           <div class="m-nav">🎫 Tickets</div>
           <div class="m-nav">👩‍💻 Analytics</div>
-          <div class="m-nav">📞 Huddle</div>
         </div>
-        <div class="m-main">
-          <div class="m-header">
+        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
+          <!-- Page header -->
+          <div style="padding:10px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;">
+            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Dashboard <span style="font-size:.68rem;font-weight:400;color:#94a3b8;margin-left:4px;">Acme Corp Team Dashboard</span></div>
+          </div>
+          <!-- Greeting -->
+          <div style="margin:8px 10px;padding:8px 12px;background:#fff;border-radius:10px;border:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <div class="m-title">Sprint Board</div>
-              <div class="m-tabs"><div class="m-tab act">Board</div><div class="m-tab">List</div><div class="m-tab">Timeline</div></div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <div style="display:flex;">
-                <div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:2px solid #fff;margin-left:0;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">A</div>
-                <div style="width:20px;height:20px;border-radius:50%;background:#7c3aed;border:2px solid #fff;margin-left:-5px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">B</div>
-                <div style="width:20px;height:20px;border-radius:50%;background:#059669;border:2px solid #fff;margin-left:-5px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">C</div>
-                <div style="width:20px;height:20px;border-radius:50%;background:#d97706;border:2px solid #fff;margin-left:-5px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:700;color:#fff;">D</div>
+              <div style="width:24px;height:24px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;">P</div>
+              <div>
+                <div style="font-size:.75rem;font-weight:700;color:#0f172a;">Good day, Alex! 👋 <span style="background:#eff6ff;color:#2563eb;font-size:.6rem;padding:1px 7px;border-radius:100px;border:1px solid #bfdbfe;margin-left:3px;">Acme Corp</span></div>
+                <div style="font-size:.62rem;color:#64748b;">8 projects · 24 tasks · 6 members · 5 active tasks assigned to you</div>
               </div>
-              <div style="font-size:.62rem;color:var(--ac);background:var(--ac3);padding:3px 8px;border-radius:100px;border:1px solid var(--bd);cursor:pointer;">+ Add Task</div>
             </div>
           </div>
-          <div class="m-board">
-            <div class="m-col"><div class="m-col-h">Backlog <div class="m-col-c">3</div></div><div class="m-card"><div class="m-card-t">API rate limiting</div><div><span class="m-pill pill-m">Medium</span></div><div class="m-prog"><div class="m-prog-fill o" style="width:15%"></div></div></div><div class="m-card"><div class="m-card-t">Write unit tests</div><div><span class="m-pill pill-d">Low</span></div><div class="m-prog"><div class="m-prog-fill" style="width:0%"></div></div></div></div>
-            <div class="m-col"><div class="m-col-h">In Progress <div class="m-col-c">2</div></div><div class="m-card"><div class="m-card-t">Auth flow redesign</div><div><span class="m-pill pill-h">High</span></div><div class="m-prog"><div class="m-prog-fill" style="width:65%"></div></div></div><div class="m-card"><div class="m-card-t">Dashboard charts</div><div><span class="m-pill pill-m">Medium</span></div><div class="m-prog"><div class="m-prog-fill" style="width:40%"></div></div></div></div>
-            <div class="m-col"><div class="m-col-h">Review <div class="m-col-c">1</div></div><div class="m-card"><div class="m-card-t">Payment gateway</div><div><span class="m-pill pill-h">High</span></div><div class="m-prog"><div class="m-prog-fill o" style="width:90%"></div></div></div></div>
-            <div class="m-col"><div class="m-col-h">Done <div class="m-col-c">5</div></div><div class="m-card"><div class="m-card-t">User onboarding</div><div><span class="m-pill pill-ok">Done ✓</span></div><div class="m-prog"><div class="m-prog-fill g" style="width:100%"></div></div></div><div class="m-card"><div class="m-card-t">CI/CD pipeline</div><div><span class="m-pill pill-ok">Done ✓</span></div><div class="m-prog"><div class="m-prog-fill g" style="width:100%"></div></div></div></div>
+          <!-- Stats row -->
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:0 10px 8px;">
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #2563eb;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">8</div><div style="font-size:.58rem;color:#64748b;">Total Projects</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #059669;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">24</div><div style="font-size:.58rem;color:#64748b;">Active Tasks</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #7c3aed;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">11</div><div style="font-size:.58rem;color:#64748b;">Completed</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #dc2626;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">0</div><div style="font-size:.58rem;color:#64748b;">Blocked</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #d97706;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">5</div><div style="font-size:.58rem;color:#64748b;">My Tasks</div></div>
+          </div>
+          <!-- Bottom panels -->
+          <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;margin:0 10px;">
+            <!-- Priority split -->
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Priority Split</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Critical</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">3</div></div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#f97316;"></div><div style="font-size:.6rem;color:#334155;flex:1;">High</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">9</div></div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#7c3aed;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Medium</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">8</div></div>
+              <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#2563eb;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Low</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">4</div></div>
+            </div>
+            <!-- Project progress -->
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Project Progress</div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">E-commerce Platform</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">72%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:72%;background:#059669;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Mobile App Redesign</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">65%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:65%;background:#f59e0b;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">API Gateway v2</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">81%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:81%;background:#ef4444;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Customer Portal</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">90%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:90%;background:#2563eb;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Analytics Dashboard</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">55%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:55%;background:#7c3aed;border-radius:2px;"></div></div></div>
+              </div>
+            </div>
+            <!-- Active tasks -->
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;">My Active Tasks</div><div style="font-size:.58rem;color:#ef4444;font-weight:600;">⚠ 1 overdue</div></div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #2563eb;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Review Q2 sprint plan</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">PLANNING</span><span style="font-size:.55rem;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;">HIGH</span></div></div>
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #7c3aed;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Fix auth token expiry bug</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;">CRITICAL</span></div></div>
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #059669;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Update API documentation</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">DEV</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup-frame" id="mock-proj" style="display:none;">
+      <div class="mockup-topbar">
+        <div class="m-dot" style="background:#ff5f57"></div>
+        <div class="m-dot" style="background:#febc2e"></div>
+        <div class="m-dot" style="background:#28c840"></div>
+        <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app/projects</span></div>
+      </div>
+      <!-- Top bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:20px;height:20px;border-radius:5px;background:#aaff00;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
+          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">P</div>
+        </div>
+      </div>
+      <div class="mockup-body" style="height:320px;">
+        <div class="m-sidebar">
+          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">4 members</div></div></div>
+          <div class="m-sec">Workspace</div>
+          <div class="m-nav">📊 Dashboard</div>
+          <div class="m-nav act">📁 Projects <span class="m-badge">12</span></div>
+          <div class="m-nav">✅ Tasks</div>
+          <div class="m-nav">💬 Messages</div>
+          <div class="m-sec">Tools</div>
+          <div class="m-nav">📅 Timeline</div>
+          <div class="m-nav">🎫 Tickets</div>
+          <div class="m-nav">👩‍💻 Analytics</div>
+        </div>
+        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
+          <div style="padding:8px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Projects <span style="font-size:.68rem;font-weight:400;color:#94a3b8;">8 projects · Acme Corp</span></div>
+            <div style="font-size:.62rem;color:#fff;background:#2563eb;padding:3px 9px;border-radius:6px;font-weight:600;">+ New Project</div>
+          </div>
+          <div style="padding:8px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;">
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">E-commerce Platform</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Next-gen shopping experience rebuild</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#059669;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Jan – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">72%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #f59e0b;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Mobile App Redesign</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">iOS & Android redesign with new UI</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#f59e0b;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">15 Feb – 15 May</span><span style="font-size:.58rem;color:#f59e0b;font-weight:600;">65%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #ef4444;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">API Gateway v2</div><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">High-performance REST & GraphQL gateway</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:78%;background:#ef4444;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 01 Aug</span><span style="font-size:.58rem;color:#ef4444;font-weight:600;">81%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #2563eb;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Customer Portal</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Self-service customer dashboard & billing</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:88%;background:#2563eb;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Feb – 31 Mar</span><span style="font-size:.58rem;color:#2563eb;font-weight:600;">90%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #7c3aed;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Analytics Dashboard</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Real-time KPI tracking and reporting</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:98%;background:#7c3aed;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">10 Jan – 30 Apr</span><span style="font-size:.58rem;color:#7c3aed;font-weight:600;">55%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">DevOps Pipeline</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">CI/CD automation & infrastructure as code</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:95%;background:#059669;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">88%</span></div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 </section>
+<script>
+function showTab(t){
+  document.getElementById('mock-dash').style.display=t==='dash'?'block':'none';
+  document.getElementById('mock-proj').style.display=t==='proj'?'block':'none';
+  document.getElementById('tab-dash').style.background=t==='dash'?'#2563eb':'#fff';
+  document.getElementById('tab-dash').style.color=t==='dash'?'#fff':'#64748b';
+  document.getElementById('tab-dash').style.borderColor=t==='dash'?'#2563eb':'#e2e8f0';
+  document.getElementById('tab-proj').style.background=t==='proj'?'#2563eb':'#fff';
+  document.getElementById('tab-proj').style.color=t==='proj'?'#fff':'#64748b';
+  document.getElementById('tab-proj').style.borderColor=t==='proj'?'#2563eb':'#e2e8f0';
+}
+</script>
 
 <!-- TICKER -->
 <div class="ticker-wrap">
@@ -3097,31 +3242,11 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .page-enter{animation:pageEnter .22s ease forwards}
 @keyframes teamSwitch{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
 .team-switch-enter{animation:teamSwitch .25s ease forwards}
+@keyframes loadBar{0%{width:0%;margin-left:0}60%{width:80%}100%{width:100%;margin-left:120%}}
 </style></head><body>
 
-<div id="root" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#ffffff;">
-  <!-- Ocean wave bg -->
-  <div style="position:fixed;inset:0;z-index:0;background:linear-gradient(180deg,#ffffff 0%,#f0f9ff 40%,#dbeafe 70%,#bfdbfe 100%);"></div>
-  <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;">
-    <div style="width:80px;height:80px;background:#2563eb;border-radius:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(37,99,235,0.35);animation:sp .9s linear infinite">
-      <svg width="42" height="42" viewBox="0 0 64 64" fill="none">
-        <circle cx="32" cy="32" r="9" fill="white"/>
-        <circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/>
-        <circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/>
-        <circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/>
-        <line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-        <line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-        <line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      </svg>
-    </div>
-    <p style="color:#475569;font-size:13px;margin-top:18px;font-family:'DM Sans',sans-serif;letter-spacing:.3px;font-weight:500">Loading ProjectFlowPro...</p>
-    <div style="margin-top:12px;width:120px;height:3px;background:#e2e8f0;border-radius:100px;overflow:hidden;">
-      <div style="height:100%;background:#2563eb;border-radius:100px;animation:loadBar 1.4s ease-in-out infinite;"></div>
-    </div>
-  </div>
-  <div id="LE" style="display:none;color:#dc2626;font-size:12px;margin-top:14px;max-width:360px;padding:12px 16px;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);border-radius:10px;text-align:center;position:relative;z-index:1;"></div>
-  <style>@keyframes loadBar{0%{width:0%;margin-left:0}60%{width:80%}100%{width:100%;margin-left:100%}}</style>
-</div>
+<div id="root"></div>
+  <div id="LE" style="display:none;color:#dc2626;font-size:12px;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:360px;padding:12px 16px;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);border-radius:10px;text-align:center;z-index:9999;"></div>
 <script>
 window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
 </script>
@@ -9200,13 +9325,17 @@ function App(){
     return safe(data.users).filter(u=>teamMemberIds.has(u.id));
   },[data.users,activeTeam,teamMemberIds]);
 
-  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'var(--bg)',flexDirection:'column'}}>
-    <div style=${{position:'relative',width:100,height:100,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style=${{width:88,height:88,background:'linear-gradient(135deg,#aaff00,#9b8ef4)',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 40px rgba(170,255,0,.45)',animation:'sp .9s linear infinite'}}>
-        <svg width="46" height="46" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity="0.95"/><circle cx="51" cy="43" r="6" fill="white" opacity="0.95"/><circle cx="13" cy="43" r="6" fill="white" opacity="0.95"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
+  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#ffffff',flexDirection:'column',gap:0}}>
+    <div style=${{position:'fixed',inset:0,background:'linear-gradient(180deg,#ffffff 0%,#f0f9ff 40%,#dbeafe 70%,#bfdbfe 100%)',zIndex:0}}></div>
+    <div style=${{position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:0}}>
+      <div style=${{width:72,height:72,background:'#2563eb',borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(37,99,235,0.3)',animation:'sp .9s linear infinite'}}>
+        <svg width="38" height="38" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
+      </div>
+      <p style=${{color:'#475569',fontSize:13,marginTop:16,fontFamily:"'DM Sans',sans-serif",letterSpacing:'.3px',fontWeight:500}}>Loading ProjectFlowPro...</p>
+      <div style=${{marginTop:10,width:110,height:3,background:'#e2e8f0',borderRadius:100,overflow:'hidden'}}>
+        <div style=${{height:'100%',background:'#2563eb',borderRadius:100,animation:'loadBar 1.4s ease-in-out infinite'}}></div>
       </div>
     </div>
-    <p style=${{color:'var(--tx2)',fontSize:13,marginTop:22,letterSpacing:'.3px'}}>Loading ProjectFlowPro...</p>
   </div>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
