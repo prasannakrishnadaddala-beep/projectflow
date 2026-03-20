@@ -3517,7 +3517,7 @@ class ErrorBoundary extends React.Component{
   }
 }
 
-/* ─── AuthScreen — 3D Globe Premium Design ────────────────────────────────── */
+/* ─── AuthScreen — Split Layout with 3D Illustration ──────────────────────── */
 function AuthScreen({onLogin}){
   const [tab,setTab]=useState('login');
   const [regMode,setRegMode]=useState('create');
@@ -3535,7 +3535,6 @@ function AuthScreen({onLogin}){
   const [otpCode,setOtpCode]=useState('');
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
-  const canvasRef=useRef(null);
 
   useEffect(()=>{
     if(otpResendCd<=0)return;
@@ -3547,240 +3546,6 @@ function AuthScreen({onLogin}){
     if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
   },[otpStep]);
 
-  // ── 3D Globe Canvas ──
-  useEffect(()=>{
-    const cv=canvasRef.current;if(!cv)return;
-    const ctx=cv.getContext('2d');
-    let id,frame=0;
-    const resize=()=>{cv.width=window.innerWidth;cv.height=window.innerHeight;};
-    resize();window.addEventListener('resize',resize);
-
-    // Globe params
-    const GLOBE_POINTS=320;
-    const CONNECTIONS=120;
-    let globeRot=0;
-
-    // Generate points on sphere surface using fibonacci lattice
-    const pts3d=Array.from({length:GLOBE_POINTS},(_, i)=>{
-      const phi=Math.acos(1-2*(i+.5)/GLOBE_POINTS);
-      const theta=Math.PI*(1+Math.sqrt(5))*i;
-      return {
-        x:Math.sin(phi)*Math.cos(theta),
-        y:Math.sin(phi)*Math.sin(theta),
-        z:Math.cos(phi),
-        pulse:Math.random()*Math.PI*2,
-        pspd:.02+Math.random()*.015,
-      };
-    });
-
-    // Connections between nearby points
-    const conns=[];
-    for(let i=0;i<GLOBE_POINTS&&conns.length<CONNECTIONS;i++){
-      for(let j=i+1;j<GLOBE_POINTS&&conns.length<CONNECTIONS;j++){
-        const dx=pts3d[i].x-pts3d[j].x,dy=pts3d[i].y-pts3d[j].y,dz=pts3d[i].z-pts3d[j].z;
-        if(Math.sqrt(dx*dx+dy*dy+dz*dz)<.42)conns.push({a:i,b:j,speed:.006+Math.random()*.012,offset:Math.random()});
-      }
-    }
-
-    // Floating data points around globe
-    const dataPts=Array.from({length:22},()=>({
-      lat:(Math.random()-.5)*Math.PI,
-      lon:Math.random()*Math.PI*2,
-      size:2+Math.random()*3,
-      pulse:Math.random()*Math.PI*2,
-      col:Math.random()>.5?'170,255,0':Math.random()>.5?'99,91,255':'6,182,212',
-    }));
-
-    // Particle field (background)
-    const particles=Array.from({length:200},()=>({
-      x:Math.random(),y:Math.random(),
-      vx:(Math.random()-.5)*.00015,vy:(Math.random()-.5)*.00015,
-      r:.3+Math.random()*.8,a:.05+Math.random()*.25,
-      ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.01,
-    }));
-
-    // Project 3D point to 2D
-    const project=(x,y,z,cx,cy,R)=>{
-      // Rotate around Y axis
-      const cosR=Math.cos(globeRot),sinR=Math.sin(globeRot);
-      const rx=x*cosR+z*sinR;
-      const ry=y;
-      const rz=-x*sinR+z*cosR;
-      // Slight tilt around X
-      const tilt=.22;
-      const ty=ry*Math.cos(tilt)-rz*Math.sin(tilt);
-      const tz=ry*Math.sin(tilt)+rz*Math.cos(tilt);
-      // Perspective
-      const fov=2.8;
-      const scale=fov/(fov+tz);
-      return {sx:cx+rx*R*scale,sy:cy+ty*R*scale,sz:tz,scale,visible:tz>-0.95};
-    };
-
-    const draw=()=>{
-      const W=cv.width,H=cv.height;
-      frame++;const t=frame*.016;
-      globeRot+=.0025;
-
-      // Background
-      ctx.fillStyle='#060810';ctx.fillRect(0,0,W,H);
-
-      // Deep radial glow center
-      const cg=ctx.createRadialGradient(W*.62,H*.5,0,W*.62,H*.5,W*.45);
-      cg.addColorStop(0,'rgba(10,25,50,0.9)');
-      cg.addColorStop(.4,'rgba(6,10,20,0.6)');
-      cg.addColorStop(1,'rgba(4,6,14,0)');
-      ctx.fillStyle=cg;ctx.fillRect(0,0,W,H);
-
-      // Subtle aurora top-left
-      const ag=ctx.createRadialGradient(W*.05,H*.1,0,W*.05,H*.1,W*.35);
-      ag.addColorStop(0,'rgba(170,255,0,0.06)');ag.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle=ag;ctx.fillRect(0,0,W,H);
-      const ag2=ctx.createRadialGradient(W*.95,H*.85,0,W*.95,H*.85,W*.3);
-      ag2.addColorStop(0,'rgba(99,91,255,0.07)');ag2.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle=ag2;ctx.fillRect(0,0,W,H);
-
-      // Background particles
-      particles.forEach(p=>{
-        p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
-        if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=1;if(p.y>1)p.y=0;
-        const a=p.a*(0.4+Math.sin(p.ph)*0.6);
-        ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
-        ctx.fillStyle='rgba(200,210,255,'+a+')';ctx.fill();
-      });
-
-      // ── GLOBE ──
-      const GX=W*.65,GY=H*.5;
-      const R=Math.min(W,H)*.28;
-
-      // Globe atmosphere glow
-      const atmos=ctx.createRadialGradient(GX,GY,R*.7,GX,GY,R*1.3);
-      atmos.addColorStop(0,'rgba(170,255,0,0)');
-      atmos.addColorStop(.6,'rgba(170,255,0,0.025)');
-      atmos.addColorStop(1,'rgba(170,255,0,0)');
-      ctx.fillStyle=atmos;ctx.beginPath();ctx.arc(GX,GY,R*1.3,0,Math.PI*2);ctx.fill();
-
-      // Globe base sphere (subtle)
-      const sphereG=ctx.createRadialGradient(GX-R*.25,GY-R*.2,0,GX,GY,R);
-      sphereG.addColorStop(0,'rgba(20,40,80,0.18)');
-      sphereG.addColorStop(.6,'rgba(10,20,40,0.08)');
-      sphereG.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle=sphereG;ctx.beginPath();ctx.arc(GX,GY,R,0,Math.PI*2);ctx.fill();
-
-      // Latitude/longitude grid lines (subtle)
-      ctx.strokeStyle='rgba(170,255,0,0.04)';ctx.lineWidth=.5;
-      // Latitude rings
-      for(let lat=-75;lat<=75;lat+=30){
-        const phi=lat*Math.PI/180;
-        const r2=Math.cos(phi)*R;
-        const yOff=Math.sin(phi)*R;
-        const p0=project(Math.cos(0),Math.sin(phi),Math.sin(0),GX,GY,R);
-        ctx.beginPath();
-        for(let a=0;a<=360;a+=3){
-          const ra=a*Math.PI/180;
-          const p=project(Math.cos(ra)*Math.cos(phi),Math.sin(phi),Math.sin(ra)*Math.cos(phi),GX,GY,R);
-          if(p.visible){a===0?ctx.moveTo(p.sx,p.sy):ctx.lineTo(p.sx,p.sy);}
-        }
-        ctx.stroke();
-      }
-      // Meridians
-      for(let lon=0;lon<360;lon+=30){
-        const baseLon=lon*Math.PI/180;
-        ctx.beginPath();let started=false;
-        for(let lat=-90;lat<=90;lat+=3){
-          const phi=lat*Math.PI/180;
-          const p=project(Math.cos(phi)*Math.cos(baseLon),Math.sin(phi),Math.cos(phi)*Math.sin(baseLon),GX,GY,R);
-          if(p.visible){if(!started){ctx.moveTo(p.sx,p.sy);started=true;}else ctx.lineTo(p.sx,p.sy);}
-          else started=false;
-        }
-        ctx.stroke();
-      }
-
-      // Project all points
-      const projected=pts3d.map(p=>{
-        p.pulse+=p.pspd;
-        return {...project(p.x,p.y,p.z,GX,GY,R),pulse:p.pulse};
-      });
-
-      // Draw connections (back layer)
-      conns.forEach(c=>{
-        const pa=projected[c.a],pb=projected[c.b];
-        if(!pa.visible||!pb.visible)return;
-        if(pa.sz<-.3||pb.sz<-.3)return;
-        const prog=(Math.sin(t*c.speed*6+c.offset*Math.PI*2)+1)/2;
-        const alpha=.06+prog*.12;
-        const depth=Math.max(0,(pa.sz+pb.sz)/2+1)/2;
-        ctx.strokeStyle='rgba(170,255,0,'+(alpha*depth)+')';
-        ctx.lineWidth=.5+pa.scale*.3;
-        ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();
-      });
-
-      // Draw globe points
-      projected.forEach((p,i)=>{
-        if(!p.visible||p.sz<-.2)return;
-        const depth=(p.sz+1)/2;
-        const pulse=(Math.sin(p.pulse)+1)/2;
-        const r=(.8+pulse*.8)*p.scale;
-        const a=(.15+pulse*.25)*depth;
-        ctx.beginPath();ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
-        ctx.fillStyle='rgba(170,255,0,'+a+')';ctx.fill();
-      });
-
-      // Bright highlighted nodes (data points on globe)
-      dataPts.forEach(dp=>{
-        dp.pulse+=.018;
-        const phi=dp.lat,theta=dp.lon+globeRot*1.0;
-        const px=Math.cos(phi)*Math.cos(theta);
-        const py=Math.sin(phi);
-        const pz=Math.cos(phi)*Math.sin(theta);
-        const p=project(px,py,pz,GX,GY,R);
-        if(!p.visible||p.sz<0)return;
-        const depth=(p.sz+1)/2;
-        const pulse=(Math.sin(dp.pulse)+1)/2;
-        // Outer ring
-        ctx.beginPath();ctx.arc(p.sx,p.sy,(dp.size+pulse*4)*p.scale,0,Math.PI*2);
-        ctx.fillStyle='rgba('+dp.col+','+(0.06*depth)+')';ctx.fill();
-        // Core dot
-        ctx.beginPath();ctx.arc(p.sx,p.sy,dp.size*.6*p.scale,0,Math.PI*2);
-        ctx.fillStyle='rgba('+dp.col+','+(0.7*depth)+')';ctx.fill();
-      });
-
-      // Globe edge glow ring
-      ctx.strokeStyle='rgba(170,255,0,0.08)';ctx.lineWidth=1.5;
-      ctx.beginPath();ctx.arc(GX,GY,R,0,Math.PI*2);ctx.stroke();
-
-      // Scanning beam effect (horizontal scan line across globe)
-      const scanY=GY+Math.sin(t*.4)*R*.8;
-      const scanAlpha=.04+Math.sin(t*.4)*.02;
-      const scanG=ctx.createLinearGradient(GX-R,scanY,GX+R,scanY);
-      scanG.addColorStop(0,'rgba(170,255,0,0)');
-      scanG.addColorStop(.4,'rgba(170,255,0,'+scanAlpha+')');
-      scanG.addColorStop(.5,'rgba(170,255,0,'+(scanAlpha*2)+')');
-      scanG.addColorStop(.6,'rgba(170,255,0,'+scanAlpha+')');
-      scanG.addColorStop(1,'rgba(170,255,0,0)');
-      ctx.fillStyle=scanG;ctx.fillRect(GX-R,scanY-1,R*2,2);
-
-      // Orbit ring around globe
-      ctx.save();ctx.translate(GX,GY);ctx.scale(1,.28);
-      ctx.strokeStyle='rgba(99,91,255,0.12)';ctx.lineWidth=1/0.28;
-      ctx.setLineDash([4,8]);ctx.beginPath();ctx.arc(0,0,R*1.12,0,Math.PI*2);ctx.stroke();
-      ctx.setLineDash([]);ctx.restore();
-
-      // Orbit dot
-      const orbitAngle=t*.5;
-      const ox=GX+Math.cos(orbitAngle)*R*1.12;
-      const oy=GY+Math.sin(orbitAngle)*R*1.12*.28;
-      ctx.beginPath();ctx.arc(ox,oy,3,0,Math.PI*2);
-      ctx.fillStyle='rgba(99,91,255,0.8)';ctx.fill();
-      ctx.beginPath();ctx.arc(ox,oy,6,0,Math.PI*2);
-      ctx.fillStyle='rgba(99,91,255,0.15)';ctx.fill();
-
-      id=requestAnimationFrame(draw);
-    };
-    draw();
-    return()=>{window.removeEventListener('resize',resize);cancelAnimationFrame(id);};
-  },[]);
-
-  // ── Auth logic ──
   const go=async()=>{
     setErr('');setBusy(true);
     if(tab==='login'){
@@ -3823,140 +3588,397 @@ function AuthScreen({onLogin}){
     if(p.length===6){setOtpCode(p);setTimeout(submitOtp,80);}
   };
 
-  // ── Shared styles ──
+  // ── Shared form styles (white panel) ──
   const inpS={
-    width:'100%',padding:'11px 14px',borderRadius:9,fontSize:13.5,outline:'none',
-    background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.09)',
-    color:'#e8eaf6',fontFamily:'inherit',transition:'border-color .2s,background .2s',
+    width:'100%',padding:'13px 16px',borderRadius:12,fontSize:14,outline:'none',
+    background:'#f7f8fa',border:'1.5px solid #e8eaed',
+    color:'#1a1a2e',fontFamily:'inherit',transition:'border-color .2s,box-shadow .2s',
     boxSizing:'border-box',
   };
-  const lblS={display:'block',fontSize:10.5,fontWeight:700,letterSpacing:.08,
-    textTransform:'uppercase',color:'rgba(148,163,200,0.6)',marginBottom:7};
-  const cardS={
-    background:'rgba(10,14,28,0.88)',
-    backdropFilter:'blur(32px)',WebkitBackdropFilter:'blur(32px)',
-    border:'1px solid rgba(255,255,255,0.07)',
-    borderRadius:20,padding:'28px 28px 24px',
-    boxShadow:'0 0 0 1px rgba(170,255,0,0.04),0 40px 100px rgba(0,0,0,0.8),inset 0 1px 0 rgba(255,255,255,0.06)',
-  };
+  const lblS={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07,
+    textTransform:'uppercase',color:'#9ca3af',marginBottom:7};
 
-  const shell=(child)=>html`
-    <div style=${{position:'fixed',inset:0,overflow:'hidden'}}>
-      <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%',display:'block'}}></canvas>
+  // ── 3D SVG illustration (left panel) ──
+  const illustration=html`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 580" style=${{width:'100%',height:'100%',maxHeight:'520px'}}>
+      <defs>
+        <radialGradient id="floorG" cx="50%" cy="100%" r="70%">
+          <stop offset="0%" stop-color="#6dbe5a"/>
+          <stop offset="100%" stop-color="#3d8c2e"/>
+        </radialGradient>
+        <radialGradient id="wallG" cx="50%" cy="0%" r="100%">
+          <stop offset="0%" stop-color="#c8f0b0"/>
+          <stop offset="100%" stop-color="#a8e090"/>
+        </radialGradient>
+        <radialGradient id="deskG" cx="30%" cy="20%" r="80%">
+          <stop offset="0%" stop-color="#4a9e3a"/>
+          <stop offset="100%" stop-color="#2d7020"/>
+        </radialGradient>
+        <radialGradient id="laptopG" cx="30%" cy="30%" r="80%">
+          <stop offset="0%" stop-color="#d0d8e4"/>
+          <stop offset="100%" stop-color="#9aa5b4"/>
+        </radialGradient>
+        <radialGradient id="screenG" cx="40%" cy="30%" r="80%">
+          <stop offset="0%" stop-color="#4fc3f7"/>
+          <stop offset="100%" stop-color="#0277bd"/>
+        </radialGradient>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="3" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,0.18)"/>
+        </filter>
+        <filter id="shadow2" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="2" dy="4" stdDeviation="4" flood-color="rgba(0,0,0,0.15)"/>
+        </filter>
+      </defs>
 
-      <!-- Topbar -->
-      <div style=${{position:'absolute',top:0,left:0,right:0,zIndex:30,height:52,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 28px',background:'rgba(6,8,16,0.6)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(255,255,255,0.04)'}}>
-        <div style=${{display:'flex',alignItems:'center',gap:9}}>
-          <div style=${{width:28,height:28,borderRadius:7,background:'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 12px rgba(170,255,0,0.5)'}}>
-            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00"/><circle cx="51" cy="43" r="6" fill="#0a1a00"/><circle cx="13" cy="43" r="6" fill="#0a1a00"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
-          </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#fff',letterSpacing:-.3}}>ProjectFlow</span>
+      <!-- Background wall -->
+      <rect x="0" y="0" width="520" height="400" fill="url(#wallG)" rx="0"/>
+      <!-- Floor -->
+      <ellipse cx="260" cy="480" rx="280" ry="80" fill="url(#floorG)" opacity="0.9"/>
+      <rect x="0" y="380" width="520" height="200" fill="#5ab04a"/>
+      <rect x="0" y="380" width="520" height="20" fill="#4a9e3a" opacity="0.5"/>
+
+      <!-- Wall corner shadow -->
+      <polygon points="0,0 0,400 60,340 60,0" fill="rgba(0,0,0,0.04)"/>
+      <polygon points="0,380 520,380 520,400 0,400" fill="rgba(0,0,0,0.06)"/>
+
+      <!-- Clock on wall -->
+      <circle cx="260" cy="80" r="32" fill="white" filter="url(#shadow2)" opacity="0.95"/>
+      <circle cx="260" cy="80" r="28" fill="white"/>
+      <circle cx="260" cy="80" r="3" fill="#374151"/>
+      <!-- Clock hands -->
+      <line x1="260" y1="80" x2="260" y2="58" stroke="#374151" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="260" y1="80" x2="278" y2="85" stroke="#374151" stroke-width="2" stroke-linecap="round"/>
+      <!-- Clock ticks -->
+      <line x1="260" y1="54" x2="260" y2="58" stroke="#9ca3af" stroke-width="1.5"/>
+      <line x1="260" y1="102" x2="260" y2="106" stroke="#9ca3af" stroke-width="1.5"/>
+      <line x1="234" y1="80" x2="238" y2="80" stroke="#9ca3af" stroke-width="1.5"/>
+      <line x1="282" y1="80" x2="286" y2="80" stroke="#9ca3af" stroke-width="1.5"/>
+
+      <!-- Cabinet (left) -->
+      <rect x="30" y="240" width="85" height="140" rx="6" fill="white" filter="url(#shadow2)" opacity="0.95"/>
+      <rect x="30" y="240" width="85" height="55" rx="6" fill="#f1f5f9"/>
+      <rect x="30" y="295" width="85" height="2" fill="#e2e8f0"/>
+      <rect x="30" y="350" width="85" height="2" fill="#e2e8f0"/>
+      <circle cx="72" cy="272" r="4" fill="#d1d5db"/>
+      <circle cx="72" cy="322" r="4" fill="#d1d5db"/>
+      <!-- Plant on cabinet -->
+      <rect x="56" y="210" width="18" height="30" rx="3" fill="#9ca3af"/>
+      <ellipse cx="65" cy="210" rx="12" ry="8" fill="#6b7280" opacity="0.6"/>
+      <!-- Cactus -->
+      <rect x="61" y="165" width="8" height="50" rx="4" fill="#4a9e3a"/>
+      <rect x="50" y="182" width="14" height="6" rx="3" fill="#5ab04a"/>
+      <rect x="57" y="178" width="6" height="10" rx="3" fill="#5ab04a"/>
+      <rect x="67" y="186" width="12" height="6" rx="3" fill="#5ab04a"/>
+      <rect x="67" y="180" width="6" height="12" rx="3" fill="#5ab04a"/>
+
+      <!-- DESK -->
+      <ellipse cx="235" cy="345" rx="145" ry="18" fill="rgba(0,0,0,0.12)"/>
+      <!-- Desk top surface -->
+      <rect x="90" y="295" width="295" height="18" rx="6" fill="url(#deskG)" filter="url(#shadow)"/>
+      <rect x="90" y="298" width="295" height="8" rx="4" fill="rgba(255,255,255,0.15)"/>
+      <!-- Desk side panels -->
+      <rect x="90" y="313" width="18" height="75" rx="4" fill="#2d7020"/>
+      <rect x="367" y="313" width="18" height="75" rx="4" fill="#2d7020"/>
+      <!-- Desk legs -->
+      <rect x="105" y="370" width="12" height="40" rx="4" fill="#255a1a"/>
+      <rect x="358" y="370" width="12" height="40" rx="4" fill="#255a1a"/>
+      <rect x="120" y="400" width="240" height="10" rx="4" fill="#1e4d15" opacity="0.7"/>
+
+      <!-- Laptop base -->
+      <rect x="155" y="270" width="145" height="95" rx="8" fill="url(#laptopG)" filter="url(#shadow2)"/>
+      <rect x="163" y="278" width="129" height="80" rx="4" fill="url(#screenG)"/>
+      <!-- Screen content lines -->
+      <rect x="172" y="288" width="60" height="4" rx="2" fill="rgba(255,255,255,0.5)"/>
+      <rect x="172" y="296" width="45" height="3" rx="2" fill="rgba(255,255,255,0.3)"/>
+      <rect x="172" y="308" width="112" height="3" rx="2" fill="rgba(255,255,255,0.25)"/>
+      <rect x="172" y="314" width="95" height="3" rx="2" fill="rgba(255,255,255,0.2)"/>
+      <rect x="172" y="320" width="105" height="3" rx="2" fill="rgba(255,255,255,0.2)"/>
+      <rect x="172" y="330" width="70" height="3" rx="2" fill="rgba(255,255,255,0.15)"/>
+      <rect x="172" y="340" width="88" height="3" rx="2" fill="rgba(255,255,255,0.15)"/>
+      <!-- Laptop hinge -->
+      <rect x="155" y="362" width="145" height="8" rx="4" fill="#8899aa"/>
+      <!-- Laptop keyboard -->
+      <rect x="160" y="370" width="135" height="18" rx="4" fill="#c0c8d4"/>
+      <rect x="165" y="374" width="8" height="5" rx="1" fill="#a0aab4"/>
+      <rect x="175" y="374" width="8" height="5" rx="1" fill="#a0aab4"/>
+      <rect x="185" y="374" width="8" height="5" rx="1" fill="#a0aab4"/>
+      <rect x="195" y="374" width="8" height="5" rx="1" fill="#a0aab4"/>
+      <rect x="205" y="374" width="8" height="5" rx="1" fill="#a0aab4"/>
+      <rect x="215" y="374" width="8" height="5" rx="1" fill="#a0aab4"/>
+      <rect x="225" y="374" width="8" height="5" rx="1" fill="#a0aab4"/>
+      <rect x="168" y="381" width="40" height="4" rx="1" fill="#a0aab4"/>
+      <rect x="212" y="381" width="40" height="4" rx="1" fill="#a0aab4"/>
+      <rect x="175" y="381" width="30" height="4" rx="1" fill="#b0bac4" opacity="0"/>
+
+      <!-- Mug -->
+      <rect x="345" y="270" width="35" height="30" rx="5" fill="#5b8dee" filter="url(#shadow2)"/>
+      <path d="M380 278 Q395 278 395 285 Q395 295 380 295" stroke="#4a7dd4" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <rect x="348" y="273" width="29" height="6" rx="3" fill="rgba(255,255,255,0.3)"/>
+      <!-- Steam -->
+      <path d="M355 262 Q352 256 355 250" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M363 260 Q360 253 363 246" stroke="rgba(255,255,255,0.4)" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+      <!-- Notes/papers on desk -->
+      <rect x="320" y="278" width="24" height="18" rx="2" fill="#fef08a" filter="url(#shadow2)" transform="rotate(-5 320 278)"/>
+      <rect x="324" y="282" width="16" height="2" rx="1" fill="#ca8a04" opacity="0.5" transform="rotate(-5 320 278)"/>
+      <rect x="324" y="286" width="12" height="2" rx="1" fill="#ca8a04" opacity="0.4" transform="rotate(-5 320 278)"/>
+
+      <!-- CHAIR -->
+      <!-- Chair back -->
+      <rect x="218" y="200" width="80" height="85" rx="10" fill="#9ca3af" filter="url(#shadow2)"/>
+      <rect x="224" y="206" width="68" height="73" rx="8" fill="#b0bac4"/>
+      <!-- Chair seat -->
+      <ellipse cx="258" cy="295" rx="58" ry="18" fill="#9ca3af" filter="url(#shadow)"/>
+      <ellipse cx="258" cy="293" rx="54" ry="14" fill="#b0bac4"/>
+      <!-- Chair pole -->
+      <rect x="250" y="310" width="16" height="50" rx="6" fill="#6b7280"/>
+      <!-- Chair base star -->
+      <ellipse cx="258" cy="370" rx="48" ry="10" fill="#6b7280" opacity="0.8"/>
+      <line x1="258" y1="360" x2="210" y2="375" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+      <line x1="258" y1="360" x2="306" y2="375" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+      <line x1="258" y1="360" x2="258" y2="380" stroke="#6b7280" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="210" cy="376" r="6" fill="#9ca3af"/>
+      <circle cx="306" cy="376" r="6" fill="#9ca3af"/>
+      <circle cx="258" cy="381" r="6" fill="#9ca3af"/>
+      <!-- Chair armrests -->
+      <rect x="190" y="255" width="22" height="8" rx="4" fill="#9ca3af"/>
+      <rect x="304" y="255" width="22" height="8" rx="4" fill="#9ca3af"/>
+      <rect x="194" y="263" width="6" height="28" rx="3" fill="#6b7280"/>
+      <rect x="326" y="263" width="6" height="28" rx="3" fill="#6b7280"/>
+
+      <!-- CHARACTER -->
+      <!-- Body / torso (green sweater) -->
+      <ellipse cx="258" cy="285" rx="42" ry="10" fill="rgba(0,0,0,0.08)"/>
+      <!-- Legs -->
+      <rect x="228" y="270" width="22" height="60" rx="8" fill="#3b82f6"/>
+      <rect x="264" y="270" width="22" height="60" rx="8" fill="#3b82f6"/>
+      <!-- Shoes -->
+      <ellipse cx="239" cy="330" rx="18" ry="10" fill="#8b5cf6"/>
+      <ellipse cx="275" cy="330" rx="18" ry="10" fill="#8b5cf6"/>
+      <rect x="246" y="328" width="10" height="5" rx="2" fill="white" opacity="0.7"/>
+      <rect x="268" y="328" width="10" height="5" rx="2" fill="white" opacity="0.7"/>
+      <!-- Shirt collar / body -->
+      <rect x="222" y="185" width="72" height="90" rx="16" fill="#4ade80" filter="url(#shadow2)"/>
+      <rect x="228" y="190" width="60" height="78" rx="12" fill="#5ae68e"/>
+      <!-- Collar detail -->
+      <rect x="245" y="185" width="26" height="15" rx="4" fill="#60a5fa"/>
+      <!-- Arms -->
+      <!-- Left arm (extended toward laptop) -->
+      <rect x="185" y="195" width="42" height="20" rx="10" fill="#4ade80" transform="rotate(15 185 195)"/>
+      <rect x="185" y="207" width="36" height="18" rx="9" fill="#fcd9b0" transform="rotate(20 185 207)"/>
+      <!-- Left hand -->
+      <ellipse cx="220" cy="250" rx="14" ry="10" fill="#fcd9b0"/>
+      <rect x="210" y="244" width="6" height="12" rx="3" fill="#fcd9b0"/>
+      <rect x="218" y="242" width="6" height="13" rx="3" fill="#fcd9b0"/>
+      <rect x="226" y="243" width="6" height="12" rx="3" fill="#fcd9b0"/>
+      <!-- Right arm -->
+      <rect x="289" y="195" width="42" height="20" rx="10" fill="#4ade80" transform="rotate(-10 289 195)"/>
+      <rect x="300" y="205" width="36" height="18" rx="9" fill="#fcd9b0" transform="rotate(-15 300 205)"/>
+      <!-- Right hand on mouse -->
+      <ellipse cx="330" cy="248" rx="13" ry="9" fill="#fcd9b0"/>
+
+      <!-- HEAD -->
+      <!-- Neck -->
+      <rect x="248" y="162" width="20" height="28" rx="8" fill="#fcd9b0"/>
+      <!-- Head -->
+      <ellipse cx="258" cy="140" rx="40" ry="44" fill="#fcd9b0" filter="url(#shadow2)"/>
+      <!-- Hair -->
+      <ellipse cx="258" cy="105" rx="38" ry="22" fill="#7c3d12"/>
+      <ellipse cx="230" cy="118" rx="14" ry="18" fill="#7c3d12"/>
+      <ellipse cx="286" cy="118" rx="14" ry="18" fill="#7c3d12"/>
+      <ellipse cx="258" cy="100" rx="32" ry="16" fill="#92400e"/>
+      <!-- Ears -->
+      <ellipse cx="218" cy="140" rx="9" ry="12" fill="#f5c6a0"/>
+      <ellipse cx="298" cy="140" rx="9" ry="12" fill="#f5c6a0"/>
+      <!-- Glasses frame -->
+      <rect x="228" y="132" width="26" height="18" rx="7" fill="none" stroke="#374151" stroke-width="2.5"/>
+      <rect x="260" y="132" width="26" height="18" rx="7" fill="none" stroke="#374151" stroke-width="2.5"/>
+      <line x1="254" y1="141" x2="260" y2="141" stroke="#374151" stroke-width="2"/>
+      <line x1="218" y1="138" x2="228" y2="137" stroke="#374151" stroke-width="2"/>
+      <line x1="286" y1="137" x2="298" y2="138" stroke="#374151" stroke-width="2"/>
+      <!-- Glass lenses (subtle) -->
+      <rect x="229" y="133" width="24" height="16" rx="6" fill="rgba(147,197,253,0.3)"/>
+      <rect x="261" y="133" width="24" height="16" rx="6" fill="rgba(147,197,253,0.3)"/>
+      <!-- Eyebrows -->
+      <path d="M230 128 Q241 123 252 127" stroke="#7c3d12" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M263 127 Q272 123 283 127" stroke="#7c3d12" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <!-- Eyes -->
+      <ellipse cx="241" cy="140" rx="5" ry="5.5" fill="#374151"/>
+      <ellipse cx="273" cy="140" rx="5" ry="5.5" fill="#374151"/>
+      <circle cx="243" cy="138" r="1.5" fill="white"/>
+      <circle cx="275" cy="138" r="1.5" fill="white"/>
+      <!-- Nose -->
+      <ellipse cx="258" cy="151" rx="5" ry="3.5" fill="#f0a875"/>
+      <!-- Smile -->
+      <path d="M244 160 Q258 172 272 160" stroke="#d97706" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <!-- Beard -->
+      <ellipse cx="258" cy="167" rx="28" ry="14" fill="#92400e"/>
+      <ellipse cx="258" cy="166" rx="24" ry="11" fill="#a35c1a"/>
+      <!-- Beard highlight -->
+      <path d="M240 162 Q258 170 276 162" stroke="#b87333" stroke-width="1.5" fill="none" opacity="0.5"/>
+
+      <!-- Plant (right side) -->
+      <rect x="400" y="300" width="42" height="55" rx="10" fill="#9ca3af"/>
+      <rect x="404" y="304" width="34" height="48" rx="8" fill="#b0bac4"/>
+      <rect x="404" y="304" width="34" height="10" rx="4" fill="rgba(0,0,0,0.1)"/>
+      <!-- Plant leaves -->
+      <path d="M421 300 Q390 250 370 220 Q400 240 421 280" fill="#2d7020"/>
+      <path d="M421 300 Q450 245 465 215 Q438 240 421 275" fill="#3d8c2e"/>
+      <path d="M421 295 Q405 255 395 230 Q415 250 421 275" fill="#4a9e3a"/>
+      <path d="M421 295 Q438 260 448 235 Q428 255 421 275" fill="#3d8c2e"/>
+      <path d="M421 290 Q410 260 408 240 Q420 255 421 278" fill="#5ab04a"/>
+
+      <!-- Floating UI card (top right area) -->
+      <rect x="380" y="115" width="120" height="60" rx="12" fill="white" opacity="0.92" filter="url(#shadow2)"/>
+      <rect x="388" y="123" width="40" height="5" rx="2" fill="#9ca3af"/>
+      <rect x="388" y="132" width="60" height="8" rx="2" fill="#4ade80"/>
+      <rect x="388" y="144" width="50" height="4" rx="2" fill="#d1fae5"/>
+      <rect x="388" y="152" width="35" height="4" rx="2" fill="#d1fae5"/>
+      <!-- Status dot -->
+      <circle cx="486" cy="126" r="5" fill="#4ade80"/>
+
+      <!-- Notification badge -->
+      <rect x="42" y="140" width="100" height="45" rx="10" fill="white" opacity="0.9" filter="url(#shadow2)"/>
+      <circle cx="56" cy="162" r="10" fill="#aaff00"/>
+      <rect x="72" y="153" width="55" height="5" rx="2" fill="#374151"/>
+      <rect x="72" y="162" width="40" height="4" rx="2" fill="#9ca3af"/>
+      <rect x="72" y="170" width="48" height="4" rx="2" fill="#9ca3af"/>
+    </svg>`;
+
+  // ── Left panel (illustration) ──
+  const leftPanel=html`
+    <div style=${{
+      flex:'0 0 52%',minHeight:'100vh',
+      background:'linear-gradient(150deg,#b8f5a0 0%,#7dd96a 40%,#5ab04a 100%)',
+      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+      padding:'40px 32px',position:'relative',overflow:'hidden',
+    }}>
+      <!-- Subtle radial overlay -->
+      <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 30% 40%,rgba(255,255,255,0.18) 0%,transparent 65%)',pointerEvents:'none'}}></div>
+      <!-- Bottom shadow -->
+      <div style=${{position:'absolute',bottom:0,left:0,right:0,height:80,background:'linear-gradient(to top,rgba(0,0,0,0.08),transparent)',pointerEvents:'none'}}></div>
+
+      <!-- Brand -->
+      <div style=${{position:'absolute',top:28,left:32,display:'flex',alignItems:'center',gap:9,zIndex:2}}>
+        <div style=${{width:32,height:32,borderRadius:9,background:'rgba(255,255,255,0.95)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(0,0,0,0.12)'}}>
+          <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#2d7020"/><circle cx="32" cy="11" r="6" fill="#2d7020"/><circle cx="51" cy="43" r="6" fill="#2d7020"/><circle cx="13" cy="43" r="6" fill="#2d7020"/><line x1="32" y1="17" x2="32" y2="23" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <div style=${{display:'flex',alignItems:'center',gap:12}}>
-          <span style=${{fontSize:11,color:'rgba(148,163,200,0.35)'}}>Team project management · AI-powered</span>
-          <div style=${{display:'flex',alignItems:'center',gap:5,background:'rgba(170,255,0,0.07)',border:'1px solid rgba(170,255,0,0.15)',padding:'3px 10px',borderRadius:100}}>
-            <div style=${{width:4,height:4,borderRadius:'50%',background:'#aaff00',boxShadow:'0 0 5px #aaff00'}}></div>
-            <span style=${{fontSize:9.5,color:'rgba(170,255,0,0.8)',fontWeight:700,letterSpacing:.05}}>LIVE</span>
-          </div>
-        </div>
+        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:'#1a3d10',letterSpacing:-.3}}>ProjectFlow</span>
       </div>
 
-      <!-- Main -->
-      <div style=${{position:'relative',zIndex:20,width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:'max(32px,5vw)',paddingTop:52,paddingBottom:20,paddingRight:20,overflowY:'auto'}}>
+      <!-- Illustration -->
+      <div style=${{position:'relative',zIndex:2,width:'100%',maxWidth:500,marginTop:20}}>
+        ${illustration}
+      </div>
+
+      <!-- Tagline -->
+      <div style=${{position:'relative',zIndex:2,textAlign:'center',marginTop:8}}>
+        <p style=${{fontSize:15,fontWeight:700,color:'#1a3d10',marginBottom:4,fontFamily:"'Syne',sans-serif"}}>Your team's command center</p>
+        <p style=${{fontSize:12.5,color:'rgba(26,61,16,0.65)',lineHeight:1.6}}>Tasks · AI assistant · Huddles · Timeline · Tickets</p>
+      </div>
+    </div>`;
+
+  // ── Right panel wrapper ──
+  const rightPanel=(child)=>html`
+    <div style=${{flex:1,minHeight:'100vh',background:'#ffffff',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 40px',overflowY:'auto'}}>
+      <div style=${{width:'100%',maxWidth:420}}>
         ${child}
       </div>
     </div>`;
 
-  // ── OTP ──
-  if(otpStep) return shell(html`
-    <div style=${{width:'100%',maxWidth:380}}>
-      <div style=${{marginBottom:24}}>
-        <div style=${{width:52,height:52,borderRadius:14,background:'rgba(170,255,0,0.08)',border:'1px solid rgba(170,255,0,0.2)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:16,fontSize:22}}>🔐</div>
-        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:'#fff',marginBottom:6,letterSpacing:-.3}}>Verify your identity</h2>
-        <p style=${{fontSize:12.5,color:'rgba(148,163,200,0.55)',marginBottom:2}}>6-digit code sent to</p>
-        <p style=${{fontSize:13,fontWeight:700,color:'#aaff00'}}>${otpEmail}</p>
-      </div>
-      <div style=${cardS}>
-        <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}} onPaste=${handleOtpPaste}>
+  // ── OTP Screen ──
+  if(otpStep) return html`
+    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
+      ${leftPanel}
+      ${rightPanel(html`
+        <div style=${{textAlign:'center',marginBottom:28}}>
+          <div style=${{width:60,height:60,borderRadius:18,background:'#f0fdf4',border:'2px solid #bbf7d0',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:26}}>🔐</div>
+          <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,color:'#111827',marginBottom:8}}>Check your email</h2>
+          <p style=${{fontSize:13.5,color:'#6b7280',marginBottom:3}}>We sent a 6-digit code to</p>
+          <p style=${{fontSize:14,fontWeight:700,color:'#16a34a'}}>${otpEmail}</p>
+        </div>
+        <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:24}} onPaste=${handleOtpPaste}>
           ${[0,1,2,3,4,5].map(i=>html`
             <input key=${i} ref=${otpRefs[i]}
-              style=${{width:46,height:52,borderRadius:10,textAlign:'center',fontSize:21,fontWeight:700,fontFamily:'monospace',outline:'none',transition:'all .18s',boxSizing:'border-box',
-                background:otpCode[i]?'rgba(170,255,0,0.07)':'rgba(255,255,255,0.04)',
-                border:'1px solid '+(otpCode[i]?'rgba(170,255,0,0.45)':'rgba(255,255,255,0.08)'),
-                color:'#fff',boxShadow:otpCode[i]?'0 0 14px rgba(170,255,0,0.12)':'none'}}
+              style=${{width:52,height:58,borderRadius:13,textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',outline:'none',boxSizing:'border-box',transition:'all .18s',
+                background:otpCode[i]?'#f0fdf4':'#f9fafb',
+                border:'2px solid '+(otpCode[i]?'#4ade80':'#e5e7eb'),
+                color:'#111827',boxShadow:otpCode[i]?'0 0 0 3px rgba(74,222,128,0.15)':'none'}}
               maxLength=1 value=${otpCode[i]||''}
               onInput=${e=>handleOtpInput(i,e.target.value)}
               onKeyDown=${e=>handleOtpKey(i,e)}
               onFocus=${e=>e.target.select()}
             />`)}
         </div>
-        ${err?html`<div style=${{color:'#fca5a5',fontSize:12,padding:'9px 12px',background:'rgba(239,68,68,.07)',borderRadius:8,border:'1px solid rgba(239,68,68,.18)',marginBottom:14,textAlign:'center'}}>${err}</div>`:null}
+        ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',marginBottom:16,textAlign:'center'}}>${err}</div>`:null}
         <button onClick=${submitOtp} disabled=${busy||otpCode.length!==6}
-          style=${{width:'100%',height:44,borderRadius:10,border:'none',fontFamily:'inherit',
-            background:otpCode.length===6?'#aaff00':'rgba(170,255,0,0.15)',
-            color:otpCode.length===6?'#040a00':'rgba(170,255,0,0.35)',
-            fontSize:13.5,fontWeight:700,cursor:otpCode.length===6?'pointer':'default',
-            transition:'all .2s',marginBottom:14,
-            boxShadow:otpCode.length===6?'0 4px 20px rgba(170,255,0,0.28)':'none'}}>
+          style=${{width:'100%',height:48,borderRadius:13,border:'none',fontFamily:'inherit',
+            background:otpCode.length===6?'#aaff00':'#e5e7eb',
+            color:otpCode.length===6?'#14380a':'#9ca3af',
+            fontSize:14.5,fontWeight:700,cursor:otpCode.length===6?'pointer':'default',
+            transition:'all .2s',marginBottom:16,
+            boxShadow:otpCode.length===6?'0 4px 20px rgba(170,255,0,0.35)':'none'}}>
           ${busy?'Verifying...':'Verify & Sign In →'}
         </button>
-        <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:8}}>
-          <span style=${{fontSize:12,color:'rgba(148,163,200,0.4)'}}>Didn't receive it?</span>
+        <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:12}}>
+          <span style=${{fontSize:13,color:'#9ca3af'}}>Didn't receive it?</span>
           <button onClick=${resendOtp} disabled=${otpResendCd>0}
             style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',
-              color:otpResendCd>0?'rgba(148,163,200,0.25)':'#aaff00',fontSize:12,fontWeight:600,padding:0}}>
+              color:otpResendCd>0?'#d1d5db':'#16a34a',fontSize:13,fontWeight:600,padding:0}}>
             ${otpResendCd>0?`Resend in ${otpResendCd}s`:'Resend code'}
           </button>
         </div>
         <div style=${{textAlign:'center'}}>
           <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(148,163,200,0.3)',fontSize:11.5,fontFamily:'inherit'}}>
+            style=${{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:12.5,fontFamily:'inherit'}}>
             ← Back to login
           </button>
         </div>
-      </div>
-    </div>`);
+      `)}
+    </div>`;
 
-  // ── Main form ──
-  return shell(html`
-    <div style=${{width:'100%',maxWidth:tab==='register'?440:400}}>
+  // ── Main Login / Register ──
+  return html`
+    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
+      ${leftPanel}
+      ${rightPanel(html`
 
-      <!-- Header text -->
-      <div style=${{marginBottom:22}}>
-        <div style=${{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(170,255,0,0.06)',border:'1px solid rgba(170,255,0,0.12)',padding:'3px 11px',borderRadius:100,marginBottom:14}}>
-          <div style=${{width:4,height:4,borderRadius:'50%',background:'#aaff00'}}></div>
-          <span style=${{fontSize:10,color:'rgba(170,255,0,0.75)',fontWeight:700,letterSpacing:.06}}>AI-POWERED TEAM OS</span>
+        <!-- Logo on right panel -->
+        <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:28}}>
+          <div style=${{width:30,height:30,borderRadius:8,background:'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 10px rgba(170,255,0,0.4)'}}>
+            <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a1a00"/><circle cx="32" cy="11" r="6" fill="#0a1a00"/><circle cx="51" cy="43" r="6" fill="#0a1a00"/><circle cx="13" cy="43" r="6" fill="#0a1a00"/><line x1="32" y1="17" x2="32" y2="23" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a1a00" stroke-width="3.5" stroke-linecap="round"/></svg>
+          </div>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#111827',letterSpacing:-.3}}>ProjectFlow</span>
         </div>
-        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.6rem,2.5vw,2rem)',fontWeight:800,color:'#fff',marginBottom:7,letterSpacing:-.04,lineHeight:1.12}}>
-          ${tab==='login'?'Welcome back':'Start your workspace'}
-        </h1>
-        <p style=${{fontSize:12.5,color:'rgba(148,163,200,0.5)',lineHeight:1.6}}>
-          ${tab==='login'?'Sign in to continue to ProjectFlow':'Create your team workspace in 2 minutes'}
-        </p>
-      </div>
 
-      <!-- Card -->
-      <div style=${cardS}>
-        <!-- Tabs -->
-        <div style=${{display:'flex',background:'rgba(255,255,255,0.03)',borderRadius:11,padding:3,marginBottom:22,border:'1px solid rgba(255,255,255,0.05)'}}>
+        <!-- Heading -->
+        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.6rem,2.5vw,2.1rem)',fontWeight:800,color:'#111827',marginBottom:8,letterSpacing:-.03,lineHeight:1.15}}>
+          ${tab==='login'?'Welcome back':'Create account'}
+        </h1>
+        <p style=${{fontSize:13.5,color:'#6b7280',marginBottom:28,lineHeight:1.6}}>
+          ${tab==='login'?'Sign in to continue to your workspace':'Get your team up and running in minutes'}
+        </p>
+
+        <!-- Tab switcher -->
+        <div style=${{display:'flex',background:'#f3f4f6',borderRadius:12,padding:3,marginBottom:24}}>
           ${['login','register'].map(tp=>html`
             <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
-              style=${{flex:1,height:34,fontSize:12.5,fontWeight:600,border:'none',cursor:'pointer',borderRadius:9,fontFamily:'inherit',transition:'all .18s',
-                background:tab===tp?'rgba(170,255,0,0.11)':'transparent',
-                color:tab===tp?'#aaff00':'rgba(148,163,200,0.4)',
-                boxShadow:tab===tp?'0 0 0 1px rgba(170,255,0,0.2)':'none'}}>
+              style=${{flex:1,height:36,fontSize:13,fontWeight:600,border:'none',cursor:'pointer',borderRadius:10,fontFamily:'inherit',transition:'all .18s',
+                background:tab===tp?'#ffffff':'transparent',
+                color:tab===tp?'#111827':'#9ca3af',
+                boxShadow:tab===tp?'0 1px 6px rgba(0,0,0,0.08)':'none'}}>
               ${tp==='login'?'Sign In':'Create Account'}
             </button>`)}
         </div>
 
         ${tab==='register'?html`
-          <div style=${{display:'flex',background:'rgba(255,255,255,0.025)',borderRadius:9,padding:3,marginBottom:16,border:'1px solid rgba(255,255,255,0.04)'}}>
+          <div style=${{display:'flex',background:'#f3f4f6',borderRadius:10,padding:3,marginBottom:18}}>
             ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
               <button key=${m} onClick=${()=>setRegMode(m)}
-                style=${{flex:1,height:30,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',borderRadius:7,fontFamily:'inherit',transition:'all .18s',
-                  background:regMode===m?'rgba(99,91,255,0.16)':'transparent',
-                  color:regMode===m?'#a5b4fc':'rgba(148,163,200,0.32)',
-                  boxShadow:regMode===m?'0 0 0 1px rgba(99,91,255,0.25)':'none'}}>
+                style=${{flex:1,height:32,fontSize:11.5,fontWeight:600,border:'none',cursor:'pointer',borderRadius:8,fontFamily:'inherit',transition:'all .18s',
+                  background:regMode===m?'#ffffff':'transparent',
+                  color:regMode===m?'#374151':'#9ca3af',
+                  boxShadow:regMode===m?'0 1px 4px rgba(0,0,0,0.07)':'none'}}>
                 ${lbl}
               </button>`)}
           </div>
@@ -3964,11 +3986,11 @@ function AuthScreen({onLogin}){
             <div style=${{marginBottom:14}}><label style=${lblS}>Workspace Name</label>
               <input style=${inpS} placeholder="e.g. Acme Corp, Five Star Group" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
           ${regMode==='join'?html`
-            <div style=${{marginBottom:14,padding:'12px',background:'rgba(99,91,255,0.05)',borderRadius:10,border:'1px solid rgba(99,91,255,0.12)'}}>
+            <div style=${{marginBottom:14,padding:'12px 14px',background:'#f0fdf4',borderRadius:12,border:'1px solid #bbf7d0'}}>
               <label style=${lblS}>Invite Code</label>
-              <input style=${{...inpS,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center'}} placeholder="XXXXXXXX"
+              <input style=${{...inpS,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center',background:'#fff'}} placeholder="XXXXXXXX"
                 value=${inviteCode} onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
-              <p style=${{fontSize:11,color:'rgba(148,163,200,0.3)',marginTop:6,textAlign:'center'}}>Get this from your workspace Admin</p>
+              <p style=${{fontSize:11.5,color:'#9ca3af',marginTop:6,textAlign:'center'}}>Get this from your workspace Admin</p>
             </div>`:null}`:null}
 
         <div style=${{display:'flex',flexDirection:'column',gap:14}}>
@@ -3982,11 +4004,11 @@ function AuthScreen({onLogin}){
 
           <div><label style=${lblS}>Password</label>
             <div style=${{position:'relative'}}>
-              <input style=${{...inpS,paddingRight:42}} type=${showPw?'text':'password'}
+              <input style=${{...inpS,paddingRight:44}} type=${showPw?'text':'password'}
                 placeholder="••••••••••" value=${pw}
                 onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
               <button onClick=${()=>setShowPw(!showPw)}
-                style=${{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(148,163,200,0.4)',fontSize:14,padding:0,lineHeight:1}}>
+                style=${{position:'absolute',right:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:14,padding:0,lineHeight:1}}>
                 ${showPw?'🙈':'👁'}
               </button>
             </div>
@@ -3995,32 +4017,33 @@ function AuthScreen({onLogin}){
           ${tab==='register'?html`
             <div><label style=${lblS}>Role</label>
               <select style=${{...inpS,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
-                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r} style=${{background:'#0d1117',color:'#e8eaf6'}}>${r}</option>`)}
+                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
               </select></div>`:null}
 
           ${err?html`
-            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'9px 12px',background:'rgba(239,68,68,.07)',borderRadius:9,border:'1px solid rgba(239,68,68,.16)'}}>
-              <span>⚠️</span><span style=${{fontSize:12.5,color:'#fca5a5'}}>${err}</span>
+            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca'}}>
+              <span style=${{fontSize:14}}>⚠️</span>
+              <span style=${{fontSize:13,color:'#dc2626'}}>${err}</span>
             </div>`:null}
 
           <button onClick=${go} disabled=${busy}
-            style=${{height:46,borderRadius:11,border:'none',cursor:busy?'default':'pointer',fontFamily:'inherit',
-              background:busy?'rgba(170,255,0,0.2)':'#aaff00',
-              color:busy?'rgba(0,0,0,0.35)':'#030801',
-              fontSize:13.5,fontWeight:700,letterSpacing:.01,
-              transition:'all .18s',marginTop:2,
-              boxShadow:busy?'none':'0 4px 24px rgba(170,255,0,0.3),inset 0 1px 0 rgba(255,255,255,0.2)'}}>
+            style=${{height:50,borderRadius:13,border:'none',cursor:busy?'default':'pointer',fontFamily:'inherit',
+              background:busy?'#d1fae5':'#aaff00',
+              color:busy?'#6b7280':'#14380a',
+              fontSize:14.5,fontWeight:700,letterSpacing:.01,
+              transition:'all .18s',marginTop:4,
+              boxShadow:busy?'none':'0 4px 18px rgba(170,255,0,0.38),0 1px 0 rgba(255,255,255,0.6) inset'}}>
             ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
           </button>
         </div>
-      </div>
 
-      <p style=${{fontSize:11.5,color:'rgba(148,163,200,0.28)',marginTop:14,paddingLeft:2}}>
-        ${tab==='login'
-          ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.65)',cursor:'pointer',fontSize:11.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
-          :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'rgba(170,255,0,0.65)',cursor:'pointer',fontSize:11.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
-      </p>
-    </div>`);
+        <p style=${{fontSize:13,color:'#9ca3af',marginTop:20,textAlign:'center'}}>
+          ${tab==='login'
+            ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#16a34a',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#16a34a',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
+        </p>
+      `)}
+    </div>`;
 }
 
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
