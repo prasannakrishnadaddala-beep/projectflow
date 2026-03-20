@@ -3517,7 +3517,7 @@ class ErrorBoundary extends React.Component{
   }
 }
 
-/* ─── AuthScreen — Garden Bee Split Layout ─────────────────────────────────── */
+/* ─── AuthScreen — Professional Tech Design ───────────────────────────────── */
 function AuthScreen({onLogin}){
   const [tab,setTab]=useState('login');
   const [regMode,setRegMode]=useState('create');
@@ -3535,7 +3535,7 @@ function AuthScreen({onLogin}){
   const [otpCode,setOtpCode]=useState('');
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
-  const canvasRef=useRef(null);
+  const cvRef=useRef(null);
 
   useEffect(()=>{
     if(otpResendCd<=0)return;
@@ -3546,163 +3546,172 @@ function AuthScreen({onLogin}){
     if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
   },[otpStep]);
 
-  // ── Ocean Waves on White canvas ──
   useEffect(()=>{
-    const cv=canvasRef.current;if(!cv)return;
+    const cv=cvRef.current;if(!cv)return;
     const ctx=cv.getContext('2d');
     let id,frame=0;
-    const resize=()=>{cv.width=cv.offsetWidth||600;cv.height=cv.offsetHeight||900;};
+    const resize=()=>{cv.width=cv.offsetWidth||700;cv.height=cv.offsetHeight||900;};
     resize();
-    const ro=new ResizeObserver(resize);ro.observe(cv);
+    const ro=new ResizeObserver(()=>{resize();});ro.observe(cv);
 
-    // Wave layers — soft ocean on white
-    const waves=[
-      {speed:.00038,amp:.055,freq:2.1,phase:0,     color:'rgba(56,189,248,',  base:.52},
-      {speed:.00028,amp:.045,freq:1.7,phase:2.1,   color:'rgba(14,165,233,',  base:.58},
-      {speed:.00045,amp:.038,freq:2.6,phase:4.2,   color:'rgba(2,132,199,',   base:.63},
-      {speed:.00022,amp:.032,freq:1.4,phase:1.1,   color:'rgba(7,89,133,',    base:.68},
-      {speed:.00052,amp:.028,freq:3.0,phase:3.3,   color:'rgba(12,74,110,',   base:.72},
+    // Ocean waves (white bg, soft blue tones)
+    const waveConfigs=[
+      {spd:.00042,amp:.048,freq:2.2,ph:0,     fill:'rgba(147,197,253,',stroke:'rgba(96,165,250,', base:.50},
+      {spd:.00031,amp:.040,freq:1.8,ph:2.0,   fill:'rgba(96,165,250,', stroke:'rgba(59,130,246,', base:.56},
+      {spd:.00051,amp:.032,freq:2.7,ph:4.1,   fill:'rgba(59,130,246,', stroke:'rgba(37,99,235,',  base:.61},
+      {spd:.00024,amp:.026,freq:1.5,ph:1.2,   fill:'rgba(37,99,235,',  stroke:'rgba(29,78,216,',  base:.66},
+      {spd:.00058,amp:.020,freq:3.1,ph:3.4,   fill:'rgba(29,78,216,',  stroke:'rgba(30,64,175,',  base:.70},
     ];
 
-    // Floating bubbles
-    const bubbles=Array.from({length:22},()=>({
-      x:Math.random(),y:.4+Math.random()*.5,
-      r:2+Math.random()*5,vy:-.0003-Math.random()*.0004,
-      ph:Math.random()*Math.PI*2,sp:.008+Math.random()*.006,
-      alpha:.08+Math.random()*.12,
+    // Floating particles (subtle, tech feel)
+    const pts=Array.from({length:28},()=>({
+      x:Math.random(),y:Math.random()*.5,
+      vx:(Math.random()-.5)*.00012,vy:(Math.random()-.5)*.00010,
+      r:.6+Math.random()*1.2,ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.008,
     }));
 
-    // Soft sparkles on water surface
-    const sparkles=Array.from({length:30},()=>({
-      x:Math.random(),yBase:.45+Math.random()*.2,
-      ph:Math.random()*Math.PI*2,sp:.02+Math.random()*.015,
-      size:.8+Math.random()*1.4,
+    // Bubbles
+    const bubbles=Array.from({length:16},()=>({
+      x:Math.random(),y:.45+Math.random()*.45,
+      r:1.5+Math.random()*4,vy:-.00025-Math.random()*.0003,
+      ph:Math.random()*Math.PI*2,sp:.007+Math.random()*.005,a:.06+Math.random()*.10,
+    }));
+
+    // Sparkles
+    const sparks=Array.from({length:24},()=>({
+      x:Math.random(),yb:.46+Math.random()*.18,
+      ph:Math.random()*Math.PI*2,sp:.018+Math.random()*.014,sz:.6+Math.random()*1.2,
     }));
 
     const draw=()=>{
       const W=cv.width,H=cv.height;
-      frame++;
-      const t=frame*.016;
-      ctx.clearRect(0,0,W,H);
+      frame++;const t=frame*.016;
 
-      // White-to-light-blue gradient background
+      // White → sky → ocean blue background
       const bg=ctx.createLinearGradient(0,0,0,H);
       bg.addColorStop(0,'#ffffff');
-      bg.addColorStop(.38,'#f0f9ff');
-      bg.addColorStop(.65,'#e0f2fe');
-      bg.addColorStop(1,'#bae6fd');
+      bg.addColorStop(.30,'#f0f9ff');
+      bg.addColorStop(.52,'#dbeafe');
+      bg.addColorStop(.75,'#bfdbfe');
+      bg.addColorStop(1,'#93c5fd');
       ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-      // Soft radial light from top-center (sun diffuse)
-      const sun=ctx.createRadialGradient(W*.5,0,0,W*.5,0,H*.7);
-      sun.addColorStop(0,'rgba(255,255,240,0.35)');
-      sun.addColorStop(.4,'rgba(224,242,254,0.15)');
-      sun.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle=sun;ctx.fillRect(0,0,W,H);
+      // Sun glow top-right
+      const sg=ctx.createRadialGradient(W*.78,H*.08,0,W*.78,H*.08,W*.5);
+      sg.addColorStop(0,'rgba(254,240,138,0.45)');
+      sg.addColorStop(.3,'rgba(253,224,71,0.15)');
+      sg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
 
-      // Horizon glow line
-      const horizY=H*.48;
-      const hg=ctx.createLinearGradient(0,horizY-8,0,horizY+8);
-      hg.addColorStop(0,'rgba(255,255,255,0)');
-      hg.addColorStop(.5,'rgba(186,230,253,0.5)');
-      hg.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle=hg;ctx.fillRect(0,horizY-8,W,16);
+      // Soft top ambient
+      const ta=ctx.createRadialGradient(W*.5,0,0,W*.5,0,H*.55);
+      ta.addColorStop(0,'rgba(219,234,254,0.4)');
+      ta.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=ta;ctx.fillRect(0,0,W,H);
 
-      // Draw waves back to front
-      waves.forEach((w,wi)=>{
-        const phaseShift=t*w.speed*1000+w.phase;
+      // Floating dots (sky area)
+      pts.forEach(p=>{
+        p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
+        if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=.5;if(p.y>.5)p.y=0;
+        const a=(.08+Math.sin(p.ph)*.06)*(1-p.y/.5);
+        ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
+        ctx.fillStyle='rgba(59,130,246,'+a+')';ctx.fill();
+      });
 
-        // Filled wave body
-        ctx.beginPath();
-        ctx.moveTo(0,H);
+      // Connection lines between nearby particles
+      ctx.lineWidth=.4;
+      for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+        const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<W*.14){
+          ctx.strokeStyle='rgba(147,197,253,'+(0.06*(1-d/(W*.14)))+')';
+          ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.stroke();
+        }
+      }
+
+      // Horizon shimmer line
+      const hy=H*.48;
+      const hl=ctx.createLinearGradient(0,hy,W,hy);
+      hl.addColorStop(0,'rgba(255,255,255,0)');hl.addColorStop(.3,'rgba(255,255,255,0.4)');
+      hl.addColorStop(.5,'rgba(219,234,254,0.6)');hl.addColorStop(.7,'rgba(255,255,255,0.4)');
+      hl.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=hl;ctx.fillRect(0,hy-1,W,3);
+
+      // WAVES
+      waveConfigs.forEach((w,wi)=>{
+        const ph=t*w.spd*1000+w.ph;
+        // fill
+        ctx.beginPath();ctx.moveTo(0,H);
         for(let x=0;x<=W;x+=2){
           const xn=x/W;
-          const y=H*(w.base
-            +Math.sin(xn*Math.PI*w.freq+phaseShift)*w.amp
-            +Math.sin(xn*Math.PI*w.freq*1.6+phaseShift*.7)*(w.amp*.35)
-            +Math.sin(xn*Math.PI*w.freq*.8+phaseShift*1.3)*(w.amp*.2)
-          );
+          const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
+            +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)
+            +Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));
           x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
         }
         ctx.lineTo(W,H);ctx.closePath();
-        const alphaFill=[.13,.12,.11,.10,.09][wi];
-        ctx.fillStyle=w.color+alphaFill+')';ctx.fill();
-
-        // Wave crest highlight line
+        ctx.fillStyle=w.fill+[.14,.12,.11,.10,.09][wi]+')';ctx.fill();
+        // crest line
         ctx.beginPath();
         for(let x=0;x<=W;x+=2){
           const xn=x/W;
-          const y=H*(w.base
-            +Math.sin(xn*Math.PI*w.freq+phaseShift)*w.amp
-            +Math.sin(xn*Math.PI*w.freq*1.6+phaseShift*.7)*(w.amp*.35)
-            +Math.sin(xn*Math.PI*w.freq*.8+phaseShift*1.3)*(w.amp*.2)
-          );
+          const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
+            +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)
+            +Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));
           x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
         }
-        ctx.strokeStyle=w.color+(.06+wi*.008)+')';
-        ctx.lineWidth=1.2;ctx.stroke();
-
-        // Foam/crest white highlights on top wave only
+        ctx.strokeStyle=w.stroke+[.07,.06,.06,.05,.05][wi]+')';ctx.lineWidth=1.1;ctx.stroke();
+        // foam on front wave
         if(wi===0){
-          for(let fx=0;fx<W;fx+=W*.07+Math.sin(fx)*.02*W){
+          for(let fx=W*.04;fx<W;fx+=W*.09+Math.sin(fx*0.01)*W*.02){
             const xn=fx/W;
-            const fy=H*(w.base
-              +Math.sin(xn*Math.PI*w.freq+phaseShift)*w.amp
-              +Math.sin(xn*Math.PI*w.freq*1.6+phaseShift*.7)*(w.amp*.35)
-            );
-            const foamA=.12+Math.sin(t*.8+fx)*.06;
-            const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,18+Math.sin(t+fx)*6);
-            fg.addColorStop(0,'rgba(255,255,255,'+foamA+')');
-            fg.addColorStop(1,'rgba(255,255,255,0)');
-            ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(fx,fy,22,6,0,0,Math.PI*2);ctx.fill();
+            const fy=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
+              +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3));
+            const fa=.10+Math.sin(t*.9+fx*.008)*.05;
+            const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,20+Math.sin(t+fx*.01)*5);
+            fg.addColorStop(0,'rgba(255,255,255,'+fa+')');fg.addColorStop(1,'rgba(255,255,255,0)');
+            ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(fx,fy,22,5,0,0,Math.PI*2);ctx.fill();
           }
         }
       });
 
-      // Water reflection shimmer
-      for(let sx=0;sx<W;sx+=W*.06){
-        const sy=H*(.5+Math.sin(t*.4+sx*.01)*.06);
-        const shimA=.04+Math.sin(t*.9+sx)*.025;
-        const sg=ctx.createLinearGradient(sx,sy,sx+W*.04,sy+4);
-        sg.addColorStop(0,'rgba(255,255,255,0)');
-        sg.addColorStop(.5,'rgba(255,255,255,'+shimA+')');
-        sg.addColorStop(1,'rgba(255,255,255,0)');
-        ctx.fillStyle=sg;ctx.fillRect(sx,sy,W*.04,3);
+      // Reflection shimmers on water
+      for(let rx=W*.02;rx<W;rx+=W*.065){
+        const ry=H*(.52+Math.sin(t*.35+rx*.008)*.05);
+        const ra=.03+Math.sin(t*.7+rx*.015)*.02;
+        const rg=ctx.createLinearGradient(rx,ry,rx+W*.05,ry);
+        rg.addColorStop(0,'rgba(255,255,255,0)');rg.addColorStop(.5,'rgba(255,255,255,'+ra+')');rg.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=rg;ctx.fillRect(rx,ry,W*.05,2);
       }
 
-      // Bubbles rising
+      // Bubbles
       bubbles.forEach(b=>{
         b.y+=b.vy;b.ph+=b.sp;
-        if(b.y<-.05)b.y=.5+Math.random()*.4;
-        const bx=b.x*W+Math.sin(b.ph)*8;
+        if(b.y<.42)b.y=.5+Math.random()*.3;
+        const bx=b.x*W+Math.sin(b.ph)*6;
         const by=b.y*H;
-        const ba=b.alpha*(0.5+Math.sin(b.ph)*.5);
-        // bubble ring
+        const ba=b.a*(0.4+Math.sin(b.ph)*.6);
         ctx.beginPath();ctx.arc(bx,by,b.r,0,Math.PI*2);
-        ctx.strokeStyle='rgba(56,189,248,'+ba+')';ctx.lineWidth=.8;ctx.stroke();
-        // bubble highlight
-        ctx.beginPath();ctx.arc(bx-b.r*.3,by-b.r*.3,b.r*.3,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,255,255,'+(ba*.6)+')';ctx.fill();
+        ctx.strokeStyle='rgba(147,197,253,'+ba+')';ctx.lineWidth=.7;ctx.stroke();
+        ctx.beginPath();ctx.arc(bx-b.r*.3,by-b.r*.35,b.r*.28,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,'+(ba*.55)+')';ctx.fill();
       });
 
-      // Surface sparkles
-      sparkles.forEach(s=>{
+      // Sparkles
+      sparks.forEach(s=>{
         s.ph+=s.sp;
-        const sx=s.x*W+Math.sin(s.ph*.5)*12;
-        const sy=H*(s.yBase+Math.sin(s.ph*.3)*.02);
+        const sx=s.x*W+Math.sin(s.ph*.4)*10;
+        const sy=H*(s.yb+Math.sin(s.ph*.3)*.015);
         const sa=(Math.sin(s.ph)+1)/2;
-        if(sa>.4){
-          const star=sa*.25;
+        if(sa>.35){
+          const a=sa*.22;
           ctx.save();ctx.translate(sx,sy);
-          ctx.fillStyle='rgba(255,255,255,'+star+')';
-          // 4-point star
+          ctx.fillStyle='rgba(255,255,255,'+a+')';
           ctx.beginPath();
-          ctx.moveTo(0,-s.size*2);ctx.lineTo(s.size*.4,-s.size*.4);
-          ctx.lineTo(s.size*2,0);ctx.lineTo(s.size*.4,s.size*.4);
-          ctx.lineTo(0,s.size*2);ctx.lineTo(-s.size*.4,s.size*.4);
-          ctx.lineTo(-s.size*2,0);ctx.lineTo(-s.size*.4,-s.size*.4);
-          ctx.closePath();ctx.fill();
-          ctx.restore();
+          ctx.moveTo(0,-s.sz*2.2);ctx.lineTo(s.sz*.35,-s.sz*.35);ctx.lineTo(s.sz*2.2,0);
+          ctx.lineTo(s.sz*.35,s.sz*.35);ctx.lineTo(0,s.sz*2.2);ctx.lineTo(-s.sz*.35,s.sz*.35);
+          ctx.lineTo(-s.sz*2.2,0);ctx.lineTo(-s.sz*.35,-s.sz*.35);
+          ctx.closePath();ctx.fill();ctx.restore();
         }
       });
 
@@ -3711,6 +3720,7 @@ function AuthScreen({onLogin}){
     draw();
     return()=>{ro.disconnect();cancelAnimationFrame(id);};
   },[]);
+
   const go=async()=>{
     setErr('');setBusy(true);
     if(tab==='login'){
@@ -3753,428 +3763,240 @@ function AuthScreen({onLogin}){
     if(p.length===6){setOtpCode(p);setTimeout(submitOtp,80);}
   };
 
-  const inpS={width:'100%',padding:'13px 16px',borderRadius:12,fontSize:14,outline:'none',
-    background:'#fafbfc',border:'1.5px solid #e8eaed',color:'#1a1a2e',
-    fontFamily:'inherit',transition:'border-color .2s',boxSizing:'border-box'};
-  const lblS={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07,
-    textTransform:'uppercase',color:'#9ca3af',marginBottom:7};
+  // Shared input/label styles — clean light theme
+  const inp={
+    width:'100%',padding:'12px 15px',borderRadius:10,fontSize:14,outline:'none',
+    background:'#f8fafc',border:'1.5px solid #e2e8f0',color:'#0f172a',
+    fontFamily:'inherit',transition:'border-color .18s,box-shadow .18s',boxSizing:'border-box',
+  };
+  const lbl={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07,
+    textTransform:'uppercase',color:'#94a3b8',marginBottom:6};
 
-  // ── Garden scene SVG (static flowers, grass, hive) ──
-  const gardenSVG=html`
-    <svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg" style=${{width:'100%',display:'block',flexShrink:0}}>
-      <defs>
-        <radialGradient id="skyG" cx="50%" cy="0%" r="100%">
-          <stop offset="0%" stop-color="#fff9e6"/>
-          <stop offset="100%" stop-color="#ffe680"/>
-        </radialGradient>
-        <radialGradient id="groundG" cx="50%" cy="0%" r="100%">
-          <stop offset="0%" stop-color="#5cc048"/>
-          <stop offset="100%" stop-color="#2d8020"/>
-        </radialGradient>
-        <radialGradient id="hiveG" cx="35%" cy="25%" r="75%">
-          <stop offset="0%" stop-color="#ffe066"/>
-          <stop offset="60%" stop-color="#e8a800"/>
-          <stop offset="100%" stop-color="#a06000"/>
-        </radialGradient>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="3" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <filter id="ds">
-          <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="rgba(0,80,0,0.2)"/>
-        </filter>
-        <filter id="ds2">
-          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.15)"/>
-        </filter>
-      </defs>
-
-      <!-- Sky -->
-      <rect x="0" y="0" width="480" height="210" fill="url(#skyG)"/>
-      <!-- Sun -->
-      <circle cx="420" cy="55" r="38" fill="#ffe566" opacity="0.5" filter="url(#glow)"/>
-      <circle cx="420" cy="55" r="26" fill="#ffdd00" opacity="0.8"/>
-      <circle cx="420" cy="55" r="18" fill="#fff176"/>
-      <!-- Sun rays -->
-      <g stroke="#ffe566" stroke-width="2.5" stroke-linecap="round" opacity="0.5">
-        <line x1="420" y1="20" x2="420" y2="10"/>
-        <line x1="420" y1="90" x2="420" y2="100"/>
-        <line x1="385" y1="55" x2="375" y2="55"/>
-        <line x1="455" y1="55" x2="465" y2="55"/>
-        <line x1="395" y1="30" x2="388" y2="23"/>
-        <line x1="445" y1="80" x2="452" y2="87"/>
-        <line x1="445" y1="30" x2="452" y2="23"/>
-        <line x1="395" y1="80" x2="388" y2="87"/>
-      </g>
-
-      <!-- Clouds -->
-      <g opacity="0.85">
-        <ellipse cx="80" cy="52" rx="42" ry="18" fill="white"/>
-        <ellipse cx="62" cy="58" rx="26" ry="16" fill="white"/>
-        <ellipse cx="100" cy="58" rx="30" ry="15" fill="white"/>
-        <ellipse cx="80" cy="60" rx="44" ry="14" fill="white"/>
-      </g>
-      <g opacity="0.7">
-        <ellipse cx="240" cy="38" rx="32" ry="13" fill="white"/>
-        <ellipse cx="225" cy="43" rx="20" ry="12" fill="white"/>
-        <ellipse cx="258" cy="43" rx="22" ry="11" fill="white"/>
-      </g>
-
-      <!-- Ground -->
-      <rect x="0" y="200" width="480" height="120" fill="url(#groundG)"/>
-      <!-- Ground highlight -->
-      <ellipse cx="240" cy="202" rx="280" ry="14" fill="rgba(255,255,255,0.12)"/>
-      <!-- Ground shade -->
-      <rect x="0" y="198" width="480" height="8" fill="rgba(0,0,0,0.08)" rx="3"/>
-
-      <!-- ── GRASS BLADES ── -->
-      <g fill="#3d9e28" stroke="none">
-        <!-- scattered grass tufts -->
-        <path d="M15 205 Q12 185 10 178 Q14 192 18 205Z" opacity="0.9"/>
-        <path d="M22 204 Q26 182 24 175 Q21 190 20 204Z" opacity="0.8"/>
-        <path d="M55 204 Q52 186 50 180 Q54 193 57 204Z"/>
-        <path d="M62 203 Q66 184 64 177 Q61 191 60 203Z" opacity="0.85"/>
-        <path d="M140 204 Q137 188 135 181 Q139 194 142 204Z"/>
-        <path d="M148 203 Q152 185 150 178 Q147 192 146 203Z" opacity="0.8"/>
-        <path d="M310 204 Q307 188 305 181 Q309 194 312 204Z"/>
-        <path d="M320 203 Q324 186 322 179 Q319 192 318 203Z" opacity="0.85"/>
-        <path d="M400 205 Q397 187 395 180 Q399 194 402 205Z"/>
-        <path d="M408 204 Q412 186 410 179 Q407 193 406 204Z" opacity="0.8"/>
-        <path d="M455 204 Q452 188 450 181 Q454 194 457 204Z"/>
-        <path d="M462 203 Q466 185 464 178 Q461 192 460 203Z" opacity="0.85"/>
-      </g>
-
-      <!-- ── HONEYBEE HIVE (right side) ── -->
-      <g filter="url(#ds)" transform="translate(360,105)">
-        <!-- branch -->
-        <path d="M-10,10 Q5,-15 0,-50" stroke="#7c4e1a" stroke-width="8" fill="none" stroke-linecap="round"/>
-        <path d="M0,-50 Q8,-70 5,-90" stroke="#8b5e2a" stroke-width="6" fill="none" stroke-linecap="round"/>
-        <!-- leaves on branch -->
-        <ellipse cx="8" cy="-65" rx="14" ry="7" fill="#3d9e28" transform="rotate(-30,8,-65)"/>
-        <ellipse cx="-5" cy="-75" rx="12" ry="6" fill="#4ab030" transform="rotate(20,-5,-75)"/>
-        <!-- hive body -->
-        <ellipse cx="0" cy="-55" rx="30" ry="36" fill="url(#hiveG)"/>
-        <!-- hive stripes -->
-        <path d="M-29,-50 Q0,-47 29,-50" stroke="rgba(140,80,0,0.3)" stroke-width="2.5" fill="none"/>
-        <path d="M-30,-42 Q0,-39 30,-42" stroke="rgba(140,80,0,0.3)" stroke-width="2.5" fill="none"/>
-        <path d="M-29,-34 Q0,-31 29,-34" stroke="rgba(140,80,0,0.25)" stroke-width="2.5" fill="none"/>
-        <path d="M-26,-26 Q0,-23 26,-26" stroke="rgba(140,80,0,0.2)" stroke-width="2" fill="none"/>
-        <path d="M-20,-18 Q0,-15 20,-18" stroke="rgba(140,80,0,0.15)" stroke-width="2" fill="none"/>
-        <!-- hive hole -->
-        <ellipse cx="0" cy="-38" rx="9" ry="7" fill="#3d1a00"/>
-        <ellipse cx="0" cy="-37" rx="7" ry="5.5" fill="#1a0800"/>
-        <!-- hive highlight -->
-        <ellipse cx="-10" cy="-70" rx="10" ry="14" fill="rgba(255,240,150,0.3)" transform="rotate(-10,-10,-70)"/>
-        <!-- dripping honey -->
-        <path d="M8,-20 Q9,-10 8,0 Q7,8 9,14" stroke="#e8a800" stroke-width="4" fill="none" stroke-linecap="round"/>
-        <circle cx="9" cy="15" r="5" fill="#f5b800"/>
-        <path d="M-5,-19 Q-4,-12 -5,-4" stroke="#e8a800" stroke-width="3" fill="none" stroke-linecap="round"/>
-        <circle cx="-5" cy="-3" r="4" fill="#f5b800"/>
-      </g>
-
-      <!-- ── FLOWER 1 — Sunflower (left) ── -->
-      <g filter="url(#ds2)" transform="translate(60,160)">
-        <!-- stem -->
-        <path d="M0,50 Q-5,20 0,-10" stroke="#2d8020" stroke-width="5" fill="none" stroke-linecap="round"/>
-        <!-- leaf -->
-        <path d="M-3,30 Q-25,22 -20,14 Q-8,20 -2,28Z" fill="#3d9e28"/>
-        <!-- petals -->
-        <g fill="#f5c800">
-          ${[0,1,2,3,4,5,6,7].map(i=>`
-            <ellipse cx="${Math.cos(i*Math.PI/4-Math.PI/8)*22}" cy="${Math.sin(i*Math.PI/4-Math.PI/8)*22}" rx="9" ry="5"
-              transform="rotate(${i*45-22.5},${Math.cos(i*Math.PI/4-Math.PI/8)*22},${Math.sin(i*Math.PI/4-Math.PI/8)*22})"/>`).join('')}
-        </g>
-        <!-- center -->
-        <circle cx="0" cy="0" r="14" fill="#7c3d00"/>
-        <circle cx="0" cy="0" r="11" fill="#5c2a00"/>
-        <!-- seed dots -->
-        <circle cx="-4" cy="-4" r="1.5" fill="#8b4800" opacity="0.7"/>
-        <circle cx="2" cy="-5" r="1.5" fill="#8b4800" opacity="0.7"/>
-        <circle cx="5" cy="0" r="1.5" fill="#8b4800" opacity="0.7"/>
-        <circle cx="2" cy="5" r="1.5" fill="#8b4800" opacity="0.7"/>
-        <circle cx="-4" cy="4" r="1.5" fill="#8b4800" opacity="0.7"/>
-        <circle cx="-6" cy="0" r="1.5" fill="#8b4800" opacity="0.7"/>
-        <!-- center highlight -->
-        <ellipse cx="-4" cy="-5" rx="4" ry="3" fill="rgba(255,200,100,0.2)"/>
-      </g>
-
-      <!-- ── FLOWER 2 — Pink daisy (center-left) ── -->
-      <g filter="url(#ds2)" transform="translate(160,175)">
-        <path d="M0,40 Q3,15 0,-8" stroke="#2d8020" stroke-width="4" fill="none" stroke-linecap="round"/>
-        <path d="M2,22 Q18,14 16,6 Q6,14 1,20Z" fill="#3d9e28"/>
-        <g fill="#ff9ec0">
-          ${[0,1,2,3,4,5,6,7,8,9].map(i=>`
-            <ellipse cx="${Math.cos(i*Math.PI/5)*18}" cy="${Math.sin(i*Math.PI/5)*18}" rx="7" ry="4"
-              transform="rotate(${i*36},${Math.cos(i*Math.PI/5)*18},${Math.sin(i*Math.PI/5)*18})"/>`).join('')}
-        </g>
-        <circle cx="0" cy="0" r="10" fill="#ffe566"/>
-        <circle cx="0" cy="0" r="7" fill="#f5c800"/>
-        <circle cx="-3" cy="-3" r="2" fill="rgba(255,255,255,0.4)"/>
-      </g>
-
-      <!-- ── FLOWER 3 — Lavender (center) ── -->
-      <g transform="translate(248,185)">
-        <path d="M0,35 Q-2,18 0,-5" stroke="#2d8020" stroke-width="4" fill="none" stroke-linecap="round"/>
-        <path d="M-1,20 Q-16,12 -14,5 Q-5,12 -1,18Z" fill="#3d9e28"/>
-        <!-- lavender florets -->
-        <g fill="#c084fc">
-          <ellipse cx="-4" cy="-12" rx="5" ry="7" transform="rotate(-15,-4,-12)"/>
-          <ellipse cx="4" cy="-15" rx="5" ry="7" transform="rotate(15,4,-15)"/>
-          <ellipse cx="0" cy="-20" rx="5" ry="7"/>
-          <ellipse cx="-7" cy="-5" rx="4" ry="6" transform="rotate(-25,-7,-5)"/>
-          <ellipse cx="7" cy="-5" rx="4" ry="6" transform="rotate(25,7,-5)"/>
-        </g>
-        <g fill="#a855f7" opacity="0.6">
-          <ellipse cx="-3" cy="-13" rx="3" ry="5" transform="rotate(-15,-3,-13)"/>
-          <ellipse cx="4" cy="-16" rx="3" ry="5" transform="rotate(15,4,-16)"/>
-          <ellipse cx="0" cy="-21" rx="3" ry="5"/>
-        </g>
-      </g>
-
-      <!-- ── FLOWER 4 — Red tulip (center-right) ── -->
-      <g filter="url(#ds2)" transform="translate(330,178)">
-        <path d="M0,40 Q2,18 0,-5" stroke="#2d8020" stroke-width="4" fill="none" stroke-linecap="round"/>
-        <path d="M1,24 Q16,16 15,8 Q5,15 0,22Z" fill="#3d9e28"/>
-        <!-- tulip petals -->
-        <path d="M0,-30 Q-18,-20 -16,0 Q-8,-8 0,-5Z" fill="#ef4444"/>
-        <path d="M0,-30 Q18,-20 16,0 Q8,-8 0,-5Z" fill="#dc2626"/>
-        <path d="M0,-32 Q-10,-18 -8,2 Q0,-4 0,-5Z" fill="#f87171"/>
-        <path d="M0,-32 Q10,-18 8,2 Q0,-4 0,-5Z" fill="#ef4444"/>
-        <path d="M0,-34 Q0,-20 0,-5Z" fill="#fca5a5" opacity="0.3"/>
-        <!-- inner -->
-        <path d="M0,-24 Q-6,-14 -5,0 Q0,-6 5,0 Q6,-14 0,-24Z" fill="#991b1b" opacity="0.4"/>
-      </g>
-
-      <!-- ── SMALL WILD FLOWERS (scattered) ── -->
-      <g>
-        <!-- tiny white daisies -->
-        <g transform="translate(100,208)">
-          <g fill="white">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*7}" cy="${Math.sin(i*Math.PI/3)*7}" rx="3.5" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
-          <circle cx="0" cy="0" r="4" fill="#ffe566"/>
-        </g>
-        <g transform="translate(210,212)">
-          <g fill="#ffd6f0">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*6}" cy="${Math.sin(i*Math.PI/3)*6}" rx="3" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
-          <circle cx="0" cy="0" r="4" fill="#ffe566"/>
-        </g>
-        <g transform="translate(280,210)">
-          <g fill="#c4b5fd">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*6}" cy="${Math.sin(i*Math.PI/3)*6}" rx="3" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
-          <circle cx="0" cy="0" r="3.5" fill="#fbbf24"/>
-        </g>
-        <g transform="translate(380,212)">
-          <g fill="#fde68a">${[0,1,2,3,4,5].map(i=>`<ellipse cx="${Math.cos(i*Math.PI/3)*6}" cy="${Math.sin(i*Math.PI/3)*6}" rx="3" ry="2" transform="rotate(${i*60})"/>`).join('')}</g>
-          <circle cx="0" cy="0" r="4" fill="#f97316"/>
-        </g>
-        <!-- stems for tiny flowers -->
-        <line x1="100" y1="212" x2="100" y2="225" stroke="#2d8020" stroke-width="2"/>
-        <line x1="210" y1="215" x2="210" y2="228" stroke="#2d8020" stroke-width="2"/>
-        <line x1="280" y1="213" x2="280" y2="226" stroke="#2d8020" stroke-width="2"/>
-        <line x1="380" y1="215" x2="380" y2="228" stroke="#2d8020" stroke-width="2"/>
-      </g>
-
-      <!-- ── BUTTERFLY (small, background) ── -->
-      <g transform="translate(195,130)" opacity="0.75">
-        <path d="M0,0 Q-20,-18 -28,-8 Q-20,4 0,0Z" fill="#fb923c"/>
-        <path d="M0,0 Q20,-18 28,-8 Q20,4 0,0Z" fill="#f97316"/>
-        <path d="M0,0 Q-15,10 -18,20 Q-8,16 0,0Z" fill="#fbbf24"/>
-        <path d="M0,0 Q15,10 18,20 Q8,16 0,0Z" fill="#f59e0b"/>
-        <!-- body -->
-        <ellipse cx="0" cy="0" rx="2.5" ry="8" fill="#7c2d12"/>
-        <circle cx="-1" cy="-9" r="3" fill="#7c2d12"/>
-        <!-- antennae -->
-        <path d="M-1,-8 Q-8,-16 -7,-20" stroke="#7c2d12" stroke-width="1" fill="none"/>
-        <path d="M-1,-8 Q6,-16 7,-20" stroke="#7c2d12" stroke-width="1" fill="none"/>
-        <circle cx="-7" cy="-20" r="1.5" fill="#7c2d12"/>
-        <circle cx="7" cy="-20" r="1.5" fill="#7c2d12"/>
-      </g>
-
-      <!-- ── HONEYCOMB pattern (decorative bottom) ── -->
-      <g opacity="0.12" transform="translate(420,230)">
-        ${[0,1,2].map(row=>[0,1,2].map(col=>{
-          const hx=col*26+(row%2)*13,hy=row*22;
-          const pts=Array.from({length:6},(_,i)=>`${hx+12*Math.cos(i*Math.PI/3-Math.PI/6)},${hy+12*Math.sin(i*Math.PI/3-Math.PI/6)}`).join(' ');
-          return `<polygon points="${pts}" fill="none" stroke="#f5c800" stroke-width="1.5"/>`;
-        }).join('')).join('')}
-      </g>
-    </svg>`;
-
-  // ── Left panel ──
+  // ── Left panel: canvas fills everything ──
   const leftPanel=html`
     <div style=${{
-      width:'50%',flexShrink:0,minHeight:'100vh',
-      background:'linear-gradient(180deg,#ffffff 0%,#f0f9ff 40%,#e0f2fe 70%,#bae6fd 100%)',
-      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',
-      padding:'20px 16px 0',position:'relative',overflow:'hidden',
+      width:'48%',flexShrink:0,minHeight:'100vh',
+      position:'relative',overflow:'hidden',
     }}>
-      <!-- Ambient glow top -->
-      <div style=${{position:'absolute',top:0,left:0,right:0,height:'40%',background:'radial-gradient(ellipse at 50% 0%,rgba(186,230,253,0.6) 0%,transparent 65%)',pointerEvents:'none'}}></div>
+      <canvas ref=${cvRef} style=${{
+        position:'absolute',top:0,left:0,
+        width:'100%',height:'100%',display:'block',
+      }}></canvas>
 
-      <!-- Brand top-left -->
-      <div style=${{position:'absolute',top:22,left:22,display:'flex',alignItems:'center',gap:8,zIndex:10}}>
-        <div style=${{width:30,height:30,borderRadius:8,background:'rgba(255,255,255,0.95)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 10px rgba(0,0,0,0.12)'}}>
-          <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#2d7020"/><circle cx="32" cy="11" r="6" fill="#2d7020"/><circle cx="51" cy="43" r="6" fill="#2d7020"/><circle cx="13" cy="43" r="6" fill="#2d7020"/><line x1="32" y1="17" x2="32" y2="23" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#2d7020" stroke-width="3.5" stroke-linecap="round"/></svg>
+      <!-- Brand overlay top-left -->
+      <div style=${{position:'absolute',top:24,left:24,zIndex:10,display:'flex',alignItems:'center',gap:9}}>
+        <div style=${{width:32,height:32,borderRadius:9,background:'white',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(59,130,246,0.2)'}}>
+          <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#1d4ed8"/><circle cx="32" cy="11" r="6" fill="#1d4ed8"/><circle cx="51" cy="43" r="6" fill="#1d4ed8"/><circle cx="13" cy="43" r="6" fill="#1d4ed8"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#0c4a6e',letterSpacing:-.3}}>ProjectFlow</span>
+        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>ProjectFlow</span>
       </div>
 
-      <!-- Animated bee canvas (fills the sky area) -->
-      <canvas ref=${canvasRef} style=${{position:'absolute',top:0,left:0,width:'100%',height:'65%',zIndex:2,pointerEvents:'none'}}></canvas>
-
-      <!-- Garden scene SVG (bottom) -->
-      <div style=${{position:'relative',zIndex:3,width:'100%'}}>
-        ${gardenSVG}
+      <!-- Center tagline -->
+      <div style=${{
+        position:'absolute',top:'50%',left:'50%',
+        transform:'translate(-50%,-50%)',
+        textAlign:'center',zIndex:10,pointerEvents:'none',
+        width:'80%',
+      }}>
+        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(255,255,255,0.7)',border:'1px solid rgba(147,197,253,0.6)',padding:'5px 14px',borderRadius:100,marginBottom:18,backdropFilter:'blur(8px)'}}>
+          <div style=${{width:5,height:5,borderRadius:'50%',background:'#3b82f6'}}></div>
+          <span style=${{fontSize:11,color:'#1d4ed8',fontWeight:700,letterSpacing:.05}}>AI-POWERED · MULTI-TENANT · v4.0</span>
+        </div>
+        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.5vw,2rem)',fontWeight:800,color:'#1e3a5f',lineHeight:1.2,marginBottom:10,letterSpacing:-.03}}>
+          Where teams<br/>ship together
+        </h2>
+        <p style=${{fontSize:13,color:'rgba(30,58,95,0.65)',lineHeight:1.7}}>
+          Tasks · AI assistant · Huddles<br/>Timeline · Tickets
+        </p>
       </div>
 
-      <!-- Caption -->
-      <div style=${{position:'relative',zIndex:4,textAlign:'center',padding:'10px 0 18px',background:'linear-gradient(to top,rgba(186,230,253,0.9),transparent)'}}>
-        <p style=${{fontSize:14,fontWeight:700,color:'#0c4a6e',fontFamily:"'Syne',sans-serif",marginBottom:3}}>Ride the wave of productivity 🌊</p>
-        <p style=${{fontSize:12,color:'rgba(12,74,110,0.65)'}}>Tasks · AI assistant · Huddles · Timeline · Tickets</p>
+      <!-- Bottom feature pills -->
+      <div style=${{
+        position:'absolute',bottom:28,left:0,right:0,
+        display:'flex',justifyContent:'center',gap:8,flexWrap:'wrap',
+        padding:'0 20px',zIndex:10,
+      }}>
+        ${['📋 Tasks','🤖 AI','📅 Timeline','📞 Huddles','🎫 Tickets'].map(f=>html`
+          <div key=${f} style=${{
+            background:'rgba(255,255,255,0.72)',
+            border:'1px solid rgba(147,197,253,0.5)',
+            backdropFilter:'blur(8px)',
+            padding:'5px 12px',borderRadius:100,
+            fontSize:11,fontWeight:600,color:'#1d4ed8',
+          }}>${f}</div>
+        `)}
       </div>
     </div>`;
 
-  // ── Right panel ──
+  // ── Right panel: clean white form ──
   const rightPanel=(child)=>html`
-    <div style=${{flex:1,minHeight:'100vh',background:'#ffffff',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 36px',overflowY:'auto'}}>
+    <div style=${{
+      flex:1,minHeight:'100vh',background:'#ffffff',
+      display:'flex',alignItems:'center',justifyContent:'center',
+      padding:'40px 36px',overflowY:'auto',
+      borderLeft:'1px solid #f1f5f9',
+    }}>
       <div style=${{width:'100%',maxWidth:400}}>
         ${child}
       </div>
     </div>`;
 
-  // ── OTP ──
+  // ── OTP Screen ──
   if(otpStep) return html`
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
-        <div style=${{textAlign:'center',marginBottom:28}}>
-          <div style=${{width:58,height:58,borderRadius:16,background:'#fffbeb',border:'2px solid #fde68a',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',fontSize:26}}>🔐</div>
-          <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:21,fontWeight:800,color:'#111827',marginBottom:7}}>Verify your identity</h2>
-          <p style=${{fontSize:13.5,color:'#6b7280',marginBottom:3}}>6-digit code sent to</p>
-          <p style=${{fontSize:14,fontWeight:700,color:'#d97706'}}>${otpEmail}</p>
+        <div style=${{marginBottom:28}}>
+          <div style=${{width:52,height:52,borderRadius:14,background:'#eff6ff',border:'1.5px solid #bfdbfe',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:16,fontSize:24}}>🔐</div>
+          <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:'#0f172a',marginBottom:6}}>Verify your identity</h2>
+          <p style=${{fontSize:13.5,color:'#64748b',marginBottom:3}}>6-digit code sent to</p>
+          <p style=${{fontSize:14,fontWeight:700,color:'#2563eb'}}>${otpEmail}</p>
         </div>
-        <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:22}} onPaste=${handleOtpPaste}>
+        <div style=${{display:'flex',gap:8,marginBottom:20}} onPaste=${handleOtpPaste}>
           ${[0,1,2,3,4,5].map(i=>html`
             <input key=${i} ref=${otpRefs[i]}
-              style=${{width:50,height:56,borderRadius:12,textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',outline:'none',boxSizing:'border-box',transition:'all .18s',
-                background:otpCode[i]?'#fffbeb':'#f9fafb',
-                border:'2px solid '+(otpCode[i]?'#f5c800':'#e5e7eb'),
-                color:'#111827',boxShadow:otpCode[i]?'0 0 0 3px rgba(245,200,0,0.15)':'none'}}
+              style=${{flex:1,height:54,borderRadius:10,textAlign:'center',fontSize:20,fontWeight:700,fontFamily:'monospace',outline:'none',boxSizing:'border-box',transition:'all .15s',
+                background:otpCode[i]?'#eff6ff':'#f8fafc',
+                border:'1.5px solid '+(otpCode[i]?'#3b82f6':'#e2e8f0'),
+                color:'#0f172a',boxShadow:otpCode[i]?'0 0 0 3px rgba(59,130,246,0.1)':'none'}}
               maxLength=1 value=${otpCode[i]||''}
               onInput=${e=>handleOtpInput(i,e.target.value)}
               onKeyDown=${e=>handleOtpKey(i,e)}
               onFocus=${e=>e.target.select()}
             />`)}
         </div>
-        ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',marginBottom:14,textAlign:'center'}}>${err}</div>`:null}
+        ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca',marginBottom:14}}>${err}</div>`:null}
         <button onClick=${submitOtp} disabled=${busy||otpCode.length!==6}
-          style=${{width:'100%',height:48,borderRadius:13,border:'none',fontFamily:'inherit',
-            background:otpCode.length===6?'#f5c800':'#e5e7eb',
-            color:otpCode.length===6?'#3d2000':'#9ca3af',
+          style=${{width:'100%',height:46,borderRadius:10,border:'none',fontFamily:'inherit',
+            background:otpCode.length===6?'#2563eb':'#e2e8f0',
+            color:otpCode.length===6?'#fff':'#94a3b8',
             fontSize:14,fontWeight:700,cursor:otpCode.length===6?'pointer':'default',
-            transition:'all .2s',marginBottom:14,
-            boxShadow:otpCode.length===6?'0 4px 18px rgba(245,200,0,0.4)':'none'}}>
+            transition:'all .18s',marginBottom:14,
+            boxShadow:otpCode.length===6?'0 4px 14px rgba(37,99,235,0.3)':'none'}}>
           ${busy?'Verifying...':'Verify & Sign In →'}
         </button>
-        <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:10}}>
-          <span style=${{fontSize:13,color:'#9ca3af'}}>Didn't receive it?</span>
+        <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:8}}>
+          <span style=${{fontSize:12.5,color:'#94a3b8'}}>Didn't receive it?</span>
           <button onClick=${resendOtp} disabled=${otpResendCd>0}
-            style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'#d1d5db':'#d97706',fontSize:13,fontWeight:600,padding:0}}>
+            style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'#cbd5e1':'#2563eb',fontSize:12.5,fontWeight:600,padding:0}}>
             ${otpResendCd>0?`Resend in ${otpResendCd}s`:'Resend code'}
           </button>
         </div>
         <div style=${{textAlign:'center'}}>
           <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:12.5,fontFamily:'inherit'}}>
+            style=${{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:12,fontFamily:'inherit'}}>
             ← Back to login
           </button>
         </div>
       `)}
     </div>`;
 
-  // ── Main form ──
+  // ── Main login/register ──
   return html`
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
-        <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:26}}>
-          <div style=${{width:28,height:28,borderRadius:7,background:'#f5c800',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(245,200,0,0.4)'}}>
-            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#3d2000"/><circle cx="32" cy="11" r="6" fill="#3d2000"/><circle cx="51" cy="43" r="6" fill="#3d2000"/><circle cx="13" cy="43" r="6" fill="#3d2000"/><line x1="32" y1="17" x2="32" y2="23" stroke="#3d2000" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#3d2000" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#3d2000" stroke-width="3.5" stroke-linecap="round"/></svg>
+        <!-- Logo -->
+        <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:28}}>
+          <div style=${{width:28,height:28,borderRadius:7,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
+            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#111827',letterSpacing:-.3}}>ProjectFlow</span>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>ProjectFlow</span>
         </div>
-        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.55rem,2.4vw,2rem)',fontWeight:800,color:'#111827',marginBottom:7,letterSpacing:-.03,lineHeight:1.12}}>
-          ${tab==='login'?'Welcome back 🍯':'Create account'}
+
+        <!-- Heading -->
+        <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.2vw,1.85rem)',fontWeight:800,color:'#0f172a',marginBottom:6,letterSpacing:-.03,lineHeight:1.15}}>
+          ${tab==='login'?'Welcome back':'Create account'}
         </h1>
-        <p style=${{fontSize:13.5,color:'#6b7280',marginBottom:24,lineHeight:1.6}}>
-          ${tab==='login'?'Sign in to your ProjectFlow workspace':'Get your team up and running today'}
+        <p style=${{fontSize:13.5,color:'#64748b',marginBottom:24,lineHeight:1.6}}>
+          ${tab==='login'?'Sign in to your ProjectFlow workspace':'Set up your workspace and start shipping'}
         </p>
-        <div style=${{display:'flex',background:'#f3f4f6',borderRadius:12,padding:3,marginBottom:22}}>
+
+        <!-- Tab switcher -->
+        <div style=${{display:'flex',background:'#f1f5f9',borderRadius:11,padding:3,marginBottom:22}}>
           ${['login','register'].map(tp=>html`
             <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
-              style=${{flex:1,height:36,fontSize:13,fontWeight:600,border:'none',cursor:'pointer',borderRadius:10,fontFamily:'inherit',transition:'all .18s',
+              style=${{flex:1,height:35,fontSize:13,fontWeight:600,border:'none',cursor:'pointer',
+                borderRadius:9,fontFamily:'inherit',transition:'all .16s',
                 background:tab===tp?'#ffffff':'transparent',
-                color:tab===tp?'#111827':'#9ca3af',
-                boxShadow:tab===tp?'0 1px 6px rgba(0,0,0,0.08)':'none'}}>
+                color:tab===tp?'#0f172a':'#94a3b8',
+                boxShadow:tab===tp?'0 1px 4px rgba(0,0,0,0.08)':'none'}}>
               ${tp==='login'?'Sign In':'Create Account'}
             </button>`)}
         </div>
+
         ${tab==='register'?html`
-          <div style=${{display:'flex',background:'#f3f4f6',borderRadius:10,padding:3,marginBottom:16}}>
+          <div style=${{display:'flex',background:'#f1f5f9',borderRadius:9,padding:3,marginBottom:16}}>
             ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
               <button key=${m} onClick=${()=>setRegMode(m)}
-                style=${{flex:1,height:30,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',borderRadius:8,fontFamily:'inherit',transition:'all .18s',
+                style=${{flex:1,height:29,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',
+                  borderRadius:7,fontFamily:'inherit',transition:'all .16s',
                   background:regMode===m?'#ffffff':'transparent',
-                  color:regMode===m?'#374151':'#9ca3af',
-                  boxShadow:regMode===m?'0 1px 4px rgba(0,0,0,0.07)':'none'}}>
+                  color:regMode===m?'#374151':'#94a3b8',
+                  boxShadow:regMode===m?'0 1px 3px rgba(0,0,0,0.07)':'none'}}>
                 ${lbl}
               </button>`)}
           </div>
           ${regMode==='create'?html`
-            <div style=${{marginBottom:14}}><label style=${lblS}>Workspace Name</label>
-              <input style=${inpS} placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
+            <div style=${{marginBottom:14}}><label style=${lbl}>Workspace Name</label>
+              <input style=${inp} placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
           ${regMode==='join'?html`
-            <div style=${{marginBottom:14,padding:'12px 14px',background:'#fffbeb',borderRadius:12,border:'1px solid #fde68a'}}>
-              <label style=${lblS}>Invite Code</label>
-              <input style=${{...inpS,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center',background:'#fff'}} placeholder="XXXXXXXX"
-                value=${inviteCode} onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
+            <div style=${{marginBottom:14,padding:'12px 14px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe'}}>
+              <label style=${lbl}>Invite Code</label>
+              <input style=${{...inp,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center',background:'#fff'}}
+                placeholder="XXXXXXXX" value=${inviteCode}
+                onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
             </div>`:null}`:null}
+
         <div style=${{display:'flex',flexDirection:'column',gap:13}}>
           ${tab==='register'?html`
-            <div><label style=${lblS}>Full Name</label>
-              <input style=${inpS} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
-          <div><label style=${lblS}>Email Address</label>
-            <input style=${inpS} type="email" placeholder="you@company.com" value=${email}
+            <div><label style=${lbl}>Full Name</label>
+              <input style=${inp} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
+
+          <div><label style=${lbl}>Email Address</label>
+            <input style=${inp} type="email" placeholder="you@company.com" value=${email}
               onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
-          <div><label style=${lblS}>Password</label>
+
+          <div><label style=${lbl}>Password</label>
             <div style=${{position:'relative'}}>
-              <input style=${{...inpS,paddingRight:44}} type=${showPw?'text':'password'}
+              <input style=${{...inp,paddingRight:42}} type=${showPw?'text':'password'}
                 placeholder="••••••••••" value=${pw}
                 onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
               <button onClick=${()=>setShowPw(!showPw)}
-                style=${{position:'absolute',right:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:14,padding:0,lineHeight:1}}>
+                style=${{position:'absolute',right:13,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:14,padding:0,lineHeight:1}}>
                 ${showPw?'🙈':'👁'}
               </button>
             </div>
           </div>
+
           ${tab==='register'?html`
-            <div><label style=${lblS}>Role</label>
-              <select style=${{...inpS,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
+            <div><label style=${lbl}>Role</label>
+              <select style=${{...inp,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
                 ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
               </select></div>`:null}
+
           ${err?html`
-            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca'}}>
-              <span>⚠️</span><span style=${{fontSize:13,color:'#dc2626'}}>${err}</span>
+            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'10px 13px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca'}}>
+              <span style=${{fontSize:13}}>⚠️</span>
+              <span style=${{fontSize:13,color:'#dc2626'}}>${err}</span>
             </div>`:null}
+
           <button onClick=${go} disabled=${busy}
-            style=${{height:50,borderRadius:13,border:'none',cursor:busy?'default':'pointer',fontFamily:'inherit',
-              background:busy?'#fef9c3':'#f5c800',
-              color:busy?'#9ca3af':'#3d2000',
-              fontSize:14.5,fontWeight:700,transition:'all .18s',marginTop:2,
-              boxShadow:busy?'none':'0 4px 18px rgba(245,200,0,0.45),inset 0 1px 0 rgba(255,255,255,0.5)'}}>
+            style=${{height:46,borderRadius:10,border:'none',cursor:busy?'default':'pointer',
+              fontFamily:'inherit',
+              background:busy?'#bfdbfe':'#2563eb',
+              color:busy?'#93c5fd':'#ffffff',
+              fontSize:14,fontWeight:700,letterSpacing:.01,
+              transition:'all .18s',marginTop:2,
+              boxShadow:busy?'none':'0 4px 14px rgba(37,99,235,0.3),inset 0 1px 0 rgba(255,255,255,0.15)'}}>
             ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
           </button>
         </div>
-        <p style=${{fontSize:13,color:'#9ca3af',marginTop:18,textAlign:'center'}}>
+
+        <p style=${{fontSize:12.5,color:'#94a3b8',marginTop:18,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#d97706',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
-            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#d97706',cursor:'pointer',fontSize:13,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
+            ?html`New to ProjectFlow? <button onClick=${()=>{setTab('register');setErr('');}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
       `)}
     </div>`;
