@@ -6269,13 +6269,29 @@ function renderMd(text){
 }
 function MessagesView({projects,users,cu,tasks}){
   const [allProjects,setAllProjects]=useState(safe(projects));
-  const [lastMsgTs,setLastMsgTs]=useState({}); // projectId → last message ISO ts
+  const [lastMsgTs,setLastMsgTs]=useState({});
+  // Stable sorted order — computed ONCE after first real fetch, never re-sorted again
+  // This prevents the glitch where Google SecOps jumps to top on every poll
+  const [stableOrder,setStableOrder]=useState(null); // null = not yet fetched
+  const orderSetRef=useRef(false);
+
   useEffect(()=>{api.get('/api/projects/all').then(d=>{if(Array.isArray(d)&&d.length)setAllProjects(d);});},[]);
-  // Load real last-message timestamps for all channels
+
+  // Fetch last-message timestamps — only lock in sort order on FIRST successful fetch
   useEffect(()=>{
-    const fetchTs=()=>api.get('/api/projects/last-messages').then(d=>{if(d&&typeof d==='object')setLastMsgTs(d);});
+    const fetchTs=async()=>{
+      const d=await api.get('/api/projects/last-messages');
+      if(d&&typeof d==='object'){
+        setLastMsgTs(d);
+        // Set stable order only once on first fetch — never re-sort after that
+        if(!orderSetRef.current){
+          orderSetRef.current=true;
+          setStableOrder(d);
+        }
+      }
+    };
     fetchTs();
-    const id=setInterval(fetchTs,8000); // refresh every 8s
+    const id=setInterval(fetchTs,8000);
     return()=>clearInterval(id);
   },[]);
 
@@ -6301,10 +6317,10 @@ function MessagesView({projects,users,cu,tasks}){
           setMsgs(prev=>{
             if(d.length>prev.length){
               playSound('notif');
-              // Update last message timestamp for this project
               if(d.length>0){
                 const latest=d.reduce((mx,m)=>m.ts>mx?m.ts:mx,'');
                 setLastMsgTs(prev=>({...prev,[pid]:latest}));
+                // DO NOT update stableOrder here — prevents re-sort glitch
               }
             }
             return d;
@@ -6330,24 +6346,32 @@ function MessagesView({projects,users,cu,tasks}){
     if(!txt.trim())return;const c=txt.trim();setTxt('');
     const m=await api.post('/api/messages',{project:pid,content:c});
     setMsgs(prev=>[...prev,m]);
-    // Immediately update last message ts for this channel
+    // Update lastMsgTs for unread indicators but do NOT change stableOrder
     setLastMsgTs(prev=>({...prev,[pid]:m.ts||new Date().toISOString()}));
   };
 
-  // Sort channels by REAL last message timestamp (most recent activity first)
+  // Sort channels: use stableOrder (locked after first fetch) for ordering
+  // If stableOrder not yet available, use project creation order (no jump)
   const sortedProjects=useMemo(()=>{
     let rows=[...allProjects];
     if(chanSearch.trim()){
       const q=chanSearch.toLowerCase();
       rows=rows.filter(p=>p.name.toLowerCase().includes(q));
     }
+    // Use stableOrder if available, else sort by name (stable, no jumping)
+    const orderTs=stableOrder||{};
+    const hasAnyTs=Object.keys(orderTs).length>0;
     rows.sort((a,b)=>{
-      const aTs=lastMsgTs[a.id]||a.created||'';
-      const bTs=lastMsgTs[b.id]||b.created||'';
-      return bTs.localeCompare(aTs); // ISO strings sort correctly as strings
+      if(hasAnyTs){
+        const aTs=orderTs[a.id]||a.created||'';
+        const bTs=orderTs[b.id]||b.created||'';
+        return bTs.localeCompare(aTs);
+      }
+      // Fallback: alphabetical (stable while loading)
+      return a.name.localeCompare(b.name);
     });
     return rows;
-  },[allProjects,chanSearch,lastMsgTs]);
+  },[allProjects,chanSearch,stableOrder]);
 
   return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
 
