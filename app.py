@@ -2524,6 +2524,121 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
   </div>
 </div>
 
+<!-- ── ABOUT VEUIT SECTION ──────────────────────────── -->
+<section id="about" style="padding:80px 24px;background:#f8fafc;border-top:1px solid #e2e8f0">
+  <div style="max-width:1100px;margin:0 auto">
+    <div style="text-align:center;margin-bottom:56px">
+      <div style="display:inline-block;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);padding:5px 16px;border-radius:100px;font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">About VEUIT</div>
+      <h2 style="font-size:clamp(26px,4vw,42px);font-weight:800;color:#0f172a;letter-spacing:-0.5px;margin-bottom:16px">Built for teams that ship fast</h2>
+      <p style="font-size:16px;color:#475569;max-width:620px;margin:0 auto;line-height:1.7">VEUIT replaces 5–7 separate tools with one unified platform. Plan projects, track tasks, communicate, manage support and measure productivity — without ever switching tabs.</p>
+    </div>
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:20px;margin-bottom:56px">
+      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
+        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">12+</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Integrated modules</div>
+      </div>
+      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
+        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">6</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">User role levels</div>
+      </div>
+      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
+        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">∞</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Projects & workspaces</div>
+      </div>
+      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
+        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">AI</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Powered by Claude</div>
+      </div>
+      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
+        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">100%</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Web-based, no installs</div>
+      </div>
+    </div>
+
+    <!-- Who it's for -->
+    <h3 style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;text-align:center">Roles built into every workspace</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:14px;margin-bottom:56px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
+        <div style="font-size:26px;margin-bottom:8px">👑</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Admin</div>
+        <div style="font-size:11px;color:#64748b">Full workspace control, settings & all data</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
+        <div style="font-size:26px;margin-bottom:8px">🗂️</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Manager</div>
+        <div style="font-size:11px;color:#64748b">Create projects, manage tasks, view analytics</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
+        <div style="font-size:26px;margin-bottom:8px">🏷️</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Team Lead</div>
+        <div style="font-size:11px;color:#64748b">Lead sub-teams, assign tasks, manage members</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
+        <div style="font-size:26px;margin-bottom:8px">💻</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Developer</div>
+        <div style="font-size:11px;color:#64748b">Work on tasks, log progress, communicate</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
+        <div style="font-size:26px;margin-bottom:8px">🔍</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Tester</div>
+        <div style="font-size:11px;color:#64748b">Create tickets, test and verify work items</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
+        <div style="font-size:26px;margin-bottom:8px">👁️</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Viewer</div>
+        <div style="font-size:11px;color:#64748b">Read-only access to projects and progress</div>
+      </div>
+    </div>
+
+    <!-- Why VEUIT vs others -->
+    <h3 style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;text-align:center">Why teams choose VEUIT</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:48px">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
+        <div style="font-size:20px;margin-bottom:10px">🔗</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Zero context switching</div>
+        <div style="font-size:13px;color:#64748b;line-height:1.6">Everything from planning to delivery lives in one place. No more jumping between Jira, Slack, Confluence and spreadsheets.</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
+        <div style="font-size:20px;margin-bottom:10px">🤖</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">AI that knows your work</div>
+        <div style="font-size:13px;color:#64748b;line-height:1.6">The built-in AI assistant understands your actual projects and tasks — not just general knowledge. Ask it anything about your workspace.</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
+        <div style="font-size:20px;margin-bottom:10px">⚡</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Real-time everything</div>
+        <div style="font-size:13px;color:#64748b;line-height:1.6">Live presence indicators, instant DM notifications, real-time task updates and push alerts keep your team in sync without manual refreshes.</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
+        <div style="font-size:20px;margin-bottom:10px">🏢</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Multi-workspace ready</div>
+        <div style="font-size:13px;color:#64748b;line-height:1.6">Separate workspaces for different clients or departments, each fully isolated with their own members, projects and settings.</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
+        <div style="font-size:20px;margin-bottom:10px">📱</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Works everywhere</div>
+        <div style="font-size:13px;color:#64748b;line-height:1.6">Fully web-based with PWA support — works on desktop, tablet and mobile. Install it on your phone like a native app with no App Store needed.</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
+        <div style="font-size:20px;margin-bottom:10px">🔒</div>
+        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Secure by design</div>
+        <div style="font-size:13px;color:#64748b;line-height:1.6">bcrypt password hashing, session-based auth, role-based access control and optional OTP email verification for every login.</div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div style="text-align:center;background:#0f172a;border-radius:20px;padding:52px 24px">
+      <h3 style="font-size:28px;font-weight:800;color:#fff;margin-bottom:12px;letter-spacing:-0.5px">Ready to bring your team together?</h3>
+      <p style="color:#94a3b8;font-size:15px;margin-bottom:28px">Create a free workspace in seconds. No credit card required.</p>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+        <a href="/?action=register" style="display:inline-block;background:#2563eb;color:#fff;padding:13px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700">Create Free Account</a>
+        <a href="/?action=login" style="display:inline-block;border:1px solid rgba(255,255,255,.2);color:#cbd5e1;padding:12px 28px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600">Sign In</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="footer-links">
     <a href="/">Home</a>
@@ -3133,12 +3248,12 @@ function showTab(t){
         <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>VEUIT</a>
         <p>The all-in-one project management platform for engineering teams. AI-powered, multi-tenant, fully featured.</p>
       </div>
-      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#how">How it works</a></li></ul></div>
+      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#about">About VEUIT</a></li><li><a href="#how">How it works</a></li></ul></div>
       <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li></ul></div>
       <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-copy">© 2025 VEUIT v4.0 — Hosted on Railway</div>
+      <div class="footer-copy">© 2025 VEUIT — AI-Powered Team Collaboration · <a href="/about" style="color:inherit;opacity:.7">About</a></div>
       <div class="footer-badges"><div class="fb">v4.0</div><div class="fb">PostgreSQL</div><div class="fb">AI-Powered</div><div class="fb">bcrypt</div></div>
     </div>
   </div>
@@ -3178,7 +3293,7 @@ HTML = r"""<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="VEUIT"/>
 <meta name="mobile-web-app-capable" content="yes"/>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Ccircle cx='16' cy='16' r='4' fill='white'/%3E%3Ccircle cx='16' cy='7' r='3' fill='white' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='white' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='white' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
 <script>
 (function(){
   var svg="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
@@ -4390,21 +4505,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
               position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--cy)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
             }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
           </button>`)}
-        ${!col&&(wsDmEnabled||(cu&&(cu.role==='Admin'||cu.role==='Manager')))&&users&&users.length>0?html`
-          <div style=${{padding:'4px 8px 6px 12px',display:'flex',flexWrap:'wrap',gap:6}}>
-            ${safe(users).filter(u=>u.id!==cu?.id).slice(0,10).map(u=>{
-              const isOnline=onlineUsers.has(u.id);
-              const unreadCnt=(dmUnread.find(x=>x.user_id===u.id||x.sender===u.id)||{}).cnt||0;
-              return html`
-              <div key=${u.id} style=${{position:'relative',cursor:'pointer'}}
-                onClick=${()=>setView('dm:'+u.id)}
-                title=${u.name+(isOnline?' · Online':' · Offline')}>
-                <div style=${{width:28,height:28,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'#fff',border:isOnline?'2px solid #22c55e':'2px solid transparent',transition:'border .3s',boxShadow:isOnline?'0 0 6px rgba(34,197,94,.5)':'none'}}>${(u.avatar||u.name||'?')[0]}</div>
-                <div style=${{position:'absolute',bottom:0,right:0,width:8,height:8,borderRadius:'50%',background:isOnline?'#22c55e':'#475569',border:'1.5px solid #0f172a',boxShadow:isOnline?'0 0 4px rgba(34,197,94,.8)':'none'}}></div>
-                ${unreadCnt>0?html`<div style=${{position:'absolute',top:-4,right:-4,minWidth:14,height:14,borderRadius:7,background:'var(--cy)',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px'}}>${unreadCnt}</div>`:null}
-              </div>`;
-            })}
-          </div>`:null}
+
       </nav>
 
             <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
@@ -7849,7 +7950,7 @@ function AIAssistant({cu,projects,tasks,users}){
 }
 
 /* ─── Browser Notifications & Badge ──────────────────────────────────────── */
-const NOTIF_ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236366f1'/%3E%3Ccircle cx='32' cy='32' r='9' fill='white'/%3E%3Ccircle cx='32' cy='11' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='51' cy='43' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='13' cy='43' r='6' fill='white' opacity='.95'/%3E%3Cline x1='32' y1='17' x2='32' y2='23' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='46' y1='40' x2='40' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='18' y1='40' x2='24' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
+const NOTIF_ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Ccircle cx='32' cy='32' r='9' fill='white'/%3E%3Ccircle cx='32' cy='11' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='51' cy='43' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='13' cy='43' r='6' fill='white' opacity='.95'/%3E%3Cline x1='32' y1='17' x2='32' y2='23' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='46' y1='40' x2='40' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='18' y1='40' x2='24' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
 
 function updateBadge(count){
   try{
