@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-VEUIT v4.0
+VEWIT v4.0
 Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 """
 import os, sys, json, hashlib, secrets, random, urllib.request, urllib.error
@@ -204,13 +204,13 @@ def generate_otp():
 
 def send_otp_email(to_email, otp_code, user_name):
     """Send OTP verification email."""
-    subject = "VEUIT — Your Login Code"
+    subject = "VEWIT — Your Login Code"
     body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
       <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
         <div style="background:#0a1a00;padding:24px 32px;text-align:center;">
-          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">VEUIT</h1>
+          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">VEWIT</h1>
         </div>
         <div style="padding:32px;">
           <h2 style="color:#111;margin:0 0 8px;">Hi {user_name},</h2>
@@ -223,7 +223,7 @@ def send_otp_email(to_email, otp_code, user_name):
           <p style="color:#888;font-size:13px;margin:0;">If you didn't request this code, you can safely ignore this email. Do not share this code with anyone.</p>
         </div>
         <div style="background:#f9f9f9;padding:14px 32px;text-align:center;border-top:1px solid #eee;">
-          <p style="color:#aaa;font-size:11px;margin:0;">VEUIT · Team Project Management</p>
+          <p style="color:#aaa;font-size:11px;margin:0;">VEWIT · Team Project Management</p>
         </div>
       </div>
     </body>
@@ -318,7 +318,7 @@ def send_task_assigned_email(user_email, user_name, task_title, assigner_name, t
                 <h3 style="margin: 0 0 10px 0; color: #1f2937;">{task_title}</h3>
             </div>
             <p><a href="{APP_URL}" style="display: inline-block; background: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Task</a></p>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEWIT Notification System</p>
         </div>
     </body>
     </html>
@@ -340,7 +340,7 @@ def send_status_change_email(user_email, user_name, task_title, new_stage, chang
                 <p style="margin: 0;"><strong>New Status:</strong> <span style="color: #10b981; font-weight: bold;">{new_stage}</span></p>
             </div>
             <p><a href="{APP_URL}" style="display: inline-block; background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Task</a></p>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEWIT Notification System</p>
         </div>
     </body>
     </html>
@@ -364,7 +364,7 @@ def send_comment_email(user_email, user_name, task_title, commenter_name, commen
                 </div>
             </div>
             <p><a href="{APP_URL}" style="display: inline-block; background: #f59e0b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Comment</a></p>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEWIT Notification System</p>
         </div>
     </body>
     </html>
@@ -768,6 +768,14 @@ def resend_otp():
 @app.route("/api/auth/logout",methods=["POST"])
 def logout(): session.clear(); return jsonify({"ok":True})
 
+@app.route("/signout")
+@app.route("/sign-out")
+def signout_redirect():
+    """GET /signout — clear session and redirect to login page."""
+    session.clear()
+    return '<html><head><meta http-equiv="refresh" content="0;url=/?action=login"/></head><body>Signing out...</body></html>'
+
+
 @app.route("/api/auth/register",methods=["POST"])
 def register():
     d=request.json or {}
@@ -907,7 +915,7 @@ def test_email():
     if not test_to:
         return jsonify({"error":"test_email required"}),400
 
-    subject="VEUIT Email Test"
+    subject="VEWIT Email Test"
     body="""
     <html>
     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -924,7 +932,7 @@ def test_email():
                 <li>Status changes</li>
                 <li>New comments</li>
             </ul>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEWIT Notification System</p>
         </div>
     </body>
     </html>
@@ -2002,7 +2010,7 @@ def ai_chat():
     task_ctx="\n".join([f"- [{t['id']}] {t['title']} | stage:{t['stage']} | priority:{t['priority']} | pct:{t['pct']}%" for t in tasks])
     user_ctx="\n".join([f"- {u['name']} (id:{u['id']}, role:{u['role']})" for u in users])
 
-    system=f"""You are an AI assistant for VEUIT — a project management tool used by the workspace "{ws['name'] if ws else 'Unknown'}".
+    system=f"""You are an AI assistant for VEWIT — a project management tool used by the workspace "{ws['name'] if ws else 'Unknown'}".
 Current user: {cu['name']} (role: {cu['role']})
 Today: {datetime.now().strftime('%Y-%m-%d')}
 
@@ -2204,7 +2212,7 @@ def serve_js(fn):
 def serve_sw():
     """Service Worker for background push notifications and offline caching."""
     sw_code = r"""
-// VEUIT Service Worker v2
+// VEWIT Service Worker v2
 const CACHE = 'pf-v2';
 const ICON = '/favicon.ico';
 
@@ -2221,7 +2229,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('push', e => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch(err) {}
-  const title  = data.title  || 'VEUIT';
+  const title  = data.title  || 'VEWIT';
   const body   = data.body   || '';
   const tag    = data.tag    || 'pf-notif';
   const url    = data.url    || '/';
@@ -2291,7 +2299,7 @@ async function pollNotifications() {
 def serve_manifest():
     """PWA manifest — full desktop installability."""
     manifest = {
-        "name": "VEUIT",
+        "name": "VEWIT",
         "short_name": "PFPro",
         "description": "AI-powered team project management — tasks, huddles, timeline, tickets & more.",
         "start_url": "/dashboard",
@@ -2316,7 +2324,7 @@ def serve_manifest():
             {"name": "Projects", "short_name": "Projects", "url": "/projects", "description": "View all projects"}
         ],
         "screenshots": [
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "wide", "label": "VEUIT Dashboard"}
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "wide", "label": "VEWIT Dashboard"}
         ]
     }
     return jsonify(manifest)
@@ -2348,18 +2356,18 @@ def about_page():
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>About VEUIT — AI-Powered Team Collaboration Platform</title>
-<meta name="description" content="VEUIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
-<meta name="keywords" content="VEUIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
+<title>About VEWIT — AI-Powered Team Collaboration Platform</title>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
+<meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
 <meta name="robots" content="index, follow"/>
 <link rel="canonical" href="https://www.vewit.in/about"/>
-<meta property="og:title" content="About VEUIT — AI-Powered Team Collaboration"/>
-<meta property="og:description" content="VEUIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, tickets and analytics all in one place."/>
+<meta property="og:title" content="About VEWIT — AI-Powered Team Collaboration"/>
+<meta property="og:description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, tickets and analytics all in one place."/>
 <meta property="og:url" content="https://www.vewit.in/about"/>
 <meta property="og:type" content="website"/>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Organization",
-"name":"VEUIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
+"name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
 "foundingDate":"2024","applicationCategory":"BusinessApplication",
 "sameAs":["https://www.vewit.in"]}
 </script>
@@ -2404,21 +2412,21 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
 <body>
 
 <nav class="nav">
-  <a href="/" class="nav-logo">VEUIT</a>
+  <a href="/" class="nav-logo">VEWIT</a>
   <a href="/?action=login" class="nav-cta">Sign In →</a>
 </nav>
 
 <section class="hero">
   <h1>AI-Powered <span>Team Collaboration</span><br/>Built for Modern Teams</h1>
-  <p>VEUIT brings together project management, task tracking, direct messaging, support tickets, timeline planning and developer analytics — all in one unified platform.</p>
+  <p>VEWIT brings together project management, task tracking, direct messaging, support tickets, timeline planning and developer analytics — all in one unified platform.</p>
   <a href="/?action=register" class="hero-cta">Get Started Free</a>
   <a href="/?action=login" class="hero-sec">Sign In</a>
 </section>
 
 <div class="section">
-  <div class="section-label">What is VEUIT</div>
+  <div class="section-label">What is VEWIT</div>
   <h2>Everything your team needs, in one place</h2>
-  <p>VEUIT is a multi-workspace team collaboration platform powered by AI. Teams use VEUIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
+  <p>VEWIT is a multi-workspace team collaboration platform powered by AI. Teams use VEWIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
 
   <div class="features">
     <div class="feat">
@@ -2489,7 +2497,7 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
 <div class="section">
   <div class="section-label">User Roles</div>
   <h2>Role-based access for every team</h2>
-  <p>VEUIT supports five user roles with fine-grained permissions, so every team member sees exactly what they need.</p>
+  <p>VEWIT supports five user roles with fine-grained permissions, so every team member sees exactly what they need.</p>
   <div class="roles">
     <div class="role"><div class="role-icon">👑</div><h4>Admin</h4><p>Full workspace control, settings, billing and all data</p></div>
     <div class="role"><div class="role-icon">🗂️</div><h4>Manager</h4><p>Create projects, manage tasks and view all team data</p></div>
@@ -2503,9 +2511,9 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
 <div class="divider"></div>
 
 <div class="section" style="padding-bottom:0">
-  <div class="section-label">Why VEUIT</div>
+  <div class="section-label">Why VEWIT</div>
   <h2>One platform, zero context switching</h2>
-  <p>Most teams use 5–7 separate tools for project management, communication, ticketing and analytics. VEUIT replaces all of them with a single integrated platform that keeps your entire team in sync.</p>
+  <p>Most teams use 5–7 separate tools for project management, communication, ticketing and analytics. VEWIT replaces all of them with a single integrated platform that keeps your entire team in sync.</p>
   <div class="stats">
     <div class="stat"><span class="stat-num">12+</span><span class="stat-label">Integrated modules</span></div>
     <div class="stat"><span class="stat-num">6</span><span class="stat-label">User role levels</span></div>
@@ -2520,124 +2528,11 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
   <p>Create a free workspace in seconds. Invite your team, set up your first project and start shipping faster — no credit card required.</p>
   <div style="margin-top:28px;display:flex;gap:16px;flex-wrap:wrap">
     <a href="/?action=register" class="hero-cta" style="display:inline-block">Create Free Account</a>
-    <a href="/?action=login" class="hero-sec" style="display:inline-block;background:#f1f5f9;border-color:#e2e8f0;color:#475569">Sign In to VEUIT</a>
+    <a href="/?action=login" class="hero-sec" style="display:inline-block;background:#f1f5f9;border-color:#e2e8f0;color:#475569">Sign In to VEWIT</a>
   </div>
 </div>
 
-<!-- ── ABOUT VEUIT SECTION ──────────────────────────── -->
-<section id="about" style="padding:80px 24px;background:#f8fafc;border-top:1px solid #e2e8f0">
-  <div style="max-width:1100px;margin:0 auto">
-    <div style="text-align:center;margin-bottom:56px">
-      <div style="display:inline-block;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);padding:5px 16px;border-radius:100px;font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">About VEUIT</div>
-      <h2 style="font-size:clamp(26px,4vw,42px);font-weight:800;color:#0f172a;letter-spacing:-0.5px;margin-bottom:16px">Built for teams that ship fast</h2>
-      <p style="font-size:16px;color:#475569;max-width:620px;margin:0 auto;line-height:1.7">VEUIT replaces 5–7 separate tools with one unified platform. Plan projects, track tasks, communicate, manage support and measure productivity — without ever switching tabs.</p>
-    </div>
 
-    <!-- Stats row -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:20px;margin-bottom:56px">
-      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
-        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">12+</div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Integrated modules</div>
-      </div>
-      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
-        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">6</div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">User role levels</div>
-      </div>
-      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
-        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">∞</div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Projects & workspaces</div>
-      </div>
-      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
-        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">AI</div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Powered by Claude</div>
-      </div>
-      <div style="background:#0f172a;border-radius:16px;padding:28px 20px;text-align:center">
-        <div style="font-size:38px;font-weight:800;color:#60a5fa;letter-spacing:-1px">100%</div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:6px;font-weight:500">Web-based, no installs</div>
-      </div>
-    </div>
-
-    <!-- Who it's for -->
-    <h3 style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;text-align:center">Roles built into every workspace</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:14px;margin-bottom:56px">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
-        <div style="font-size:26px;margin-bottom:8px">👑</div>
-        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Admin</div>
-        <div style="font-size:11px;color:#64748b">Full workspace control, settings & all data</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
-        <div style="font-size:26px;margin-bottom:8px">🗂️</div>
-        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Manager</div>
-        <div style="font-size:11px;color:#64748b">Create projects, manage tasks, view analytics</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
-        <div style="font-size:26px;margin-bottom:8px">🏷️</div>
-        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Team Lead</div>
-        <div style="font-size:11px;color:#64748b">Lead sub-teams, assign tasks, manage members</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
-        <div style="font-size:26px;margin-bottom:8px">💻</div>
-        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Developer</div>
-        <div style="font-size:11px;color:#64748b">Work on tasks, log progress, communicate</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
-        <div style="font-size:26px;margin-bottom:8px">🔍</div>
-        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Tester</div>
-        <div style="font-size:11px;color:#64748b">Create tickets, test and verify work items</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;text-align:center">
-        <div style="font-size:26px;margin-bottom:8px">👁️</div>
-        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px">Viewer</div>
-        <div style="font-size:11px;color:#64748b">Read-only access to projects and progress</div>
-      </div>
-    </div>
-
-    <!-- Why VEUIT vs others -->
-    <h3 style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:24px;text-align:center">Why teams choose VEUIT</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:48px">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
-        <div style="font-size:20px;margin-bottom:10px">🔗</div>
-        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Zero context switching</div>
-        <div style="font-size:13px;color:#64748b;line-height:1.6">Everything from planning to delivery lives in one place. No more jumping between Jira, Slack, Confluence and spreadsheets.</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
-        <div style="font-size:20px;margin-bottom:10px">🤖</div>
-        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">AI that knows your work</div>
-        <div style="font-size:13px;color:#64748b;line-height:1.6">The built-in AI assistant understands your actual projects and tasks — not just general knowledge. Ask it anything about your workspace.</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
-        <div style="font-size:20px;margin-bottom:10px">⚡</div>
-        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Real-time everything</div>
-        <div style="font-size:13px;color:#64748b;line-height:1.6">Live presence indicators, instant DM notifications, real-time task updates and push alerts keep your team in sync without manual refreshes.</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
-        <div style="font-size:20px;margin-bottom:10px">🏢</div>
-        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Multi-workspace ready</div>
-        <div style="font-size:13px;color:#64748b;line-height:1.6">Separate workspaces for different clients or departments, each fully isolated with their own members, projects and settings.</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
-        <div style="font-size:20px;margin-bottom:10px">📱</div>
-        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Works everywhere</div>
-        <div style="font-size:13px;color:#64748b;line-height:1.6">Fully web-based with PWA support — works on desktop, tablet and mobile. Install it on your phone like a native app with no App Store needed.</div>
-      </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
-        <div style="font-size:20px;margin-bottom:10px">🔒</div>
-        <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Secure by design</div>
-        <div style="font-size:13px;color:#64748b;line-height:1.6">bcrypt password hashing, session-based auth, role-based access control and optional OTP email verification for every login.</div>
-      </div>
-    </div>
-
-    <!-- CTA -->
-    <div style="text-align:center;background:#0f172a;border-radius:20px;padding:52px 24px">
-      <h3 style="font-size:28px;font-weight:800;color:#fff;margin-bottom:12px;letter-spacing:-0.5px">Ready to bring your team together?</h3>
-      <p style="color:#94a3b8;font-size:15px;margin-bottom:28px">Create a free workspace in seconds. No credit card required.</p>
-      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
-        <a href="/?action=register" style="display:inline-block;background:#2563eb;color:#fff;padding:13px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700">Create Free Account</a>
-        <a href="/?action=login" style="display:inline-block;border:1px solid rgba(255,255,255,.2);color:#cbd5e1;padding:12px 28px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:600">Sign In</a>
-      </div>
-    </div>
-  </div>
-</section>
 
 <footer>
   <div class="footer-links">
@@ -2646,7 +2541,7 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
     <a href="/?action=login">Sign In</a>
     <a href="/?action=register">Sign Up</a>
   </div>
-  <p>© 2024 VEUIT — AI-Powered Team Collaboration Platform &nbsp;·&nbsp; <a href="https://www.vewit.in">www.vewit.in</a></p>
+  <p>© 2024 VEWIT — AI-Powered Team Collaboration Platform &nbsp;·&nbsp; <a href="https://www.vewit.in">www.vewit.in</a></p>
 </footer>
 
 </body>
@@ -2714,24 +2609,24 @@ LANDING_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VEUIT — AI-Powered Team Collaboration Platform</title>
-<meta name="description" content="VEUIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timelines and team productivity — all in one place."/>
-<meta name="keywords" content="VEUIT, team collaboration, project management, task management, AI assistant, direct messages, productivity, tickets, timeline"/>
-<meta name="author" content="VEUIT"/>
+<title>VEWIT — AI-Powered Team Collaboration Platform</title>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timelines and team productivity — all in one place."/>
+<meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, productivity, tickets, timeline"/>
+<meta name="author" content="VEWIT"/>
 <meta name="robots" content="index, follow"/>
 <meta name="theme-color" content="#0f172a"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
-<meta property="og:title" content="VEUIT — AI-Powered Team Collaboration Platform"/>
+<meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
 <meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform."/>
-<meta property="og:site_name" content="VEUIT"/>
+<meta property="og:site_name" content="VEWIT"/>
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="VEUIT — AI-Powered Team Collaboration"/>
+<meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
 <meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication",
-"name":"VEUIT","url":"https://www.vewit.in",
+"name":"VEWIT","url":"https://www.vewit.in",
 "description":"AI-powered team collaboration platform for project management, tasks, direct messaging and productivity.",
 "applicationCategory":"BusinessApplication","operatingSystem":"Web",
 "offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},
@@ -2740,10 +2635,10 @@ LANDING_HTML = """<!DOCTYPE html>
 </script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite",
-"name":"VEUIT","url":"https://www.vewit.in",
+"name":"VEWIT","url":"https://www.vewit.in",
 "potentialAction":{"@type":"SearchAction","target":"https://www.vewit.in/tasks?q={search_term_string}","query-input":"required name=search_term_string"}}
 </script>
-<meta name="description" content="VEUIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
+<meta name="description" content="VEWIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <style>
@@ -2919,13 +2814,13 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
   <div class="nav-inner">
     <a href="/" class="logo">
       <div class="logo-icon"><svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-      VEUIT
+      VEWIT
     </a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#modules">Modules</a></li>
       <li><a href="#how">How it works</a></li>
-
+      <li><a href="#about">About</a></li>
     </ul>
     <div class="nav-cta">
       <a href="/?action=login" class="btn btn-outline">Sign In</a>
@@ -2936,7 +2831,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
 
 <section class="hero">
   <div class="hero-content">
-    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEUIT — Team Collaboration Platform</div>
+    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEWIT — Team Collaboration Platform</div>
     <h1 class="a2">The workspace your<br/>team <span class="blue">actually uses.</span></h1>
     <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, Instant Meet, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
     <div class="hero-actions a4">
@@ -2961,7 +2856,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
             <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEUIT</span>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
@@ -3043,7 +2938,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
             <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEUIT</span>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
@@ -3221,6 +3116,138 @@ function showTab(t){
   </div>
 </section>
 
+<section id="about">
+  <div class="wrap">
+    <div class="centered" style="margin-bottom:52px">
+      <div class="sec-tag">About VEWIT</div>
+      <h2 class="sec-title">One platform. Every tool your team needs.</h2>
+      <p class="sec-sub">Most engineering teams lose 2–3 hours a day switching between tools. VEWIT was built to end that — a single platform where planning, execution and communication happen together.</p>
+    </div>
+
+    <!-- Origin story / mission -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:56px;align-items:center">
+      <div>
+        <div class="sec-tag" style="margin-bottom:14px">Our mission</div>
+        <h3 style="font-size:clamp(20px,2.5vw,28px);font-weight:800;color:var(--tx);margin-bottom:16px;letter-spacing:-.02em;line-height:1.3">Replace the tool chaos with clarity</h3>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">The average team uses Jira for tasks, Slack for chat, Confluence for docs, Notion for planning and spreadsheets for tracking. Each switch breaks focus and loses context.</p>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">VEWIT puts your projects, tasks, direct messages, support tickets, timeline and analytics under one roof — with an AI assistant that understands <em>your actual work</em>, not just general knowledge.</p>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75">The result: less overhead, faster delivery, and a team that stays in sync without the noise.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">12+</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Built-in modules</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">6</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Access roles</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">AI</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Claude-powered</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">PWA</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Works on mobile</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Who it's for — role cards using landing theme -->
+    <div class="sec-tag centered" style="display:block;text-align:center;margin-bottom:12px">Who uses VEWIT</div>
+    <h3 style="text-align:center;font-size:clamp(18px,2.5vw,26px);font-weight:800;color:var(--tx);margin-bottom:32px;letter-spacing:-.02em">Built for every layer of your team</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:56px">
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">👑</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Admin</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Full workspace control — SMTP, AI keys, invite codes, roles and all settings</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🗂️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Manager</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Create and manage projects, assign tasks, view team analytics and productivity</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🏷️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Team Lead</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Lead sub-teams, assign work to members, track progress and unblock delivery</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">💻</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Developer</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Own tasks, track story points, log progress, DM teammates and use the AI assistant</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🔍</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Tester</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Raise and manage tickets, link bugs to tasks, track resolution across sprints</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">👁️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Viewer</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Read-only visibility into projects, tasks and team progress — perfect for stakeholders</p>
+      </div>
+    </div>
+
+    <!-- VEWIT vs others comparison -->
+    <div class="centered" style="margin-bottom:28px">
+      <div class="sec-tag">VEWIT vs the alternatives</div>
+      <h3 style="font-size:clamp(18px,2.5vw,26px);font-weight:800;color:var(--tx);margin-top:10px;letter-spacing:-.02em">Stop paying for 5 tools when 1 does it all</h3>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:56px">
+      <table style="width:100%;border-collapse:collapse;min-width:560px;font-size:13px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--bd)">
+            <th style="padding:12px 16px;text-align:left;color:var(--tx3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Capability</th>
+            <th style="padding:12px 16px;text-align:center;color:var(--ac);font-weight:800;font-size:13px;background:var(--ac3);border-radius:8px 8px 0 0">VEWIT</th>
+            <th style="padding:12px 16px;text-align:center;color:var(--tx3);font-weight:600">Jira + Slack</th>
+            <th style="padding:12px 16px;text-align:center;color:var(--tx3);font-weight:600">Notion + Linear</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Project & task management</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅</td><td style="text-align:center;color:var(--tx3)">✅</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Direct messaging</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅ (Slack)</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">AI assistant (workspace-aware)</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td><td style="text-align:center;color:var(--tx3)">Partial</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Support ticket system</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Timeline / Gantt view</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅ (paid)</td><td style="text-align:center;color:var(--tx3)">Partial</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Developer productivity analytics</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Push notifications (desktop)</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
+          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Multi-workspace / multi-tenant</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅ (expensive)</td><td style="text-align:center;color:var(--tx3)">✅ (paid)</td></tr>
+          <tr><td style="padding:11px 16px;color:var(--tx);font-weight:700">Monthly cost</td><td style="text-align:center;background:var(--ac4);color:var(--ac);font-weight:800">Free to start</td><td style="text-align:center;color:var(--tx3)">$15–30/user</td><td style="text-align:center;color:var(--tx3)">$16–20/user</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Security & tech stack -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:8px">
+      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
+        <div class="sec-tag" style="margin-bottom:16px">Security</div>
+        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Enterprise-grade security, zero config</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> bcrypt password hashing (12 rounds)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Optional OTP email verification per login</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Role-based access control (6 levels)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Session-based auth with 7-day persistence</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Workspace isolation — data never crosses tenants</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> HTTPS enforced via Railway + Let's Encrypt</div>
+        </div>
+      </div>
+      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
+        <div class="sec-tag" style="margin-bottom:16px">Technology</div>
+        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Modern stack, no dependencies to manage</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Python Flask backend — fast and lightweight</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> PostgreSQL database via pg8000 (pure Python)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> React 18 frontend — no build step, instant load</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Anthropic Claude AI integration</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Web Push API for real-time desktop notifications</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Hosted on Railway — auto-deploy, zero downtime</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="cta-section">
   <div class="wrap">
     <div class="cta-box">
@@ -3245,15 +3272,15 @@ function showTab(t){
   <div class="wrap">
     <div class="footer-top">
       <div class="footer-brand">
-        <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>VEUIT</a>
+        <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>VEWIT</a>
         <p>The all-in-one project management platform for engineering teams. AI-powered, multi-tenant, fully featured.</p>
       </div>
-      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#about">About VEUIT</a></li><li><a href="#how">How it works</a></li></ul></div>
+      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#about">About VEWIT</a></li><li><a href="#how">How it works</a></li></ul></div>
       <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li></ul></div>
       <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-copy">© 2025 VEUIT — AI-Powered Team Collaboration · <a href="/about" style="color:inherit;opacity:.7">About</a></div>
+      <div class="footer-copy">© 2025 VEWIT — AI-Powered Team Collaboration · <a href="/about" style="color:inherit;opacity:.7">About</a></div>
       <div class="footer-badges"><div class="fb">v4.0</div><div class="fb">PostgreSQL</div><div class="fb">AI-Powered</div><div class="fb">bcrypt</div></div>
     </div>
   </div>
@@ -3283,15 +3310,15 @@ window.addEventListener('scroll',()=>{
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>VEUIT — Sign In</title>
-<meta name="description" content="Sign in to VEUIT — AI-powered team collaboration platform."/>
+<title>VEWIT — Sign In</title>
+<meta name="description" content="Sign in to VEWIT — AI-powered team collaboration platform."/>
 <meta name="robots" content="noindex"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#1d4ed8"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="VEUIT"/>
+<meta name="apple-mobile-web-app-title" content="VEWIT"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Ccircle cx='16' cy='16' r='4' fill='white'/%3E%3Ccircle cx='16' cy='7' r='3' fill='white' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='white' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='white' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
 <script>
@@ -4016,7 +4043,7 @@ function AuthScreen({onLogin}){
         <div style=${{width:32,height:32,borderRadius:9,background:'white',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(59,130,246,0.2)'}}>
           <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#1d4ed8"/><circle cx="32" cy="11" r="6" fill="#1d4ed8"/><circle cx="51" cy="43" r="6" fill="#1d4ed8"/><circle cx="13" cy="43" r="6" fill="#1d4ed8"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>VEUIT</span>
+        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>VEWIT</span>
       </div>
 
             <div style=${{
@@ -4099,14 +4126,14 @@ function AuthScreen({onLogin}){
           <div style=${{width:28,height:28,borderRadius:7,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
             <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>VEUIT</span>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>VEWIT</span>
         </div>
 
                 <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.2vw,1.85rem)',fontWeight:800,color:'#0f172a',marginBottom:6,letterSpacing:-.03,lineHeight:1.15}}>
           ${tab==='login'?'Welcome back':'Create account'}
         </h1>
         <p style=${{fontSize:13.5,color:'#64748b',marginBottom:24,lineHeight:1.6}}>
-          ${tab==='login'?'Sign in to your VEUIT workspace':'Set up your workspace and start shipping'}
+          ${tab==='login'?'Sign in to your VEWIT workspace':'Set up your workspace and start shipping'}
         </p>
 
                 <div style=${{display:'flex',background:'#f1f5f9',borderRadius:11,padding:3,marginBottom:22}}>
@@ -4177,7 +4204,7 @@ function AuthScreen({onLogin}){
 
         <p style=${{fontSize:12.5,color:'#94a3b8',marginTop:18,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to VEUIT? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            ?html`New to VEWIT? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
             :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');try{history.replaceState(null,'','/?action=login');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
       `)}
@@ -4477,7 +4504,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
           <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity=".9"/><circle cx="51" cy="43" r="6" fill="white" opacity=".9"/><circle cx="13" cy="43" r="6" fill="white" opacity=".9"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
         </div>
         ${!col?html`<div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:12,fontWeight:700,color:'#ffffff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'VEUIT'}</div>
+          <div style=${{fontSize:12,fontWeight:700,color:'#ffffff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'VEWIT'}</div>
           ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4}}>
             ${!isAdminManager?html`<span style=${{color:'rgba(255,255,255,.3)',fontWeight:400}}>My Team</span>`:null}
             ${activeTeam.name}
@@ -7975,7 +8002,7 @@ function updateBadge(count){
       }
       const links=document.querySelectorAll("link[rel*='icon']");
       links.forEach(l=>{l.href=canvas.toDataURL();});
-      document.title=count>0?'('+count+') VEUIT':'VEUIT';
+      document.title=count>0?'('+count+') VEWIT':'VEWIT';
     };
     img.src=NOTIF_ICON;
   }catch(e){}
@@ -7987,7 +8014,7 @@ async function requestNotifPermission(){
       const {isPermissionGranted,requestPermission,sendNotification}=window.__TAURI__.notification;
       let ok=await isPermissionGranted();
       if(!ok){const p=await requestPermission();ok=(p==='granted');}
-      if(ok)await sendNotification({title:'VEUIT',body:'Notifications enabled.'});
+      if(ok)await sendNotification({title:'VEWIT',body:'Notifications enabled.'});
       return;
     }catch(e){}
   }
@@ -8011,7 +8038,7 @@ async function requestNotifPermission(){
           }
         }catch(e){}
       }
-      new Notification('VEUIT',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
+      new Notification('VEWIT',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
     }
   }
 }
@@ -8525,8 +8552,8 @@ function App(){
     try{
       const p=window.location.pathname.replace(/^\//, '').split('/')[0].trim();
       const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity'};
-      if(p&&VIEW_T[p]) document.title='VEUIT — '+VIEW_T[p]+' | AI-Powered Team Collaboration';
-      else document.title='VEUIT — AI-Powered Team Collaboration Platform';
+      if(p&&VIEW_T[p]) document.title='VEWIT — '+VIEW_T[p]+' | AI-Powered Team Collaboration';
+      else document.title='VEWIT — AI-Powered Team Collaboration Platform';
     }catch(e){}
   },[]);
   const [view,setView]=useState(()=>{
@@ -8551,7 +8578,7 @@ function App(){
       const base=v.split(':')[0];
       if(VALID_VIEWS.includes(base)){
         history.pushState(null,'','/'+base);
-        document.title='VEUIT — '+(VIEW_TITLES[base]||base)+' | AI-Powered Team Collaboration';
+        document.title='VEWIT — '+(VIEW_TITLES[base]||base)+' | AI-Powered Team Collaboration';
       }
     }catch(e){}
   },[]);
@@ -8789,7 +8816,7 @@ function App(){
         brandNew.forEach(n=>{
           if(n.type==='dm')return; // DMs handled by separate poll
           if(n.type==='call') return;
-          const title=NTITLES[n.type]||'VEUIT';
+          const title=NTITLES[n.type]||'VEWIT';
           const nav=NNAV[n.type]||'notifs';
           addToast(n.type,title,n.content||'');
           showBrowserNotif(title,n.content||'',()=>{
@@ -8931,7 +8958,7 @@ function App(){
       <div style=${{width:72,height:72,background:'#2563eb',borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(37,99,235,0.3)',animation:'sp .9s linear infinite'}}>
         <svg width="38" height="38" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
       </div>
-      <p style=${{color:'#475569',fontSize:13,marginTop:16,fontFamily:"'DM Sans',sans-serif",letterSpacing:'.3px',fontWeight:500}}>Loading VEUIT...</p>
+      <p style=${{color:'#475569',fontSize:13,marginTop:16,fontFamily:"'DM Sans',sans-serif",letterSpacing:'.3px',fontWeight:500}}>Loading VEWIT...</p>
       <div style=${{marginTop:10,width:110,height:3,background:'#e2e8f0',borderRadius:100,overflow:'hidden'}}>
         <div style=${{height:'100%',background:'#2563eb',borderRadius:100,animation:'loadBar 1.4s ease-in-out infinite'}}></div>
       </div>
@@ -9213,7 +9240,7 @@ def open_browser(port):
     webbrowser.open(f"http://localhost:{port}")
 
 if __name__=="__main__":
-    print("\n⚡ VEUIT v4.0 — Multi-Tenant | AI | Workspaces")
+    print("\n⚡ VEWIT v4.0 — Multi-Tenant | AI | Workspaces")
     print("="*54)
     print("  Initializing database...")
     init_db()
