@@ -827,26 +827,24 @@ def meet_notify():
     """Send a Google Meet call notification to a specific user."""
     d = request.json or {}
     target_id = d.get("target_id")
-    meet_url = d.get("meet_url", "https://meet.new")
+    room_name = d.get("room_name", "")
+    caller_name_override = d.get("caller_name", "")
     if not target_id:
         return jsonify({"error": "target_id required"}), 400
     with get_db() as db:
         caller = db.execute("SELECT name FROM users WHERE id=?", (session["user_id"],)).fetchone()
-        cname = caller["name"] if caller else "Someone"
+        cname = caller_name_override or (caller["name"] if caller else "Someone")
         nid = f"n{int(datetime.now().timestamp()*1000)}"
+        msg = f"📹 {cname} is calling you — click to join the meeting"
         try:
             db.execute(
                 "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
-                (nid, wid(), "call",
-                 f"📹 {cname} is calling you on Google Meet — click to join",
-                 target_id, 0, ts(), session["user_id"]))
+                (nid, wid(), "call", msg, target_id, 0, ts(), session["user_id"]))
         except:
             db.execute(
                 "INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                (nid, wid(), "call",
-                 f"📹 {cname} is calling you on Google Meet — click to join",
-                 target_id, 0, ts()))
-        return jsonify({"ok": True, "caller": cname})
+                (nid, wid(), "call", msg, target_id, 0, ts()))
+        return jsonify({"ok": True, "caller": cname, "room": room_name})
 
 @app.route("/api/auth/me")
 def me():
@@ -6631,16 +6629,15 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
         ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(toUser.id)?1:.4}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
           <button title=${'Start Google Meet with '+toUser.name+' (opens in new tab)'}
             onClick=${async ()=>{
-              // 1. Open Google Meet immediately for the caller
-              window.open('https://meet.new','_blank','noopener,noreferrer');
-              // 2. Show confirmation toast to caller
-              window._pfToast&&window._pfToast('ok','📹 Google Meet started','Share the link from your browser with '+toUser.name);
-              // 3. Send notification to the recipient
+              // Start embedded Jitsi call
+              onStartHuddle&&onStartHuddle(toUser);
+              // Notify recipient
               try{
-                await api.post('/api/meet/notify',{target_id:toId,meet_url:'https://meet.new'});
+                const room='pfp-'+[cu.id,toUser.id].sort().join('-').replace(/[^a-z0-9]/gi,'-').toLowerCase().slice(0,44);
+                await api.post('/api/meet/notify',{target_id:toId,room_name:room,caller_name:cu.name});
               }catch(e){}
             }}
-            style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid rgba(26,115,232,.4)',background:'rgba(26,115,232,.08)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#1a73e8',transition:'all .15s',flexShrink:0}}>
+            style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid rgba(34,197,94,.35)',background:'rgba(34,197,94,.08)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#22c55e',transition:'all .15s',flexShrink:0}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
             </svg>
@@ -8197,91 +8194,113 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-/* ─── GoogleMeetLauncher ────────────────────────────────────────────────── */
+/* ─── JitsiMeet — Embedded in-app video call ──────────────────────────── */
 function HuddleCall({cu,users,onStateChange,cmdRef}){
-  const [meetUrl,setMeetUrl]=useState(null);
-  const [showDialog,setShowDialog]=useState(false);
-  const [roomName,setRoomName]=useState('');
+  const [jitsiRoom,setJitsiRoom]=useState(null); // room name string
+  const [jitsiUser,setJitsiUser]=useState(null); // other user object
+  const [minimized,setMinimized]=useState(false);
+  const iframeRef=useRef(null);
 
-  const genMeetUrl=()=>{
-    // meet.new always creates a fresh, valid Google Meet room
-    // Room codes can only be generated by Google's servers — not client-side
-    return 'https://meet.new';
+  // Generate a stable room name from two user IDs (same for both sides)
+  const roomFor=(uid1,uid2)=>{
+    const sorted=[uid1,uid2].sort().join('-');
+    // Sanitize: only lowercase letters/numbers/hyphens, max 50 chars
+    return 'pfp-'+sorted.replace(/[^a-z0-9]/gi,'-').toLowerCase().slice(0,44);
   };
 
   useEffect(()=>{
-    if(cmdRef)cmdRef.current={
+    if(!cmdRef)return;
+    cmdRef.current={
       openHuddle:(user)=>{
-        // Directly open Google Meet — no popup needed
-        window.open('https://meet.new','_blank','noopener,noreferrer');
+        if(!user||!cu)return;
+        const room=roomFor(cu.id,user.id);
+        setJitsiUser(user);
+        setJitsiRoom(room);
+        setMinimized(false);
+        onStateChange&&onStateChange({status:'in-call'});
       },
-      start:()=>{
-        window.open('https://meet.new','_blank','noopener,noreferrer');
+      start:(name)=>{
+        // Start a general room (from sidebar)
+        const room='pfp-general-'+Date.now();
+        setJitsiUser(null);
+        setJitsiRoom(room);
+        setMinimized(false);
+        onStateChange&&onStateChange({status:'in-call'});
       },
-      leave:()=>{},
+      leave:()=>{
+        setJitsiRoom(null);setJitsiUser(null);setMinimized(false);
+        onStateChange&&onStateChange({status:'idle'});
+      },
+      show:()=>setMinimized(false),
     };
-  },[]);
+  },[cu]);
 
-  return null; // No in-app dialog — meet.new opens directly in new tab
-  if(false)return html`
-    <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:9900,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}}
-      onClick=${e=>{if(e.target===e.currentTarget){setShowDialog(false);setMeetUrl(null);}}}>
-      <div style=${{width:'min(440px,92vw)',background:'var(--sf)',borderRadius:18,boxShadow:'0 24px 80px rgba(0,0,0,.4)',border:'1px solid var(--bd)',overflow:'hidden'}}>
-        <!-- Header -->
-        <div style=${{background:'linear-gradient(135deg,#1a73e8,#0d47a1)',padding:'20px 22px 18px',position:'relative'}}>
-          <button onClick=${()=>{setShowDialog(false);setMeetUrl(null);}}
-            style=${{position:'absolute',top:12,right:12,width:28,height:28,borderRadius:7,background:'rgba(255,255,255,.15)',border:'none',cursor:'pointer',color:'#fff',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
-          <div style=${{display:'flex',alignItems:'center',gap:10}}>
-            <div style=${{width:40,height:40,borderRadius:12,background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="white" strokeWidth="2" strokeLinecap="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="white" strokeWidth="2"/></svg>
-            </div>
-            <div>
-              <div style=${{color:'#fff',fontWeight:700,fontSize:16}}>${roomName}</div>
-              <div style=${{color:'rgba(255,255,255,.7)',fontSize:12}}>Google Meet · Instant Room</div>
-            </div>
-          </div>
-        </div>
-        <!-- Body -->
-        <div style=${{padding:'20px 22px'}}>
-          <div style=${{fontSize:12,color:'var(--tx3)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:.5}}>Your meeting link</div>
-          <div style=${{display:'flex',gap:8,marginBottom:16}}>
-            <div style=${{flex:1,padding:'10px 12px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,fontSize:12,fontFamily:'monospace',color:'var(--ac)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-              https://meet.new → opens a fresh Google Meet room
-            </div>
-            <button onClick=${()=>{navigator.clipboard.writeText(meetUrl).then(()=>window._pfToast&&window._pfToast('ok','✓ Copied','Link copied to clipboard'));}}
-              style=${{padding:'10px 14px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,cursor:'pointer',color:'var(--tx2)',fontSize:12,fontWeight:600,flexShrink:0,transition:'all .15s'}}
-              onMouseEnter=${e=>{e.currentTarget.style.background='var(--ac3)';e.currentTarget.style.color='var(--ac)';}}
-              onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.color='var(--tx2)';}}>
-              Copy
-            </button>
-          </div>
-          <div style=${{display:'flex',gap:10}}>
-            <button onClick=${()=>{setShowDialog(false);setMeetUrl(null);}}
-              style=${{flex:1,height:42,borderRadius:11,background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)',cursor:'pointer',fontWeight:600,fontSize:14,transition:'all .15s'}}
-              onMouseEnter=${e=>e.currentTarget.style.background='var(--bd)'}
-              onMouseLeave=${e=>e.currentTarget.style.background='var(--sf2)'}>
-              Cancel
-            </button>
-            <a href=${meetUrl} target="_blank" rel="noopener"
-              onClick=${()=>{setShowDialog(false);}}
-              style=${{flex:2,height:42,borderRadius:11,background:'linear-gradient(135deg,#1a73e8,#1557b0)',border:'none',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8,textDecoration:'none',boxShadow:'0 4px 16px rgba(26,115,232,.4)',transition:'all .15s'}}
-              onMouseEnter=${e=>e.currentTarget.style.transform='translateY(-1px)'}
-              onMouseLeave=${e=>e.currentTarget.style.transform='none'}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="white" strokeWidth="2" strokeLinecap="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="white" strokeWidth="2"/></svg>
-              Open in Google Meet
-            </a>
-          </div>
-          <div style=${{marginTop:12,padding:'10px 12px',background:'rgba(26,115,232,.07)',borderRadius:9,border:'1px solid rgba(26,115,232,.15)',fontSize:11,color:'var(--tx3)',lineHeight:1.6}}>
-            Clicking <b>Open in Google Meet</b> creates a new room. 
-            Share the Google Meet link from your browser with teammates so they can join the same room.
-          </div>
-        </div>
+  if(!jitsiRoom)return null;
+
+  // Build Jitsi iframe URL with config options
+  const displayName=encodeURIComponent((cu&&cu.name)||'User');
+  const jitsiUrl=`https://meet.jit.si/${jitsiRoom}#userInfo.displayName="${displayName}"&config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&config.toolbarButtons=["microphone","camera","desktop","hangup","chat","tileview","participants-pane"]&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.APP_NAME=ProjectFlowPro`;
+
+  return html`
+    <div style=${{
+      position:'fixed',
+      bottom:minimized?16:0, right:minimized?16:0,
+      width:minimized?'260px':'100vw',
+      height:minimized?'52px':'100vh',
+      zIndex:9800,
+      borderRadius:minimized?14:0,
+      overflow:'hidden',
+      boxShadow:minimized?'0 8px 32px rgba(0,0,0,.5)':'none',
+      transition:'all .3s cubic-bezier(.4,0,.2,1)',
+      display:'flex',flexDirection:'column',
+      background:'#1a1a2e',
+    }}>
+      <!-- Top bar -->
+      <div style=${{
+        display:'flex',alignItems:'center',gap:10,
+        padding:'0 14px',
+        height:52,flexShrink:0,
+        background:'rgba(0,0,0,.6)',
+        backdropFilter:'blur(12px)',
+        borderBottom:minimized?'none':'1px solid rgba(255,255,255,.08)',
+        cursor:minimized?'pointer':'default',
+      }} onClick=${minimized?()=>setMinimized(false):null}>
+        <!-- Live dot -->
+        <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',flexShrink:0,boxShadow:'0 0 8px #22c55e',animation:'pulse 1.5s infinite'}}></div>
+        <!-- Icon -->
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}>
+          <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14"/>
+          <rect x="3" y="6" width="12" height="12" rx="2"/>
+        </svg>
+        <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          ${jitsiUser?'Meet · '+jitsiUser.name:'Instant Meet'}
+        </span>
+        ${minimized?html`<span style=${{fontSize:10,color:'#22c55e',fontFamily:'monospace',fontWeight:700,background:'rgba(34,197,94,.12)',padding:'2px 8px',borderRadius:100,border:'1px solid rgba(34,197,94,.3)'}}>LIVE</span>`:null}
+        <!-- Minimize/expand -->
+        <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}}
+          style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',color:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:14,transition:'all .15s'}}
+          title=${minimized?'Expand':'Minimise'}>
+          ${minimized?'⛶':'—'}
+        </button>
+        <!-- Leave -->
+        ${!minimized?html`
+          <button onClick=${()=>{setJitsiRoom(null);setJitsiUser(null);onStateChange&&onStateChange({status:'idle'});}}
+            style=${{height:30,padding:'0 14px',borderRadius:8,background:'rgba(239,68,68,.2)',border:'1px solid rgba(239,68,68,.4)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:12,flexShrink:0,transition:'all .15s'}}>
+            Leave
+          </button>`:null}
       </div>
+      <!-- Jitsi iframe -->
+      ${!minimized?html`
+        <iframe
+          ref=${iframeRef}
+          src=${jitsiUrl}
+          allow="camera; microphone; fullscreen; display-capture; autoplay"
+          style=${{flex:1,border:'none',width:'100%'}}
+        ></iframe>`:null}
     </div>`;
 }
 
 
-/* ─── App ─────────────────────────────────────────────────────────────────── */
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
@@ -8508,14 +8527,18 @@ function App(){
         brandNew.forEach(n=>{
           if(n.type==='dm')return; // DMs handled by separate poll
           if(n.type==='call'){
-            // Show a prominent call notification
-            const callerName=n.content.replace('📹 ','').split(' is calling')[0]||'Someone';
-            addToast('call','📹 Incoming Google Meet',n.content||'');
-            showBrowserNotif('📹 Google Meet Call',n.content||'',()=>{
-              if(n.sender_id||n.sender){
-                window._pfSetDmTarget&&window._pfSetDmTarget(n.sender_id||n.sender);
+            addToast('call','📹 Incoming Call',n.content||'');
+            showBrowserNotif('📹 Incoming Call',n.content||'',()=>{
+              const senderId=n.sender_id||n.sender;
+              if(senderId){
+                const callerUser=data.users.find(u=>u.id===senderId);
+                if(callerUser&&huddleCmdRef.current&&huddleCmdRef.current.openHuddle){
+                  huddleCmdRef.current.openHuddle(callerUser);
+                  return;
+                }
+                window._pfSetDmTarget&&window._pfSetDmTarget(senderId);
+                setView('dm');
               }
-              setView('dm');
             },{tag:'call-'+n.id,requireInteraction:true});
             playSound('call');
             return;
@@ -8724,10 +8747,22 @@ function App(){
             setData(prev=>({...prev,notifs:prev.notifs.filter(x=>x.id!==n.id)}));
             const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dm',message:'messages'};
             const dest=nav[n.type]||'notifs';
-            // DM + Call: use sender_id to open that person's chat thread
-            if(n.type==='dm'||n.type==='call'||n.type==='message'){
+            // DM: open sender's chat thread
+            if(n.type==='dm'||n.type==='message'){
               const senderId=n.sender_id||n.sender||null;
               if(senderId)setDmTargetUser(senderId);
+            }
+            // Call: open Jitsi with the caller directly
+            if(n.type==='call'){
+              const senderId=n.sender_id||n.sender||null;
+              if(senderId){
+                const callerUser=data.users.find(u=>u.id===senderId);
+                if(callerUser&&huddleCmdRef.current.openHuddle){
+                  huddleCmdRef.current.openHuddle(callerUser);
+                  return; // don't navigate — Jitsi opens fullscreen
+                }
+                setDmTargetUser(senderId); // fallback: open DM
+              }
             }
             setView(dest);
           }}
