@@ -4144,23 +4144,18 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
             }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
           </button>`)}
         ${!col&&(wsDmEnabled||(cu&&(cu.role==='Admin'||cu.role==='Manager')))&&users&&users.length>0?html`
-          <div style=${{padding:'2px 4px 4px 10px',display:'flex',flexDirection:'column',gap:1}}>
-            ${safe(users).filter(u=>u.id!==cu?.id).slice(0,8).map(u=>{
+          <div style=${{padding:'4px 8px 6px 12px',display:'flex',flexWrap:'wrap',gap:6}}>
+            ${safe(users).filter(u=>u.id!==cu?.id).slice(0,10).map(u=>{
               const isOnline=onlineUsers.has(u.id);
-              const firstName=(u.name||'').split(' ')[0];
               const unreadCnt=(dmUnread.find(x=>x.user_id===u.id||x.sender===u.id)||{}).cnt||0;
               return html`
-              <button key=${u.id} onClick=${()=>setView('dm:'+u.id)} title=${u.name}
-                style=${{display:'flex',alignItems:'center',gap:7,width:'100%',padding:'4px 6px',borderRadius:7,border:'none',cursor:'pointer',background:'transparent',transition:'background .1s'}}
-                onMouseEnter=${e=>e.currentTarget.style.background='rgba(37,99,235,0.12)'}
-                onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
-                <div style=${{position:'relative',flexShrink:0}}>
-                  <div style=${{width:22,height:22,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||firstName||'?')[0]}</div>
-                  <div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',background:isOnline?'#22c55e':'#475569',border:'1.5px solid #0f172a',boxShadow:isOnline?'0 0 5px rgba(34,197,94,.8)':'none',transition:'background .3s,box-shadow .3s'}}></div>
-                </div>
-                <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.92)':'rgba(148,163,184,0.45)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${firstName}</span>
-                ${unreadCnt>0?html`<span style=${{minWidth:15,height:15,borderRadius:8,background:'var(--cy)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',flexShrink:0}}>${unreadCnt}</span>`:null}
-              </button>`;
+              <div key=${u.id} style=${{position:'relative',cursor:'pointer'}}
+                onClick=${()=>setView('dm:'+u.id)}
+                title=${u.name+(isOnline?' · Online':' · Offline')}>
+                <div style=${{width:28,height:28,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'#fff',border:isOnline?'2px solid #22c55e':'2px solid transparent',transition:'border .3s',boxShadow:isOnline?'0 0 6px rgba(34,197,94,.5)':'none'}}>${(u.avatar||u.name||'?')[0]}</div>
+                <div style=${{position:'absolute',bottom:0,right:0,width:8,height:8,borderRadius:'50%',background:isOnline?'#22c55e':'#475569',border:'1.5px solid #0f172a',boxShadow:isOnline?'0 0 4px rgba(34,197,94,.8)':'none'}}></div>
+                ${unreadCnt>0?html`<div style=${{position:'absolute',top:-4,right:-4,minWidth:14,height:14,borderRadius:7,background:'var(--cy)',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px'}}>${unreadCnt}</div>`:null}
+              </div>`;
             })}
           </div>`:null}
       </nav>
