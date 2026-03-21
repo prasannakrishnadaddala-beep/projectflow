@@ -4388,6 +4388,10 @@ function FileAttachments({taskId,projectId,readOnly}){
 }
 
 /* ─── TaskModal ───────────────────────────────────────────────────────────── */
+const TYPE_COLORS={task:'#1d4ed8',story:'#15803d',bug:'#b91c1c',epic:'#6d28d9',spike:'#b45309'};
+const TYPE_BG={task:'rgba(29,78,216,0.10)',story:'rgba(21,128,61,0.10)',bug:'rgba(185,28,28,0.10)',epic:'rgba(109,40,217,0.10)',spike:'rgba(180,83,9,0.10)'};
+const TYPE_BORDER={task:'rgba(29,78,216,0.2)',story:'rgba(21,128,61,0.2)',bug:'rgba(185,28,28,0.2)',epic:'rgba(109,40,217,0.2)',spike:'rgba(180,83,9,0.2)'};
+
 function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSetReminder,teams,activeTeam}){
   const [title,setTitle]=useState((task&&task.title)||'');
   const [desc,setDesc]=useState((task&&task.description)||'');
@@ -4427,9 +4431,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [taskLabels,setTaskLabels]=useState(()=>{const r=task&&task.labels;if(!r)return[];if(Array.isArray(r))return r;try{return JSON.parse(r)||[];}catch{return [];}});
   const [newLabel,setNewLabel]=useState('');
   const TASK_TYPES=['task','story','bug','epic','spike'];
-  const TYPE_COLORS={task:'#1d4ed8',story:'#15803d',bug:'#b91c1c',epic:'#6d28d9',spike:'#b45309'};
-  const TYPE_BG={task:'rgba(29,78,216,0.10)',story:'rgba(21,128,61,0.10)',bug:'rgba(185,28,28,0.10)',epic:'rgba(109,40,217,0.10)',spike:'rgba(180,83,9,0.10)'};
-  const TYPE_BORDER={task:'rgba(29,78,216,0.2)',story:'rgba(21,128,61,0.2)',bug:'rgba(185,28,28,0.2)',epic:'rgba(109,40,217,0.2)',spike:'rgba(180,83,9,0.2)'};
 
   useEffect(()=>{
     if(isEdit&&tab==='subtasks'){
@@ -4504,13 +4505,28 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
       <div class="mo fi">
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
           <div>
-            <div style=${{display:'flex',alignItems:'center',gap:8}}>
-              ${isEdit&&taskType&&taskType!=='task'?html`
-                <span style=${{fontSize:10,fontWeight:800,padding:'3px 8px',borderRadius:5,textTransform:'uppercase',
-                  background:({'story':'rgba(21,128,61,0.12)','bug':'rgba(185,28,28,0.10)','epic':'rgba(109,40,217,0.12)','spike':'rgba(180,83,9,0.10)'})[taskType]||'var(--ac3)',
-                  color:({'story':'var(--gn)','bug':'var(--rd)','epic':'var(--pu)','spike':'var(--am)'})[taskType]||'var(--ac)'
-                }}>${taskType.toUpperCase()}</span>`:null}
-              <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',margin:0}}>${isEdit?(canEditTask?('Edit '+(taskType&&taskType!=='task'?taskType.charAt(0).toUpperCase()+taskType.slice(1):'Task')):canUpdateStage?'Update Stage':'View Task'):('New '+(taskType&&taskType!=='task'?taskType.charAt(0).toUpperCase()+taskType.slice(1):'Task'))}</h2>
+            <div style=${{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+              <!-- Type badge pill -->
+              <span style=${{
+                fontSize:10,fontWeight:800,padding:'3px 9px',borderRadius:5,textTransform:'uppercase',
+                background:TYPE_BG[taskType||'task'],
+                color:TYPE_COLORS[taskType||'task'],
+                border:'1px solid '+TYPE_BORDER[taskType||'task'],
+                display:'flex',alignItems:'center',gap:4
+              }}>
+                <span style=${{width:7,height:7,borderRadius:1,display:'inline-block',background:TYPE_COLORS[taskType||'task']}}></span>
+                ${taskType||'task'}
+              </span>
+              <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',margin:0}}>
+                ${isEdit
+                  ? (tab==='subtasks'
+                      ? 'Subtasks'
+                      : canEditTask
+                        ? 'Edit '+(taskType&&taskType!=='task'?taskType.charAt(0).toUpperCase()+taskType.slice(1):'Task')
+                        : canUpdateStage?'Update Stage':'View Task')
+                  : 'New '+(taskType&&taskType!=='task'?taskType.charAt(0).toUpperCase()+taskType.slice(1):'Task')}
+              </h2>
+              ${tab==='subtasks'?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:400}}>${title}</span>`:null}
             </div>
             ${isEdit?html`<span class="id-badge id-task">${task.id}</span>`:null}
             ${isEdit&&!canEditTask&&canUpdateStage?html`<div style=${{fontSize:11,color:'var(--am)',marginTop:3}}>You can update stage & progress as the assignee.</div>`:null}
