@@ -3298,6 +3298,11 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .tx3-11{font-size:11px;color:var(--tx3)}
 .tx3-10{font-size:10px;color:var(--tx3)}
 .mono-10{font-size:10px;color:var(--tx3);font-family:monospace}
+.id-badge{display:inline-flex;align-items:center;font-size:10px;font-family:'JetBrains Mono',monospace,sans-serif;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.02em;white-space:nowrap;flex-shrink:0}
+.id-task{background:rgba(29,78,216,0.10);color:#1d4ed8;border:1px solid rgba(29,78,216,0.2)}
+.id-ticket{background:rgba(194,65,12,0.10);color:#c2410c;border:1px solid rgba(194,65,12,0.2)}
+.id-subtask{background:rgba(71,85,105,0.10);color:#475569;border:1px solid rgba(71,85,105,0.2)}
+.id-epic{background:rgba(109,40,217,0.10);color:#6d28d9;border:1px solid rgba(109,40,217,0.2)}
 .f1-mw0{flex:1;min-width:0}
 .jc-sb{display:flex;justify-content:space-between}
 .fc-g8{display:flex;flex-direction:column;gap:8px}
@@ -4422,6 +4427,9 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [taskLabels,setTaskLabels]=useState(()=>{const r=task&&task.labels;if(!r)return[];if(Array.isArray(r))return r;try{return JSON.parse(r)||[];}catch{return [];}});
   const [newLabel,setNewLabel]=useState('');
   const TASK_TYPES=['task','story','bug','epic','spike'];
+  const TYPE_COLORS={task:'#1d4ed8',story:'#15803d',bug:'#b91c1c',epic:'#6d28d9',spike:'#b45309'};
+  const TYPE_BG={task:'rgba(29,78,216,0.10)',story:'rgba(21,128,61,0.10)',bug:'rgba(185,28,28,0.10)',epic:'rgba(109,40,217,0.10)',spike:'rgba(180,83,9,0.10)'};
+  const TYPE_BORDER={task:'rgba(29,78,216,0.2)',story:'rgba(21,128,61,0.2)',bug:'rgba(185,28,28,0.2)',epic:'rgba(109,40,217,0.2)',spike:'rgba(180,83,9,0.2)'};
   const TYPE_COLORS={task:'var(--ac)',story:'var(--gn)',bug:'var(--rd)',epic:'var(--pu)',spike:'var(--am)'};
 
   useEffect(()=>{
@@ -4497,8 +4505,15 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
       <div class="mo fi">
         <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
           <div>
-            <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>${isEdit?(canEditTask?'Edit Task':canUpdateStage?'Update Stage':'View Task'):'New Task'}</h2>
-            ${isEdit?html`<span class="mono-10">${task.id}</span>`:null}
+            <div style=${{display:'flex',alignItems:'center',gap:8}}>
+              ${isEdit&&taskType&&taskType!=='task'?html`
+                <span style=${{fontSize:10,fontWeight:800,padding:'3px 8px',borderRadius:5,textTransform:'uppercase',
+                  background:({'story':'rgba(21,128,61,0.12)','bug':'rgba(185,28,28,0.10)','epic':'rgba(109,40,217,0.12)','spike':'rgba(180,83,9,0.10)'})[taskType]||'var(--ac3)',
+                  color:({'story':'var(--gn)','bug':'var(--rd)','epic':'var(--pu)','spike':'var(--am)'})[taskType]||'var(--ac)'
+                }}>${taskType.toUpperCase()}</span>`:null}
+              <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',margin:0}}>${isEdit?(canEditTask?('Edit '+(taskType&&taskType!=='task'?taskType.charAt(0).toUpperCase()+taskType.slice(1):'Task')):canUpdateStage?'Update Stage':'View Task'):('New '+(taskType&&taskType!=='task'?taskType.charAt(0).toUpperCase()+taskType.slice(1):'Task'))}</h2>
+            </div>
+            ${isEdit?html`<span class="id-badge id-task">${task.id}</span>`:null}
             ${isEdit&&!canEditTask&&canUpdateStage?html`<div style=${{fontSize:11,color:'var(--am)',marginTop:3}}>You can update stage & progress as the assignee.</div>`:null}
             ${isEdit&&!canEditTask&&!canUpdateStage?html`<div style=${{fontSize:11,color:'var(--tx3)',marginTop:3}}>Read-only — you are not assigned to this task.</div>`:null}
           </div>
@@ -4512,7 +4527,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
           <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:14,width:'fit-content',flexWrap:'wrap'}}>
             ${['details','subtasks','comments','files'].map(t=>html`
               <button key=${t} class=${'tb'+(tab===t?' act':'')} onClick=${()=>setTab(t)} style=${{fontSize:11}}>
-                ${t==='details'?'Details':t==='subtasks'?html`Subtasks ${subtasks.length>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9,marginLeft:2}}>${subtasks.length}</span>`:null}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
+                ${t==='details'?'Details':t==='subtasks'?html`Subtasks${subtasks.length>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${subtasks.filter(s=>s.done).length}/${subtasks.length}</span>`:''}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
               </button>`)}
           </div>`:null}
 
@@ -4709,6 +4724,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                     <div key=${st.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',transition:'all .15s'}}>
                       <input type="checkbox" checked=${!!st.done} onChange=${()=>toggleSubtask(st)}
                         style=${{width:15,height:15,accentColor:'var(--ac)',cursor:'pointer',flexShrink:0}}/>
+                      <span class="id-badge id-subtask" style=${{fontSize:9}}>${st.id.slice(0,8)}</span>
                       <span style=${{flex:1,fontSize:13,color:'var(--tx)',textDecoration:st.done?'line-through':'none',opacity:st.done?.55:1}}>${st.title}</span>
                       ${st.done?html`<span style=${{fontSize:10,color:'var(--gn)',fontWeight:600}}>Done</span>`:null}
                       <button onClick=${()=>delSubtask(st.id)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--rd2)',fontSize:14,lineHeight:1,padding:'0 2px',opacity:.6}}
@@ -4857,7 +4873,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
                   const au=safe(allUsers).find(u=>u.id===tk.assignee);
                   return html`<div key=${tk.id} class="tkc" style=${{marginBottom:7,display:'flex',gap:10,alignItems:'center'}} onClick=${()=>setEditTask(tk)}>
                     <div style=${{flex:1,minWidth:0}}>
-                      <div style=${{display:'flex',gap:7,alignItems:'center',marginBottom:4}}><span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.id}</span><${PB} p=${tk.priority}/></div>
+                      <div style=${{display:'flex',gap:7,alignItems:'center',marginBottom:4}}><span class="id-badge id-task">${tk.id}</span><${PB} p=${tk.priority}/></div>
                       <div style=${{fontSize:13,fontWeight:500,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${tk.title}</div>
                       ${tk.pct>0?html`<div style=${{marginTop:5}}><${Prog} pct=${tk.pct} color=${si.color}/></div>`:null}
                     </div>
@@ -5176,6 +5192,15 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
   const [csvImporting,setCsvImporting]=useState(false);
   const [csvResult,setCsvResult]=useState(null);
   const csvRef=useRef(null);
+  useEffect(()=>{
+    const h=(e)=>{
+      if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.isContentEditable)return;
+      if(e.key==='n'||e.key==='N'){e.preventDefault();setNewT(true);}
+      if(e.key==='Escape'){setEditT(null);setNewT(false);}
+    };
+    document.addEventListener('keydown',h);
+    return()=>document.removeEventListener('keydown',h);
+  },[]);
 
   useEffect(()=>{
     if(initialStage){setStageF(initialStage);setShowFilters(true);}
@@ -5393,8 +5418,11 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
                     const isOverdue=tk.due&&new Date(tk.due)<new Date()&&tk.stage!=='completed';
                     const isDueToday=tk.due&&fmtD(tk.due)===fmtD(new Date().toISOString().split('T')[0]);
                     return html`<div key=${tk.id} class="tkc" onClick=${()=>setEditT(tk)}>
-                      <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                        <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.id}</span>
+                      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                        <div style=${{display:'flex',alignItems:'center',gap:4}}>
+                          <span style=${{width:10,height:10,borderRadius:2,display:'inline-block',flexShrink:0,background:TYPE_COLORS[tk.task_type||'task']||'#1d4ed8'}}></span>
+                          <span style=${{fontSize:9,fontWeight:700,fontFamily:'monospace',padding:'1px 6px',borderRadius:4,background:TYPE_BG[tk.task_type||'task']||'rgba(29,78,216,0.10)',color:TYPE_COLORS[tk.task_type||'task']||'#1d4ed8',border:'1px solid '+(TYPE_BORDER[tk.task_type||'task']||'rgba(29,78,216,0.2)')}}>${tk.id}</span>
+                        </div>
                         <${PB} p=${tk.priority}/>
                       </div>
                       ${(tk.task_type&&tk.task_type!=='task')||tk.story_points>0?html`
@@ -5477,7 +5505,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
                     <tr key=${tk.id} style=${{borderBottom:i<sorted.length-1?'1px solid var(--bd)':'none'}}
                       onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
                       onMouseLeave=${e=>e.currentTarget.style.background=''}>
-                      <td style=${{padding:'9px 13px'}}><span class="mono-10">${tk.id}</span></td>
+                      <td style=${{padding:'9px 13px'}}><span class="id-badge id-task">${tk.id}</span></td>
                       <td style=${{padding:'9px 13px'}}>${tk.task_type&&tk.task_type!=='task'?html`<span style=${{fontSize:9,fontWeight:800,padding:'2px 6px',borderRadius:3,textTransform:'uppercase',background:({'story':'rgba(21,128,61,0.12)','bug':'rgba(185,28,28,0.10)','epic':'rgba(109,40,217,0.12)','spike':'rgba(180,83,9,0.10)'})[tk.task_type]||'var(--ac3)',color:({'story':'var(--gn)','bug':'var(--rd)','epic':'var(--pu)','spike':'var(--am)'})[tk.task_type]||'var(--ac)'}}>${tk.task_type}</span>`:html`<span style=${{fontSize:9,color:'var(--tx3)'}}>task</span>`}</td>
                       <td style=${{padding:'9px 13px',cursor:'pointer'}} onClick=${()=>setEditT(tk)}><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${tk.title}</span></td>
                       <td style=${{padding:'9px 13px'}}>${pr?html`<div style=${{display:'flex',alignItems:'center',gap:5}}><div style=${{width:6,height:6,borderRadius:2,background:pr.color}}></div><span style=${{fontSize:12,color:'var(--tx2)'}}>${pr.name}</span></div>`:null}</td>
@@ -7009,6 +7037,10 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
                 ${Object.entries(STATUS_CFG).map(([v,c])=>html`<option key=${v} value=${v}>${c.icon} ${c.label}</option>`)}
               </select>
             </div>
+            <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+              <span class="id-badge id-ticket">${detailTicket.id}</span>
+              ${detailTicket.type?html`<span class="id-badge" style=${{background:({'bug':'rgba(185,28,28,0.10)','feature':'rgba(29,78,216,0.10)','improvement':'rgba(14,116,144,0.10)','task':'rgba(21,128,61,0.10)','question':'rgba(109,40,217,0.10)'})[detailTicket.type]||'var(--ac3)',color:({'bug':'var(--rd)','feature':'var(--ac)','improvement':'var(--cy)','task':'var(--gn)','question':'var(--pu)'})[detailTicket.type]||'var(--ac)'}}>${detailTicket.type}</span>`:null}
+            </div>
             <h2 style=${{fontSize:16,fontWeight:700,color:'var(--tx)',marginBottom:4}}>${detailTicket.title}</h2>
             <div class="tx3-11">
               Reported by ${(umap[detailTicket.reporter]||{name:'Unknown'}).name} · ${new Date(detailTicket.created).toLocaleDateString()}
@@ -7119,6 +7151,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
                         <div style=${{width:36,height:36,borderRadius:9,background:tc.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0}}>${tc.icon}</div>
                         <div style=${{flex:1,minWidth:0}}>
               <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:3}}>
+                <span class="id-badge id-ticket" style=${{fontSize:9,flexShrink:0}}>${t.id}</span>
                 <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${t.title}</span>
                 <span style=${{fontSize:10,padding:'1px 7px',borderRadius:5,background:sc.color+'22',color:sc.color,fontWeight:700,flexShrink:0}}>${sc.icon} ${sc.label}</span>
               </div>
