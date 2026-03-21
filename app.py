@@ -6633,7 +6633,10 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
               onStartHuddle&&onStartHuddle(toUser);
               // Notify recipient
               try{
-                const room='pfp-'+[cu.id,toUser.id].sort().join('-').replace(/[^a-z0-9]/gi,'-').toLowerCase().slice(0,44);
+                // Same hash as roomFor() in HuddleCall — must match exactly
+              const _s=[cu.id,toUser.id].sort().join('');
+              let _h=0;for(let i=0;i<_s.length;i++){_h=((_h<<5)-_h+_s.charCodeAt(i))|0;}
+              const room='ProjectFlow-'+Math.abs(_h).toString(36).padStart(6,'0').slice(0,6);
                 await api.post('/api/meet/notify',{target_id:toId,room_name:room,caller_name:cu.name});
               }catch(e){}
             }}
@@ -8201,11 +8204,15 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [minimized,setMinimized]=useState(false);
   const iframeRef=useRef(null);
 
-  // Generate a stable room name from two user IDs (same for both sides)
+  // Generate a stable short room name from two user IDs
   const roomFor=(uid1,uid2)=>{
-    const sorted=[uid1,uid2].sort().join('-');
-    // Sanitize: only lowercase letters/numbers/hyphens, max 50 chars
-    return 'pfp-'+sorted.replace(/[^a-z0-9]/gi,'-').toLowerCase().slice(0,44);
+    // Sort IDs so room is same regardless of who initiates
+    const sorted=[uid1,uid2].sort().join('');
+    // Simple hash to get a short code
+    let h=0;
+    for(let i=0;i<sorted.length;i++){h=((h<<5)-h+sorted.charCodeAt(i))|0;}
+    const code=Math.abs(h).toString(36).padStart(6,'0').slice(0,6);
+    return 'ProjectFlow-'+code;
   };
 
   useEffect(()=>{
@@ -8237,9 +8244,24 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
 
   if(!jitsiRoom)return null;
 
-  // Build Jitsi iframe URL with config options
+  // Build Jitsi iframe URL
+  // Use meet.jit.si with config to skip prejoin and auth screens
   const displayName=encodeURIComponent((cu&&cu.name)||'User');
-  const jitsiUrl=`https://meet.jit.si/${jitsiRoom}#userInfo.displayName="${displayName}"&config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&config.toolbarButtons=["microphone","camera","desktop","hangup","chat","tileview","participants-pane"]&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.APP_NAME=ProjectFlowPro`;
+  const email=encodeURIComponent((cu&&cu.email)||'user@projectflow.app');
+  // Config passed via URL hash — disables auth requirement and prejoin page
+  const cfg=[
+    'config.prejoinPageEnabled=false',
+    'config.requireDisplayName=false',
+    'config.enableWelcomePage=false',
+    'config.startWithAudioMuted=false',
+    'config.startWithVideoMuted=false',
+    'config.disableDeepLinking=true',
+    'config.p2p.enabled=true',
+    'config.analytics.disabled=true',
+    'userInfo.displayName="'+displayName+'"',
+    'userInfo.email="'+email+'"',
+  ].join('&');
+  const jitsiUrl=`https://meet.jit.si/${jitsiRoom}#${cfg}`;
 
   return html`
     <div style=${{
