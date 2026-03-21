@@ -1738,8 +1738,12 @@ def create_call():
         db.execute("UPDATE call_rooms SET invited_users=? WHERE id=?",(json.dumps(invited),room_id))
         for uid in invited:
             nid=f"n{int(datetime.now().timestamp()*1000)}{uid}"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"call",f"📞 {cname} started an Instant Meet — Join now! ({room_name})",uid,0,ts()))
+            try:
+                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
+                           (nid,wid(),"call",f"📞 {cname} started an Instant Meet — Join now! ({room_name})",uid,0,ts(),session["user_id"]))
+            except:
+                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                           (nid,wid(),"call",f"📞 {cname} started an Instant Meet — Join now! ({room_name})",uid,0,ts()))
         return jsonify({"room_id":room_id,"name":room_name})
 
 @app.route("/api/calls/<room_id>/join", methods=["POST"])
@@ -4242,7 +4246,15 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                    <div style=${{position:'relative'}} ref=${npRef}>
+                    <!-- Search trigger -->
+          <button onClick=${()=>{if(window._pfOpenSearch)window._pfOpenSearch();}}
+            title="Search (Ctrl+K)"
+            style=${{width:32,height:32,borderRadius:9,border:'1px solid var(--bd)',background:'var(--sf)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx3)',transition:'all .15s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx3)';}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <div style=${{position:'relative'}} ref=${npRef}>
             <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -8375,9 +8387,14 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             setRaisedHands(prev=>({...prev,[from]:data.raised||false}));
             if(data.raised){
               setFloatingReactions(prev=>[...prev.filter(r=>r.id!==hid),{id:hid,emoji:'✋',x:10+Math.random()*30,label:(data.from||'Someone')+' raised hand'}]);
-              setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==hid)),5000);
+              // Auto-hide tile indicator after 5s
+              setTimeout(()=>{
+                setFloatingReactions(prev=>prev.filter(r=>r.id!==hid));
+                setRaisedHands(prev=>({...prev,[from]:false}));
+              },5000);
             } else {
               setFloatingReactions(prev=>prev.filter(r=>r.id!==hid));
+              setRaisedHands(prev=>({...prev,[from]:false}));
             }
           }
         }
@@ -8434,11 +8451,9 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     if(!r||r.error){alert(r&&r.error||'Could not join.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
     const parts=r.participants||[];
     setRoomId(rid);setRoomName(r.name||rname||'Huddle');
-    const mkMeet=(id)=>{
-      const h=id.replace(/[^a-z0-9]/gi,'').toLowerCase().padEnd(12,'x');
-      return 'https://meet.google.com/'+h.slice(0,3)+'-'+h.slice(3,7)+'-'+h.slice(7,11);
-    };
-    setMeetUrl(mkMeet(rid));
+    // Always use meet.google.com/new — opens a fresh meeting room
+    // Participants share this URL to join the same meeting
+    setMeetUrl('https://meet.google.com/new');
     setParticipants(parts);setPhase('in-call');setIncomingCall(null);
     setPopupPos(centerPos(780,540));
     playSound('notif');
@@ -9033,7 +9048,9 @@ function App(){
     setTeamCtxRaw(id);
     try{localStorage.setItem('pf_team_ctx',id||'');}catch{}
   },[cu]);
-  const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
+  const [dmUnread,setDmUnread]=useState([]);
+  const [globalSearch,setGlobalSearch]=useState('');
+  const [showGlobalSearch,setShowGlobalSearch]=useState(false);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
   const [onlineUsers,setOnlineUsers]=useState(new Set());
 
   // Presence heartbeat — ping every 30s, fetch online users every 15s
@@ -9041,10 +9058,11 @@ function App(){
     if(!cu)return;
     const beat=()=>api.post('/api/presence',{}).catch(()=>{});
     beat(); // immediate on mount
-    const beatId=setInterval(beat,30000);
+    const beatId=setInterval(beat,20000);
+    window.addEventListener('focus',beat); // trigger on tab focus too
     const fetchPresence=()=>api.get('/api/presence').then(ids=>{if(Array.isArray(ids))setOnlineUsers(new Set(ids));}).catch(()=>{});
     fetchPresence();
-    const presId=setInterval(fetchPresence,15000);
+    const presId=setInterval(fetchPresence,10000);
     return()=>{clearInterval(beatId);clearInterval(presId);};
   },[cu]);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
@@ -9111,6 +9129,17 @@ function App(){
   },[cu]);
 
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
+  // Expose search opener for topbar button
+  useEffect(()=>{window._pfOpenSearch=()=>{setShowGlobalSearch(v=>!v);setGlobalSearch('');};},[]);
+  // Global search shortcut: Cmd+K / Ctrl+K
+  useEffect(()=>{
+    const h=(e)=>{
+      if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();setShowGlobalSearch(v=>!v);setGlobalSearch('');}
+      if(e.key==='Escape')setShowGlobalSearch(false);
+    };
+    document.addEventListener('keydown',h);
+    return()=>document.removeEventListener('keydown',h);
+  },[]);
   useEffect(()=>{load();},[load]);
 
   const prevTeamCtxRef=useRef(teamCtx);
@@ -9388,10 +9417,10 @@ function App(){
             api.del('/api/notifications/'+n.id).catch(()=>{});
             // Remove from local state instantly — panel clears without waiting for reload
             setData(prev=>({...prev,notifs:prev.notifs.filter(x=>x.id!==n.id)}));
-            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
+            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dm',message:'messages'};
             const dest=nav[n.type]||'notifs';
-            // DM: use sender_id (from DB) or sender field to open that person's thread
-            if(n.type==='dm'){
+            // DM + Call: use sender_id to open that person's chat thread
+            if(n.type==='dm'||n.type==='call'||n.type==='message'){
               const senderId=n.sender_id||n.sender||null;
               if(senderId)setDmTargetUser(senderId);
             }
@@ -9425,6 +9454,65 @@ function App(){
       </div>
     </div>
     <${AIAssistant} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users}/>
+    <!-- Global Search Spotlight — Cmd+K -->
+    ${showGlobalSearch?html`
+      <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:9800,display:'flex',alignItems:'flex-start',justifyContent:'center',paddingTop:'10vh',backdropFilter:'blur(4px)'}}
+        onClick=${e=>{if(e.target===e.currentTarget)setShowGlobalSearch(false);}}>
+        <div style=${{width:'min(640px,92vw)',background:'var(--sf)',borderRadius:16,boxShadow:'0 24px 80px rgba(0,0,0,.35)',border:'1px solid var(--bd)',overflow:'hidden'}}>
+          <!-- Search input -->
+          <div style=${{display:'flex',alignItems:'center',gap:10,padding:'14px 18px',borderBottom:'1px solid var(--bd)'}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input autoFocus class="inp" style=${{border:'none',background:'transparent',fontSize:16,flex:1,height:28,outline:'none',color:'var(--tx)'}}
+              placeholder="Search tasks, tickets, subtasks by ID or name..."
+              value=${globalSearch}
+              onInput=${e=>setGlobalSearch(e.target.value)}
+              onKeyDown=${e=>{if(e.key==='Escape')setShowGlobalSearch(false);}}/>
+            <span style=${{fontSize:10,color:'var(--tx3)',background:'var(--sf2)',padding:'2px 6px',borderRadius:5,border:'1px solid var(--bd)'}}>ESC</span>
+          </div>
+          <!-- Results -->
+          <div style=${{maxHeight:400,overflowY:'auto'}}>
+            ${(()=>{
+              const q=(globalSearch||'').trim().toLowerCase();
+              if(!q||q.length<2)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>Type to search tasks, tickets by ID or name</div>`;
+              const results=[];
+              // Search tasks by ID or title
+              safe(scopedTasks).forEach(t=>{
+                if(t.id.toLowerCase().includes(q)||t.title.toLowerCase().includes(q)){
+                  const proj=safe(scopedProjects).find(p=>p.id===t.project);
+                  results.push({type:'task',id:t.id,title:t.title,sub:proj?proj.name:'',color:TYPE_COLORS[t.task_type||'task']||'#1d4ed8',bg:TYPE_BG[t.task_type||'task']||'rgba(29,78,216,0.1)',item:t});
+                }
+              });
+              // Search projects
+              safe(scopedProjects).forEach(p=>{
+                if(p.id.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)){
+                  results.push({type:'project',id:p.id,title:p.name,sub:'Project',color:p.color||'var(--ac)',bg:'rgba(29,78,216,0.06)',item:p});
+                }
+              });
+              if(!results.length)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>No results for "${globalSearch}"</div>`;
+              return results.slice(0,12).map((r,i)=>html`
+                <div key=${i}
+                  onClick=${()=>{
+                    setShowGlobalSearch(false);
+                    if(r.type==='task'){setView('tasks');}
+                    else if(r.type==='project'){setView('projects');setInitialProjectId(r.item.id);}
+                  }}
+                  style=${{display:'flex',alignItems:'center',gap:12,padding:'10px 18px',cursor:'pointer',borderBottom:'1px solid var(--bd)',transition:'background .1s'}}
+                  onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
+                  onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
+                  <span style=${{fontSize:9,fontWeight:800,padding:'2px 7px',borderRadius:4,background:r.bg,color:r.color,border:'1px solid '+r.color+'44',flexShrink:0,textTransform:'uppercase'}}>${r.type}</span>
+                  <span style=${{fontSize:9,fontWeight:700,fontFamily:'monospace',padding:'2px 7px',borderRadius:4,background:r.bg,color:r.color,border:'1px solid '+r.color+'33',flexShrink:0}}>${r.id}</span>
+                  <span style=${{fontSize:13,color:'var(--tx)',fontWeight:500,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${r.title}</span>
+                  ${r.sub?html`<span style=${{fontSize:11,color:'var(--tx3)',flexShrink:0}}>${r.sub}</span>`:null}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                </div>`);
+            })()}
+          </div>
+          <!-- Footer -->
+          <div style=${{padding:'8px 18px',borderTop:'1px solid var(--bd)',display:'flex',gap:12,fontSize:11,color:'var(--tx3)'}}>
+            <span>↵ Open</span><span>↑↓ Navigate</span><span style=${{marginLeft:'auto'}}>Ctrl+K to close</span>
+          </div>
+        </div>
+      </div>`:null}
     <${HuddleCall} cu=${cu} users=${data.users} onStateChange=${s=>setCallState(prev=>({...prev,...s}))} cmdRef=${huddleCmdRef}/>
 
         ${teamLoading?html`
