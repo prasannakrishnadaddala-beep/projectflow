@@ -244,10 +244,52 @@ SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
 SMTP_USERNAME = os.environ.get('SMTP_USERNAME', '')
 SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
 FROM_EMAIL = os.environ.get('FROM_EMAIL', SMTP_USERNAME)
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 APP_URL = os.environ.get('APP_URL', 'http://localhost:5000')
 
+def _send_via_resend(to_email, subject, body_html, from_email):
+    """Send email via Resend HTTP API — works on Railway (no SMTP port blocking)."""
+    if not RESEND_API_KEY:
+        return False
+    try:
+        import json as _json
+        payload = _json.dumps({
+            "from": f"VEWIT <{from_email or 'noreply@vewit.in'}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": body_html
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = resp.read()
+            print(f"[Resend] ✓ Sent to {to_email}: {result[:80]}")
+            return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"[Resend] ✗ HTTP {e.code}: {body}")
+        return False
+    except Exception as e:
+        print(f"[Resend] ✗ Error: {type(e).__name__}: {e}")
+        return False
+
 def send_email(to_email, subject, body_html, workspace_id=None):
-    """Send an email notification using workspace-specific SMTP settings"""
+    """Send email — tries Resend API first (works on Railway), falls back to SMTP."""
+    from_addr = FROM_EMAIL or SMTP_USERNAME or 'noreply@vewit.in'
+
+    # ── Try Resend API first (no port restrictions) ───────────────────────
+    if RESEND_API_KEY:
+        print(f"[Email] Using Resend API to send to {to_email}")
+        return _send_via_resend(to_email, subject, body_html, from_addr)
+
+    # ── Fall back to workspace SMTP settings ──────────────────────────────
     smtp_config = None
     if workspace_id:
         try:
@@ -274,34 +316,46 @@ def send_email(to_email, subject, body_html, workspace_id=None):
             'server': SMTP_SERVER,
             'port': SMTP_PORT,
             'username': SMTP_USERNAME,
-            'password': SMTP_PASSWORD,
+            'password': SMTP_PASSWORD.replace(' ', '') if SMTP_PASSWORD else '',
             'from_email': FROM_EMAIL or SMTP_USERNAME
         }
 
+    import traceback as _tb
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = smtp_config['from_email']
         msg['To'] = to_email
+        msg.attach(MIMEText(body_html, 'html'))
 
-        html_part = MIMEText(body_html, 'html')
-        msg.attach(html_part)
+        user = smtp_config['username']
+        pwd  = (smtp_config['password'] or '').replace(' ', '')
+        srv  = smtp_config['server']
+        port = int(smtp_config['port'] or 587)
+        print(f"[SMTP] >>> Connecting {srv}:{port} as {user} pwd_len={len(pwd)}")
 
-        with smtplib.SMTP(smtp_config['server'], smtp_config['port'], timeout=30) as server:
-            server.starttls()
-            server.login(smtp_config['username'], smtp_config['password'])
-            server.send_message(msg)
+        try:
+            with smtplib.SMTP(srv, port, timeout=30) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                print(f"[SMTP] >>> TLS OK, logging in...")
+                server.login(user, pwd)
+                print(f"[SMTP] >>> Login OK, sending to {to_email}...")
+                server.send_message(msg)
+        except Exception as inner_e:
+            print(f"[SMTP] >>> STARTTLS failed ({type(inner_e).__name__}: {inner_e}), trying SSL:465...")
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            with smtplib.SMTP_SSL(srv, 465, timeout=30, context=ctx) as server:
+                server.login(user, pwd)
+                server.send_message(msg)
 
-        print(f"[Email] Sent: {subject} -> {to_email}")
+        print(f"[SMTP] >>> SUCCESS: sent to {to_email}")
         return True
-    except socket.timeout:
-        print(f"[Email] Timeout connecting to {smtp_config['server']}:{smtp_config['port']}")
-        return False
-    except smtplib.SMTPAuthenticationError:
-        print(f"[Email] Authentication failed - check username/password")
-        return False
     except Exception as e:
-        print(f"[Email] Error sending to {to_email}: {e}")
+        print(f"[SMTP] >>> FINAL FAILURE to {to_email}: {type(e).__name__}: {e}")
+        _tb.print_exc()
         return False
 
 def send_task_assigned_email(user_email, user_name, task_title, assigner_name, task_id, workspace_id):
@@ -2619,8 +2673,12 @@ def contact_form():
     </html>
     """
 
+    # Log before sending
+    print(f"[Contact] Attempting send: {name} <{email}> | SMTP={SMTP_SERVER}:{SMTP_PORT} | user={SMTP_USERNAME} | pwd_len={len((SMTP_PASSWORD or '').replace(' ',''))}")
+
     # Send to CEO
     success = send_email("ceo@vewit.in", subject, body_html)
+    print(f"[Contact] send_email to CEO returned: {success}")
 
     # Also send auto-reply to the person who submitted
     auto_reply_html = f"""
@@ -2649,10 +2707,9 @@ def contact_form():
     send_email(email, f"We received your message — VEWIT", auto_reply_html)
 
     if success:
-        return jsonify({"ok": True, "message": f"Message sent! We'll reply to {email} within 24 hours."})
+        return jsonify({"ok": True, "message": f"Message sent successfully! We'll reply to {email} within 24 hours."})
     else:
-        # Even if email fails (no SMTP config), acknowledge receipt
-        return jsonify({"ok": True, "message": f"Message received! We'll get back to you at {email} soon."})
+        return jsonify({"ok": False, "error": "Email could not be sent. Please email ceo@vewit.in directly."}), 500
 
 @app.route("/sitemap.xml")
 def sitemap():
@@ -3670,124 +3727,49 @@ function showTab(t){
         </div>
       </div>
 
-      <!-- Right — contact form -->
-      <div style="padding:48px 40px;background:var(--sf)">
-        <h3 style="font-size:20px;font-weight:800;color:var(--tx);margin-bottom:6px;letter-spacing:-.02em">Send us a message</h3>
-        <p style="font-size:13px;color:var(--tx3);margin-bottom:28px">Fill in the form and we'll get back to you within 24 hours.</p>
+      <!-- Right — direct email CTA -->
+      <div style="padding:52px 44px;background:var(--sf);display:flex;flex-direction:column;justify-content:center;gap:32px">
 
-        <form id="contact-form" onsubmit="handleContactForm(event)" style="display:flex;flex-direction:column;gap:18px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-            <div>
-              <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Full Name *</label>
-              <input type="text" id="cf-name" required placeholder="Your full name" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
+        <div>
+          <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);padding:5px 14px;border-radius:100px;margin-bottom:18px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e"></span>
+            <span style="font-size:11px;font-weight:700;color:#2563eb;letter-spacing:.06em;text-transform:uppercase">We respond within 24 hours</span>
+          </div>
+          <h3 style="font-size:26px;font-weight:800;color:var(--tx);letter-spacing:-.03em;line-height:1.2;margin-bottom:12px">Reach us directly<br/>by email</h3>
+          <p style="font-size:14px;color:var(--tx3);line-height:1.7">No forms, no bots. Write to us directly and a real person will reply — usually within a few hours.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <a href="mailto:ceo@vewit.in?subject=Enquiry about VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#2563eb';this.style.background='rgba(37,99,235,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✉️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">General enquiries &amp; CEO</div>
+              <div style="font-size:15px;font-weight:700;color:#2563eb">ceo@vewit.in</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Partnerships · Demo · Enterprise</div>
             </div>
-            <div>
-              <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Work Email *</label>
-              <input type="email" id="cf-email" required placeholder="you@company.com" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+
+          <a href="mailto:support@vewit.in?subject=Support Request — VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#7c3aed';this.style.background='rgba(124,58,237,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🛠️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Technical support</div>
+              <div style="font-size:15px;font-weight:700;color:#7c3aed">support@vewit.in</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Bugs · Feature requests · Help</div>
             </div>
-          </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+        </div>
 
-          <div>
-            <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Company / Team</label>
-            <input type="text" id="cf-company" placeholder="Your company name" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
-          </div>
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:16px 18px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px">
+          <span style="font-size:18px;flex-shrink:0;margin-top:1px">💡</span>
+          <p style="margin:0;font-size:12px;color:var(--tx2);line-height:1.65"><strong style="color:var(--tx)">Pro tip:</strong> Include your workspace name, team size and what you need — it helps us reply faster.</p>
+        </div>
 
-          <div>
-            <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Topic *</label>
-            <select id="cf-topic" required style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit;cursor:pointer" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'">
-              <option value="">Select a topic...</option>
-              <option value="demo">Request a demo</option>
-              <option value="support">Technical support</option>
-              <option value="feature">Feature request</option>
-              <option value="enterprise">Enterprise / pricing</option>
-              <option value="partnership">Partnership</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          <div>
-            <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Message *</label>
-            <textarea id="cf-message" required placeholder="Tell us how we can help..." rows="4" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit;resize:vertical;line-height:1.6" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"></textarea>
-          </div>
-
-          <button type="submit" id="cf-submit" style="background:#2563eb;color:#fff;border:none;border-radius:12px;padding:13px 28px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;font-family:inherit;width:100%" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
-            <span id="cf-btn-text">Send Message</span>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          </button>
-
-          <div id="cf-status" style="display:none;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;text-align:center"></div>
-        </form>
       </div>
     </div>
-
   </div>
 </section>
-
-<script>
-async function handleContactForm(e){
-  e.preventDefault();
-  const name=document.getElementById('cf-name').value.trim();
-  const email=document.getElementById('cf-email').value.trim();
-  const company=document.getElementById('cf-company').value.trim();
-  const topic=document.getElementById('cf-topic').value;
-  const message=document.getElementById('cf-message').value.trim();
-  const status=document.getElementById('cf-status');
-  const btn=document.getElementById('cf-submit');
-  const btnText=document.getElementById('cf-btn-text');
-
-  if(!name||!email||!topic||!message){
-    status.style.display='block';
-    status.style.background='#fee2e2';
-    status.style.color='#991b1b';
-    status.style.border='1px solid #fecaca';
-    status.textContent='Please fill in all required fields.';
-    return;
-  }
-
-  btnText.textContent='Sending...';
-  btn.disabled=true;
-  btn.style.opacity='0.75';
-  status.style.display='none';
-
-  try{
-    const res=await fetch('/api/contact',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name,email,company,topic,message})
-    });
-    const data=await res.json();
-    if(data.ok){
-      status.style.display='block';
-      status.style.background='#dcfce7';
-      status.style.color='#166534';
-      status.style.border='1px solid #bbf7d0';
-      status.textContent='\u2713 '+data.message;
-      btnText.textContent='Message Sent \u2713';
-      btn.style.background='#059669';
-      btn.style.opacity='1';
-      setTimeout(()=>{
-        document.getElementById('contact-form').reset();
-        btnText.textContent='Send Message';
-        btn.style.background='#2563eb';
-        btn.disabled=false;
-        btn.style.opacity='1';
-        status.style.display='none';
-      },4000);
-    } else {
-      throw new Error(data.error||'Failed to send');
-    }
-  }catch(err){
-    status.style.display='block';
-    status.style.background='#fee2e2';
-    status.style.color='#991b1b';
-    status.style.border='1px solid #fecaca';
-    status.textContent='\u274c Could not send. Please email ceo@vewit.in directly.';
-    btnText.textContent='Send Message';
-    btn.disabled=false;
-    btn.style.opacity='1';
-  }
-}
-</script>
 
 
 <footer>
