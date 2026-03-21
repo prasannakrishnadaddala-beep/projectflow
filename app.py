@@ -4196,7 +4196,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
                 onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
                 <div style=${{position:'relative',flexShrink:0}}>
                   <div style=${{width:20,height:20,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>
-                  <div style=${{position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:isOnline?'#22c55e':'rgba(148,163,184,0.4)',border:'1.5px solid #0f172a',transition:'background .3s'}}></div>
+                  <div style=${{position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:isOnline?'#22c55e':'rgba(148,163,184,0.4)',border:'1.5px solid #0f172a',boxShadow:isOnline?'0 0 4px rgba(34,197,94,0.7)':'none',transition:'background .3s'}}></div>
                 </div>
                 <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.9)':'rgba(148,163,184,0.55)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${u.name}</span>
                 ${unreadCnt>0?html`<span style=${{minWidth:14,height:14,borderRadius:7,background:'var(--cy)',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px',flexShrink:0}}>${unreadCnt}</span>`:null}
@@ -6647,15 +6647,26 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
       <div style=${{flex:1,overflowY:'auto',padding:6}}>
         ${filtered.map(u=>{const unr=unreadFor(u.id);const isA=toId===u.id;return html`
           <button key=${u.id} onClick=${()=>setToId(u.id)} style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',border:'none',borderRadius:9,cursor:'pointer',marginBottom:2,background:isA?'rgba(99,102,241,.14)':'transparent',transition:'all .14s'}}>
-            <div style=${{position:'relative',flexShrink:0}}><${Av} u=${u} size=${32}/><div style=${{position:'absolute',bottom:0,right:0,width:8,height:8,borderRadius:'50%',background:onlineUsers.has(u.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(u.id)?1:.4}}></div></div>
-            <div style=${{flex:1,minWidth:0,textAlign:'left'}}><div style=${{fontSize:13,fontWeight:600,color:'#000000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div><div class="mono-10">${u.role}</div></div>
+            <div style=${{position:'relative',flexShrink:0}}><${Av} u=${u} size=${32}/>
+              <div style=${{position:'absolute',bottom:0,right:0,width:10,height:10,borderRadius:'50%',background:onlineUsers.has(u.id)?'#22c55e':'#64748b',border:'2px solid var(--bg)',boxShadow:onlineUsers.has(u.id)?'0 0 0 1px #22c55e,0 0 6px rgba(34,197,94,0.6)':'none',transition:'background .3s,box-shadow .3s'}}></div>
+            </div>
+            <div style=${{flex:1,minWidth:0,textAlign:'left'}}>
+              <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div>
+              <div style=${{fontSize:10,color:onlineUsers.has(u.id)?'#22c55e':'var(--tx3)',fontWeight:onlineUsers.has(u.id)?600:400}}>${onlineUsers.has(u.id)?'● Online':u.role}</div>
+            </div>
             ${unr>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${unr}</span>`:null}
           </button>`;})}
       </div>
     </div>
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
-        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(toUser.id)?1:.4}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
+        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/>
+          <div style=${{position:'absolute',bottom:0,right:0,width:11,height:11,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'#22c55e':'#64748b',border:'2px solid var(--bg)',boxShadow:onlineUsers.has(toUser.id)?'0 0 0 1px #22c55e,0 0 7px rgba(34,197,94,0.7)':'none',transition:'background .3s,box-shadow .3s'}}></div>
+          </div>
+          <div>
+            <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div>
+            <div style=${{fontSize:11,color:onlineUsers.has(toUser.id)?'#22c55e':'var(--tx3)',fontWeight:onlineUsers.has(toUser.id)?600:400}}>${onlineUsers.has(toUser.id)?'● Online now':toUser.role}</div>
+          </div>
           <button title=${'Start Google Meet with '+toUser.name+' (opens in new tab)'}
             onClick=${async ()=>{
               // Start embedded Jitsi call
@@ -8231,12 +8242,11 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [room,setRoom]=useState(null);
   const [remoteUser,setRemoteUser]=useState(null);
   const [minimized,setMinimized]=useState(false);
-  const [status,setStatus]=useState('connecting'); // connecting|calling|ringing|connected|error
+  const [status,setStatus]=useState('connecting');
   const [muted,setMuted]=useState(false);
   const [camOff,setCamOff]=useState(false);
   const [elapsed,setElapsed]=useState(0);
   const [errorMsg,setErrorMsg]=useState('');
-
   const peerRef=useRef(null);
   const callRef=useRef(null);
   const localStreamRef=useRef(null);
@@ -8245,320 +8255,131 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const timerRef=useRef(null);
   const peerJsLoaded=useRef(false);
 
-  // Stable room ID derived from sorted user IDs — same for both ends
-  const roomFor=(uid1,uid2)=>{
-    const sorted=[uid1,uid2].sort().join('');
-    let h=5381;
-    for(let i=0;i<sorted.length;i++){h=((h<<5)+h)+sorted.charCodeAt(i);}
-    return 'pf-'+Math.abs(h).toString(36).slice(0,8);
-  };
-
-  // Load PeerJS script dynamically once
   const ensurePeerJS=()=>new Promise((res,rej)=>{
     if(window.Peer){res();return;}
-    if(peerJsLoaded.current){
-      const wait=()=>window.Peer?res():setTimeout(wait,100);wait();return;
-    }
+    if(peerJsLoaded.current){const w=()=>window.Peer?res():setTimeout(w,100);w();return;}
     peerJsLoaded.current=true;
     const s=document.createElement('script');
     s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-    s.onload=()=>res();
-    s.onerror=()=>rej(new Error('PeerJS failed to load'));
+    s.onload=()=>res();s.onerror=()=>rej(new Error('PeerJS failed to load'));
     document.head.appendChild(s);
   });
 
-  // Cleanup everything
   const cleanup=()=>{
     if(timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
     if(callRef.current){try{callRef.current.close();}catch(e){}}
     callRef.current=null;
-    if(localStreamRef.current){
-      localStreamRef.current.getTracks().forEach(t=>t.stop());
-      localStreamRef.current=null;
-    }
+    if(localStreamRef.current){localStreamRef.current.getTracks().forEach(t=>t.stop());localStreamRef.current=null;}
     if(peerRef.current){try{peerRef.current.destroy();}catch(e){}}
     peerRef.current=null;
     if(localVidRef.current)localVidRef.current.srcObject=null;
     if(remoteVidRef.current)remoteVidRef.current.srcObject=null;
   };
 
-  // Attach stream to video element safely
-  const attachStream=(vidEl,stream)=>{
-    if(!vidEl||!stream)return;
-    vidEl.srcObject=stream;
-    vidEl.play().catch(()=>{});
-  };
-
-  // Start local camera
-  const getMedia=async()=>{
-    const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-    localStreamRef.current=stream;
-    attachStream(localVidRef.current,stream);
-    return stream;
-  };
-
-  // Start timer
-  const startTimer=()=>{
-    setElapsed(0);
-    timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);
-  };
-
+  const attachStream=(vidEl,stream)=>{if(!vidEl||!stream)return;vidEl.srcObject=stream;vidEl.play().catch(()=>{});};
+  const getMedia=async()=>{const s=await navigator.mediaDevices.getUserMedia({video:true,audio:true});localStreamRef.current=s;attachStream(localVidRef.current,s);return s;};
+  const startTimer=()=>{setElapsed(0);timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);};
   const fmtTime=s=>{const m=Math.floor(s/60);return m+':'+(s%60<10?'0':'')+s%60;};
 
-  // ── CALLER side ─────────────────────────────────────────────────────────────
   const startCall=async(targetUser)=>{
     try{
-      setStatus('connecting');
-      await ensurePeerJS();
+      setStatus('connecting');await ensurePeerJS();
       const stream=await getMedia();
-      const myPeerId=cu.id+'-'+Date.now(); // unique peer per session
-      const peer=new window.Peer(myPeerId,{debug:0});
+      const peer=new window.Peer(cu.id+'-c-'+Date.now(),{debug:0});
       peerRef.current=peer;
-
       peer.on('open',()=>{
         setStatus('calling');
-        // Target peer ID = targetUser.id (the receiver registers with their stable ID)
         const call=peer.call(targetUser.id,stream);
         callRef.current=call;
         if(!call){setErrorMsg('Could not reach peer');setStatus('error');return;}
-        call.on('stream',remoteStream=>{
-          attachStream(remoteVidRef.current,remoteStream);
-          setStatus('connected');
-          startTimer();
-          onStateChange&&onStateChange({status:'in-call'});
-        });
+        call.on('stream',rs=>{attachStream(remoteVidRef.current,rs);setStatus('connected');startTimer();onStateChange&&onStateChange({status:'in-call'});});
         call.on('close',()=>hangup());
         call.on('error',e=>{setErrorMsg(e.message||'Call error');setStatus('error');});
       });
       peer.on('error',e=>{setErrorMsg(e.message||'Peer error');setStatus('error');});
-    }catch(e){
-      setErrorMsg(e.message||'Camera/mic access denied');
-      setStatus('error');
-    }
+    }catch(e){setErrorMsg(e.message||'Camera/mic access denied');setStatus('error');}
   };
 
-  // ── RECEIVER side ────────────────────────────────────────────────────────────
   const answerCall=async()=>{
     try{
-      setStatus('connecting');
-      await ensurePeerJS();
+      setStatus('connecting');await ensurePeerJS();
       const stream=await getMedia();
-      // Register with own stable ID so caller can reach us
-      const peer=new window.Peer(cu.id,{debug:0});
-      peerRef.current=peer;
-
-      const answerIncoming=(call)=>{
-        callRef.current=call;
-        call.answer(stream);
-        call.on('stream',remoteStream=>{
-          attachStream(remoteVidRef.current,remoteStream);
-          setStatus('connected');
-          startTimer();
-          onStateChange&&onStateChange({status:'in-call'});
+      const tryPeer=(pid)=>{
+        const peer=new window.Peer(pid,{debug:0});
+        peerRef.current=peer;
+        const answerIncoming=(call)=>{
+          callRef.current=call;call.answer(stream);
+          call.on('stream',rs=>{attachStream(remoteVidRef.current,rs);setStatus('connected');startTimer();onStateChange&&onStateChange({status:'in-call'});});
+          call.on('close',()=>hangup());
+          call.on('error',e=>{setErrorMsg(e.message||'Call error');setStatus('error');});
+        };
+        peer.on('open',()=>setStatus('ringing'));
+        peer.on('call',call=>answerIncoming(call));
+        peer.on('error',e=>{
+          if(e.type==='unavailable-id'){setTimeout(()=>{try{peer.destroy();}catch(x){}tryPeer(pid+'-r');},600);}
+          else{setErrorMsg(e.message||'Peer error');setStatus('error');}
         });
-        call.on('close',()=>hangup());
-        call.on('error',e=>{setErrorMsg(e.message||'Call error');setStatus('error');});
       };
-
-      peer.on('open',()=>setStatus('ringing'));
-      peer.on('call',call=>answerIncoming(call));
-      peer.on('error',e=>{
-        // ID taken means someone else opened a peer with our ID (previous session) — retry
-        if(e.type==='unavailable-id'){
-          setTimeout(()=>{
-            if(peerRef.current)peerRef.current.destroy();
-            const p2=new window.Peer(cu.id+'-r',{debug:0});
-            peerRef.current=p2;
-            p2.on('call',call=>answerIncoming(call));
-            p2.on('open',()=>setStatus('ringing'));
-          },500);
-        } else {
-          setErrorMsg(e.message||'Peer error');setStatus('error');
-        }
-      });
-    }catch(e){
-      setErrorMsg(e.message||'Camera/mic access denied');
-      setStatus('error');
-    }
+      tryPeer(cu.id);
+    }catch(e){setErrorMsg(e.message||'Camera/mic access denied');setStatus('error');}
   };
 
   const hangup=()=>{
-    cleanup();
-    setRoom(null);setRemoteUser(null);setMinimized(false);
+    cleanup();setRoom(null);setRemoteUser(null);setMinimized(false);
     setStatus('connecting');setElapsed(0);setErrorMsg('');
     onStateChange&&onStateChange({status:'idle'});
   };
+  const toggleMute=()=>{if(!localStreamRef.current)return;localStreamRef.current.getAudioTracks().forEach(t=>{t.enabled=!t.enabled;});setMuted(m=>!m);};
+  const toggleCam=()=>{if(!localStreamRef.current)return;localStreamRef.current.getVideoTracks().forEach(t=>{t.enabled=!t.enabled;});setCamOff(c=>!c);};
 
-  const toggleMute=()=>{
-    if(!localStreamRef.current)return;
-    localStreamRef.current.getAudioTracks().forEach(t=>{t.enabled=!t.enabled;});
-    setMuted(m=>!m);
-  };
-  const toggleCam=()=>{
-    if(!localStreamRef.current)return;
-    localStreamRef.current.getVideoTracks().forEach(t=>{t.enabled=!t.enabled;});
-    setCamOff(c=>!c);
-  };
-
-  // Expose commands to parent
   useEffect(()=>{
     if(!cmdRef)return;
     cmdRef.current={
-      openHuddle:(user)=>{
-        if(!user||!cu)return;
-        const r=roomFor(cu.id,user.id);
-        setRemoteUser(user);setRoom(r);setMinimized(false);
-      },
-      start:(name)=>{
-        setRemoteUser(null);setRoom('pfp-general-'+Date.now());setMinimized(false);
-      },
-      leave:hangup,
-      show:()=>setMinimized(false),
+      openHuddle:(user)=>{if(!user||!cu)return;setRemoteUser(user);setRoom('pf-'+Date.now());setMinimized(false);},
+      start:()=>{setRemoteUser(null);setRoom('pfp-'+Date.now());setMinimized(false);},
+      leave:hangup,show:()=>setMinimized(false),
     };
   },[cu]);
 
-  // When room is set, initiate or answer based on who's the "caller"
-  // (lower sorted ID is always the caller)
   useEffect(()=>{
     if(!room||!cu)return;
-    if(remoteUser){
-      // Determine role: smaller ID calls, larger ID answers
-      const isCaller=cu.id<remoteUser.id;
-      if(isCaller)startCall(remoteUser);
-      else answerCall();
-    } else {
-      // General room — just answer/wait
-      answerCall();
-    }
-    return ()=>cleanup();
+    if(remoteUser){const isCaller=cu.id<remoteUser.id;if(isCaller)startCall(remoteUser);else answerCall();}
+    else answerCall();
+    return()=>cleanup();
   },[room]);
 
   if(!room)return null;
 
-  const statusLabel={
-    connecting:'Starting camera…',
-    calling:'Calling…',
-    ringing:'Waiting for call…',
-    connected:fmtTime(elapsed),
-    error:'Connection failed',
-  }[status]||'…';
+  const statusLabel={connecting:'Starting camera…',calling:'Calling…',ringing:'Waiting for call…',connected:fmtTime(elapsed),error:'Failed'}[status]||'…';
 
   return html`
-    <div style=${{
-      position:'fixed',
-      bottom:minimized?16:0,right:minimized?16:0,
-      width:minimized?'280px':'100vw',
-      height:minimized?'52px':'100vh',
-      zIndex:9800,borderRadius:minimized?14:0,
-      overflow:'hidden',
-      boxShadow:minimized?'0 8px 40px rgba(0,0,0,.7)':'none',
-      transition:'all .3s cubic-bezier(.4,0,.2,1)',
-      display:'flex',flexDirection:'column',
-      background:'#0d1117',
-    }}>
-
-      <!-- Top bar -->
-      <div style=${{
-        display:'flex',alignItems:'center',gap:10,padding:'0 14px',
-        height:52,flexShrink:0,
-        background:'rgba(0,0,0,.7)',backdropFilter:'blur(12px)',
-        borderBottom:minimized?'none':'1px solid rgba(255,255,255,.08)',
-        cursor:minimized?'pointer':'default',
-      }} onClick=${minimized?()=>setMinimized(false):null}>
-        <div style=${{width:8,height:8,borderRadius:'50%',
-          background:status==='connected'?'#22c55e':'#f59e0b',
-          boxShadow:status==='connected'?'0 0 8px #22c55e':'0 0 8px #f59e0b',
-          animation:'pulse 1.5s infinite',flexShrink:0}}></div>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}>
-          <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14"/>
-          <rect x="3" y="6" width="12" height="12" rx="2"/>
-        </svg>
-        <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-          ${remoteUser?'Meet · '+remoteUser.name:'Instant Meet'}
-        </span>
-        <span style=${{fontSize:11,color:status==='connected'?'#22c55e':'#f59e0b',fontFamily:'monospace',fontWeight:700,
-          background:status==='connected'?'rgba(34,197,94,.12)':'rgba(245,158,11,.12)',
-          padding:'2px 8px',borderRadius:100,border:'1px solid '+(status==='connected'?'rgba(34,197,94,.3)':'rgba(245,158,11,.3)'),
-          flexShrink:0,fontSize:10}}>
-          ${statusLabel}
-        </span>
-        <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}}
-          style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',color:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:13}}
-          title=${minimized?'Expand':'Minimise'}>${minimized?'⛶':'—'}</button>
-        ${!minimized?html`
-          <button onClick=${hangup}
-            style=${{height:30,padding:'0 14px',borderRadius:8,background:'rgba(239,68,68,.25)',border:'1px solid rgba(239,68,68,.5)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:12,flexShrink:0}}>
-            Leave
-          </button>`:null}
+    <div style=${{position:'fixed',bottom:minimized?16:0,right:minimized?16:0,width:minimized?'280px':'100vw',height:minimized?'52px':'100vh',zIndex:9800,borderRadius:minimized?14:0,overflow:'hidden',boxShadow:minimized?'0 8px 40px rgba(0,0,0,.7)':'none',transition:'all .3s cubic-bezier(.4,0,.2,1)',display:'flex',flexDirection:'column',background:'#0d1117'}}>
+      <div style=${{display:'flex',alignItems:'center',gap:10,padding:'0 14px',height:52,flexShrink:0,background:'rgba(0,0,0,.7)',backdropFilter:'blur(12px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.08)',cursor:minimized?'pointer':'default'}} onClick=${minimized?()=>setMinimized(false):null}>
+        <div style=${{width:8,height:8,borderRadius:'50%',background:status==='connected'?'#22c55e':'#f59e0b',boxShadow:status==='connected'?'0 0 8px #22c55e':'0 0 8px #f59e0b',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
+        <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${remoteUser?'Meet · '+remoteUser.name:'Instant Meet'}</span>
+        <span style=${{fontSize:10,color:status==='connected'?'#22c55e':'#f59e0b',fontFamily:'monospace',fontWeight:700,background:status==='connected'?'rgba(34,197,94,.12)':'rgba(245,158,11,.12)',padding:'2px 8px',borderRadius:100,border:'1px solid '+(status==='connected'?'rgba(34,197,94,.3)':'rgba(245,158,11,.3)'),flexShrink:0}}>${statusLabel}</span>
+        <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}} style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',color:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:13}} title=${minimized?'Expand':'Minimise'}>${minimized?'⛶':'—'}</button>
+        ${!minimized?html`<button onClick=${hangup} style=${{height:30,padding:'0 14px',borderRadius:8,background:'rgba(239,68,68,.25)',border:'1px solid rgba(239,68,68,.5)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:12,flexShrink:0}}>Leave</button>`:null}
       </div>
-
-      <!-- Video area -->
       ${!minimized?html`
         <div style=${{flex:1,position:'relative',background:'#0d1117',overflow:'hidden'}}>
-
-          <!-- Remote video (main, full area) -->
-          <video ref=${remoteVidRef} autoplay playsinline
-            style=${{width:'100%',height:'100%',objectFit:'cover',background:'#111',display:status==='connected'?'block':'none'}}></video>
-
-          <!-- Waiting overlay -->
+          <video ref=${remoteVidRef} autoplay playsinline style=${{width:'100%',height:'100%',objectFit:'cover',background:'#111',display:status==='connected'?'block':'none'}}></video>
           ${status!=='connected'?html`
             <div style=${{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16,background:'#0d1117'}}>
-              ${remoteUser?html`
-                <div style=${{width:72,height:72,borderRadius:'50%',background:remoteUser.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff',boxShadow:'0 0 0 3px rgba(255,255,255,.1)'}}>
-                  ${(remoteUser.avatar||remoteUser.name||'?')[0]}
-                </div>`:null}
+              ${remoteUser?html`<div style=${{width:72,height:72,borderRadius:'50%',background:remoteUser.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff'}}>${(remoteUser.avatar||remoteUser.name||'?')[0]}</div>`:null}
               <div style=${{fontSize:16,fontWeight:700,color:'#fff'}}>${remoteUser?remoteUser.name:'Instant Meet'}</div>
-              ${status==='error'?html`
-                <div style=${{fontSize:13,color:'#f87171',textAlign:'center',maxWidth:300,lineHeight:1.6,padding:'0 24px'}}>${errorMsg||'Connection failed'}</div>
-                <button class="btn bp" style=${{marginTop:8}} onClick=${hangup}>Close</button>
-              `:html`
-                <div style=${{display:'flex',alignItems:'center',gap:10,color:'#94a3b8',fontSize:13}}>
-                  <div style=${{width:16,height:16,border:'2px solid rgba(255,255,255,.2)',borderTop:'2px solid #22c55e',borderRadius:'50%',animation:'sp .8s linear infinite'}}></div>
-                  ${statusLabel}
-                </div>
-              `}
+              ${status==='error'?html`<div style=${{fontSize:13,color:'#f87171',textAlign:'center',maxWidth:300,padding:'0 24px'}}>${errorMsg||'Connection failed'}</div><button class="btn bp" style=${{marginTop:8}} onClick=${hangup}>Close</button>`
+              :html`<div style=${{display:'flex',alignItems:'center',gap:10,color:'#94a3b8',fontSize:13}}><div style=${{width:16,height:16,border:'2px solid rgba(255,255,255,.2)',borderTop:'2px solid #22c55e',borderRadius:'50%',animation:'sp .8s linear infinite'}}></div>${statusLabel}</div>`}
             </div>`:null}
-
-          <!-- Local video (picture-in-picture) -->
-          <div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,overflow:'hidden',
-            border:'2px solid rgba(255,255,255,.15)',boxShadow:'0 4px 20px rgba(0,0,0,.6)',
-            background:'#1a1a2e',display:camOff?'none':'block'}}>
-            <video ref=${localVidRef} autoplay muted playsinline
-              style=${{width:'100%',height:'100%',objectFit:'cover',transform:'scaleX(-1)'}}></video>
+          <div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,overflow:'hidden',border:'2px solid rgba(255,255,255,.15)',boxShadow:'0 4px 20px rgba(0,0,0,.6)',background:'#1a1a2e',display:camOff?'none':'block'}}>
+            <video ref=${localVidRef} autoplay muted playsinline style=${{width:'100%',height:'100%',objectFit:'cover',transform:'scaleX(-1)'}}></video>
           </div>
-          ${camOff?html`
-            <div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,
-              border:'2px solid rgba(255,255,255,.15)',background:'#1a1a2e',
-              display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:6}}>
-              <div style=${{fontSize:22}}>📷</div>
-              <div style=${{fontSize:10,color:'#94a3b8'}}>Camera off</div>
-            </div>`:null}
-
-          <!-- Controls bar -->
-          <div style=${{position:'absolute',bottom:0,left:0,right:0,height:70,
-            background:'linear-gradient(to top,rgba(0,0,0,.85),transparent)',
-            display:'flex',alignItems:'center',justifyContent:'center',gap:14,paddingBottom:8}}>
-            <!-- Mute -->
-            <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'}
-              style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',
-                background:muted?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',
-                color:muted?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,transition:'all .15s'}}>
-              ${muted?'🔇':'🎙️'}
-            </button>
-            <!-- Camera -->
-            <button onClick=${toggleCam} title=${camOff?'Camera on':'Camera off'}
-              style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',
-                background:camOff?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',
-                color:camOff?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,transition:'all .15s'}}>
-              ${camOff?'📷':'📹'}
-            </button>
-            <!-- Hang up -->
-            <button onClick=${hangup} title="Leave call"
-              style=${{width:52,height:52,borderRadius:'50%',border:'none',cursor:'pointer',
-                background:'#ef4444',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,
-                boxShadow:'0 4px 16px rgba(239,68,68,.5)',transition:'all .15s'}}>
-              📵
-            </button>
+          ${camOff?html`<div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,border:'2px solid rgba(255,255,255,.15)',background:'#1a1a2e',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:6}}><div style=${{fontSize:22}}>📷</div><div style=${{fontSize:10,color:'#94a3b8'}}>Camera off</div></div>`:null}
+          <div style=${{position:'absolute',bottom:0,left:0,right:0,height:70,background:'linear-gradient(to top,rgba(0,0,0,.85),transparent)',display:'flex',alignItems:'center',justifyContent:'center',gap:14,paddingBottom:8}}>
+            <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'} style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',background:muted?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',color:muted?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${muted?'🔇':'🎙️'}</button>
+            <button onClick=${toggleCam} title=${camOff?'Camera on':'Camera off'} style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',background:camOff?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',color:camOff?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${camOff?'📷':'📹'}</button>
+            <button onClick=${hangup} title="Leave call" style=${{width:52,height:52,borderRadius:'50%',border:'none',cursor:'pointer',background:'#ef4444',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 16px rgba(239,68,68,.5)'}}>📵</button>
           </div>
         </div>`:null}
     </div>`;
