@@ -4263,15 +4263,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
           </div>
         </div>
         <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                    <!-- Search trigger -->
-          <button onClick=${()=>{if(window._pfOpenSearch)window._pfOpenSearch();}}
-            title="Search (Ctrl+K)"
-            style=${{width:32,height:32,borderRadius:9,border:'1px solid var(--bd)',background:'var(--sf)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx3)',transition:'all .15s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx3)';}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </button>
-          <div style=${{position:'relative'}} ref=${npRef}>
+                    <div style=${{position:'relative'}} ref=${npRef}>
             <button style=${{width:34,height:34,borderRadius:'50%',border:'none',background:showNP?'var(--sf2)':'var(--sf)',boxShadow:showNP?'none':'var(--sh)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',color:'var(--tx2)',transition:'all .15s'}}
               onClick=${()=>setShowNP(v=>!v)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -5279,7 +5271,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
         const byAssignee=teamFilterMemberIds&&t.assignee&&teamFilterMemberIds.has(t.assignee);
         if(!byTeamId&&!byAssignee)return false;
       }
-      if(search&&!t.title.toLowerCase().includes(search.toLowerCase()))return false;
+      if(search){const sq=search.toLowerCase();if(!t.title.toLowerCase().includes(sq)&&!t.id.toLowerCase().includes(sq))return false;}
       if(dueF!=='all'&&t.due){
         const d=new Date(t.due);d.setHours(0,0,0,0);
         if(dueF==='overdue'&&d>=today)return false;
@@ -5338,7 +5330,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
         <div style=${{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           <div style=${{position:'relative',flex:'1 1 160px',minWidth:130}}>
             <span style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--tx3)',fontSize:13}}>🔍</span>
-            <input class="inp" style=${{paddingLeft:30}} placeholder="Search tasks..." value=${search} onInput=${e=>setSearch(e.target.value)}/>
+            <input class="inp" style=${{paddingLeft:30}} placeholder="Search by task ID or name (e.g. T-015)" value=${search} onInput=${e=>setSearch(e.target.value)}/>
           </div>
           <button class=${'btn bg'+(showFilters?' act':'')} style=${{position:'relative',padding:'8px 13px',fontSize:12,borderColor:activeFilters>0?'var(--ac)':'',color:activeFilters>0?'var(--ac2)':''}}
             onClick=${()=>setShowFilters(!showFilters)}>
@@ -6323,10 +6315,13 @@ function MessagesView({projects,users,cu,tasks}){
   const fixedOrderRef=useRef(null);
   const [newMsgProjects,setNewMsgProjects]=useState(new Set()); // projects with new msgs since load
 
-  // Build fixed order on first data
+  // Build fixed order ONCE — on first render that has both projects + timestamps
+  // After that, never rebuild (prevents glitching)
+  const orderBuiltRef=useRef(false);
   useEffect(()=>{
-    if(fixedOrderRef.current||!allProjects.length)return;
-    // Sort by last message timestamp descending (stable initial order)
+    if(orderBuiltRef.current)return; // never rebuild
+    if(!allProjects.length)return;   // wait for projects
+    orderBuiltRef.current=true;
     const ts=lastMsgTs||{};
     const sorted=[...allProjects].sort((a,b)=>{
       const at=ts[a.id]||a.created||'';
@@ -6334,7 +6329,7 @@ function MessagesView({projects,users,cu,tasks}){
       return bt.localeCompare(at);
     });
     fixedOrderRef.current=sorted.map(p=>p.id);
-  },[allProjects,lastMsgTs]);
+  },[allProjects.length,Object.keys(lastMsgTs).length]); // only rebuild if item count changes
 
   const sortedProjects=useMemo(()=>{
     let rows=[...allProjects];
@@ -6605,8 +6600,8 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
         ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(toUser.id)?1:.4}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
-          <button title=${'Start Google Meet with '+toUser.name}
-            onClick=${()=>onStartHuddle&&onStartHuddle(toUser)}
+          <button title=${'Start Google Meet with '+toUser.name+' (opens in new tab)'}
+            onClick=${()=>window.open('https://meet.new','_blank','noopener,noreferrer')}
             style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid var(--bd)',background:'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s',flexShrink:0}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
@@ -8171,30 +8166,26 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
   const [roomName,setRoomName]=useState('');
 
   const genMeetUrl=()=>{
-    // Generate a unique meet.google.com style room code
-    const chars='abcdefghijklmnopqrstuvwxyz';
-    const seg=n=>[...Array(n)].map(()=>chars[Math.floor(Math.random()*chars.length)]).join('');
-    return 'https://meet.google.com/'+seg(3)+'-'+seg(4)+'-'+seg(3);
+    // meet.new always creates a fresh, valid Google Meet room
+    // Room codes can only be generated by Google's servers — not client-side
+    return 'https://meet.new';
   };
 
   useEffect(()=>{
     if(cmdRef)cmdRef.current={
       openHuddle:(user)=>{
-        const url=genMeetUrl();
-        const name=user?'Meet with '+user.name:'Team Instant Meet';
-        setMeetUrl(url);setRoomName(name);setShowDialog(true);
-        onStateChange&&onStateChange({status:'idle'});
+        // Directly open Google Meet — no popup needed
+        window.open('https://meet.new','_blank','noopener,noreferrer');
       },
       start:()=>{
-        const url=genMeetUrl();
-        setMeetUrl(url);setRoomName('Team Instant Meet');setShowDialog(true);
+        window.open('https://meet.new','_blank','noopener,noreferrer');
       },
-      leave:()=>{setShowDialog(false);setMeetUrl(null);},
+      leave:()=>{},
     };
   },[]);
 
-  if(!showDialog||!meetUrl)return null;
-  return html`
+  return null; // No in-app dialog — meet.new opens directly in new tab
+  if(false)return html`
     <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:9900,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}}
       onClick=${e=>{if(e.target===e.currentTarget){setShowDialog(false);setMeetUrl(null);}}}>
       <div style=${{width:'min(440px,92vw)',background:'var(--sf)',borderRadius:18,boxShadow:'0 24px 80px rgba(0,0,0,.4)',border:'1px solid var(--bd)',overflow:'hidden'}}>
@@ -8217,7 +8208,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           <div style=${{fontSize:12,color:'var(--tx3)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:.5}}>Your meeting link</div>
           <div style=${{display:'flex',gap:8,marginBottom:16}}>
             <div style=${{flex:1,padding:'10px 12px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,fontSize:12,fontFamily:'monospace',color:'var(--ac)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-              ${meetUrl}
+              https://meet.new → opens a fresh Google Meet room
             </div>
             <button onClick=${()=>{navigator.clipboard.writeText(meetUrl).then(()=>window._pfToast&&window._pfToast('ok','✓ Copied','Link copied to clipboard'));}}
               style=${{padding:'10px 14px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,cursor:'pointer',color:'var(--tx2)',fontSize:12,fontWeight:600,flexShrink:0,transition:'all .15s'}}
@@ -8243,8 +8234,8 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             </a>
           </div>
           <div style=${{marginTop:12,padding:'10px 12px',background:'rgba(26,115,232,.07)',borderRadius:9,border:'1px solid rgba(26,115,232,.15)',fontSize:11,color:'var(--tx3)',lineHeight:1.6}}>
-            Share this link with your team. Anyone with the link can join. 
-            The meeting stays open until everyone leaves.
+            Clicking <b>Open in Google Meet</b> creates a new room. 
+            Share the Google Meet link from your browser with teammates so they can join the same room.
           </div>
         </div>
       </div>
