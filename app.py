@@ -709,6 +709,11 @@ def login():
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
+        # Mark user as active immediately on login
+        try:
+            db.execute("UPDATE users SET last_active=? WHERE id=?",
+                       (datetime.utcnow().isoformat(), u["id"]))
+        except Exception: pass
         return jsonify(dict(u))
 
 @app.route("/api/auth/verify-otp",methods=["POST"])
@@ -733,6 +738,11 @@ def verify_otp():
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
+        # Mark user as active immediately on OTP login
+        try:
+            db.execute("UPDATE users SET last_active=? WHERE id=?",
+                       (datetime.utcnow().isoformat(), u["id"]))
+        except Exception: pass
         return jsonify(dict(u))
 
 @app.route("/api/auth/resend-otp",methods=["POST"])
@@ -4112,7 +4122,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true}){
+function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true,onlineUsers=new Set()}){
   const inCall=false; // Google Meet handles calls externally
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
@@ -4174,6 +4184,28 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
               position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--cy)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
             }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
           </button>`)}
+        ${/* Online users mini-list below DM nav, only when expanded and DM enabled */
+          !col&&(wsDmEnabled||(cu&&(cu.role==='Admin'||cu.role==='Manager')))&&users&&users.length>0?html`
+          <div style=${{padding:'4px 4px 2px 12px',display:'flex',flexDirection:'column',gap:1}}>
+            ${safe(users).filter(u=>u.id!==cu?.id).slice(0,8).map(u=>{
+              const isOnline=onlineUsers.has(u.id);
+              const unreadCnt=(dmUnread.find(x=>x.user_id===u.id)||{}).cnt||0;
+              return html`
+              <button key=${u.id}
+                onClick=${()=>setView('dm:'+u.id)}
+                title=${u.name+(isOnline?' (Online)':'')}
+                style=${{display:'flex',alignItems:'center',gap:7,width:'100%',padding:'4px 6px',borderRadius:7,border:'none',cursor:'pointer',background:'transparent',transition:'background .1s'}}
+                onMouseEnter=${e=>e.currentTarget.style.background='rgba(37,99,235,0.12)'}
+                onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
+                <div style=${{position:'relative',flexShrink:0}}>
+                  <div style=${{width:20,height:20,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>
+                  <div style=${{position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:isOnline?'#22c55e':'rgba(148,163,184,0.4)',border:'1.5px solid #0f172a',transition:'background .3s'}}></div>
+                </div>
+                <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.9)':'rgba(148,163,184,0.55)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${u.name}</span>
+                ${unreadCnt>0?html`<span style=${{minWidth:14,height:14,borderRadius:7,background:'var(--cy)',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px',flexShrink:0}}>${unreadCnt}</span>`:null}
+              </button>`;
+            })}
+          </div>`:null}
       </nav>
 
             <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
@@ -8742,7 +8774,10 @@ function App(){
 
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
-      <${Sidebar} cu=${cu} view=${baseView} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${v=>{setCol(v);try{localStorage.setItem('pf_col',v?'1':'0');}catch{}}} wsName=${wsName}
+      <${Sidebar} cu=${cu} view=${baseView} setView=${v=>{
+          if(typeof v==='string'&&v.startsWith('dm:')){const uid=v.slice(3);setDmTargetUser(uid);setView('dm');}
+          else setView(v);
+        }} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${v=>{setCol(v);try{localStorage.setItem('pf_col',v?'1':'0');}catch{}}} wsName=${wsName}
         dark=${dark} setDark=${setDark} wsDmEnabled=${wsDmEnabled} onlineUsers=${onlineUsers}
         teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}
         teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
