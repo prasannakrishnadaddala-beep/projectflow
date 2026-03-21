@@ -817,8 +817,8 @@ def get_presence():
         # Use 3-minute window; strip Z suffix so string comparison is consistent
         cutoff = (datetime.utcnow() - timedelta(minutes=3)).isoformat()
         rows = db.execute(
-            "SELECT id FROM users WHERE workspace_id=? AND REPLACE(last_active,'Z','')>?",
-            (wid(), cutoff)).fetchall()
+            "SELECT id FROM users WHERE workspace_id=? AND (REPLACE(last_active,'Z','')>? OR last_active>?)",
+            (wid(), cutoff, cutoff)).fetchall()
         return jsonify([r["id"] for r in rows])
 
 @app.route("/api/meet/notify", methods=["POST"])
@@ -8321,13 +8321,17 @@ function App(){
   // Presence heartbeat — ping every 30s, fetch online users every 15s
   useEffect(()=>{
     if(!cu)return;
-    const fetchPresence=()=>api.get('/api/presence').then(ids=>{if(Array.isArray(ids))setOnlineUsers(new Set(ids));}).catch(()=>{});
-    const beat=()=>api.post('/api/presence',{}).then(fetchPresence).catch(()=>{});
-    beat(); // immediate on mount — beat then fetch
+    const fetchPresence=()=>api.get('/api/presence').then(ids=>{
+      if(Array.isArray(ids)&&ids.length>=0)setOnlineUsers(new Set(ids));
+    }).catch(()=>{});
+    const beat=()=>api.post('/api/presence',{}).then(()=>fetchPresence()).catch(()=>{});
+    // Fire immediately on mount
+    fetchPresence(); // fetch current online users right away (don't wait for beat)
+    beat();          // then beat + fetch again
     const beatId=setInterval(beat,15000);
-    window.addEventListener('focus',beat);
+    window.addEventListener('focus',()=>{beat();});
     const presId=setInterval(fetchPresence,8000);
-    return()=>{clearInterval(beatId);clearInterval(presId);window.removeEventListener('focus',beat);};
+    return()=>{clearInterval(beatId);clearInterval(presId);};
   },[cu]);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
