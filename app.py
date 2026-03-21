@@ -2339,27 +2339,231 @@ def icon_512():
     return Response(png_data, mimetype='image/png',
         headers={'Cache-Control':'public,max-age=86400'})
 
+
+@app.route("/about")
+def about_page():
+    """Public About page — indexed by Google, no login required."""
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>About VEUIT — AI-Powered Team Collaboration Platform</title>
+<meta name="description" content="VEUIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
+<meta name="keywords" content="VEUIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="https://www.vewit.in/about"/>
+<meta property="og:title" content="About VEUIT — AI-Powered Team Collaboration"/>
+<meta property="og:description" content="VEUIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, tickets and analytics all in one place."/>
+<meta property="og:url" content="https://www.vewit.in/about"/>
+<meta property="og:type" content="website"/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization",
+"name":"VEUIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
+"foundingDate":"2024","applicationCategory":"BusinessApplication",
+"sameAs":["https://www.vewit.in"]}
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1e293b;background:#fff;line-height:1.6}
+.nav{background:#0f172a;padding:16px 40px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{color:#fff;font-size:20px;font-weight:800;letter-spacing:-0.5px;text-decoration:none}
+.nav-logo span{color:#2563eb}
+.nav-cta{background:#2563eb;color:#fff;padding:9px 22px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700}
+.hero{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:#fff;padding:80px 40px;text-align:center}
+.hero h1{font-size:clamp(28px,5vw,52px);font-weight:800;letter-spacing:-1px;margin-bottom:20px;line-height:1.15}
+.hero h1 span{color:#60a5fa}
+.hero p{font-size:18px;color:#94a3b8;max-width:640px;margin:0 auto 36px}
+.hero-cta{display:inline-block;background:#2563eb;color:#fff;padding:14px 36px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-right:12px}
+.hero-sec{display:inline-block;border:1px solid rgba(255,255,255,.25);color:#cbd5e1;padding:13px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600}
+.section{padding:72px 40px;max-width:1100px;margin:0 auto}
+.section-label{font-size:12px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
+.section h2{font-size:clamp(24px,3.5vw,38px);font-weight:800;letter-spacing:-0.5px;margin-bottom:16px;color:#0f172a}
+.section p{color:#475569;font-size:16px;max-width:680px}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:48px}
+.feat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:28px;transition:box-shadow .2s}
+.feat:hover{box-shadow:0 8px 32px rgba(37,99,235,.1)}
+.feat-icon{width:48px;height:48px;background:#eff6ff;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px}
+.feat h3{font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px}
+.feat p{font-size:14px;color:#64748b;line-height:1.55}
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-top:36px}
+.role{background:#f1f5f9;border-radius:12px;padding:20px;text-align:center}
+.role-icon{font-size:28px;margin-bottom:8px}
+.role h4{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px}
+.role p{font-size:12px;color:#64748b}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px;background:#0f172a;border-radius:20px;padding:48px;margin-top:48px}
+.stat{text-align:center;color:#fff}
+.stat-num{font-size:42px;font-weight:800;color:#60a5fa;display:block;letter-spacing:-1px}
+.stat-label{font-size:13px;color:#94a3b8;margin-top:4px}
+.divider{height:1px;background:#e2e8f0;margin:0 40px}
+footer{background:#0f172a;color:#94a3b8;padding:40px;text-align:center;font-size:13px}
+footer a{color:#60a5fa;text-decoration:none}
+footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:16px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-logo">VEUIT</a>
+  <a href="/?action=login" class="nav-cta">Sign In →</a>
+</nav>
+
+<section class="hero">
+  <h1>AI-Powered <span>Team Collaboration</span><br/>Built for Modern Teams</h1>
+  <p>VEUIT brings together project management, task tracking, direct messaging, support tickets, timeline planning and developer analytics — all in one unified platform.</p>
+  <a href="/?action=register" class="hero-cta">Get Started Free</a>
+  <a href="/?action=login" class="hero-sec">Sign In</a>
+</section>
+
+<div class="section">
+  <div class="section-label">What is VEUIT</div>
+  <h2>Everything your team needs, in one place</h2>
+  <p>VEUIT is a multi-workspace team collaboration platform powered by AI. Teams use VEUIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
+
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon">📋</div>
+      <h3>Project Management</h3>
+      <p>Create and manage multiple projects with team assignments, progress tracking, target dates and priority management. Filter projects by team and track completion rates in real time.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">✅</div>
+      <h3>Smart Task Board</h3>
+      <p>Kanban-style task board with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders. Assign tasks to specific team members with role-based access.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">💬</div>
+      <h3>Direct Messages</h3>
+      <p>Private one-to-one messaging between team members with real-time online presence indicators, message history and unread notification badges. See who is active at a glance.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">#️⃣</div>
+      <h3>Project Channels</h3>
+      <p>Dedicated message channels per project for focused team communication. Share updates, files and decisions in context without cluttering direct messages.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🎫</div>
+      <h3>Support Tickets</h3>
+      <p>Full ticketing system with bug reports, feature requests, priority levels, assignee tracking, status workflows and team-based filtering. Close issues faster with full context.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📅</div>
+      <h3>Timeline Tracker</h3>
+      <p>Visual Gantt-style timeline to plan project schedules, track milestones and identify overlapping workloads across your entire team. Navigate weeks and months effortlessly.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📊</div>
+      <h3>Developer Productivity</h3>
+      <p>Analytics dashboard measuring individual and team output — completed tasks, velocity, blocked work, sprint performance and project contribution breakdowns.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🤖</div>
+      <h3>AI Assistant</h3>
+      <p>Built-in AI assistant powered by Anthropic Claude. Ask questions about your projects and tasks, get summaries, generate task descriptions and get intelligent suggestions.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⏰</div>
+      <h3>Smart Reminders</h3>
+      <p>Set reminders on tasks and deadlines. Get desktop push notifications at the right time so nothing falls through the cracks — even when the app is in the background.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔔</div>
+      <h3>Push Notifications</h3>
+      <p>Real-time notifications for task assignments, status changes, comments, direct messages and reminders. Desktop and in-app notifications route you directly to the relevant item.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">👥</div>
+      <h3>Team Management</h3>
+      <p>Create sub-teams within your workspace, assign team leads, add members and filter all views by team. Admins control roles, permissions and workspace settings.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🏢</div>
+      <h3>Multi-Workspace</h3>
+      <p>Separate workspaces for different companies or departments, each with their own members, projects, settings and branding. Invite members with a unique workspace code.</p>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="section">
+  <div class="section-label">User Roles</div>
+  <h2>Role-based access for every team</h2>
+  <p>VEUIT supports five user roles with fine-grained permissions, so every team member sees exactly what they need.</p>
+  <div class="roles">
+    <div class="role"><div class="role-icon">👑</div><h4>Admin</h4><p>Full workspace control, settings, billing and all data</p></div>
+    <div class="role"><div class="role-icon">🗂️</div><h4>Manager</h4><p>Create projects, manage tasks and view all team data</p></div>
+    <div class="role"><div class="role-icon">🏷️</div><h4>Team Lead</h4><p>Lead sub-teams, assign tasks and manage team members</p></div>
+    <div class="role"><div class="role-icon">💻</div><h4>Developer</h4><p>Work on assigned tasks, log progress and communicate</p></div>
+    <div class="role"><div class="role-icon">🔍</div><h4>Tester</h4><p>Create and manage tickets, test and verify work items</p></div>
+    <div class="role"><div class="role-icon">👁️</div><h4>Viewer</h4><p>Read-only access to projects and team progress</p></div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="section" style="padding-bottom:0">
+  <div class="section-label">Why VEUIT</div>
+  <h2>One platform, zero context switching</h2>
+  <p>Most teams use 5–7 separate tools for project management, communication, ticketing and analytics. VEUIT replaces all of them with a single integrated platform that keeps your entire team in sync.</p>
+  <div class="stats">
+    <div class="stat"><span class="stat-num">12+</span><span class="stat-label">Integrated modules</span></div>
+    <div class="stat"><span class="stat-num">6</span><span class="stat-label">User role levels</span></div>
+    <div class="stat"><span class="stat-num">∞</span><span class="stat-label">Projects & tasks</span></div>
+    <div class="stat"><span class="stat-num">AI</span><span class="stat-label">Powered by Claude</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Get Started</div>
+  <h2>Ready to bring your team together?</h2>
+  <p>Create a free workspace in seconds. Invite your team, set up your first project and start shipping faster — no credit card required.</p>
+  <div style="margin-top:28px;display:flex;gap:16px;flex-wrap:wrap">
+    <a href="/?action=register" class="hero-cta" style="display:inline-block">Create Free Account</a>
+    <a href="/?action=login" class="hero-sec" style="display:inline-block;background:#f1f5f9;border-color:#e2e8f0;color:#475569">Sign In to VEUIT</a>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+    <a href="/?action=login">Sign In</a>
+    <a href="/?action=register">Sign Up</a>
+  </div>
+  <p>© 2024 VEUIT — AI-Powered Team Collaboration Platform &nbsp;·&nbsp; <a href="https://www.vewit.in">www.vewit.in</a></p>
+</footer>
+
+</body>
+</html>"""
+
 @app.route("/sitemap.xml")
 def sitemap():
     xml = '''<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://www.vewit.in/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://www.vewit.in/dashboard</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
-  <url><loc>https://www.vewit.in/projects</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
-  <url><loc>https://www.vewit.in/tasks</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
-  <url><loc>https://www.vewit.in/messages</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://www.vewit.in/dm</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://www.vewit.in/tickets</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
-  <url><loc>https://www.vewit.in/timeline</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://www.vewit.in/reminders</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
-  <url><loc>https://www.vewit.in/team</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://www.vewit.in/productivity</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.vewit.in/about</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
 </urlset>'''
     return xml, 200, {"Content-Type": "application/xml"}
 
 @app.route("/robots.txt")
 def robots():
-    txt = "User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: https://www.vewit.in/sitemap.xml"
+    txt = """User-agent: *
+Allow: /
+Allow: /about
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /projects
+Disallow: /tasks
+Disallow: /messages
+Disallow: /dm
+Disallow: /tickets
+Disallow: /timeline
+Disallow: /reminders
+Disallow: /settings
+Disallow: /team
+Disallow: /productivity
+Sitemap: https://www.vewit.in/sitemap.xml"""
     return txt, 200, {"Content-Type": "text/plain"}
 
 @app.route("/dashboard")
