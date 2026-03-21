@@ -3189,33 +3189,219 @@ function showTab(t){
       </div>
     </div>
 
-    <!-- VEWIT vs others comparison -->
-    <div class="centered" style="margin-bottom:28px">
+    <!-- VEWIT vs others comparison — premium redesign -->
+    <div class="centered" style="margin-bottom:40px">
       <div class="sec-tag">VEWIT vs the alternatives</div>
-      <h3 style="font-size:clamp(18px,2.5vw,26px);font-weight:800;color:var(--tx);margin-top:10px;letter-spacing:-.02em">Stop paying for 5 tools when 1 does it all</h3>
+      <h3 style="font-size:clamp(20px,2.8vw,30px);font-weight:800;color:var(--tx);margin-top:12px;letter-spacing:-.03em;line-height:1.2">Stop paying for 5 tools when 1 does it all</h3>
+      <p style="color:var(--tx3);font-size:14px;margin-top:10px;max-width:520px;margin-left:auto;margin-right:auto">Every capability your team needs — built-in, not bolted on.</p>
     </div>
-    <div style="overflow-x:auto;margin-bottom:56px">
-      <table style="width:100%;border-collapse:collapse;min-width:560px;font-size:13px">
+
+    <div style="overflow-x:auto;margin-bottom:64px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.07);border:1px solid var(--bd)">
+      <table style="width:100%;border-collapse:collapse;min-width:600px">
+
+        <!-- Header -->
         <thead>
-          <tr style="border-bottom:2px solid var(--bd)">
-            <th style="padding:12px 16px;text-align:left;color:var(--tx3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Capability</th>
-            <th style="padding:12px 16px;text-align:center;color:var(--ac);font-weight:800;font-size:13px;background:var(--ac3);border-radius:8px 8px 0 0">VEWIT</th>
-            <th style="padding:12px 16px;text-align:center;color:var(--tx3);font-weight:600">Jira + Slack</th>
-            <th style="padding:12px 16px;text-align:center;color:var(--tx3);font-weight:600">Notion + Linear</th>
+          <tr>
+            <th style="padding:20px 24px;text-align:left;background:var(--sf);border-bottom:1px solid var(--bd);width:35%">
+              <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">Capability</span>
+            </th>
+            <!-- VEWIT column — highlighted -->
+            <th style="padding:20px 24px;text-align:center;background:linear-gradient(160deg,#1e3a5f,#0f172a);border-bottom:2px solid var(--ac);position:relative;width:21%">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="width:28px;height:28px;border-radius:8px;background:var(--ac);display:flex;align-items:center;justify-content:center;margin-bottom:2px">
+                  <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+                </div>
+                <span style="font-size:14px;font-weight:800;color:#fff;letter-spacing:-.01em">VEWIT</span>
+                <span style="font-size:10px;background:rgba(37,99,235,.35);color:#93c5fd;padding:2px 8px;border-radius:100px;font-weight:600;letter-spacing:.03em">RECOMMENDED</span>
+              </div>
+            </th>
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
+              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Jira + Slack</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
+            </th>
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
+              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Notion + Linear</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
+            </th>
           </tr>
         </thead>
+
         <tbody>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Project & task management</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅</td><td style="text-align:center;color:var(--tx3)">✅</td></tr>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Direct messaging</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅ (Slack)</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">AI assistant (workspace-aware)</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td><td style="text-align:center;color:var(--tx3)">Partial</td></tr>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Support ticket system</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Timeline / Gantt view</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅ (paid)</td><td style="text-align:center;color:var(--tx3)">Partial</td></tr>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Developer productivity analytics</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Push notifications (desktop)</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅</td><td style="text-align:center;color:var(--tx3)">❌</td></tr>
-          <tr style="border-bottom:1px solid var(--bd)"><td style="padding:11px 16px;color:var(--tx)">Multi-workspace / multi-tenant</td><td style="text-align:center;background:var(--ac4)">✅</td><td style="text-align:center;color:var(--tx3)">✅ (expensive)</td><td style="text-align:center;color:var(--tx3)">✅ (paid)</td></tr>
-          <tr><td style="padding:11px 16px;color:var(--tx);font-weight:700">Monthly cost</td><td style="text-align:center;background:var(--ac4);color:var(--ac);font-weight:800">Free to start</td><td style="text-align:center;color:var(--tx3)">$15–30/user</td><td style="text-align:center;color:var(--tx3)">$16–20/user</td></tr>
+          <!-- Row macro: cap | vewit | jira | notion -->
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📋</span>
+              Project &amp; task management
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💬</span>
+              Direct messaging
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">via Slack</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</span>
+              AI assistant (workspace-aware)
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
+                <span style="font-size:10px;color:#94a3b8">Partial</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🎫</span>
+              Support ticket system
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📅</span>
+              Timeline / Gantt view
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
+                <span style="font-size:10px;color:#94a3b8">Partial</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📊</span>
+              Developer productivity analytics
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔔</span>
+              Push notifications (desktop)
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🏢</span>
+              Multi-workspace / multi-tenant
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Expensive</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+              </div>
+            </td>
+          </tr>
+          <!-- Pricing footer row -->
+          <tr style="background:var(--sf2)">
+            <td style="padding:18px 24px;font-size:13px;font-weight:700;color:var(--tx)">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:28px;height:28px;border-radius:8px;background:var(--ac3);border:1px solid var(--bd);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💰</span>
+                Monthly cost per user
+              </div>
+            </td>
+            <td style="text-align:center;background:linear-gradient(160deg,rgba(37,99,235,.12),rgba(37,99,235,.06));padding:18px 24px;border-top:2px solid var(--ac)">
+              <div style="font-size:18px;font-weight:800;color:var(--ac);line-height:1">Free</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px;font-weight:500">to get started</div>
+            </td>
+            <td style="text-align:center;padding:18px 24px">
+              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$15–30</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
+            </td>
+            <td style="text-align:center;padding:18px 24px">
+              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$16–20</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
+            </td>
+          </tr>
         </tbody>
       </table>
+
+      <!-- Legend -->
+      <div style="display:flex;gap:20px;justify-content:flex-end;padding:14px 24px;border-top:1px solid var(--bd);background:var(--sf);border-radius:0 0 20px 20px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#dcfce7;font-size:10px">✓</span> Included
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fee2e2;font-size:9px;color:#ef4444">✕</span> Not available
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fef9c3;font-size:10px;color:#ca8a04">~</span> Partial / add-on
+        </div>
+      </div>
     </div>
 
     <!-- Security & tech stack -->
