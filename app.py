@@ -478,7 +478,13 @@ def init_db():
                 id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
                 project TEXT, assignee TEXT, priority TEXT, stage TEXT,
                 created TEXT, due TEXT, pct INTEGER DEFAULT 0, comments TEXT DEFAULT '[]',
-                team_id TEXT DEFAULT '');
+                team_id TEXT DEFAULT '', parent_id TEXT DEFAULT '',
+                story_points INTEGER DEFAULT 0, sprint TEXT DEFAULT '',
+                task_type TEXT DEFAULT 'task', labels TEXT DEFAULT '[]');
+            CREATE TABLE IF NOT EXISTS subtasks (
+                id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
+                title TEXT, done INTEGER DEFAULT 0, assignee TEXT DEFAULT '',
+                created TEXT);
             CREATE TABLE IF NOT EXISTS files (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, size INTEGER,
                 mime TEXT, task_id TEXT, project_id TEXT, uploaded_by TEXT, ts TEXT);
@@ -568,6 +574,22 @@ def init_db():
         try: db.execute("ALTER TABLE call_rooms ADD COLUMN invited_users TEXT DEFAULT '[]'")
         except: pass
         try: db.execute("ALTER TABLE notifications ADD COLUMN sender_id TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN parent_id TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN story_points INTEGER DEFAULT 0")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN sprint TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN task_type TEXT DEFAULT 'task'")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN labels TEXT DEFAULT '[]'")
+        except: pass
+        try: db.execute("""CREATE TABLE IF NOT EXISTS subtasks (
+            id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
+            title TEXT, done INTEGER DEFAULT 0, assignee TEXT DEFAULT '', created TEXT)""")
         except: pass
         try:
             db.execute("ALTER TABLE workspaces ADD COLUMN smtp_server TEXT")
@@ -777,6 +799,25 @@ def register():
     except Exception as e:
         if "UNIQUE" in str(e): return jsonify({"error":"Email already registered"}),400
         return jsonify({"error":str(e)}),500
+
+@app.route("/api/presence", methods=["POST"])
+@login_required
+def update_presence():
+    with get_db() as db:
+        db.execute("UPDATE users SET last_active=? WHERE id=? AND workspace_id=?",
+                   (ts(), session["user_id"], wid()))
+        return jsonify({"ok": True})
+
+@app.route("/api/presence")
+@login_required
+def get_presence():
+    """Returns list of user IDs active in last 2 minutes."""
+    with get_db() as db:
+        cutoff = (datetime.utcnow() - timedelta(minutes=2)).isoformat()
+        rows = db.execute(
+            "SELECT id FROM users WHERE workspace_id=? AND last_active>?",
+            (wid(), cutoff)).fetchall()
+        return jsonify([r["id"] for r in rows])
 
 @app.route("/api/auth/me")
 def me():
@@ -1160,14 +1201,26 @@ def update_task(tid):
 
         old_stage=t["stage"]
         old_stage=t["stage"]
+        def tf(key,default=''):
+            return t[key] if key in t.keys() else default
+        labels_val=d.get("labels",None)
+        if labels_val is not None and isinstance(labels_val,list): labels_val=json.dumps(labels_val)
+        elif labels_val is None: labels_val=tf("labels","[]")
+        comments_val=d.get("comments",None)
+        if comments_val is None: comments_val=json.loads(t["comments"] or "[]")
         db.execute("""UPDATE tasks SET title=?,description=?,project=?,assignee=?,
-                      priority=?,stage=?,due=?,pct=?,comments=?,team_id=? WHERE id=? AND workspace_id=?""",
+                      priority=?,stage=?,due=?,pct=?,comments=?,team_id=?,
+                      story_points=?,task_type=?,labels=?,sprint=? WHERE id=? AND workspace_id=?""",
                    (d.get("title",t["title"]),d.get("description",t["description"]),
                     d.get("project",t["project"]),d.get("assignee",t["assignee"]),
                     d.get("priority",t["priority"]),d.get("stage",t["stage"]),
                     d.get("due",t["due"]),d.get("pct",t["pct"]),
-                    json.dumps(d.get("comments",json.loads(t["comments"]))),
-                    d.get("team_id",t["team_id"] if "team_id" in t.keys() else ""),
+                    json.dumps(comments_val),
+                    d.get("team_id",tf("team_id","")),
+                    d.get("story_points",tf("story_points",0)),
+                    d.get("task_type",tf("task_type","task")),
+                    labels_val,
+                    d.get("sprint",tf("sprint","")),
                     tid,wid()))
         if d.get("stage") and d["stage"]!=old_stage:
             base_ts2=int(datetime.now().timestamp()*1000)
@@ -1232,6 +1285,44 @@ def update_task(tid):
                           f"{cname}: {latest.get('text','')[:80]}", "/"),
                     daemon=True).start()
         return jsonify(dict(db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()))
+
+
+@app.route("/api/tasks/<tid>/subtasks", methods=["GET"])
+@login_required
+def get_subtasks(tid):
+    with get_db() as db:
+        rows=db.execute("SELECT * FROM subtasks WHERE task_id=? AND workspace_id=? ORDER BY created",(tid,wid())).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/tasks/<tid>/subtasks", methods=["POST"])
+@login_required
+def create_subtask(tid):
+    d=request.json or {}
+    sid=f"st{int(datetime.now().timestamp()*1000)}{secrets.token_hex(3)}"
+    with get_db() as db:
+        db.execute("INSERT INTO subtasks VALUES (?,?,?,?,?,?,?)",
+                   (sid,wid(),tid,d.get("title","Untitled"),0,d.get("assignee",""),ts()))
+        return jsonify({"id":sid,"task_id":tid,"title":d.get("title",""),"done":0})
+
+@app.route("/api/subtasks/<sid>", methods=["PUT"])
+@login_required
+def update_subtask(sid):
+    d=request.json or {}
+    with get_db() as db:
+        st=db.execute("SELECT * FROM subtasks WHERE id=? AND workspace_id=?",(sid,wid())).fetchone()
+        if not st: return jsonify({"error":"Not found"}),404
+        done=d.get("done",st["done"])
+        title=d.get("title",st["title"])
+        assignee=d.get("assignee",st["assignee"])
+        db.execute("UPDATE subtasks SET done=?,title=?,assignee=? WHERE id=?",(done,title,assignee,sid))
+        return jsonify({"ok":True})
+
+@app.route("/api/subtasks/<sid>", methods=["DELETE"])
+@login_required
+def delete_subtask(sid):
+    with get_db() as db:
+        db.execute("DELETE FROM subtasks WHERE id=? AND workspace_id=?",(sid,wid()))
+        return jsonify({"ok":True})
 
 @app.route("/api/tasks/<tid>",methods=["DELETE"])
 @login_required
@@ -3732,7 +3823,7 @@ function SidebarCallsList({cu,onJoin,currentRoomId}){
       const parts=JSON.parse(c.participants||'[]');
       return html`<div key=${c.id} style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:10,padding:'9px 10px'}}>
         <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
-          <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+          <div style=${{width:7,height:7,borderRadius:'50%',background:'var(--gn)',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
           <div style=${{flex:1,minWidth:0}}>
             <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${c.name}</div>
             <div style=${{fontSize:9,color:'var(--tx3)'}}>${parts.length} participant${parts.length!==1?'s':''}</div>
@@ -4302,6 +4393,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [stage,setStage]=useState((task&&task.stage)||'backlog');
   const [due,setDue]=useState((task&&task.due)||'');
   const [pct,setPct]=useState((task&&task.pct)||0);
+  const [sprint,setSprint]=useState((task&&task.sprint)||'');
   const [cmts,setCmts]=useState(()=>{const r=task&&task.comments;if(!r)return[];if(Array.isArray(r))return r;try{return JSON.parse(r)||[];}catch{return [];}});
   const [nc,setNc]=useState('');
   const [tab,setTab]=useState('details');
@@ -4320,6 +4412,41 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const canUpdateStage=isAdminManagerTeamLead||isAssignee;
   const canDeleteTask=cu&&FULL_EDIT_ROLES.includes(cu.role);
   const [rmEnabled,setRmEnabled]=useState(false);
+  // Subtasks
+  const [subtasks,setSubtasks]=useState([]);
+  const [newSubtask,setNewSubtask]=useState('');
+  const [loadingSubtasks,setLoadingSubtasks]=useState(false);
+  // Jira fields
+  const [storyPoints,setStoryPoints]=useState((task&&task.story_points)||0);
+  const [taskType,setTaskType]=useState((task&&task.task_type)||'task');
+  const [taskLabels,setTaskLabels]=useState(()=>{const r=task&&task.labels;if(!r)return[];if(Array.isArray(r))return r;try{return JSON.parse(r)||[];}catch{return [];}});
+  const [newLabel,setNewLabel]=useState('');
+  const TASK_TYPES=['task','story','bug','epic','spike'];
+  const TYPE_COLORS={task:'var(--ac)',story:'var(--gn)',bug:'var(--rd)',epic:'var(--pu)',spike:'var(--am)'};
+
+  useEffect(()=>{
+    if(isEdit&&tab==='subtasks'){
+      setLoadingSubtasks(true);
+      api.get('/api/tasks/'+task.id+'/subtasks').then(d=>{
+        if(Array.isArray(d))setSubtasks(d);
+        setLoadingSubtasks(false);
+      }).catch(()=>setLoadingSubtasks(false));
+    }
+  },[isEdit,tab]);
+
+  const addSubtask=async()=>{
+    if(!newSubtask.trim()||!isEdit)return;
+    const st=await api.post('/api/tasks/'+task.id+'/subtasks',{title:newSubtask.trim()});
+    if(st&&st.id){setSubtasks(prev=>[...prev,st]);setNewSubtask('');}
+  };
+  const toggleSubtask=async(st)=>{
+    await api.put('/api/subtasks/'+st.id,{done:st.done?0:1});
+    setSubtasks(prev=>prev.map(s=>s.id===st.id?{...s,done:s.done?0:1}:s));
+  };
+  const delSubtask=async(sid)=>{
+    await api.del('/api/subtasks/'+sid);
+    setSubtasks(prev=>prev.filter(s=>s.id!==sid));
+  };
   const [rmDate,setRmDate]=useState(()=>{
     const d=new Date();d.setDate(d.getDate()+(d.getHours()>=20?1:0));
     return d.toISOString().split('T')[0];
@@ -4349,7 +4476,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     if(isEdit&&canUpdateStage&&!canEditTask){
       payload={stage,pct};
     } else {
-      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId};
+      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId,story_points:storyPoints,task_type:taskType,labels:taskLabels,sprint};
     }
     if(task&&task.id)payload.id=task.id;
     const result=await onSave(payload);
@@ -4382,10 +4509,10 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
           </div>
         </div>
         ${isEdit?html`
-          <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:14,width:'fit-content'}}>
-            ${['details','comments','files'].map(t=>html`
-              <button key=${t} class=${'tb'+(tab===t?' act':'')} onClick=${()=>setTab(t)}>
-                ${t==='details'?'Details':t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
+          <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:14,width:'fit-content',flexWrap:'wrap'}}>
+            ${['details','subtasks','comments','files'].map(t=>html`
+              <button key=${t} class=${'tb'+(tab===t?' act':'')} onClick=${()=>setTab(t)} style=${{fontSize:11}}>
+                ${t==='details'?'Details':t==='subtasks'?html`Subtasks ${subtasks.length>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9,marginLeft:2}}>${subtasks.length}</span>`:null}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
               </button>`)}
           </div>`:null}
 
@@ -4455,6 +4582,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                   </select></div>
                 <div><label class="lbl">Due Date</label>
                   <input class="inp" type="date" value=${due} min="" onChange=${e=>setDue(e.target.value)} onFocus=${e=>{if(!e.target.value)e.target.value=new Date().toISOString().split('T')[0];}}/></div>
+              <div><label class="lbl">Sprint</label><input class="inp" placeholder="e.g. Sprint 3" value=${sprint} onInput=${e=>setSprint(e.target.value)} disabled=${!canEditTask}/></div>
               </div>
               <div><label class="lbl">Completion: ${pct}%</label>
                 <div style=${{display:'flex',alignItems:'center',gap:12}}>
@@ -4536,6 +4664,71 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
             </div>
           </div>`:null}
 
+        ${tab==='subtasks'?html`
+          <div style=${{display:'flex',flexDirection:'column',gap:10}}>
+            <!-- Story Points + Task Type row -->
+            <div style=${{display:'flex',gap:10,flexWrap:'wrap'}}>
+              <div style=${{flex:1,minWidth:140}}>
+                <label class="lbl">Task Type</label>
+                <select class="sel" value=${taskType} onChange=${e=>setTaskType(e.target.value)} disabled=${!canEditTask}>
+                  ${TASK_TYPES.map(t=>html`<option key=${t} value=${t}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`)}
+                </select>
+              </div>
+              <div style=${{flex:1,minWidth:140}}>
+                <label class="lbl">Story Points</label>
+                <select class="sel" value=${storyPoints} onChange=${e=>setStoryPoints(parseInt(e.target.value))} disabled=${!canEditTask}>
+                  ${[0,1,2,3,5,8,13,21].map(p=>html`<option key=${p} value=${p}>${p===0?'—':p+' pt'+(p>1?'s':'')}</option>`)}
+                </select>
+              </div>
+            </div>
+            <!-- Labels -->
+            <div>
+              <label class="lbl">Labels</label>
+              <div style=${{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
+                ${taskLabels.map((lbl,i)=>html`
+                  <span key=${i} style=${{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 9px',background:'var(--ac3)',color:'var(--ac)',borderRadius:100,fontSize:11,fontWeight:600}}>
+                    ${lbl}
+                    ${canEditTask?html`<button onClick=${()=>setTaskLabels(prev=>prev.filter((_,j)=>j!==i))} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--ac)',fontSize:12,lineHeight:1,padding:0}}>×</button>`:null}
+                  </span>`)}
+              </div>
+              ${canEditTask?html`
+                <div style=${{display:'flex',gap:6}}>
+                  <input class="inp" style=${{flex:1,fontSize:12}} placeholder="Add label..." value=${newLabel}
+                    onInput=${e=>setNewLabel(e.target.value)}
+                    onKeyDown=${e=>{if(e.key==='Enter'&&newLabel.trim()){setTaskLabels(p=>[...p,newLabel.trim()]);setNewLabel('');}}}/>
+                  <button class="btn bg" style=${{fontSize:12,padding:'5px 12px'}} onClick=${()=>{if(newLabel.trim()){setTaskLabels(p=>[...p,newLabel.trim()]);setNewLabel('');}}} >+</button>
+                </div>`:null}
+            </div>
+            <!-- Subtasks list -->
+            <div>
+              <label class="lbl">Subtasks ${subtasks.length>0?html`<span style=${{color:'var(--tx3)',fontWeight:400}}>(${subtasks.filter(s=>s.done).length}/${subtasks.length} done)</span>`:null}</label>
+              ${loadingSubtasks?html`<div class="spin" style=${{margin:'10px auto'}}></div>`:null}
+              ${subtasks.length>0?html`
+                <div style=${{display:'flex',flexDirection:'column',gap:4,marginBottom:8}}>
+                  ${subtasks.map(st=>html`
+                    <div key=${st.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',transition:'all .15s'}}>
+                      <input type="checkbox" checked=${!!st.done} onChange=${()=>toggleSubtask(st)}
+                        style=${{width:15,height:15,accentColor:'var(--ac)',cursor:'pointer',flexShrink:0}}/>
+                      <span style=${{flex:1,fontSize:13,color:'var(--tx)',textDecoration:st.done?'line-through':'none',opacity:st.done?.55:1}}>${st.title}</span>
+                      ${st.done?html`<span style=${{fontSize:10,color:'var(--gn)',fontWeight:600}}>Done</span>`:null}
+                      <button onClick=${()=>delSubtask(st.id)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--rd2)',fontSize:14,lineHeight:1,padding:'0 2px',opacity:.6}}
+                        onMouseEnter=${e=>e.currentTarget.style.opacity=1}
+                        onMouseLeave=${e=>e.currentTarget.style.opacity=.6}>×</button>
+                    </div>`)}
+                </div>`:null}
+              <!-- Add subtask input -->
+              <div style=${{display:'flex',gap:6}}>
+                <input class="inp" style=${{flex:1,fontSize:12}} placeholder="Add a subtask..." value=${newSubtask}
+                  onInput=${e=>setNewSubtask(e.target.value)}
+                  onKeyDown=${e=>{if(e.key==='Enter')addSubtask();}}/>
+                <button class="btn bg" style=${{fontSize:12,padding:'5px 14px'}} onClick=${addSubtask} disabled=${!newSubtask.trim()}>+ Add</button>
+              </div>
+              ${subtasks.length>0?html`
+                <div style=${{display:'flex',gap:8,marginTop:8}}>
+                  <${Prog} pct=${Math.round(subtasks.filter(s=>s.done).length*100/subtasks.length)} color="var(--ac)"/>
+                </div>`:null}
+            </div>
+          </div>`:null}
         ${tab==='files'&&isEdit?html`<${FileAttachments} taskId=${task.id} readOnly=${cu&&cu.role==='Viewer'}/>`:null}
       </div>
     </div>`;
@@ -4972,6 +5165,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
   const [stageF,setStageF]=useState(initialStage||'all');
   const [assF,setAssF]=useState(initialAssignee==='me'?(cu&&cu.id)||'all':'all');
   const [dueF,setDueF]=useState('all');
+  const [typeF,setTypeF]=useState('all');
   const [search,setSearch]=useState('');
   const [showFilters,setShowFilters]=useState(!!(initialStage||initialPriority));
   const [showResolved,setShowResolved]=useState(false);
@@ -5023,9 +5217,11 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
         if(dueF==='week'&&(d<today||d>endOfWeek))return false;
         if(dueF==='month'&&(d<today||d>endOfMonth))return false;
       } else if(dueF!=='all'&&!t.due) return false;
+      if(typeF!=='all'&&t.task_type!==typeF)return false;
+      if(sprintFilter&&t.sprint!==sprintFilter)return false;
       return true;
     });
-  },[tasks,pid,teamF,teamFilterMemberIds,priF,stageF,assF,dueF,search,showResolved]);
+  },[tasks,pid,teamF,teamFilterMemberIds,priF,stageF,assF,dueF,search,showResolved,sprintFilter,typeF]);
 
   const toggleSort=col=>{if(sortCol===col)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortCol(col);setSortDir('asc');}};
 
@@ -5156,6 +5352,10 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
             </div>
             <div style=${{display:'flex',flexDirection:'column',gap:3}}>
               <label style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',textTransform:'uppercase',letterSpacing:.5}}>Due Date</label>
+              <select class="sel" style=${{width:120,fontSize:12}} value=${typeF} onChange=${e=>setTypeF(e.target.value)}>
+                <option value="all">All Types</option>
+                ${['task','story','bug','epic','spike'].map(tp=>html`<option key=${tp} value=${tp}>${tp.charAt(0).toUpperCase()+tp.slice(1)}</option>`)}
+              </select>
               <select class="sel" style=${{width:130,fontSize:12}} value=${dueF} onChange=${e=>setDueF(e.target.value)}>
                 <option value="all">Any Due Date</option>
                 <option value="overdue">⚠ Overdue</option>
@@ -5191,6 +5391,11 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
                         <span style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${tk.id}</span>
                         <${PB} p=${tk.priority}/>
                       </div>
+                      ${(tk.task_type&&tk.task_type!=='task')||tk.story_points>0?html`
+                        <div style=${{display:'flex',gap:4,marginBottom:4,alignItems:'center'}}>
+                          ${tk.task_type&&tk.task_type!=='task'?html`<span style=${{fontSize:8,fontWeight:800,padding:'1px 5px',borderRadius:3,textTransform:'uppercase',flexShrink:0,background:({'story':'rgba(21,128,61,0.12)','bug':'rgba(185,28,28,0.10)','epic':'rgba(109,40,217,0.12)','spike':'rgba(180,83,9,0.10)'})[tk.task_type]||'var(--ac3)',color:({'story':'var(--gn)','bug':'var(--rd)','epic':'var(--pu)','spike':'var(--am)'})[tk.task_type]||'var(--ac)'}}>${tk.task_type}</span>`:null}
+                          ${tk.story_points>0?html`<span style=${{fontSize:8,fontWeight:700,padding:'1px 5px',borderRadius:3,background:'var(--sf2)',color:'var(--tx2)',border:'1px solid var(--bd)'}}>${tk.story_points}pt${tk.story_points>1?'s':''}</span>`:null}
+                        </div>`:null}
                       <p style=${{fontSize:12,fontWeight:600,color:'var(--tx)',marginBottom:5,lineHeight:1.4}}>${tk.title}</p>
                       ${proj?html`<div style=${{fontSize:9,color:'var(--tx3)',marginBottom:5,display:'flex',alignItems:'center',gap:3}}>
                         <div style=${{width:5,height:5,borderRadius:1,background:proj.color,flexShrink:0}}></div>
@@ -5210,6 +5415,29 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
           </div>
         </div>`:null}
 
+      <!-- Sprint + stats bar -->
+      ${(()=>{
+        const sprints=[...new Set(safe(tasks).filter(t=>t.sprint).map(t=>t.sprint))];
+        const totalPts=filtered.reduce((a,t)=>a+(t.story_points||0),0);
+        const donePts=filtered.filter(t=>t.stage==='completed').reduce((a,t)=>a+(t.story_points||0),0);
+        return html\`
+          <div style=${{padding:'4px 18px 8px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+            ${sprints.length>0?html\`
+              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>Sprint:</span>
+              <button class=${'chip'+(sprintFilter===''?' on':'')} onClick=${()=>setSprintFilter('')} style=${{fontSize:10}}>All</button>
+              ${sprints.map(sp=>html\`<button key=${sp} class=${'chip'+(sprintFilter===sp?' on':'')} onClick=${()=>setSprintFilter(sp)} style=${{fontSize:10}}>${sp}</button>\`)}
+              <div style=${{width:1,height:16,background:'var(--bd)',margin:'0 4px'}}></div>
+            \`:null}
+            ${totalPts>0?html\`
+              <span style=${{fontSize:10,color:'var(--tx3)'}}>
+                <b style=${{color:'var(--ac)'}}>${donePts}</b>/<b style=${{color:'var(--tx2)'}}>${totalPts}</b> pts done
+              </span>
+              <div style=${{height:6,width:80,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
+                <div style=${{height:'100%',width:(totalPts?Math.round(donePts*100/totalPts):0)+'%',background:'var(--gn)',borderRadius:100}}></div>
+              </div>
+            \`:null}
+          </div>\`;
+      })()}
       ${mode==='list'?html`
         <div style=${{flex:1,overflowY:'auto',padding:'13px 18px'}}>
           <div class="card" style=${{padding:0,overflow:'hidden'}}>
@@ -5217,7 +5445,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
               <thead>
                 <tr style=${{borderBottom:'2px solid var(--bd)',background:'var(--sf2)'}}>
                   ${[
-                    {k:'id', lbl:'ID', s:null}, {k:'title', lbl:'Title', s:null}, {k:'project', lbl:'Project', s:null}, {k:'assignee',lbl:'Assignee', s:'assignee'}, {k:'priority',lbl:'Priority', s:'priority'}, {k:'stage', lbl:'Stage', s:'stage'}, {k:'due', lbl:'Due', s:'due'}, {k:'pct', lbl:'%', s:'pct'}, ].map(h=>{
+                    {k:'id', lbl:'ID', s:null}, {k:'type', lbl:'Type', s:null}, {k:'title', lbl:'Title', s:null}, {k:'project', lbl:'Project', s:null}, {k:'assignee',lbl:'Assignee', s:'assignee'}, {k:'priority',lbl:'Priority', s:'priority'}, {k:'stage', lbl:'Stage', s:'stage'}, {k:'due', lbl:'Due', s:'due'}, {k:'pct', lbl:'%', s:'pct'}, {k:'pts', lbl:'Pts', s:null}, ].map(h=>{
                     const isA=sortCol===h.s;const can=!!h.s;
                     return html`<th key=${h.k}
                       onClick=${can?()=>toggleSort(h.s):null}
@@ -5243,6 +5471,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
                       onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
                       onMouseLeave=${e=>e.currentTarget.style.background=''}>
                       <td style=${{padding:'9px 13px'}}><span class="mono-10">${tk.id}</span></td>
+                      <td style=${{padding:'9px 13px'}}>${tk.task_type&&tk.task_type!=='task'?html`<span style=${{fontSize:9,fontWeight:800,padding:'2px 6px',borderRadius:3,textTransform:'uppercase',background:({'story':'rgba(21,128,61,0.12)','bug':'rgba(185,28,28,0.10)','epic':'rgba(109,40,217,0.12)','spike':'rgba(180,83,9,0.10)'})[tk.task_type]||'var(--ac3)',color:({'story':'var(--gn)','bug':'var(--rd)','epic':'var(--pu)','spike':'var(--am)'})[tk.task_type]||'var(--ac)'}}>${tk.task_type}</span>`:html`<span style=${{fontSize:9,color:'var(--tx3)'}}>task</span>`}</td>
                       <td style=${{padding:'9px 13px',cursor:'pointer'}} onClick=${()=>setEditT(tk)}><span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${tk.title}</span></td>
                       <td style=${{padding:'9px 13px'}}>${pr?html`<div style=${{display:'flex',alignItems:'center',gap:5}}><div style=${{width:6,height:6,borderRadius:2,background:pr.color}}></div><span style=${{fontSize:12,color:'var(--tx2)'}}>${pr.name}</span></div>`:null}</td>
                       <td style=${{padding:'9px 13px'}}>${au?html`<div style=${{display:'flex',alignItems:'center',gap:6}}><${Av} u=${au} size=${19}/><span style=${{fontSize:12,color:'var(--tx2)'}}>${au.name}</span></div>`:html`<span style=${{color:'var(--tx3)',fontSize:12}}>—</span>`}</td>
@@ -5265,6 +5494,11 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
                           <div style=${{flex:1}}><${Prog} pct=${tk.pct} color=${si.color}/></div>
                           <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',width:28,textAlign:'right',fontWeight:700}}>${tk.pct}%</span>
                         </div>
+                      </td>
+                      <td style=${{padding:'9px 11px',textAlign:'center'}}>
+                        ${tk.story_points>0
+                          ?html`<span style=${{fontSize:11,fontWeight:700,color:'var(--tx2)',fontFamily:'monospace',background:'var(--sf2)',padding:'2px 7px',borderRadius:5,border:'1px solid var(--bd)'}}>${tk.story_points}</span>`
+                          :html`<span style=${{color:'var(--tx3)',fontSize:11}}>—</span>`}
                       </td>
                     </tr>`;
                 })}
@@ -6159,7 +6393,7 @@ const playSound=(type='notif')=>{
     }
   }catch(e){}
 };
-function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true,initialUserId=null,onClearInitial}){
+function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true,initialUserId=null,onClearInitial,onlineUsers=new Set()}){
   const isAdminOrManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   if(!dmEnabled&&!isAdminOrManager) return html`
     <div style=${{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'var(--tx3)'}}>
@@ -6203,7 +6437,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
       <div style=${{flex:1,overflowY:'auto',padding:6}}>
         ${filtered.map(u=>{const unr=unreadFor(u.id);const isA=toId===u.id;return html`
           <button key=${u.id} onClick=${()=>setToId(u.id)} style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',border:'none',borderRadius:9,cursor:'pointer',marginBottom:2,background:isA?'rgba(99,102,241,.14)':'transparent',transition:'all .14s'}}>
-            <div style=${{position:'relative',flexShrink:0}}><${Av} u=${u} size=${32}/><div style=${{position:'absolute',bottom:0,right:0,width:8,height:8,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div>
+            <div style=${{position:'relative',flexShrink:0}}><${Av} u=${u} size=${32}/><div style=${{position:'absolute',bottom:0,right:0,width:8,height:8,borderRadius:'50%',background:onlineUsers.has(u.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(u.id)?1:.4}}></div></div>
             <div style=${{flex:1,minWidth:0,textAlign:'left'}}><div style=${{fontSize:13,fontWeight:600,color:'#000000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div><div class="mono-10">${u.role}</div></div>
             ${unr>0?html`<span style=${{background:'var(--ac)',color:'#fff',borderRadius:10,fontSize:10,padding:'2px 6px',fontFamily:'monospace',fontWeight:700}}>${unr}</span>`:null}
           </button>`;})}
@@ -6211,7 +6445,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
     </div>
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
-        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:'var(--gn)',border:'2px solid var(--sf)'}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
+        ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(toUser.id)?1:.4}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
           <button title=${'Start Instant Meet with '+toUser.name}
             onClick=${()=>onStartHuddle&&onStartHuddle(toUser)}
             style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid var(--bd)',background:'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s',flexShrink:0}}>
@@ -8462,7 +8696,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 ${meetUrl?html`
           <a href=${meetUrl} target="_blank" rel="noopener"
             onClick=${e=>e.stopPropagation()}
-            title="Open this huddle in Google Meet"
+            title="Open in Google Meet — full video, screen share & recording"
             style=${{
               display:'flex',alignItems:'center',gap:5, padding:'4px 10px',borderRadius:7, background:'rgba(66,133,244,0.18)', border:'1px solid rgba(66,133,244,0.35)', color:'#7bb3f7',fontSize:10,fontWeight:700, textDecoration:'none',cursor:'pointer', transition:'all .15s',flexShrink:0, letterSpacing:'.02em',marginLeft:4
             }}
@@ -8684,6 +8918,19 @@ function App(){
     try{localStorage.setItem('pf_team_ctx',id||'');}catch{}
   },[cu]);
   const [dmUnread,setDmUnread]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
+  const [onlineUsers,setOnlineUsers]=useState(new Set());
+
+  // Presence heartbeat — ping every 30s, fetch online users every 15s
+  useEffect(()=>{
+    if(!cu)return;
+    const beat=()=>api.post('/api/presence',{}).catch(()=>{});
+    beat(); // immediate on mount
+    const beatId=setInterval(beat,30000);
+    const fetchPresence=()=>api.get('/api/presence').then(ids=>{if(Array.isArray(ids))setOnlineUsers(new Set(ids));}).catch(()=>{});
+    fetchPresence();
+    const presId=setInterval(fetchPresence,15000);
+    return()=>{clearInterval(beatId);clearInterval(presId);};
+  },[cu]);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
   const [toasts,setToasts]=useState([]);
@@ -9001,7 +9248,7 @@ function App(){
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${baseView} setView=${setView} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${v=>{setCol(v);try{localStorage.setItem('pf_col',v?'1':'0');}catch{}}} wsName=${wsName}
-        dark=${dark} setDark=${setDark} wsDmEnabled=${wsDmEnabled}
+        dark=${dark} setDark=${setDark} wsDmEnabled=${wsDmEnabled} onlineUsers=${onlineUsers}
         teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}
         teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
         callState=${{...callState,allUsers:data.users}}
@@ -9048,7 +9295,7 @@ function App(){
               initialAssignee=${taskFilterType==='assignee'?taskFilterValue:null}
             />`:null}
             ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks} key=${'msgs-'+(teamCtx||'all')}/>`:null}
-            ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} dmEnabled=${wsDmEnabled} initialUserId=${dmTargetUser} onClearInitial=${()=>setDmTargetUser(null)} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
+            ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} dmEnabled=${wsDmEnabled} initialUserId=${dmTargetUser} onClearInitial=${()=>setDmTargetUser(null)} onlineUsers=${onlineUsers} onStartHuddle=${u=>{huddleCmdRef.current.openHuddle&&huddleCmdRef.current.openHuddle(u);}}/>`:null}
             ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
             ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam} initialAssignee=${ticketFilterType==='assignee'?ticketFilterValue:null} initialStatus=${ticketFilterType==='status'?ticketFilterValue:null}/>`:null}
