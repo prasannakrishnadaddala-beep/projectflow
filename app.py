@@ -5420,23 +5420,24 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
         const sprints=[...new Set(safe(tasks).filter(t=>t.sprint).map(t=>t.sprint))];
         const totalPts=filtered.reduce((a,t)=>a+(t.story_points||0),0);
         const donePts=filtered.filter(t=>t.stage==='completed').reduce((a,t)=>a+(t.story_points||0),0);
-        return html\`
+        if(!sprints.length&&!totalPts)return null;
+        return html`
           <div style=${{padding:'4px 18px 8px',display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-            ${sprints.length>0?html\`
+            ${sprints.length>0?html`
               <span style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>Sprint:</span>
               <button class=${'chip'+(sprintFilter===''?' on':'')} onClick=${()=>setSprintFilter('')} style=${{fontSize:10}}>All</button>
-              ${sprints.map(sp=>html\`<button key=${sp} class=${'chip'+(sprintFilter===sp?' on':'')} onClick=${()=>setSprintFilter(sp)} style=${{fontSize:10}}>${sp}</button>\`)}
+              ${sprints.map(sp=>html`<button key=${sp} class=${'chip'+(sprintFilter===sp?' on':'')} onClick=${()=>setSprintFilter(sp)} style=${{fontSize:10}}>${sp}</button>`)}
               <div style=${{width:1,height:16,background:'var(--bd)',margin:'0 4px'}}></div>
-            \`:null}
-            ${totalPts>0?html\`
+            `:null}
+            ${totalPts>0?html`
               <span style=${{fontSize:10,color:'var(--tx3)'}}>
                 <b style=${{color:'var(--ac)'}}>${donePts}</b>/<b style=${{color:'var(--tx2)'}}>${totalPts}</b> pts done
               </span>
               <div style=${{height:6,width:80,background:'var(--sf2)',borderRadius:100,overflow:'hidden',border:'1px solid var(--bd)'}}>
                 <div style=${{height:'100%',width:(totalPts?Math.round(donePts*100/totalPts):0)+'%',background:'var(--gn)',borderRadius:100}}></div>
               </div>
-            \`:null}
-          </div>\`;
+            `:null}
+          </div>`;
       })()}
       ${mode==='list'?html`
         <div style=${{flex:1,overflowY:'auto',padding:'13px 18px'}}>
