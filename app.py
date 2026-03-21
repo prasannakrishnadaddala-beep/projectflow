@@ -5171,6 +5171,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
   const [showResolved,setShowResolved]=useState(false);
   const [sortCol,setSortCol]=useState(null);
   const [sortDir,setSortDir]=useState('asc');
+  const [sprintFilter,setSprintFilter]=useState('');
   const [editT,setEditT]=useState(null);const [newT,setNewT]=useState(false);
   const [csvImporting,setCsvImporting]=useState(false);
   const [csvResult,setCsvResult]=useState(null);
@@ -6119,6 +6120,23 @@ function MessagesView({projects,users,cu,tasks}){
           orderSetRef.current=true;
           setStableOrder(d);
         }
+        // Compute unread counts — messages newer than last seen ts
+        const newUnread={};
+        for(const [projId,latestTs] of Object.entries(d)){
+          const lastSeen=lastSeenMsgRef.current[projId]||'';
+          if(latestTs&&latestTs>lastSeen&&projId!==pidRef.current){
+            // Fetch count of new messages
+            newUnread[projId]=(newUnread[projId]||0)+1;
+          }
+        }
+        setChannelUnread(prev=>{
+          const merged={...prev};
+          for(const [k,v] of Object.entries(newUnread)){
+            if(!lastSeenMsgRef.current[k]&&!merged[k]) merged[k]=1;
+            else if(lastSeenMsgRef.current[k]&&d[k]>lastSeenMsgRef.current[k]&&k!==pidRef.current) merged[k]=(merged[k]||0)+1;
+          }
+          return merged;
+        });
       }
     };
     fetchTs();
@@ -6127,7 +6145,11 @@ function MessagesView({projects,users,cu,tasks}){
   },[]);
 
   const [pid,setPid]=useState('');
+  const pidRef=useRef('');
+  useEffect(()=>{pidRef.current=pid;},[pid]);
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
+  const [channelUnread,setChannelUnread]=useState({}); // {projectId: count}
+  const lastSeenMsgRef=useRef({}); // {projectId: lastMsgTs}
   const [showInfo,setShowInfo]=useState(false);
   const [chanSearch,setChanSearch]=useState('');
   const [newestFirst,setNewestFirst]=useState(false);
@@ -6135,7 +6157,16 @@ function MessagesView({projects,users,cu,tasks}){
   const loadMsgs=useCallback(async(id)=>{
     if(!id)return;
     const d=await api.get('/api/messages?project='+id);
-    if(Array.isArray(d)) setMsgs(d);
+    if(Array.isArray(d)){
+      setMsgs(d);
+      // Mark channel as read — store the latest message ts
+      if(d.length>0){
+        const latestTs=d.reduce((mx,m)=>m.ts>mx?m.ts:mx,'');
+        lastSeenMsgRef.current[id]=latestTs;
+      }
+      // Clear unread count for this channel
+      setChannelUnread(prev=>({...prev,[id]:0}));
+    }
   },[]);
 
   useEffect(()=>{loadMsgs(pid);},[pid]);
@@ -6150,7 +6181,9 @@ function MessagesView({projects,users,cu,tasks}){
               playSound('notif');
               if(d.length>0){
                 const latest=d.reduce((mx,m)=>m.ts>mx?m.ts:mx,'');
-                setLastMsgTs(prev=>({...prev,[pid]:latest}));
+                setLastMsgTs(prev2=>({...prev2,[pid]:latest}));
+                lastSeenMsgRef.current[pid]=latest;
+                setChannelUnread(prev3=>({...prev3,[pid]:0}));
               }
             }
             return d;
@@ -6240,8 +6273,7 @@ function MessagesView({projects,users,cu,tasks}){
               <div style=${{display:'flex',alignItems:'center',gap:7,width:'100%'}}>
                 <div style=${{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}></div>
                 <span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,textAlign:'left'}}># ${p.name}</span>
-                ${hasRecentMsg?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'var(--ac)',flexShrink:0,boxShadow:'0 0 6px var(--ac)'}} title="Recent activity"></div>`:null}
-                ${activeCnt>0?html`<span style=${{fontSize:9,background:p.color+'33',color:p.color,borderRadius:5,padding:'1px 5px',fontWeight:700,flexShrink:0}}>${activeCnt}</span>`:null}
+                ${channelUnread[p.id]>0?html`<span style=${{fontSize:9,fontWeight:800,background:'var(--ac)',color:'#fff',borderRadius:8,padding:'1px 6px',flexShrink:0,minWidth:16,textAlign:'center'}}>${channelUnread[p.id]>9?'9+':channelUnread[p.id]}</span>`:null}
               </div>
             </button>`;
         })}
@@ -8712,13 +8744,10 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 <div style=${{display:'flex',gap:4,marginLeft:6,flexShrink:0}}>
           <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}}
             title=${minimized?'Expand':'Minimize'}
-            style=${{width:24,height:24,borderRadius:7,background:'rgba(255,255,255,.08)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.5)',transition:'all .15s'}}>
-            ${minimized?html`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`:
-            html`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="14" y2="10"/></svg>`}
-          </button>
-          <button onClick=${e=>{e.stopPropagation();cleanup();}} title="End call"
-            style=${{width:24,height:24,borderRadius:7,background:'rgba(239,68,68,.2)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--rd2)',transition:'all .15s'}}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.12)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.7)',transition:'all .15s'}}>
+            ${minimized
+              ?html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`
+              :html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="14" y2="10"/></svg>`}
           </button>
         </div>
       </div>
