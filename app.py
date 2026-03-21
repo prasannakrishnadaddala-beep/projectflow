@@ -6155,9 +6155,8 @@ function MessagesView({projects,users,cu,tasks}){
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
   const [channelUnread,setChannelUnread]=useState({}); // {projectId: count}
   // Persist lastSeen to localStorage so refresh doesn't reset unread counts
-  const lastSeenMsgRef=useRef(()=>{
-    try{return JSON.parse(localStorage.getItem('pfLastSeen')||'{}');}catch{return {};}
-  }());
+  const _pfLastSeenInit=(()=>{try{return JSON.parse(localStorage.getItem('pfLastSeen')||'{}');}catch{return {};}})();
+  const lastSeenMsgRef=useRef(_pfLastSeenInit);
   const saveLastSeen=(obj)=>{try{localStorage.setItem('pfLastSeen',JSON.stringify(obj));}catch{}};
   const [showInfo,setShowInfo]=useState(false);
   const [chanSearch,setChanSearch]=useState('');
