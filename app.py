@@ -709,7 +709,6 @@ def login():
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
-        # Mark user as active immediately on login
         try:
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
@@ -738,7 +737,6 @@ def verify_otp():
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
-        # Mark user as active immediately on OTP login
         try:
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
@@ -4184,8 +4182,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
               position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--cy)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
             }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
           </button>`)}
-        ${/* Online users mini-list below DM nav, only when expanded and DM enabled */
-          !col&&(wsDmEnabled||(cu&&(cu.role==='Admin'||cu.role==='Manager')))&&users&&users.length>0?html`
+        ${!col&&(wsDmEnabled||(cu&&(cu.role==='Admin'||cu.role==='Manager')))&&users&&users.length>0?html`
           <div style=${{padding:'4px 4px 2px 12px',display:'flex',flexDirection:'column',gap:1}}>
             ${safe(users).filter(u=>u.id!==cu?.id).slice(0,8).map(u=>{
               const isOnline=onlineUsers.has(u.id);
@@ -8229,128 +8226,341 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-/* ─── JitsiMeet — Embedded in-app video call ──────────────────────────── */
+/* ─── PeerJS Video Call — No login, no third-party auth, pure WebRTC P2P ── */
 function HuddleCall({cu,users,onStateChange,cmdRef}){
-  const [jitsiRoom,setJitsiRoom]=useState(null); // room name string
-  const [jitsiUser,setJitsiUser]=useState(null); // other user object
+  const [room,setRoom]=useState(null);
+  const [remoteUser,setRemoteUser]=useState(null);
   const [minimized,setMinimized]=useState(false);
-  const iframeRef=useRef(null);
+  const [status,setStatus]=useState('connecting'); // connecting|calling|ringing|connected|error
+  const [muted,setMuted]=useState(false);
+  const [camOff,setCamOff]=useState(false);
+  const [elapsed,setElapsed]=useState(0);
+  const [errorMsg,setErrorMsg]=useState('');
 
-  // Generate a stable short room name from two user IDs
+  const peerRef=useRef(null);
+  const callRef=useRef(null);
+  const localStreamRef=useRef(null);
+  const localVidRef=useRef(null);
+  const remoteVidRef=useRef(null);
+  const timerRef=useRef(null);
+  const peerJsLoaded=useRef(false);
+
+  // Stable room ID derived from sorted user IDs — same for both ends
   const roomFor=(uid1,uid2)=>{
-    // Sort IDs so room is same regardless of who initiates
     const sorted=[uid1,uid2].sort().join('');
-    // Simple hash to get a short code
-    let h=0;
-    for(let i=0;i<sorted.length;i++){h=((h<<5)-h+sorted.charCodeAt(i))|0;}
-    const code=Math.abs(h).toString(36).padStart(6,'0').slice(0,6);
-    return 'ProjectFlow-'+code;
+    let h=5381;
+    for(let i=0;i<sorted.length;i++){h=((h<<5)+h)+sorted.charCodeAt(i);}
+    return 'pf-'+Math.abs(h).toString(36).slice(0,8);
   };
 
+  // Load PeerJS script dynamically once
+  const ensurePeerJS=()=>new Promise((res,rej)=>{
+    if(window.Peer){res();return;}
+    if(peerJsLoaded.current){
+      const wait=()=>window.Peer?res():setTimeout(wait,100);wait();return;
+    }
+    peerJsLoaded.current=true;
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload=()=>res();
+    s.onerror=()=>rej(new Error('PeerJS failed to load'));
+    document.head.appendChild(s);
+  });
+
+  // Cleanup everything
+  const cleanup=()=>{
+    if(timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
+    if(callRef.current){try{callRef.current.close();}catch(e){}}
+    callRef.current=null;
+    if(localStreamRef.current){
+      localStreamRef.current.getTracks().forEach(t=>t.stop());
+      localStreamRef.current=null;
+    }
+    if(peerRef.current){try{peerRef.current.destroy();}catch(e){}}
+    peerRef.current=null;
+    if(localVidRef.current)localVidRef.current.srcObject=null;
+    if(remoteVidRef.current)remoteVidRef.current.srcObject=null;
+  };
+
+  // Attach stream to video element safely
+  const attachStream=(vidEl,stream)=>{
+    if(!vidEl||!stream)return;
+    vidEl.srcObject=stream;
+    vidEl.play().catch(()=>{});
+  };
+
+  // Start local camera
+  const getMedia=async()=>{
+    const stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    localStreamRef.current=stream;
+    attachStream(localVidRef.current,stream);
+    return stream;
+  };
+
+  // Start timer
+  const startTimer=()=>{
+    setElapsed(0);
+    timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);
+  };
+
+  const fmtTime=s=>{const m=Math.floor(s/60);return m+':'+(s%60<10?'0':'')+s%60;};
+
+  // ── CALLER side ─────────────────────────────────────────────────────────────
+  const startCall=async(targetUser)=>{
+    try{
+      setStatus('connecting');
+      await ensurePeerJS();
+      const stream=await getMedia();
+      const myPeerId=cu.id+'-'+Date.now(); // unique peer per session
+      const peer=new window.Peer(myPeerId,{debug:0});
+      peerRef.current=peer;
+
+      peer.on('open',()=>{
+        setStatus('calling');
+        // Target peer ID = targetUser.id (the receiver registers with their stable ID)
+        const call=peer.call(targetUser.id,stream);
+        callRef.current=call;
+        if(!call){setErrorMsg('Could not reach peer');setStatus('error');return;}
+        call.on('stream',remoteStream=>{
+          attachStream(remoteVidRef.current,remoteStream);
+          setStatus('connected');
+          startTimer();
+          onStateChange&&onStateChange({status:'in-call'});
+        });
+        call.on('close',()=>hangup());
+        call.on('error',e=>{setErrorMsg(e.message||'Call error');setStatus('error');});
+      });
+      peer.on('error',e=>{setErrorMsg(e.message||'Peer error');setStatus('error');});
+    }catch(e){
+      setErrorMsg(e.message||'Camera/mic access denied');
+      setStatus('error');
+    }
+  };
+
+  // ── RECEIVER side ────────────────────────────────────────────────────────────
+  const answerCall=async()=>{
+    try{
+      setStatus('connecting');
+      await ensurePeerJS();
+      const stream=await getMedia();
+      // Register with own stable ID so caller can reach us
+      const peer=new window.Peer(cu.id,{debug:0});
+      peerRef.current=peer;
+
+      const answerIncoming=(call)=>{
+        callRef.current=call;
+        call.answer(stream);
+        call.on('stream',remoteStream=>{
+          attachStream(remoteVidRef.current,remoteStream);
+          setStatus('connected');
+          startTimer();
+          onStateChange&&onStateChange({status:'in-call'});
+        });
+        call.on('close',()=>hangup());
+        call.on('error',e=>{setErrorMsg(e.message||'Call error');setStatus('error');});
+      };
+
+      peer.on('open',()=>setStatus('ringing'));
+      peer.on('call',call=>answerIncoming(call));
+      peer.on('error',e=>{
+        // ID taken means someone else opened a peer with our ID (previous session) — retry
+        if(e.type==='unavailable-id'){
+          setTimeout(()=>{
+            if(peerRef.current)peerRef.current.destroy();
+            const p2=new window.Peer(cu.id+'-r',{debug:0});
+            peerRef.current=p2;
+            p2.on('call',call=>answerIncoming(call));
+            p2.on('open',()=>setStatus('ringing'));
+          },500);
+        } else {
+          setErrorMsg(e.message||'Peer error');setStatus('error');
+        }
+      });
+    }catch(e){
+      setErrorMsg(e.message||'Camera/mic access denied');
+      setStatus('error');
+    }
+  };
+
+  const hangup=()=>{
+    cleanup();
+    setRoom(null);setRemoteUser(null);setMinimized(false);
+    setStatus('connecting');setElapsed(0);setErrorMsg('');
+    onStateChange&&onStateChange({status:'idle'});
+  };
+
+  const toggleMute=()=>{
+    if(!localStreamRef.current)return;
+    localStreamRef.current.getAudioTracks().forEach(t=>{t.enabled=!t.enabled;});
+    setMuted(m=>!m);
+  };
+  const toggleCam=()=>{
+    if(!localStreamRef.current)return;
+    localStreamRef.current.getVideoTracks().forEach(t=>{t.enabled=!t.enabled;});
+    setCamOff(c=>!c);
+  };
+
+  // Expose commands to parent
   useEffect(()=>{
     if(!cmdRef)return;
     cmdRef.current={
       openHuddle:(user)=>{
         if(!user||!cu)return;
-        const room=roomFor(cu.id,user.id);
-        setJitsiUser(user);
-        setJitsiRoom(room);
-        setMinimized(false);
-        onStateChange&&onStateChange({status:'in-call'});
+        const r=roomFor(cu.id,user.id);
+        setRemoteUser(user);setRoom(r);setMinimized(false);
       },
       start:(name)=>{
-        // Start a general room (from sidebar)
-        const room='pfp-general-'+Date.now();
-        setJitsiUser(null);
-        setJitsiRoom(room);
-        setMinimized(false);
-        onStateChange&&onStateChange({status:'in-call'});
+        setRemoteUser(null);setRoom('pfp-general-'+Date.now());setMinimized(false);
       },
-      leave:()=>{
-        setJitsiRoom(null);setJitsiUser(null);setMinimized(false);
-        onStateChange&&onStateChange({status:'idle'});
-      },
+      leave:hangup,
       show:()=>setMinimized(false),
     };
   },[cu]);
 
-  if(!jitsiRoom)return null;
+  // When room is set, initiate or answer based on who's the "caller"
+  // (lower sorted ID is always the caller)
+  useEffect(()=>{
+    if(!room||!cu)return;
+    if(remoteUser){
+      // Determine role: smaller ID calls, larger ID answers
+      const isCaller=cu.id<remoteUser.id;
+      if(isCaller)startCall(remoteUser);
+      else answerCall();
+    } else {
+      // General room — just answer/wait
+      answerCall();
+    }
+    return ()=>cleanup();
+  },[room]);
 
-  // Build Jitsi iframe URL
-  // Use meet.jit.si with config to skip prejoin and auth screens
-  const displayName=encodeURIComponent((cu&&cu.name)||'User');
-  const email=encodeURIComponent((cu&&cu.email)||'user@projectflow.app');
-  // Config passed via URL hash — disables auth requirement and prejoin page
-  const cfg=[
-    'config.prejoinPageEnabled=false',
-    'config.requireDisplayName=false',
-    'config.enableWelcomePage=false',
-    'config.startWithAudioMuted=false',
-    'config.startWithVideoMuted=false',
-    'config.disableDeepLinking=true',
-    'config.p2p.enabled=true',
-    'config.analytics.disabled=true',
-    'userInfo.displayName="'+displayName+'"',
-    'userInfo.email="'+email+'"',
-  ].join('&');
-  const jitsiUrl=`https://meet.jit.si/${jitsiRoom}#${cfg}`;
+  if(!room)return null;
+
+  const statusLabel={
+    connecting:'Starting camera…',
+    calling:'Calling…',
+    ringing:'Waiting for call…',
+    connected:fmtTime(elapsed),
+    error:'Connection failed',
+  }[status]||'…';
 
   return html`
     <div style=${{
       position:'fixed',
-      bottom:minimized?16:0, right:minimized?16:0,
-      width:minimized?'260px':'100vw',
+      bottom:minimized?16:0,right:minimized?16:0,
+      width:minimized?'280px':'100vw',
       height:minimized?'52px':'100vh',
-      zIndex:9800,
-      borderRadius:minimized?14:0,
+      zIndex:9800,borderRadius:minimized?14:0,
       overflow:'hidden',
-      boxShadow:minimized?'0 8px 32px rgba(0,0,0,.5)':'none',
+      boxShadow:minimized?'0 8px 40px rgba(0,0,0,.7)':'none',
       transition:'all .3s cubic-bezier(.4,0,.2,1)',
       display:'flex',flexDirection:'column',
-      background:'#1a1a2e',
+      background:'#0d1117',
     }}>
+
       <!-- Top bar -->
       <div style=${{
-        display:'flex',alignItems:'center',gap:10,
-        padding:'0 14px',
+        display:'flex',alignItems:'center',gap:10,padding:'0 14px',
         height:52,flexShrink:0,
-        background:'rgba(0,0,0,.6)',
-        backdropFilter:'blur(12px)',
+        background:'rgba(0,0,0,.7)',backdropFilter:'blur(12px)',
         borderBottom:minimized?'none':'1px solid rgba(255,255,255,.08)',
         cursor:minimized?'pointer':'default',
       }} onClick=${minimized?()=>setMinimized(false):null}>
-        <!-- Live dot -->
-        <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',flexShrink:0,boxShadow:'0 0 8px #22c55e',animation:'pulse 1.5s infinite'}}></div>
-        <!-- Icon -->
+        <div style=${{width:8,height:8,borderRadius:'50%',
+          background:status==='connected'?'#22c55e':'#f59e0b',
+          boxShadow:status==='connected'?'0 0 8px #22c55e':'0 0 8px #f59e0b',
+          animation:'pulse 1.5s infinite',flexShrink:0}}></div>
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}>
           <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14"/>
           <rect x="3" y="6" width="12" height="12" rx="2"/>
         </svg>
         <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-          ${jitsiUser?'Meet · '+jitsiUser.name:'Instant Meet'}
+          ${remoteUser?'Meet · '+remoteUser.name:'Instant Meet'}
         </span>
-        ${minimized?html`<span style=${{fontSize:10,color:'#22c55e',fontFamily:'monospace',fontWeight:700,background:'rgba(34,197,94,.12)',padding:'2px 8px',borderRadius:100,border:'1px solid rgba(34,197,94,.3)'}}>LIVE</span>`:null}
-        <!-- Minimize/expand -->
+        <span style=${{fontSize:11,color:status==='connected'?'#22c55e':'#f59e0b',fontFamily:'monospace',fontWeight:700,
+          background:status==='connected'?'rgba(34,197,94,.12)':'rgba(245,158,11,.12)',
+          padding:'2px 8px',borderRadius:100,border:'1px solid '+(status==='connected'?'rgba(34,197,94,.3)':'rgba(245,158,11,.3)'),
+          flexShrink:0,fontSize:10}}>
+          ${statusLabel}
+        </span>
         <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}}
-          style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',color:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:14,transition:'all .15s'}}
-          title=${minimized?'Expand':'Minimise'}>
-          ${minimized?'⛶':'—'}
-        </button>
-        <!-- Leave -->
+          style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',color:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:13}}
+          title=${minimized?'Expand':'Minimise'}>${minimized?'⛶':'—'}</button>
         ${!minimized?html`
-          <button onClick=${()=>{setJitsiRoom(null);setJitsiUser(null);onStateChange&&onStateChange({status:'idle'});}}
-            style=${{height:30,padding:'0 14px',borderRadius:8,background:'rgba(239,68,68,.2)',border:'1px solid rgba(239,68,68,.4)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:12,flexShrink:0,transition:'all .15s'}}>
+          <button onClick=${hangup}
+            style=${{height:30,padding:'0 14px',borderRadius:8,background:'rgba(239,68,68,.25)',border:'1px solid rgba(239,68,68,.5)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:12,flexShrink:0}}>
             Leave
           </button>`:null}
       </div>
-      <!-- Jitsi iframe -->
+
+      <!-- Video area -->
       ${!minimized?html`
-        <iframe
-          ref=${iframeRef}
-          src=${jitsiUrl}
-          allow="camera; microphone; fullscreen; display-capture; autoplay"
-          style=${{flex:1,border:'none',width:'100%'}}
-        ></iframe>`:null}
+        <div style=${{flex:1,position:'relative',background:'#0d1117',overflow:'hidden'}}>
+
+          <!-- Remote video (main, full area) -->
+          <video ref=${remoteVidRef} autoplay playsinline
+            style=${{width:'100%',height:'100%',objectFit:'cover',background:'#111',display:status==='connected'?'block':'none'}}></video>
+
+          <!-- Waiting overlay -->
+          ${status!=='connected'?html`
+            <div style=${{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16,background:'#0d1117'}}>
+              ${remoteUser?html`
+                <div style=${{width:72,height:72,borderRadius:'50%',background:remoteUser.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff',boxShadow:'0 0 0 3px rgba(255,255,255,.1)'}}>
+                  ${(remoteUser.avatar||remoteUser.name||'?')[0]}
+                </div>`:null}
+              <div style=${{fontSize:16,fontWeight:700,color:'#fff'}}>${remoteUser?remoteUser.name:'Instant Meet'}</div>
+              ${status==='error'?html`
+                <div style=${{fontSize:13,color:'#f87171',textAlign:'center',maxWidth:300,lineHeight:1.6,padding:'0 24px'}}>${errorMsg||'Connection failed'}</div>
+                <button class="btn bp" style=${{marginTop:8}} onClick=${hangup}>Close</button>
+              `:html`
+                <div style=${{display:'flex',alignItems:'center',gap:10,color:'#94a3b8',fontSize:13}}>
+                  <div style=${{width:16,height:16,border:'2px solid rgba(255,255,255,.2)',borderTop:'2px solid #22c55e',borderRadius:'50%',animation:'sp .8s linear infinite'}}></div>
+                  ${statusLabel}
+                </div>
+              `}
+            </div>`:null}
+
+          <!-- Local video (picture-in-picture) -->
+          <div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,overflow:'hidden',
+            border:'2px solid rgba(255,255,255,.15)',boxShadow:'0 4px 20px rgba(0,0,0,.6)',
+            background:'#1a1a2e',display:camOff?'none':'block'}}>
+            <video ref=${localVidRef} autoplay muted playsinline
+              style=${{width:'100%',height:'100%',objectFit:'cover',transform:'scaleX(-1)'}}></video>
+          </div>
+          ${camOff?html`
+            <div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,
+              border:'2px solid rgba(255,255,255,.15)',background:'#1a1a2e',
+              display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:6}}>
+              <div style=${{fontSize:22}}>📷</div>
+              <div style=${{fontSize:10,color:'#94a3b8'}}>Camera off</div>
+            </div>`:null}
+
+          <!-- Controls bar -->
+          <div style=${{position:'absolute',bottom:0,left:0,right:0,height:70,
+            background:'linear-gradient(to top,rgba(0,0,0,.85),transparent)',
+            display:'flex',alignItems:'center',justifyContent:'center',gap:14,paddingBottom:8}}>
+            <!-- Mute -->
+            <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'}
+              style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',
+                background:muted?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',
+                color:muted?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,transition:'all .15s'}}>
+              ${muted?'🔇':'🎙️'}
+            </button>
+            <!-- Camera -->
+            <button onClick=${toggleCam} title=${camOff?'Camera on':'Camera off'}
+              style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',
+                background:camOff?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',
+                color:camOff?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,transition:'all .15s'}}>
+              ${camOff?'📷':'📹'}
+            </button>
+            <!-- Hang up -->
+            <button onClick=${hangup} title="Leave call"
+              style=${{width:52,height:52,borderRadius:'50%',border:'none',cursor:'pointer',
+                background:'#ef4444',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,
+                boxShadow:'0 4px 16px rgba(239,68,68,.5)',transition:'all .15s'}}>
+              📵
+            </button>
+          </div>
+        </div>`:null}
     </div>`;
 }
 
