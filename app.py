@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ProjectFlowPro v4.0
+VEUIT v4.0
 Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 """
 import os, sys, json, hashlib, secrets, random, urllib.request, urllib.error
@@ -204,13 +204,13 @@ def generate_otp():
 
 def send_otp_email(to_email, otp_code, user_name):
     """Send OTP verification email."""
-    subject = "ProjectFlow — Your Login Code"
+    subject = "VEUIT — Your Login Code"
     body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
       <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
         <div style="background:#0a1a00;padding:24px 32px;text-align:center;">
-          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">ProjectFlowPro</h1>
+          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">VEUIT</h1>
         </div>
         <div style="padding:32px;">
           <h2 style="color:#111;margin:0 0 8px;">Hi {user_name},</h2>
@@ -223,7 +223,7 @@ def send_otp_email(to_email, otp_code, user_name):
           <p style="color:#888;font-size:13px;margin:0;">If you didn't request this code, you can safely ignore this email. Do not share this code with anyone.</p>
         </div>
         <div style="background:#f9f9f9;padding:14px 32px;text-align:center;border-top:1px solid #eee;">
-          <p style="color:#aaa;font-size:11px;margin:0;">ProjectFlow · Team Project Management</p>
+          <p style="color:#aaa;font-size:11px;margin:0;">VEUIT · Team Project Management</p>
         </div>
       </div>
     </body>
@@ -318,7 +318,7 @@ def send_task_assigned_email(user_email, user_name, task_title, assigner_name, t
                 <h3 style="margin: 0 0 10px 0; color: #1f2937;">{task_title}</h3>
             </div>
             <p><a href="{APP_URL}" style="display: inline-block; background: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Task</a></p>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">ProjectFlow Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
         </div>
     </body>
     </html>
@@ -340,7 +340,7 @@ def send_status_change_email(user_email, user_name, task_title, new_stage, chang
                 <p style="margin: 0;"><strong>New Status:</strong> <span style="color: #10b981; font-weight: bold;">{new_stage}</span></p>
             </div>
             <p><a href="{APP_URL}" style="display: inline-block; background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Task</a></p>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">ProjectFlow Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
         </div>
     </body>
     </html>
@@ -364,7 +364,7 @@ def send_comment_email(user_email, user_name, task_title, commenter_name, commen
                 </div>
             </div>
             <p><a href="{APP_URL}" style="display: inline-block; background: #f59e0b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Comment</a></p>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">ProjectFlow Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
         </div>
     </body>
     </html>
@@ -907,7 +907,7 @@ def test_email():
     if not test_to:
         return jsonify({"error":"test_email required"}),400
 
-    subject="ProjectFlow Email Test"
+    subject="VEUIT Email Test"
     body="""
     <html>
     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -924,7 +924,7 @@ def test_email():
                 <li>Status changes</li>
                 <li>New comments</li>
             </ul>
-            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">ProjectFlow Notification System</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">VEUIT Notification System</p>
         </div>
     </body>
     </html>
@@ -2002,7 +2002,7 @@ def ai_chat():
     task_ctx="\n".join([f"- [{t['id']}] {t['title']} | stage:{t['stage']} | priority:{t['priority']} | pct:{t['pct']}%" for t in tasks])
     user_ctx="\n".join([f"- {u['name']} (id:{u['id']}, role:{u['role']})" for u in users])
 
-    system=f"""You are an AI assistant for ProjectFlow — a project management tool used by the workspace "{ws['name'] if ws else 'Unknown'}".
+    system=f"""You are an AI assistant for VEUIT — a project management tool used by the workspace "{ws['name'] if ws else 'Unknown'}".
 Current user: {cu['name']} (role: {cu['role']})
 Today: {datetime.now().strftime('%Y-%m-%d')}
 
@@ -2204,7 +2204,7 @@ def serve_js(fn):
 def serve_sw():
     """Service Worker for background push notifications and offline caching."""
     sw_code = r"""
-// ProjectFlow Service Worker v2
+// VEUIT Service Worker v2
 const CACHE = 'pf-v2';
 const ICON = '/favicon.ico';
 
@@ -2221,7 +2221,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('push', e => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch(err) {}
-  const title  = data.title  || 'ProjectFlowPro';
+  const title  = data.title  || 'VEUIT';
   const body   = data.body   || '';
   const tag    = data.tag    || 'pf-notif';
   const url    = data.url    || '/';
@@ -2250,7 +2250,6 @@ self.addEventListener('notificationclick', e => {
       for (const c of cs) {
         if (c.url.includes(self.location.origin) && 'focus' in c) {
           c.focus();
-          // Send the tag so the app can fire the right onClick handler
           c.postMessage({ type: 'PF_NOTIF_CLICK', tag });
           return;
         }
@@ -2292,7 +2291,7 @@ async function pollNotifications() {
 def serve_manifest():
     """PWA manifest — full desktop installability."""
     manifest = {
-        "name": "ProjectFlowPro",
+        "name": "VEUIT",
         "short_name": "PFPro",
         "description": "AI-powered team project management — tasks, huddles, timeline, tickets & more.",
         "start_url": "/?action=login",
@@ -2317,7 +2316,7 @@ def serve_manifest():
             {"name": "Projects", "short_name": "Projects", "url": "/?action=login", "description": "View all projects"}
         ],
         "screenshots": [
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "wide", "label": "ProjectFlowPro Dashboard"}
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "wide", "label": "VEUIT Dashboard"}
         ]
     }
     return jsonify(manifest)
@@ -2353,8 +2352,8 @@ LANDING_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>ProjectFlowPro — Team Project Management & AI Assistant</title>
-<meta name="description" content="ProjectFlowPro v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
+<title>VEUIT — Team Project Management & AI Assistant</title>
+<meta name="description" content="VEUIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <style>
@@ -2530,7 +2529,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
   <div class="nav-inner">
     <a href="/" class="logo">
       <div class="logo-icon"><svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-      ProjectFlowPro
+      VEUIT
     </a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
@@ -2548,7 +2547,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
 <section class="hero">
   <canvas id="hero-canvas"></canvas>
   <div class="hero-content">
-    <div class="hero-badge a1"><span class="hero-badge-dot"></span>ProjectFlowPro v4.0 — AI-Powered</div>
+    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEUIT v4.0 — AI-Powered</div>
     <h1 class="a2">The workspace your<br/>team <span class="blue">actually uses.</span></h1>
     <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, Instant Meet, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
     <div class="hero-actions a4">
@@ -2573,7 +2572,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
             <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEUIT</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
@@ -2655,7 +2654,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
             <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">ProjectFlowPro</span>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEUIT</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
@@ -2857,7 +2856,7 @@ function showTab(t){
   <div class="wrap">
     <div class="footer-top">
       <div class="footer-brand">
-        <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>ProjectFlowPro</a>
+        <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>VEUIT</a>
         <p>The all-in-one project management platform for engineering teams. AI-powered, multi-tenant, fully featured.</p>
       </div>
       <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#how">How it works</a></li></ul></div>
@@ -2865,7 +2864,7 @@ function showTab(t){
       <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-copy">© 2025 ProjectFlowPro v4.0 — Hosted on Railway</div>
+      <div class="footer-copy">© 2025 VEUIT v4.0 — Hosted on Railway</div>
       <div class="footer-badges"><div class="fb">v4.0</div><div class="fb">PostgreSQL</div><div class="fb">AI-Powered</div><div class="fb">bcrypt</div></div>
     </div>
   </div>
@@ -2970,12 +2969,12 @@ drawCanvas();
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>ProjectFlowProPro</title>
+<title>VEUITPro</title>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#1d4ed8"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="ProjectFlowPro"/>
+<meta name="apple-mobile-web-app-title" content="VEUIT"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
 <script>
@@ -3700,7 +3699,7 @@ function AuthScreen({onLogin}){
         <div style=${{width:32,height:32,borderRadius:9,background:'white',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(59,130,246,0.2)'}}>
           <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#1d4ed8"/><circle cx="32" cy="11" r="6" fill="#1d4ed8"/><circle cx="51" cy="43" r="6" fill="#1d4ed8"/><circle cx="13" cy="43" r="6" fill="#1d4ed8"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>ProjectFlowPro</span>
+        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>VEUIT</span>
       </div>
 
             <div style=${{
@@ -3783,14 +3782,14 @@ function AuthScreen({onLogin}){
           <div style=${{width:28,height:28,borderRadius:7,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
             <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>ProjectFlowPro</span>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>VEUIT</span>
         </div>
 
                 <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.2vw,1.85rem)',fontWeight:800,color:'#0f172a',marginBottom:6,letterSpacing:-.03,lineHeight:1.15}}>
           ${tab==='login'?'Welcome back':'Create account'}
         </h1>
         <p style=${{fontSize:13.5,color:'#64748b',marginBottom:24,lineHeight:1.6}}>
-          ${tab==='login'?'Sign in to your ProjectFlowPro workspace':'Set up your workspace and start shipping'}
+          ${tab==='login'?'Sign in to your VEUIT workspace':'Set up your workspace and start shipping'}
         </p>
 
                 <div style=${{display:'flex',background:'#f1f5f9',borderRadius:11,padding:3,marginBottom:22}}>
@@ -3861,7 +3860,7 @@ function AuthScreen({onLogin}){
 
         <p style=${{fontSize:12.5,color:'#94a3b8',marginTop:18,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to ProjectFlowPro? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            ?html`New to VEUIT? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
             :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');try{history.replaceState(null,'','/?action=login');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
       `)}
@@ -4161,7 +4160,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
           <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity=".9"/><circle cx="51" cy="43" r="6" fill="white" opacity=".9"/><circle cx="13" cy="43" r="6" fill="white" opacity=".9"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
         </div>
         ${!col?html`<div style=${{flex:1,minWidth:0}}>
-          <div style=${{fontSize:12,fontWeight:700,color:'#ffffff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'ProjectFlowPro'}</div>
+          <div style=${{fontSize:12,fontWeight:700,color:'#ffffff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${wsName||'VEUIT'}</div>
           ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4}}>
             ${!isAdminManager?html`<span style=${{color:'rgba(255,255,255,.3)',fontWeight:400}}>My Team</span>`:null}
             ${activeTeam.name}
@@ -4202,11 +4201,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
                 onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
                 <div style=${{position:'relative',flexShrink:0}}>
                   <div style=${{width:22,height:22,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>
-                  <div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',
-                    background:isOnline?'#22c55e':'#475569',
-                    border:'1.5px solid #0f172a',
-                    boxShadow:isOnline?'0 0 5px rgba(34,197,94,.8)':'none',
-                    transition:'background .3s,box-shadow .3s'}}></div>
+                  <div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',background:isOnline?'#22c55e':'#475569',border:'1.5px solid #0f172a',boxShadow:isOnline?'0 0 5px rgba(34,197,94,.8)':'none',transition:'background .3s,box-shadow .3s'}}></div>
                 </div>
                 <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.92)':'rgba(148,163,184,0.45)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${u.name}</span>
                 ${unreadCnt>0?html`<span style=${{minWidth:15,height:15,borderRadius:8,background:'var(--cy)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',flexShrink:0}}>${unreadCnt}</span>`:null}
@@ -6608,7 +6603,7 @@ const playSound=(type='notif')=>{
     }
   }catch(e){}
 };
-function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true,initialUserId=null,onClearInitial,onlineUsers=new Set()}){
+function DirectMessages({cu,users,dmUnread,onDmRead,dmEnabled=true,initialUserId=null,onClearInitial,onlineUsers=new Set()}){
   const isAdminOrManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   if(!dmEnabled&&!isAdminOrManager) return html`
     <div style=${{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'var(--tx3)'}}>
@@ -6654,11 +6649,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
           <button key=${u.id} onClick=${()=>setToId(u.id)} style=${{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'8px 10px',border:'none',borderRadius:9,cursor:'pointer',marginBottom:2,background:isA?'rgba(99,102,241,.14)':'transparent',transition:'all .14s'}}>
             <div style=${{position:'relative',flexShrink:0}}>
               <${Av} u=${u} size=${32}/>
-              <div style=${{position:'absolute',bottom:0,right:0,width:10,height:10,borderRadius:'50%',
-                background:onlineUsers.has(u.id)?'#22c55e':'#475569',
-                border:'2px solid var(--bg)',
-                boxShadow:onlineUsers.has(u.id)?'0 0 0 1px #22c55e,0 0 6px rgba(34,197,94,.5)':'none',
-                transition:'background .3s,box-shadow .3s'}}></div>
+              <div style=${{position:'absolute',bottom:0,right:0,width:10,height:10,borderRadius:'50%',background:onlineUsers.has(u.id)?'#22c55e':'#475569',border:'2px solid var(--bg)',boxShadow:onlineUsers.has(u.id)?'0 0 0 1px #22c55e,0 0 6px rgba(34,197,94,.5)':'none',transition:'background .3s,box-shadow .3s'}}></div>
             </div>
             <div style=${{flex:1,minWidth:0,textAlign:'left'}}>
               <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div>
@@ -6672,17 +6663,12 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
         ${toUser?html`
           <div style=${{position:'relative'}}>
             <${Av} u=${toUser} size=${36}/>
-            <div style=${{position:'absolute',bottom:0,right:0,width:11,height:11,borderRadius:'50%',
-              background:onlineUsers.has(toUser.id)?'#22c55e':'#475569',
-              border:'2px solid var(--bg)',
-              boxShadow:onlineUsers.has(toUser.id)?'0 0 0 1px #22c55e,0 0 7px rgba(34,197,94,.6)':'none',
-              transition:'background .3s,box-shadow .3s'}}></div>
+            <div style=${{position:'absolute',bottom:0,right:0,width:11,height:11,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'#22c55e':'#475569',border:'2px solid var(--bg)',boxShadow:onlineUsers.has(toUser.id)?'0 0 0 1px #22c55e,0 0 7px rgba(34,197,94,.6)':'none',transition:'background .3s,box-shadow .3s'}}></div>
           </div>
           <div>
             <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div>
             <div style=${{fontSize:11,color:onlineUsers.has(toUser.id)?'#22c55e':'var(--tx3)',fontWeight:500}}>${onlineUsers.has(toUser.id)?'Active now':'Offline'}</div>
-          </div>
-`:html`<span style=${{color:'var(--tx3)'}}>Select someone to chat</span>`}
+          </div>`:html`<span style=${{color:'var(--tx3)'}}>Select someone to chat</span>`}
       </div>
       <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'16px',display:'flex',flexDirection:'column',gap:12}}>
         ${msgs.length===0?html`<div style=${{textAlign:'center',paddingTop:60,color:'var(--tx3)',fontSize:13}}><div style=${{fontSize:36,marginBottom:10}}>👋</div><div style=${{fontWeight:600,marginBottom:4,color:'var(--tx2)'}}>${toUser?'Start a conversation with '+toUser.name:'Select someone'}</div></div>`:null}
@@ -6706,7 +6692,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
 /* ─── NotifsView ──────────────────────────────────────────────────────────── */
 function NotifsView({notifs,reload,onNavigate}){
   const NT={
-    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}, call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Instant Meet'}, };
+    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}};
   const unread=safe(notifs).filter(n=>!n.read).length;
   const handleClick=async(n)=>{
     if(!n.read) await api.put('/api/notifications/'+n.id+'/read',{});
@@ -7691,7 +7677,7 @@ function updateBadge(count){
       }
       const links=document.querySelectorAll("link[rel*='icon']");
       links.forEach(l=>{l.href=canvas.toDataURL();});
-      document.title=count>0?'('+count+') ProjectFlow':'ProjectFlowPro';
+      document.title=count>0?'('+count+') VEUIT':'VEUIT';
     };
     img.src=NOTIF_ICON;
   }catch(e){}
@@ -7703,7 +7689,7 @@ async function requestNotifPermission(){
       const {isPermissionGranted,requestPermission,sendNotification}=window.__TAURI__.notification;
       let ok=await isPermissionGranted();
       if(!ok){const p=await requestPermission();ok=(p==='granted');}
-      if(ok)await sendNotification({title:'ProjectFlowPro',body:'Notifications enabled.'});
+      if(ok)await sendNotification({title:'VEUIT',body:'Notifications enabled.'});
       return;
     }catch(e){}
   }
@@ -7727,14 +7713,14 @@ async function requestNotifPermission(){
           }
         }catch(e){}
       }
-      new Notification('ProjectFlowPro',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
+      new Notification('VEUIT',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
     }
   }
 }
 
 async function showBrowserNotif(title,body,onClick,opts={}){
-  // Store handler by tag so SW click can fire it
   const tag=opts.tag||'pf-'+Date.now();
+  // Always store handler by tag for SW click routing
   if(onClick){
     window._pfNotifHandlers=window._pfNotifHandlers||{};
     window._pfNotifHandlers[tag]=onClick;
@@ -7754,7 +7740,7 @@ async function showBrowserNotif(title,body,onClick,opts={}){
         body, icon:NOTIF_ICON, badge:NOTIF_ICON, tag,
         vibrate:[200,100,200],
         requireInteraction:opts.requireInteraction||false,
-        data:{tag}   // pass tag so SW click handler can fire the right callback
+        data:{tag}
       });
       return;
     }catch(e){}
@@ -7773,14 +7759,14 @@ const TOAST_CFG={
   dm:      {icon:'💬', color:'var(--ac)', bg:'var(--ac3)', nav:'dm'}, task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'}, status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'}, comment: {icon:'💬', color:'var(--pu)', bg:'rgba(167,139,250,.1)', nav:'tasks'}, deadline:{icon:'⏰', color:'var(--am)', bg:'rgba(245,158,11,.1)', nav:'tasks'}, project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'}, reminder:{icon:'⏰', color:'var(--rd)', bg:'rgba(255,68,68,.1)', nav:'reminders'}, message: {icon:'#️⃣', color:'#a78bfa', bg:'rgba(167,139,250,.1)', nav:'messages'}, default: {icon:'🔔', color:'var(--ac)', bg:'var(--ac3)', nav:'notifs'},
 };
 
-function ToastStack({toasts,onDismiss,onNav,onDmOpen}){
+function ToastStack({toasts,onDismiss,onNav}){
   return html`
     <div class="toast-stack">
       ${toasts.map(t=>{
         const cfg=TOAST_CFG[t.type]||TOAST_CFG.default;
         return html`
           <div key=${t.id} class=${'toast'+(t.leaving?' leaving':'')}
-            onClick=${()=>{onDismiss(t.id);if(t.type==='dm'&&t.senderId&&onDmOpen){onDmOpen(t.senderId);}else{onNav&&onNav(cfg.nav);}}}>
+            onClick=${()=>{onDismiss(t.id);onNav&&onNav(cfg.nav);}}>
             <div class="toast-bar" style=${{width:t.progress+'%',background:cfg.color}}></div>
             <div class="toast-icon" style=${{background:cfg.bg,color:cfg.color}}>${cfg.icon}</div>
             <div class="toast-body">
@@ -8241,7 +8227,6 @@ function RemindersPanel({onClose,onReload}){
 
 function HuddleCall(){return null;}
 
-
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
@@ -8299,10 +8284,10 @@ function App(){
   const toastTimers=useRef({});
   const TOAST_DUR=6000; // ms before auto-dismiss
 
-  const addToast=useCallback((type,title,body,senderId=null)=>{
+  const addToast=useCallback((type,title,body)=>{
     const id='t'+Date.now()+Math.random();
     const timeStr=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    setToasts(prev=>[{id,type,title,body,timeStr,progress:100,leaving:false,senderId},...prev].slice(0,5));
+    setToasts(prev=>[{id,type,title,body,timeStr,progress:100,leaving:false},...prev].slice(0,5));
     const start=Date.now();
     const tick=setInterval(()=>{
       const elapsed=Date.now()-start;
@@ -8332,7 +8317,6 @@ function App(){
       setTimeout(()=>setShowNotifBanner(true),2500);
     }
   },[cu]);
-
 
 
   const [teamLoading,setTeamLoading]=useState(false);
@@ -8436,10 +8420,8 @@ function App(){
           if(!old||(x.cnt||0)>(old.cnt||0)){
             const sender=data.users.find(u=>u.id===x.sender);
             const sname=sender?sender.name:'Someone';
-            window._pfToast&&window._pfToast('dm','💬 '+sname,x.last_msg||'New message',x.sender);
-            showBrowserNotif('💬 '+sname,'New direct message',()=>{
-              setDmTargetUser(x.sender);setView('dm');window.focus();
-            },{tag:'dm-'+x.sender});
+            window._pfToast&&window._pfToast('dm','💬 New message from '+sname,'Tap to open Direct Messages');
+            showBrowserNotif('💬 '+sname,'New message',()=>{setDmTargetUser(x.sender);setView('dm');window.focus();},{tag:'dm-'+x.sender});
             playSound('notif');
           }
         });
@@ -8452,8 +8434,8 @@ function App(){
 
   const prevNotifIdsRef=useRef(null); // null = not yet seeded
   const NTITLES={
-    task_assigned:'✅ Task assigned to you', status_change:'🔄 Task status changed', comment:'💬 New comment on task', deadline:'⏰ Deadline approaching', dm:'📨 New direct message', project_added:'📁 Added to a project', reminder:'⏰ Reminder', call:'📞 Huddle call', message:'#️⃣ New channel message', };
-  const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dm',message:'messages'};
+    task_assigned:'✅ Task assigned to you', status_change:'🔄 Task status changed', comment:'💬 New comment on task', deadline:'⏰ Deadline approaching', dm:'📨 New direct message', project_added:'📁 Added to a project', reminder:'⏰ Reminder', message:'#️⃣ New channel message', };
+  const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',message:'messages'};
   useEffect(()=>{
     if(!cu)return;
 
@@ -8468,19 +8450,14 @@ function App(){
         const brandNew=d.filter(n=>!prevNotifIdsRef.current.has(n.id));
         brandNew.forEach(n=>{
           if(n.type==='dm')return; // DMs handled by separate poll
-          if(n.type==='call') return; // calls removed — skip
-          const title=NTITLES[n.type]||'ProjectFlowPro';
+          if(n.type==='call') return; // calls removed
+          const title=NTITLES[n.type]||'VEUIT';
           const nav=NNAV[n.type]||'notifs';
-          addToast(n.type,title,n.content||'',n.sender_id||null);
+          addToast(n.type,title,n.content||'');
           showBrowserNotif(title,n.content||'',()=>{
             window.focus();
-            if(n.type==='dm'){
-              const sid=n.sender_id||n.sender;
-              if(sid){setDmTargetUser(sid);}
-              setView('dm');
-            } else {
-              setView(nav);
-            }
+            if(n.type==='dm'){const sid=n.sender_id||n.sender;if(sid)setDmTargetUser(sid);setView('dm');}
+            else{setView(nav);}
           },{tag:'notif-'+n.id});
           playSound('notif');
         });
@@ -8616,7 +8593,7 @@ function App(){
       <div style=${{width:72,height:72,background:'#2563eb',borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(37,99,235,0.3)',animation:'sp .9s linear infinite'}}>
         <svg width="38" height="38" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
       </div>
-      <p style=${{color:'#475569',fontSize:13,marginTop:16,fontFamily:"'DM Sans',sans-serif",letterSpacing:'.3px',fontWeight:500}}>Loading ProjectFlowPro...</p>
+      <p style=${{color:'#475569',fontSize:13,marginTop:16,fontFamily:"'DM Sans',sans-serif",letterSpacing:'.3px',fontWeight:500}}>Loading VEUIT...</p>
       <div style=${{marginTop:10,width:110,height:3,background:'#e2e8f0',borderRadius:100,overflow:'hidden'}}>
         <div style=${{height:'100%',background:'#2563eb',borderRadius:100,animation:'loadBar 1.4s ease-in-out infinite'}}></div>
       </div>
@@ -8662,16 +8639,7 @@ function App(){
         dark=${dark} setDark=${setDark} wsDmEnabled=${wsDmEnabled} onlineUsers=${onlineUsers}
         teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}
         teamCtx=${teamCtx} setTeamCtx=${setTeamCtx} activeTeam=${activeTeam}
-        callState=${{...callState,allUsers:data.users}}
-        onCallAction=${async cmd=>{
-          const h=huddleCmdRef.current;
-          if(cmd.action==='open_huddle'||cmd.action==='show')h.openHuddle&&h.openHuddle(cmd.targetUser||null);
-          else if(cmd.action==='start')h.start&&h.start(cmd.name);
-          else if(cmd.action==='join')h.join&&h.join(cmd.roomId,cmd.roomName);
-          else if(cmd.action==='leave')h.leave&&h.leave();
-          else if(cmd.action==='mute')h.mute&&h.mute();
-          else if(cmd.action==='invite'&&cmd.userId&&cmd.roomId){await api.post('/api/calls/'+cmd.roomId+'/invite/'+cmd.userId,{});showBrowserNotif('📞 Invite sent','User invited to your Huddle',null,{});}
-        }}/>
+        />
       <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
         <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
           cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
@@ -8683,25 +8651,14 @@ function App(){
             api.del('/api/notifications/'+n.id).catch(()=>{});
             // Remove from local state instantly — panel clears without waiting for reload
             setData(prev=>({...prev,notifs:prev.notifs.filter(x=>x.id!==n.id)}));
-            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dm',message:'messages'};
+            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',message:'messages'};
             const dest=nav[n.type]||'notifs';
             // DM: open sender's chat thread
             if(n.type==='dm'||n.type==='message'){
               const senderId=n.sender_id||n.sender||null;
               if(senderId)setDmTargetUser(senderId);
             }
-            // Call: open Jitsi with the caller directly
-            if(n.type==='call'){
-              const senderId=n.sender_id||n.sender||null;
-              if(senderId){
-                const callerUser=data.users.find(u=>u.id===senderId);
-                if(callerUser&&huddleCmdRef.current.openHuddle){
-                  huddleCmdRef.current.openHuddle(callerUser);
-                  return; // don't navigate — Jitsi opens fullscreen
-                }
-                setDmTargetUser(senderId); // fallback: open DM
-              }
-            }
+            if(n.type==='call') return; // calls removed
             setView(dest);
           }}
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
@@ -8824,7 +8781,6 @@ function App(){
         </div>
       </div>`:null}
 
-
         ${teamLoading?html`
       <div style=${{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999, background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center', backdropFilter:'blur(2px)'}}>
         <div style=${{background:'var(--sf)',borderRadius:16,padding:'24px 32px',display:'flex',flexDirection:'column',alignItems:'center',gap:12,border:'1px solid var(--bd)',boxShadow:'0 8px 40px rgba(0,0,0,.5)'}}>
@@ -8834,7 +8790,7 @@ function App(){
         </div>
       </div>`:null}
 
-    <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${setView} onDmOpen=${(uid)=>{setDmTargetUser(uid);setView('dm');}}/>
+    <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${setView}/>
 
     ${showNotifBanner?html`
       <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100, background:'var(--sf)',border:'1px solid rgba(170,255,0,.35)',borderRadius:18, padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)', display:'flex',alignItems:'flex-start',gap:14,maxWidth:440, animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
@@ -8912,7 +8868,7 @@ def open_browser(port):
     webbrowser.open(f"http://localhost:{port}")
 
 if __name__=="__main__":
-    print("\n⚡ ProjectFlowPro v4.0 — Multi-Tenant | AI | Workspaces")
+    print("\n⚡ VEUIT v4.0 — Multi-Tenant | AI | Workspaces")
     print("="*54)
     print("  Initializing database...")
     init_db()
