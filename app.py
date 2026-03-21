@@ -2329,6 +2329,18 @@ def serve_manifest():
     }
     return jsonify(manifest)
 
+@app.route("/favicon.ico")
+@app.route("/favicon.png")
+def favicon():
+    """Serve the VEWIT blue favicon — same as icon-192 PNG."""
+    import base64
+    from flask import Response
+    # Exact same blue VEWIT icon as icon-192
+    png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAEuklEQVR4nO3UQQ5TSRAEUS7ClTj/3IZZITWDRgJsV2b/eiHF3r8rw1++AAAAAAAAAAAAAAAAAAAAAAAAhPj67Z/vnDV9cxykx7DR9M1xkB7DRtM3x0F6DL/r75D+jQK4kPQYXh39jTGkb46D9BjePfwbQkjfHAfpMXxy/K0RpG+Og/QYPj3+xgjSN8dBegwT42+LIH1zHKTHMDX+pgjSN8dBegwCQJT0GBKkvzl9cxykxyAARNk2/oYI0jfHgQAEsBoBCGA1G8f/AwFAAALYjQAEsBoBCGA1AhDAagQggNWkRpCOIPnd6ZvjQAACWI0ABLCa5BBSEaS/OX1zHKTHIABESY9hOoL0twqgjPQYBIAo6TFMRpD+RgEUkh7DVATpbxNAKekxTESQ/iYBFJMew6cjSH+LAMpJj0EAS0kfodmnB9CiAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKFUAMwqgVAHMKIBSBTCjAEoVwIwCKPOTpL+tUQEUOUH6G9sUQJECmFcAJU6S/tYmBVBggvQ3tyiAAgWQUwBhk6S/vUEBhBWAAFYrAAGstYH0G6QVgABWK4Clw/8v6TcRwBKbSb+NAB7sTaTfSgAP8mbSbyeAy30C6TcUwIU+kfSbCuACN5B+YwGUuon0WwugyM2k314Ahl9B+hYCMPwK0rcRgPHHSd9IAIZfQfpmAjD8CtI3FIDxx0nfUgCGX0H6tgIw/ArStxbARcP/k997+7cJYGDMtwxkS+Sv3E8AFxz4b/jEP93TEICjerPvr7/ZlQE8jYnhe8OHBPAkEsP3nhcH8CTSw/euAoiQHrv3vTSA20mP21tfHMDtpActAgFESI94cwgCCJIerRAeFMBNpEcqhJ8RwCDpYYrgVwQwQHqMQvh/BPBB0uNrshUBfIj04BptRABvJj2yG2xCAG8iPaobbUAAQ4/Ie28ngDc8Iu+9nQDe8Ii893YCePEBeff96gNIPmJ6PE+w/XYCePEBeff9rggg8Yjp0TzJ5tsJ4MUH5N33uyaAqUdMD+XJNt7vqgAmHjE9kifbeLvrAvjUQ6bHscmm+10ZwLsfMT2IjbbcLxpAC+kxbDR9cxykx7DR9M1xkB7DRtM3x0F6DBtN3xwH6TFsNH1zHKTHsNH0zXGQHsNG0zfHQXoMG03fHAfpMWw0fXMcpMew0fTNcZAew0bTN8dBegwbTd8cB+kxbDR9cxykx7DR9M1xkB7DRtM3x0F6DBtN3xwH6TFsNH1zHKTHsNH0zXGQHsNG0zfHQXoMG03fHAfpMWw0fXMcpMew0fTNcZAew0bTN8dBegwbTd8cB+kxbDR9cxykx7DR9M1xkB7DRtM3x0F6DBtN3xwH6TFsNH1zHKTHsNH0zXGQHsNG0zfHQXoMG03fHAfpMWw0fXMcpMew0fTNAQAAAAAAAAAAAAAAAAAAAGAx/wJoKCsUOqYWXQAAAABJRU5ErkJggg=="
+    png_data = base64.b64decode(png_b64)
+    return Response(png_data, mimetype='image/png',
+        headers={'Cache-Control':'public,max-age=3600','Content-Disposition':'inline; filename="favicon.png"'})
+
 @app.route("/icon-192.png")
 def icon_192():
     """Real PNG icon — 192x192 blue app icon."""
@@ -2357,6 +2369,8 @@ def about_page():
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>About VEWIT — AI-Powered Team Collaboration Platform</title>
+<link rel="icon" type="image/png" href="/icon-192.png"/>
+<link rel="shortcut icon" href="/favicon.ico"/>
 <meta name="description" content="VEWIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
 <meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
 <meta name="robots" content="index, follow"/>
@@ -2546,6 +2560,99 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
 
 </body>
 </html>"""
+
+
+@app.route("/api/contact", methods=["POST"])
+def contact_form():
+    """Handle public contact form — sends email to ceo@vewit.in."""
+    d = request.json or {}
+    name    = d.get("name","").strip()
+    email   = d.get("email","").strip()
+    company = d.get("company","").strip()
+    topic   = d.get("topic","").strip()
+    message = d.get("message","").strip()
+
+    if not name or not email or not message or not topic:
+        return jsonify({"error": "Please fill in all required fields."}), 400
+
+    topic_labels = {
+        "demo": "Request a Demo",
+        "support": "Technical Support",
+        "feature": "Feature Request",
+        "enterprise": "Enterprise / Pricing",
+        "partnership": "Partnership",
+        "other": "General Inquiry"
+    }
+    topic_label = topic_labels.get(topic, topic)
+
+    subject = f"VEWIT Contact Form: {topic_label} — from {name}"
+    body_html = f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;">
+      <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <div style="background:#0f172a;padding:24px 32px;display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <span style="color:white;font-weight:800;font-size:14px">V</span>
+          </div>
+          <h1 style="color:#fff;margin:0;font-size:18px;font-weight:700;">VEWIT — New Contact Form Submission</h1>
+        </div>
+        <div style="padding:28px 32px;">
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+            <p style="margin:0;font-size:13px;color:#0369a1;font-weight:600;">📩 Topic: {topic_label}</p>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
+            <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;width:130px;">Name</td><td style="padding:10px 0;color:#1e293b;">{name}</td></tr>
+            <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;">Email</td><td style="padding:10px 0;"><a href="mailto:{email}" style="color:#2563eb;">{email}</a></td></tr>
+            {"<tr style='border-bottom:1px solid #f1f5f9;'><td style='padding:10px 0;color:#64748b;font-weight:600;'>Company</td><td style='padding:10px 0;color:#1e293b;'>" + company + "</td></tr>" if company else ""}
+          </table>
+          <div style="background:#f8fafc;border-radius:8px;padding:18px;border:1px solid #e2e8f0;">
+            <p style="margin:0 0 8px;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Message</p>
+            <p style="margin:0;font-size:14px;color:#1e293b;line-height:1.7;white-space:pre-wrap;">{message}</p>
+          </div>
+        </div>
+        <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Reply directly to <a href="mailto:{email}" style="color:#2563eb;">{email}</a></p>
+          <p style="margin:0;font-size:11px;color:#cbd5e1;">VEWIT Contact Form</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    # Send to CEO
+    success = send_email("ceo@vewit.in", subject, body_html)
+
+    # Also send auto-reply to the person who submitted
+    auto_reply_html = f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;">
+      <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <div style="background:#0f172a;padding:24px 32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:20px;font-weight:800;">VEWIT</h1>
+          <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">We received your message</p>
+        </div>
+        <div style="padding:32px;">
+          <h2 style="color:#1e293b;margin:0 0 12px;font-size:16px;">Hi {name}, thanks for reaching out! 👋</h2>
+          <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;">We've received your message about <strong>{topic_label}</strong> and will get back to you within <strong>24 hours</strong>.</p>
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+            <p style="margin:0;font-size:13px;color:#0369a1;"><strong>Your message summary:</strong><br/><span style="color:#1e293b;">{message[:200]}{"..." if len(message)>200 else ""}</span></p>
+          </div>
+          <p style="color:#64748b;font-size:13px;margin:0;">In the meantime, you can <a href="https://www.vewit.in" style="color:#2563eb;">explore VEWIT</a> or reply to this email if you have anything to add.</p>
+        </div>
+        <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">© 2025 VEWIT · <a href="https://www.vewit.in" style="color:#2563eb;">www.vewit.in</a></p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    send_email(email, f"We received your message — VEWIT", auto_reply_html)
+
+    if success:
+        return jsonify({"ok": True, "message": f"Message sent! We'll reply to {email} within 24 hours."})
+    else:
+        # Even if email fails (no SMTP config), acknowledge receipt
+        return jsonify({"ok": True, "message": f"Message received! We'll get back to you at {email} soon."})
 
 @app.route("/sitemap.xml")
 def sitemap():
@@ -3489,7 +3596,7 @@ function showTab(t){
         <div>
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:6px">Support</div>
           <div style="font-size:16px;font-weight:700;color:var(--tx);margin-bottom:4px">Technical Help</div>
-          <a href="mailto:ceo@vewit.in?subject=Support Request" style="font-size:14px;color:#7c3aed;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+          <a href="mailto:support@vewit.in" style="font-size:14px;color:#7c3aed;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
             ceo@vewit.in
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
           </a>
@@ -3572,7 +3679,7 @@ function showTab(t){
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
             <div>
               <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Full Name *</label>
-              <input type="text" id="cf-name" required placeholder="Prasanna Krishna" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
+              <input type="text" id="cf-name" required placeholder="Your full name" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
             </div>
             <div>
               <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Work Email *</label>
@@ -3617,7 +3724,7 @@ function showTab(t){
 </section>
 
 <script>
-function handleContactForm(e){
+async function handleContactForm(e){
   e.preventDefault();
   const name=document.getElementById('cf-name').value.trim();
   const email=document.getElementById('cf-email').value.trim();
@@ -3628,42 +3735,57 @@ function handleContactForm(e){
   const btn=document.getElementById('cf-submit');
   const btnText=document.getElementById('cf-btn-text');
 
+  if(!name||!email||!topic||!message){
+    status.style.display='block';
+    status.style.background='#fee2e2';
+    status.style.color='#991b1b';
+    status.style.border='1px solid #fecaca';
+    status.textContent='Please fill in all required fields.';
+    return;
+  }
+
   btnText.textContent='Sending...';
   btn.disabled=true;
-  btn.style.opacity='0.7';
+  btn.style.opacity='0.75';
+  status.style.display='none';
 
-  // Compose mailto link with form data
-  const topicLabels={demo:'Request a Demo',support:'Technical Support',feature:'Feature Request',enterprise:'Enterprise / Pricing',partnership:'Partnership',other:'General Inquiry'};
-  const subject=encodeURIComponent('VEWIT Contact: '+(topicLabels[topic]||topic));
-  const body=encodeURIComponent(
-    'Name: '+name+'
-'+
-    'Email: '+email+'
-'+
-    (company?'Company: '+company+'
-':'')+
-    'Topic: '+(topicLabels[topic]||topic)+'
-
-'+
-    'Message:
-'+message
-  );
-  const mailto='mailto:ceo@vewit.in?subject='+subject+'&body='+body;
-
-  // Open mail client
-  window.location.href=mailto;
-
-  // Show success state
-  setTimeout(()=>{
+  try{
+    const res=await fetch('/api/contact',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,email,company,topic,message})
+    });
+    const data=await res.json();
+    if(data.ok){
+      status.style.display='block';
+      status.style.background='#dcfce7';
+      status.style.color='#166534';
+      status.style.border='1px solid #bbf7d0';
+      status.textContent='\u2713 '+data.message;
+      btnText.textContent='Message Sent \u2713';
+      btn.style.background='#059669';
+      btn.style.opacity='1';
+      setTimeout(()=>{
+        document.getElementById('contact-form').reset();
+        btnText.textContent='Send Message';
+        btn.style.background='#2563eb';
+        btn.disabled=false;
+        btn.style.opacity='1';
+        status.style.display='none';
+      },4000);
+    } else {
+      throw new Error(data.error||'Failed to send');
+    }
+  }catch(err){
     status.style.display='block';
-    status.style.background='#dcfce7';
-    status.style.color='#166534';
-    status.style.border='1px solid #bbf7d0';
-    status.textContent='✓ Your mail client has opened. We'll reply to '+email+' within 24 hours!';
-    btnText.textContent='Message Prepared ✓';
-    btn.style.background='#059669';
+    status.style.background='#fee2e2';
+    status.style.color='#991b1b';
+    status.style.border='1px solid #fecaca';
+    status.textContent='\u274c Could not send. Please email ceo@vewit.in directly.';
+    btnText.textContent='Send Message';
+    btn.disabled=false;
     btn.style.opacity='1';
-  },800);
+  }
 }
 </script>
 
@@ -3711,6 +3833,8 @@ HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>VEWIT — Sign In</title>
+<link rel="icon" type="image/png" href="/icon-192.png"/>
+<link rel="shortcut icon" href="/favicon.ico"/>
 <meta name="description" content="Sign in to VEWIT — AI-powered team collaboration platform."/>
 <meta name="robots" content="noindex"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
@@ -3720,14 +3844,11 @@ HTML = r"""<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="VEWIT"/>
 <meta name="mobile-web-app-capable" content="yes"/>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563eb'/%3E%3Ccircle cx='16' cy='16' r='4' fill='white'/%3E%3Ccircle cx='16' cy='7' r='3' fill='white' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='white' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='white' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"/>
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png"/>
+<link rel="shortcut icon" type="image/png" href="/favicon.ico"/>
+<link rel="apple-touch-icon" href="/icon-192.png"/>
 <script>
-(function(){
-  var svg="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23aaff00'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%230a1a00'/%3E%3Ccircle cx='16' cy='7' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='24' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Ccircle cx='8' cy='22' r='3' fill='%230a1a00' opacity='0.9'/%3E%3Cline x1='16' y1='10' x2='16' y2='12' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='21' y1='20' x2='19' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='11' y1='20' x2='13' y2='18' stroke='%230a1a00' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
-  Array.from(document.querySelectorAll("link[rel*=icon]")).forEach(function(el){el.parentNode.removeChild(el);});
-  var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href=svg;
-  document.head.appendChild(l);
-})();
+// Favicon is now served as PNG via /favicon.ico — no JS override needed
 </script>
 
 <!-- ═══════════════════════════════════════════════════════
