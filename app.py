@@ -2821,6 +2821,7 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
       <li><a href="#modules">Modules</a></li>
       <li><a href="#how">How it works</a></li>
       <li><a href="#about">About</a></li>
+      <li><a href="#contact">Contact</a></li>
     </ul>
     <div class="nav-cta">
       <a href="/?action=login" class="btn btn-outline">Sign In</a>
@@ -3206,13 +3207,12 @@ function showTab(t){
               <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">Capability</span>
             </th>
             <!-- VEWIT column — highlighted -->
-            <th style="padding:20px 24px;text-align:center;background:linear-gradient(160deg,#1e3a5f,#0f172a);border-bottom:2px solid var(--ac);position:relative;width:21%">
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:2px solid var(--ac);position:relative;width:21%">
               <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
                 <div style="width:28px;height:28px;border-radius:8px;background:var(--ac);display:flex;align-items:center;justify-content:center;margin-bottom:2px">
                   <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
                 </div>
-                <span style="font-size:14px;font-weight:800;color:#fff;letter-spacing:-.01em">VEWIT</span>
-                <span style="font-size:10px;background:rgba(37,99,235,.35);color:#93c5fd;padding:2px 8px;border-radius:100px;font-weight:600;letter-spacing:.03em">RECOMMENDED</span>
+                <span style="font-size:14px;font-weight:800;color:var(--tx);letter-spacing:-.01em">VEWIT</span>
               </div>
             </th>
             <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
@@ -3454,6 +3454,220 @@ function showTab(t){
   </div>
 </section>
 
+<section id="contact" style="padding:90px 0;background:var(--bg);border-top:1px solid var(--bd)">
+  <div class="wrap">
+
+    <!-- Header -->
+    <div class="centered" style="margin-bottom:56px">
+      <div class="sec-tag">Get in touch</div>
+      <h2 class="sec-title" style="margin-top:12px">We'd love to hear from you</h2>
+      <p class="sec-sub">Have a question, want a demo, or need help getting started? Reach out — we respond within 24 hours.</p>
+    </div>
+
+    <!-- 3-column contact cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-bottom:56px">
+
+      <!-- Email -->
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;transition:box-shadow .2s;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#2563eb,#60a5fa)"></div>
+        <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:22px">✉️</div>
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:6px">Email</div>
+          <div style="font-size:16px;font-weight:700;color:var(--tx);margin-bottom:4px">CEO &amp; Founder</div>
+          <a href="mailto:ceo@vewit.in" style="font-size:14px;color:#2563eb;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+            ceo@vewit.in
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+        </div>
+        <div style="font-size:12px;color:var(--tx3);line-height:1.5">Partnerships, enterprise plans,<br/>press &amp; general inquiries</div>
+      </div>
+
+      <!-- Support -->
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;transition:box-shadow .2s;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div>
+        <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;display:flex;align-items:center;justify-content:center;font-size:22px">🛠️</div>
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:6px">Support</div>
+          <div style="font-size:16px;font-weight:700;color:var(--tx);margin-bottom:4px">Technical Help</div>
+          <a href="mailto:ceo@vewit.in?subject=Support Request" style="font-size:14px;color:#7c3aed;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+            ceo@vewit.in
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+        </div>
+        <div style="font-size:12px;color:var(--tx3);line-height:1.5">Bug reports, feature requests<br/>&amp; account issues</div>
+      </div>
+
+      <!-- Response time -->
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#34d399)"></div>
+        <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #a7f3d0;display:flex;align-items:center;justify-content:center;font-size:22px">⚡</div>
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:6px">Response Time</div>
+          <div style="font-size:28px;font-weight:800;color:#059669;letter-spacing:-1px;line-height:1">&lt; 24h</div>
+          <div style="font-size:13px;color:var(--tx3);margin-top:4px">Guaranteed reply</div>
+        </div>
+        <div style="font-size:12px;color:var(--tx3);line-height:1.5">Monday to Saturday<br/>9 AM – 6 PM IST</div>
+      </div>
+    </div>
+
+    <!-- Main contact panel -->
+    <div style="background:var(--sf);border:1px solid var(--bd);border-radius:24px;overflow:hidden;display:grid;grid-template-columns:1fr 1.4fr">
+
+      <!-- Left — info panel -->
+      <div style="background:linear-gradient(160deg,#0f172a 0%,#1e3a5f 100%);padding:48px 40px;display:flex;flex-direction:column;gap:32px">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(37,99,235,.4);display:flex;align-items:center;justify-content:center">
+              <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+            </div>
+            <span style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-.02em">VEWIT</span>
+          </div>
+          <h3 style="font-size:22px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:10px">Let's build something great together</h3>
+          <p style="font-size:13px;color:#94a3b8;line-height:1.7">Whether you're a startup or an enterprise team, we're here to help you get more done with less friction.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✉️</div>
+            <div>
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Email us directly</div>
+              <a href="mailto:ceo@vewit.in" style="font-size:14px;color:#60a5fa;font-weight:600;text-decoration:none">ceo@vewit.in</a>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌐</div>
+            <div>
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Website</div>
+              <a href="https://www.vewit.in" style="font-size:14px;color:#60a5fa;font-weight:600;text-decoration:none">www.vewit.in</a>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏰</div>
+            <div>
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Business hours</div>
+              <div style="font-size:14px;color:#cbd5e1;font-weight:500">Mon–Sat · 9 AM – 6 PM IST</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- What we can help with -->
+        <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:24px">
+          <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">We can help with</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Workspace setup &amp; onboarding</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Team migration from other tools</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Custom feature requests</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Enterprise &amp; team pricing</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Technical support &amp; bug reports</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right — contact form -->
+      <div style="padding:48px 40px;background:var(--sf)">
+        <h3 style="font-size:20px;font-weight:800;color:var(--tx);margin-bottom:6px;letter-spacing:-.02em">Send us a message</h3>
+        <p style="font-size:13px;color:var(--tx3);margin-bottom:28px">Fill in the form and we'll get back to you within 24 hours.</p>
+
+        <form id="contact-form" onsubmit="handleContactForm(event)" style="display:flex;flex-direction:column;gap:18px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Full Name *</label>
+              <input type="text" id="cf-name" required placeholder="Prasanna Krishna" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Work Email *</label>
+              <input type="email" id="cf-email" required placeholder="you@company.com" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Company / Team</label>
+            <input type="text" id="cf-company" placeholder="Your company name" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"/>
+          </div>
+
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Topic *</label>
+            <select id="cf-topic" required style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit;cursor:pointer" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'">
+              <option value="">Select a topic...</option>
+              <option value="demo">Request a demo</option>
+              <option value="support">Technical support</option>
+              <option value="feature">Feature request</option>
+              <option value="enterprise">Enterprise / pricing</option>
+              <option value="partnership">Partnership</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Message *</label>
+            <textarea id="cf-message" required placeholder="Tell us how we can help..." rows="4" style="width:100%;padding:10px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--bg);color:var(--tx);outline:none;transition:border .15s;font-family:inherit;resize:vertical;line-height:1.6" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='var(--bd)'"></textarea>
+          </div>
+
+          <button type="submit" id="cf-submit" style="background:#2563eb;color:#fff;border:none;border-radius:12px;padding:13px 28px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;font-family:inherit;width:100%" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+            <span id="cf-btn-text">Send Message</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+
+          <div id="cf-status" style="display:none;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;text-align:center"></div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<script>
+function handleContactForm(e){
+  e.preventDefault();
+  const name=document.getElementById('cf-name').value.trim();
+  const email=document.getElementById('cf-email').value.trim();
+  const company=document.getElementById('cf-company').value.trim();
+  const topic=document.getElementById('cf-topic').value;
+  const message=document.getElementById('cf-message').value.trim();
+  const status=document.getElementById('cf-status');
+  const btn=document.getElementById('cf-submit');
+  const btnText=document.getElementById('cf-btn-text');
+
+  btnText.textContent='Sending...';
+  btn.disabled=true;
+  btn.style.opacity='0.7';
+
+  // Compose mailto link with form data
+  const topicLabels={demo:'Request a Demo',support:'Technical Support',feature:'Feature Request',enterprise:'Enterprise / Pricing',partnership:'Partnership',other:'General Inquiry'};
+  const subject=encodeURIComponent('VEWIT Contact: '+(topicLabels[topic]||topic));
+  const body=encodeURIComponent(
+    'Name: '+name+'
+'+
+    'Email: '+email+'
+'+
+    (company?'Company: '+company+'
+':'')+
+    'Topic: '+(topicLabels[topic]||topic)+'
+
+'+
+    'Message:
+'+message
+  );
+  const mailto='mailto:ceo@vewit.in?subject='+subject+'&body='+body;
+
+  // Open mail client
+  window.location.href=mailto;
+
+  // Show success state
+  setTimeout(()=>{
+    status.style.display='block';
+    status.style.background='#dcfce7';
+    status.style.color='#166534';
+    status.style.border='1px solid #bbf7d0';
+    status.textContent='✓ Your mail client has opened. We'll reply to '+email+' within 24 hours!';
+    btnText.textContent='Message Prepared ✓';
+    btn.style.background='#059669';
+    btn.style.opacity='1';
+  },800);
+}
+</script>
+
+
 <footer>
   <div class="wrap">
     <div class="footer-top">
@@ -3462,7 +3676,7 @@ function showTab(t){
         <p>The all-in-one project management platform for engineering teams. AI-powered, multi-tenant, fully featured.</p>
       </div>
       <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#about">About VEWIT</a></li><li><a href="#how">How it works</a></li></ul></div>
-      <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li></ul></div>
+      <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li><li><a href="#contact">Contact Us</a></li></ul></div>
       <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
     </div>
     <div class="footer-bottom">
