@@ -2294,7 +2294,7 @@ def serve_manifest():
         "name": "VEUIT",
         "short_name": "PFPro",
         "description": "AI-powered team project management — tasks, huddles, timeline, tickets & more.",
-        "start_url": "/?action=login",
+        "start_url": "/dashboard",
         "scope": "/",
         "display": "standalone",
         "display_override": ["window-controls-overlay", "standalone"],
@@ -2311,9 +2311,9 @@ def serve_manifest():
             {"src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon"}
         ],
         "shortcuts": [
-            {"name": "Dashboard", "short_name": "Dashboard", "url": "/?action=login", "description": "Go to your dashboard"},
-            {"name": "New Task", "short_name": "New Task", "url": "/?action=login", "description": "Create a new task"},
-            {"name": "Projects", "short_name": "Projects", "url": "/?action=login", "description": "View all projects"}
+            {"name": "Dashboard", "short_name": "Dashboard", "url": "/dashboard", "description": "Go to your dashboard"},
+            {"name": "New Task", "short_name": "New Task", "url": "/tasks", "description": "Create a new task"},
+            {"name": "Projects", "short_name": "Projects", "url": "/projects", "description": "View all projects"}
         ],
         "screenshots": [
             {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "wide", "label": "VEUIT Dashboard"}
@@ -2344,6 +2344,16 @@ def sitemap():
     xml = '''<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://www.vewit.in/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://www.vewit.in/dashboard</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.vewit.in/projects</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.vewit.in/tasks</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.vewit.in/messages</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.vewit.in/dm</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.vewit.in/tickets</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.vewit.in/timeline</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.vewit.in/reminders</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.vewit.in/team</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.vewit.in/productivity</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
 </urlset>'''
     return xml, 200, {"Content-Type": "application/xml"}
 
@@ -2351,6 +2361,26 @@ def sitemap():
 def robots():
     txt = "User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: https://www.vewit.in/sitemap.xml"
     return txt, 200, {"Content-Type": "text/plain"}
+
+@app.route("/dashboard")
+@app.route("/projects")
+@app.route("/tasks")
+@app.route("/messages")
+@app.route("/dm")
+@app.route("/dashboard")
+@app.route("/projects")
+@app.route("/tasks")
+@app.route("/messages")
+@app.route("/dm")
+@app.route("/tickets")
+@app.route("/timeline")
+@app.route("/reminders")
+@app.route("/settings")
+@app.route("/team")
+@app.route("/productivity")
+def app_page(**kwargs):
+    """Serve the SPA for all clean URLs — JS picks up the path and sets the view."""
+    return HTML
 
 @app.route("/",defaults={"p":""})
 @app.route("/<path:p>")
@@ -2380,7 +2410,20 @@ LANDING_HTML = """<!DOCTYPE html>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="VEUIT — AI-Powered Team Collaboration"/>
 <meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"VEUIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform for project management, tasks, direct messaging and productivity.","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication",
+"name":"VEUIT","url":"https://www.vewit.in",
+"description":"AI-powered team collaboration platform for project management, tasks, direct messaging and productivity.",
+"applicationCategory":"BusinessApplication","operatingSystem":"Web",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},
+"featureList":["Project Management","Task Board","Direct Messages","Support Tickets","Timeline Tracker","Team Analytics","AI Assistant","Push Notifications"],
+"screenshot":"https://www.vewit.in/dashboard"}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite",
+"name":"VEUIT","url":"https://www.vewit.in",
+"potentialAction":{"@type":"SearchAction","target":"https://www.vewit.in/tasks?q={search_term_string}","query-input":"required name=search_term_string"}}
+</script>
 <meta name="description" content="VEUIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
@@ -8170,7 +8213,56 @@ function HuddleCall(){return null;}
 
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
-  const [view,setView]=useState('dashboard');const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
+  // Read initial view from URL path or ?page= param
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity'];
+  // Set initial page title based on current URL path
+  useEffect(()=>{
+    try{
+      const p=window.location.pathname.replace(/^\//, '').split('/')[0].trim();
+      const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity'};
+      if(p&&VIEW_T[p]) document.title='VEUIT — '+VIEW_T[p]+' | AI-Powered Team Collaboration';
+      else document.title='VEUIT — AI-Powered Team Collaboration Platform';
+    }catch(e){}
+  },[]);
+  const [view,setView]=useState(()=>{
+    try{
+      const p=window.location.pathname.replace(/^\//, '').split('/')[0].trim();
+      if(p&&VALID_VIEWS.includes(p)) return p;
+      const sp=new URLSearchParams(window.location.search).get('page');
+      if(sp&&VALID_VIEWS.includes(sp)) return sp;
+    }catch(e){}
+    return 'dashboard';
+  });
+  // Keep browser URL in sync with current view
+  const VIEW_TITLES={
+    dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',
+    messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
+    timeline:'Timeline Tracker',reminders:'Reminders',
+    settings:'Settings',team:'Team Management',productivity:'Dev Productivity'
+  };
+  const _setView=useCallback((v)=>{
+    setView(v);
+    try{
+      const base=v.split(':')[0];
+      if(VALID_VIEWS.includes(base)){
+        history.pushState(null,'','/'+base);
+        document.title='VEUIT — '+(VIEW_TITLES[base]||base)+' | AI-Powered Team Collaboration';
+      }
+    }catch(e){}
+  },[]);
+  // Handle browser back/forward
+  useEffect(()=>{
+    const onPop=()=>{
+      try{
+        const p=window.location.pathname.replace(/^\//, '').split('/')[0].trim();
+        if(p&&VALID_VIEWS.includes(p)) setView(p);
+        else setView('dashboard');
+      }catch(e){}
+    };
+    window.addEventListener('popstate',onPop);
+    return()=>window.removeEventListener('popstate',onPop);
+  },[]);
+  const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
   const [initialProjectId,setInitialProjectId]=useState(null);
   useEffect(()=>{
     try{
@@ -8362,7 +8454,7 @@ function App(){
             const sender=data.users.find(u=>u.id===x.sender);
             const sname=sender?sender.name:'Someone';
             window._pfToast&&window._pfToast('dm','💬 New message from '+sname,'Tap to open Direct Messages');
-            showBrowserNotif('💬 '+sname,'New message',()=>{setDmTargetUser(x.sender);setView('dm');window.focus();},{tag:'dm-'+x.sender});
+            showBrowserNotif('💬 '+sname,'New message',()=>{setDmTargetUser(x.sender);_setView('dm');window.focus();},{tag:'dm-'+x.sender});
             playSound('notif');
           }
         });
@@ -8397,8 +8489,8 @@ function App(){
           addToast(n.type,title,n.content||'');
           showBrowserNotif(title,n.content||'',()=>{
             window.focus();
-            if(n.type==='dm'){const sid=n.sender_id||n.sender;if(sid)setDmTargetUser(sid);setView('dm');}
-            else{setView(nav);}
+            if(n.type==='dm'){const sid=n.sender_id||n.sender;if(sid)setDmTargetUser(sid);_setView('dm');}
+            else{_setView(nav);}
           },{tag:'notif-'+n.id});
           playSound('notif');
         });
@@ -8574,8 +8666,8 @@ function App(){
   return html`
     <div style=${{display:'flex',width:'100vw',height:'100vh',background:'var(--bg)',overflow:'hidden'}}>
       <${Sidebar} cu=${cu} view=${baseView} setView=${v=>{
-          if(typeof v==='string'&&v.startsWith('dm:')){const uid=v.slice(3);setDmTargetUser(uid);setView('dm');}
-          else setView(v);
+          if(typeof v==='string'&&v.startsWith('dm:')){const uid=v.slice(3);setDmTargetUser(uid);_setView('dm');}
+          else _setView(v);
         }} onLogout=${logout} unread=${unread} dmUnread=${dmUnread} col=${col} setCol=${v=>{setCol(v);try{localStorage.setItem('pf_col',v?'1':'0');}catch{}}} wsName=${wsName}
         dark=${dark} setDark=${setDark} wsDmEnabled=${wsDmEnabled} onlineUsers=${onlineUsers}
         teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}
