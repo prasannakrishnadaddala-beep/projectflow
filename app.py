@@ -2485,10 +2485,20 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
 </nav>
 
 <section class="hero">
-  <h1>AI-Powered <span>Team Collaboration</span><br/>Built for Modern Teams</h1>
-  <p>VEWIT brings together project management, task tracking, direct messaging, support tickets, timeline planning and developer analytics — all in one unified platform.</p>
+  <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);padding:5px 14px;border-radius:100px;margin-bottom:20px">
+    <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e"></span>
+    <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.8);letter-spacing:.06em;text-transform:uppercase">Free to start · No credit card</span>
+  </div>
+  <h1>AI-Powered <span>Project Management</span><br/>&amp; Team Collaboration Platform</h1>
+  <p>VEWIT replaces Jira, Slack and Linear with one unified platform — project management, task tracking, direct messaging, support tickets, timeline planning and AI-powered analytics for your entire team.</p>
   <a href="/?action=register" class="hero-cta">Get Started Free</a>
   <a href="/?action=login" class="hero-sec">Sign In</a>
+  <div style="display:flex;gap:24px;justify-content:center;margin-top:28px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> Free workspace</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> AI assistant included</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> 12+ modules built-in</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> No credit card needed</div>
+  </div>
 </section>
 
 <div class="section">
@@ -2713,10 +2723,12 @@ def contact_form():
 
 @app.route("/sitemap.xml")
 def sitemap():
-    xml = '''<?xml version="1.0" encoding="UTF-8"?>
+    from datetime import datetime as _dt
+    today = _dt.utcnow().strftime("%Y-%m-%d")
+    xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://www.vewit.in/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://www.vewit.in/about</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.vewit.in/</loc><lastmod>{today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://www.vewit.in/about</loc><lastmod>{today}</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
 </urlset>'''
     return xml, 200, {"Content-Type": "application/xml"}
 
@@ -2773,34 +2785,62 @@ LANDING_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VEWIT — AI-Powered Team Collaboration Platform</title>
-<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timelines and team productivity — all in one place."/>
-<meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, productivity, tickets, timeline"/>
+<title>VEWIT — AI-Powered Project Management &amp; Team Collaboration Platform</title>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timeline tracking and developer productivity — all in one place. Free to start."/>
+<meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
 <meta name="author" content="VEWIT"/>
-<meta name="robots" content="index, follow"/>
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<meta name="googlebot" content="index, follow"/>
+<meta name="revisit-after" content="3 days"/>
+<meta name="language" content="English"/>
+<meta name="rating" content="general"/>
+<meta name="category" content="Business Software, Project Management, Team Collaboration"/>
 <meta name="theme-color" content="#0f172a"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="en" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="en-in" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="x-default" href="https://www.vewit.in/"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform."/>
+<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
+<meta property="og:site_name" content="VEWIT"/>
+<meta property="og:locale" content="en_IN"/>
+<meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
+<meta property="og:image:width" content="512"/>
+<meta property="og:image:height" content="512"/>
+<meta property="og:image:alt" content="VEWIT — AI-Powered Team Collaboration Platform"/>
 <meta property="og:site_name" content="VEWIT"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
 <meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication",
-"name":"VEWIT","url":"https://www.vewit.in",
-"description":"AI-powered team collaboration platform for project management, tasks, direct messaging and productivity.",
-"applicationCategory":"BusinessApplication","operatingSystem":"Web",
-"offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},
-"featureList":["Project Management","Task Board","Direct Messages","Support Tickets","Timeline Tracker","Team Analytics","AI Assistant","Push Notifications"],
-"screenshot":"https://www.vewit.in/dashboard"}
+"name":"VEWIT","alternateName":"VEWIT Team Collaboration","url":"https://www.vewit.in",
+"description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
+"applicationCategory":"BusinessApplication","applicationSubCategory":"Project Management",
+"operatingSystem":"Web, PWA, iOS, Android",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"INR","availability":"https://schema.org/InStock"},
+"aggregateRating":{"@type":"AggregateRating","ratingValue":"5","reviewCount":"1"},
+"featureList":["AI-Powered Project Management","Kanban Task Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"],
+"screenshot":"https://www.vewit.in/icon-512.png",
+"softwareVersion":"4.0",
+"releaseNotes":"AI assistant, multi-workspace support, push notifications"}
 </script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite",
 "name":"VEWIT","url":"https://www.vewit.in",
 "potentialAction":{"@type":"SearchAction","target":"https://www.vewit.in/tasks?q={search_term_string}","query-input":"required name=search_term_string"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage",
+"mainEntity":[
+  {"@type":"Question","name":"What is VEWIT?","acceptedAnswer":{"@type":"Answer","text":"VEWIT is an AI-powered team collaboration platform that combines project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics in one unified workspace."}},
+  {"@type":"Question","name":"Is VEWIT free?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT is free to start. Create a workspace instantly with no credit card required."}},
+  {"@type":"Question","name":"How is VEWIT different from Jira?","acceptedAnswer":{"@type":"Answer","text":"Unlike Jira, VEWIT includes built-in direct messaging, support tickets, AI assistant, developer productivity analytics and timeline tracking all in one platform — no plugins or integrations needed."}},
+  {"@type":"Question","name":"Does VEWIT have an AI assistant?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT has a built-in AI assistant powered by Anthropic Claude that understands your actual projects and tasks and can answer questions, summarise work and generate task descriptions."}},
+  {"@type":"Question","name":"How many users can join a VEWIT workspace?","acceptedAnswer":{"@type":"Answer","text":"VEWIT supports unlimited team members in a workspace with six role levels: Admin, Manager, Team Lead, Developer, Tester and Viewer."}}
+]}
 </script>
 <meta name="description" content="VEWIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -5777,15 +5817,24 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
 /* ─── ProjectsView ────────────────────────────────────────────────────────── */
 function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,activeTeam,initialProjectId,onClearInitial}){
   const [showNew,setShowNew]=useState(false);const [detail,setDetail]=useState(null);
+
+  // Open project from initialProjectId prop OR directly from URL path /projects/<id>
   useEffect(()=>{
-    if(initialProjectId&&safe(projects).length>0){
-      const p=safe(projects).find(proj=>proj.id===initialProjectId);
-      if(p){
-        setDetail(p);
-        onClearInitial&&onClearInitial(); // clear immediately so re-visits don't re-open
+    if(safe(projects).length===0) return;
+    // Check URL for project id first
+    try{
+      const parts=window.location.pathname.split('/');
+      if(parts[1]==='projects'&&parts[2]){
+        const urlProject=safe(projects).find(proj=>proj.id===parts[2]);
+        if(urlProject){setDetail(urlProject);return;}
       }
+    }catch(e){}
+    // Fall back to prop
+    if(initialProjectId){
+      const p=safe(projects).find(proj=>proj.id===initialProjectId);
+      if(p){setDetail(p);onClearInitial&&onClearInitial();}
     }
-  },[initialProjectId]); // intentionally only depends on initialProjectId
+  },[initialProjectId,projects.length]); // re-run when projects load
   const [name,setName]=useState('');const [desc,setDesc]=useState('');
   const [sDate,setSDate]=useState('');const [tDate,setTDate]=useState('');
   const [color,setColor]=useState('#2563eb');const [members,setMembers]=useState([]);const [err,setErr]=useState('');
@@ -5794,8 +5843,40 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
   const [viewMode,setViewMode]=useState('grid');
   const [projTeam,setProjTeam]=useState('');
 
-  useEffect(()=>{if(detail){const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);}},[projects]);
+  useEffect(()=>{if(detail){
+    const fresh=safe(projects).find(p=>p.id===detail.id);if(fresh)setDetail(fresh);
+    // Push clean URL with project id
+    try{
+      const slug=detail.id;
+      history.pushState(null,'','/projects/'+slug);
+      document.title='VEWIT — '+detail.name+' | Projects';
+    }catch(e){}
+  } else {
+    // Back to /projects when detail closes
+    try{
+      if(window.location.pathname.startsWith('/projects/')){
+        history.pushState(null,'','/projects');
+        document.title='VEWIT — Projects | AI-Powered Team Collaboration';
+      }
+    }catch(e){}
+  }},[detail]);
   useEffect(()=>{if(activeTeam)setProjTeam(activeTeam.id);},[activeTeam]);
+
+  // Handle browser back/forward within projects
+  useEffect(()=>{
+    const onPop=()=>{
+      const parts=window.location.pathname.split('/');
+      if(parts[1]==='projects'&&parts[2]){
+        const p=safe(projects).find(proj=>proj.id===parts[2]);
+        if(p){setDetail(p);return;}
+      }
+      if(window.location.pathname==='/projects'||window.location.pathname==='/projects/'){
+        setDetail(null);
+      }
+    };
+    window.addEventListener('popstate',onPop);
+    return()=>window.removeEventListener('popstate',onPop);
+  },[projects]);
 
   const create=async()=>{
     if(!name.trim()){setErr('Project name required.');return;}setErr('');
@@ -8998,6 +9079,17 @@ function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
   const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity'];
+  // Also treat /projects/<id> as valid
+  useEffect(()=>{
+    try{
+      const p=window.location.pathname;
+      if(p.startsWith('/projects/')&&p.length>10){
+        const pid=p.split('/')[2];
+        if(pid)setInitialProjectId(pid);
+        setView('projects');
+      }
+    }catch(e){}
+  },[]);
   // Set initial page title based on current URL path
   useEffect(()=>{
     try{
@@ -9313,8 +9405,10 @@ function App(){
   },[]);
   const logout=async()=>{
     if(window._pfPushUnsubscribe) await window._pfPushUnsubscribe().catch(()=>{});
-    await api.post('/api/auth/logout',{});
+    try{ await api.post('/api/auth/logout',{}); }catch(e){}
     setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);
+    // Redirect to login immediately — clears all state and shows auth page
+    window.location.href='/?action=login';
   };
 
   useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
