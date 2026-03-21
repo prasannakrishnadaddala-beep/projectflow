@@ -3628,52 +3628,6 @@ function showTab(t){
       <p class="sec-sub">Have a question, want a demo, or need help getting started? Reach out — we respond within 24 hours.</p>
     </div>
 
-    <!-- 3-column contact cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-bottom:56px">
-
-      <!-- Email -->
-      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;transition:box-shadow .2s;position:relative;overflow:hidden">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#2563eb,#60a5fa)"></div>
-        <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:22px">✉️</div>
-        <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:6px">Email</div>
-          <div style="font-size:16px;font-weight:700;color:var(--tx);margin-bottom:4px">CEO &amp; Founder</div>
-          <a href="mailto:ceo@vewit.in" style="font-size:14px;color:#2563eb;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
-            ceo@vewit.in
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
-          </a>
-        </div>
-        <div style="font-size:12px;color:var(--tx3);line-height:1.5">Partnerships, enterprise plans,<br/>press &amp; general inquiries</div>
-      </div>
-
-      <!-- Support -->
-      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;transition:box-shadow .2s;position:relative;overflow:hidden">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div>
-        <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;display:flex;align-items:center;justify-content:center;font-size:22px">🛠️</div>
-        <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:6px">Support</div>
-          <div style="font-size:16px;font-weight:700;color:var(--tx);margin-bottom:4px">Technical Help</div>
-          <a href="mailto:support@vewit.in" style="font-size:14px;color:#7c3aed;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
-            ceo@vewit.in
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
-          </a>
-        </div>
-        <div style="font-size:12px;color:var(--tx3);line-height:1.5">Bug reports, feature requests<br/>&amp; account issues</div>
-      </div>
-
-      <!-- Response time -->
-      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:20px;padding:32px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;position:relative;overflow:hidden">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#059669,#34d399)"></div>
-        <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #a7f3d0;display:flex;align-items:center;justify-content:center;font-size:22px">⚡</div>
-        <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3);margin-bottom:6px">Response Time</div>
-          <div style="font-size:28px;font-weight:800;color:#059669;letter-spacing:-1px;line-height:1">&lt; 24h</div>
-          <div style="font-size:13px;color:var(--tx3);margin-top:4px">Guaranteed reply</div>
-        </div>
-        <div style="font-size:12px;color:var(--tx3);line-height:1.5">Monday to Saturday<br/>9 AM – 6 PM IST</div>
-      </div>
-    </div>
-
     <!-- Main contact panel -->
     <div style="background:var(--sf);border:1px solid var(--bd);border-radius:24px;overflow:hidden;display:grid;grid-template-columns:1fr 1.4fr">
 
@@ -3691,13 +3645,7 @@ function showTab(t){
         </div>
 
         <div style="display:flex;flex-direction:column;gap:20px">
-          <div style="display:flex;align-items:flex-start;gap:14px">
-            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✉️</div>
-            <div>
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Email us directly</div>
-              <a href="mailto:ceo@vewit.in" style="font-size:14px;color:#60a5fa;font-weight:600;text-decoration:none">ceo@vewit.in</a>
-            </div>
-          </div>
+
           <div style="display:flex;align-items:flex-start;gap:14px">
             <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌐</div>
             <div>
