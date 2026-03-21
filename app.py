@@ -5168,7 +5168,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
   const [typeF,setTypeF]=useState('all');
   const [search,setSearch]=useState('');
   const [showFilters,setShowFilters]=useState(!!(initialStage||initialPriority));
-  const [showResolved,setShowResolved]=useState(false);
+  const [showResolved,setShowResolved]=useState(true);
   const [sortCol,setSortCol]=useState(null);
   const [sortDir,setSortDir]=useState('asc');
   const [sprintFilter,setSprintFilter]=useState('');
@@ -5303,6 +5303,11 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
               Export
             </a>
           </div>`:null}
+          <button class=${'btn '+(showResolved?'bg':'bp')} style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}}
+            onClick=${()=>setShowResolved(v=>!v)}
+            title=${showResolved?'Click to hide completed tasks':'Click to show completed tasks'}>
+            ${showResolved?'Hide Completed':'Show Completed'}
+          </button>
           <button class="btn bp" style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}} onClick=${()=>setNewT(true)}>+ New Task</button>
         </div>
         ${csvResult?html`<div style=${{marginTop:8,padding:'8px 12px',borderRadius:8,fontSize:12,background:csvResult.error?'rgba(185,28,28,0.10)':'rgba(21,128,61,0.12)',border:'1px solid '+(csvResult.error?'rgba(255,68,68,.2)':'rgba(62,207,110,.2)'),color:csvResult.error?'var(--rd)':'var(--gn)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -6149,7 +6154,11 @@ function MessagesView({projects,users,cu,tasks}){
   useEffect(()=>{pidRef.current=pid;},[pid]);
   const [msgs,setMsgs]=useState([]);const [txt,setTxt]=useState('');const ref=useRef(null);
   const [channelUnread,setChannelUnread]=useState({}); // {projectId: count}
-  const lastSeenMsgRef=useRef({}); // {projectId: lastMsgTs}
+  // Persist lastSeen to localStorage so refresh doesn't reset unread counts
+  const lastSeenMsgRef=useRef(()=>{
+    try{return JSON.parse(localStorage.getItem('pfLastSeen')||'{}');}catch{return {};}
+  }());
+  const saveLastSeen=(obj)=>{try{localStorage.setItem('pfLastSeen',JSON.stringify(obj));}catch{}};
   const [showInfo,setShowInfo]=useState(false);
   const [chanSearch,setChanSearch]=useState('');
   const [newestFirst,setNewestFirst]=useState(false);
@@ -6163,8 +6172,8 @@ function MessagesView({projects,users,cu,tasks}){
       if(d.length>0){
         const latestTs=d.reduce((mx,m)=>m.ts>mx?m.ts:mx,'');
         lastSeenMsgRef.current[id]=latestTs;
+        saveLastSeen(lastSeenMsgRef.current);
       }
-      // Clear unread count for this channel
       setChannelUnread(prev=>({...prev,[id]:0}));
     }
   },[]);
@@ -6183,6 +6192,7 @@ function MessagesView({projects,users,cu,tasks}){
                 const latest=d.reduce((mx,m)=>m.ts>mx?m.ts:mx,'');
                 setLastMsgTs(prev2=>({...prev2,[pid]:latest}));
                 lastSeenMsgRef.current[pid]=latest;
+                saveLastSeen(lastSeenMsgRef.current);
                 setChannelUnread(prev3=>({...prev3,[pid]:0}));
               }
             }
@@ -8713,12 +8723,41 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     </div>`:null;
 
   const callPopup=phase==='in-call'&&popupPos&&popupPos.x!==null?html`
-    <div style=${{position:'fixed',left:minimized?(popupPos&&popupPos.x||100)+'px':'0',top:minimized?(popupPos&&popupPos.y||60)+'px':'0',width:minimized?'240px':'100vw',height:minimized?'auto':'100vh',zIndex:8600,borderRadius:minimized?14:0,overflow:'hidden',boxShadow:'0 32px 100px rgba(0,0,0,.85)',background:'#0d0d1a',border:minimized?'1px solid rgba(255,255,255,.07)':'none',display:'flex',flexDirection:'column',transition:dragging?'none':'all .2s',userSelect:dragging?'none':'auto'}}>
-            <div onMouseDown=${onDragStart} style=${{background:'rgba(0,0,0,.5)',padding:'9px 14px',display:'flex',alignItems:'center',gap:8,cursor:'move',flexShrink:0,backdropFilter:'blur(10px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.05)'}}>
-        <div style=${{width:8,height:8,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+    <div style=${{position:'fixed',
+      left:minimized?(popupPos&&popupPos.x||100)+'px':'0',
+      top:minimized?(popupPos&&popupPos.y||60)+'px':'0',
+      width:minimized?'auto':'100vw',
+      height:minimized?'auto':'100vh',
+      zIndex:8600,
+      borderRadius:minimized?100:0,
+      overflow:minimized?'visible':'hidden',
+      boxShadow:minimized?'0 8px 32px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.4)':'0 32px 100px rgba(0,0,0,.85)',
+      background:minimized?'rgba(10,10,20,.92)':'#0d0d1a',
+      border:minimized?'1px solid rgba(255,255,255,.12)':'none',
+      backdropFilter:minimized?'blur(20px)':'none',
+      display:'flex',flexDirection:'column',
+      transition:dragging?'none':'all .25s cubic-bezier(.4,0,.2,1)',
+      userSelect:dragging?'none':'auto'}}>
+      <div onMouseDown=${onDragStart}
+        style=${{
+          background:minimized?'transparent':'rgba(0,0,0,.5)',
+          padding:minimized?'8px 14px':'9px 14px',
+          display:'flex',alignItems:'center',
+          gap:minimized?10:8,
+          cursor:'move',flexShrink:0,
+          backdropFilter:minimized?'none':'blur(10px)',
+          borderBottom:minimized?'none':'1px solid rgba(255,255,255,.05)',
+          borderRadius:minimized?100:0,
+          minWidth:minimized?220:undefined
+        }}>
+        <!-- Live indicator dot -->
+        <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+        <!-- Mic icon -->
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-        <span style=${{fontSize:12,fontWeight:700,color:'rgba(255,255,255,.85)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${roomName||'Huddle'}</span>
-        <span style=${{fontSize:11,color:'#22c55e',fontFamily:'monospace',fontWeight:700,flexShrink:0}}>${fmtTime(elapsed)}</span>
+        <!-- Room name -->
+        <span style=${{fontSize:12,fontWeight:700,color:'#fff',flex:minimized?'unset':1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:minimized?120:undefined}}>${roomName||'Instant Meet'}</span>
+        <!-- Timer — styled as green pill in minimized mode -->
+        <span style=${{fontSize:11,color:'#22c55e',fontFamily:'monospace',fontWeight:800,flexShrink:0,background:minimized?'rgba(34,197,94,.12)':'transparent',padding:minimized?'2px 8px':'0',borderRadius:minimized?100:0,border:minimized?'1px solid rgba(34,197,94,.25)':'none'}}>${fmtTime(elapsed)}</span>
                 ${minimized?html`
           <div style=${{display:'flex',marginLeft:4}}>
             ${partUsers.slice(0,4).map((u,i)=>html`
