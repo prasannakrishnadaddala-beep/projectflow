@@ -6169,7 +6169,16 @@ function MessagesView({projects,users,cu,tasks}){
   const [stableOrder,setStableOrder]=useState(null); // null = not yet fetched
   const orderSetRef=useRef(false);
 
-  useEffect(()=>{api.get('/api/projects/all').then(d=>{if(Array.isArray(d)&&d.length)setAllProjects(d);});},[]);
+  const allProjectsLoadedRef=useRef(false);
+  useEffect(()=>{
+    if(allProjectsLoadedRef.current)return;
+    api.get('/api/projects/all').then(d=>{
+      if(Array.isArray(d)&&d.length){
+        allProjectsLoadedRef.current=true;
+        setAllProjects(d);
+      }
+    });
+  },[]);
 
   useEffect(()=>{
     const fetchTs=async()=>{
@@ -6189,11 +6198,17 @@ function MessagesView({projects,users,cu,tasks}){
             newUnread[projId]=(newUnread[projId]||0)+1;
           }
         }
+        // Only set unread=1 if the channel has a NEW message since last seen
+        // Don't increment on every poll — just mark as unread (1) if newer
         setChannelUnread(prev=>{
           const merged={...prev};
-          for(const [k,v] of Object.entries(newUnread)){
-            if(!lastSeenMsgRef.current[k]&&!merged[k]) merged[k]=1;
-            else if(lastSeenMsgRef.current[k]&&d[k]>lastSeenMsgRef.current[k]&&k!==pidRef.current) merged[k]=(merged[k]||0)+1;
+          for(const [projId,latestTs] of Object.entries(d)){
+            if(projId===pidRef.current)continue; // active channel — always clear
+            const lastSeen=lastSeenMsgRef.current[projId]||'';
+            const prevUnread=prev[projId]||0;
+            if(latestTs&&latestTs>lastSeen){
+              merged[projId]=prevUnread||1; // mark unread if not already
+            }
           }
           return merged;
         });
@@ -8297,12 +8312,13 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           const tryAttach=(attempts)=>{
             if(remoteScreenRef.current){
               remoteScreenRef.current.srcObject=stream;
-              remoteScreenRef.current.play().catch(()=>{});
-            } else if(attempts<10){
-              setTimeout(()=>tryAttach(attempts+1),100);
+              remoteScreenRef.current.muted=false; // ensure audio plays
+              remoteScreenRef.current.play().catch(e=>console.warn('screen play:',e));
+            } else if(attempts<20){
+              setTimeout(()=>tryAttach(attempts+1),150);
             }
           };
-          requestAnimationFrame(()=>tryAttach(0));
+          setTimeout(()=>tryAttach(0),100); // small delay so React renders the video element
           e.track.onended=()=>{
             setRemoteScreenUid(null);
             if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;
@@ -8350,6 +8366,18 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
               const ans=await pc.createAnswer();
               await pc.setLocalDescription(ans);
               await api.post('/api/calls/'+rid+'/signal',{to_user:from,type:'answer',data:{type:ans.type,sdp:ans.sdp}});
+              // After answering, re-attach any existing remote video (handles camera restart)
+              setTimeout(()=>{
+                const receivers=pc.getReceivers();
+                const vr=receivers.find(r=>r.track&&r.track.kind==='video'&&r.track.readyState==='live');
+                if(vr&&!pendingScreenUidsRef.current.has(from)){
+                  const el=remoteVideoRefs.current[from];
+                  if(el&&(!el.srcObject||el.srcObject.getVideoTracks().length===0)){
+                    const ms=new MediaStream([vr.track]);
+                    el.srcObject=ms;el.play().catch(()=>{});
+                  }
+                }
+              },500);
             }catch(ex){}
           } else if(sig.type==='answer'){
             const pc=pcs.current[from];
@@ -8359,20 +8387,29 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             if(pc&&pc.remoteDescription){try{await pc.addIceCandidate(new RTCIceCandidate(data));}catch(ex){}}          } else if(sig.type==='screen-start'){
             pendingScreenUidsRef.current.add(from);
             setRemoteScreenUid(from);
-            setTimeout(()=>{
-              if(remoteScreenRef.current&&!remoteScreenRef.current.srcObject){
-                const pc=pcs.current[from];
-                if(pc){
-                  const receivers=pc.getReceivers();
-                  const vr=receivers.find(r=>r.track&&r.track.kind==='video'&&r.track.readyState==='live');
-                  if(vr){
-                    const ms=new MediaStream([vr.track]);
-                    remoteScreenRef.current.srcObject=ms;
-                    remoteScreenRef.current.play().catch(()=>{});
+            // Retry attaching screen track with polling — element may not be mounted yet
+            let _ssAttempts=0;
+            const _ssRetry=()=>{
+              _ssAttempts++;
+              const el=remoteScreenRef.current;
+              if(el&&(!el.srcObject||el.srcObject.getVideoTracks().every(t=>t.readyState!=='live'))){
+                const pc2=pcs.current[from];
+                if(pc2){
+                  const vrs=pc2.getReceivers().filter(r=>r.track&&r.track.kind==='video'&&r.track.readyState==='live');
+                  if(vrs.length>0){
+                    const ms=new MediaStream([vrs[vrs.length-1].track]);
+                    el.srcObject=ms;
+                    el.muted=true;
+                    el.play().catch(()=>{});
+                    return;
                   }
                 }
+              } else if(el&&el.srcObject){
+                return; // already attached
               }
-            },200);
+              if(_ssAttempts<25){setTimeout(_ssRetry,200);}
+            };
+            setTimeout(_ssRetry,200);
           } else if(sig.type==='screen-stop'){
             setRemoteScreenUid(null);
             pendingScreenUidsRef.current.delete(from);
@@ -8380,7 +8417,6 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
           } else if(sig.type==='reaction'){
             const id=Date.now()+Math.random();
             setFloatingReactions(prev=>[...prev,{id,emoji:data.emoji,x:15+Math.random()*70,label:data.from||''}]);
-            setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
             setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
           } else if(sig.type==='hand'){
             const hid='hand-'+from;
@@ -8830,7 +8866,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                 ${meetUrl?html`
           <a href=${meetUrl} target="_blank" rel="noopener"
             onClick=${e=>e.stopPropagation()}
-            title="Open in Google Meet — full video, screen share & recording"
+            title="Start Google Meet — opens a new meeting room"
             style=${{
               display:'flex',alignItems:'center',gap:5, padding:'4px 10px',borderRadius:7, background:'rgba(66,133,244,0.18)', border:'1px solid rgba(66,133,244,0.35)', color:'#7bb3f7',fontSize:10,fontWeight:700, textDecoration:'none',cursor:'pointer', transition:'all .15s',flexShrink:0, letterSpacing:'.02em',marginLeft:4
             }}
@@ -8966,17 +9002,20 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
             <button onClick=${()=>{
               const nv=!handRaised;setHandRaised(nv);
               const room=roomIdRef.current;if(!room)return;
+              // Send signal to all peers
               participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
                 api.post('/api/calls/'+room+'/signal',{to_user:uid,type:'hand',data:{raised:nv,from:cu.name||'You'}}).catch(()=>{});
               });
+              // When raising: send a 'hand-hide' signal after 5s so remote views auto-hide
+              // But do NOT lower the raiser's own button — they stay visually raised
               if(nv){
                 setTimeout(()=>{
-                  setHandRaised(false);
+                  // Only hide on remote viewers — raiser keeps their hand raised
                   const r=roomIdRef.current;if(!r)return;
                   participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
                     api.post('/api/calls/'+r+'/signal',{to_user:uid,type:'hand',data:{raised:false,from:cu.name}}).catch(()=>{});
                   });
-                },30000);
+                },5000);
               }
             }} style=${{width:44,height:44,borderRadius:13,background:handRaised?'rgba(251,191,36,.3)':'rgba(255,255,255,.09)',border:'1.5px solid '+(handRaised?'rgba(251,191,36,.8)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,transition:'all .15s',boxShadow:handRaised?'0 0 16px rgba(251,191,36,.6)':'none',animation:handRaised?'pulse 1s infinite':'none'}}>
               ${handRaised?'✋':'🖐'}
@@ -9041,7 +9080,7 @@ function App(){
       }
     }catch(e){}
   },[]);
-  const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[],teams:[]});
+  const [data,setData]=useState({users:[],projects:[],tasks:[],notifs:[],teams:[],tickets:[]});
   const [teamCtx,setTeamCtxRaw]=useState(()=>{try{return localStorage.getItem('pf_team_ctx')||'';}catch{return '';}});
   const setTeamCtx=useCallback((id,forceDev=false)=>{
     if(cu&&cu.role!=='Admin'&&cu.role!=='Manager'&&!forceDev)return;
@@ -9116,10 +9155,11 @@ function App(){
     try{
       const projUrl=tCtx?'/api/projects?team_id='+tCtx:'/api/projects';
       const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
-      const [users,projects,tasks,notifs,dmu,ws,teamsRaw]=await Promise.all([
-        api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'), ]);
+      const [users,projects,tasks,notifs,dmu,ws,teamsRaw,ticketsRaw]=await Promise.all([
+        api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'),api.get('/api/tickets'), ]);
       const teams=Array.isArray(teamsRaw)?teamsRaw:[];
-      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams});
+      const tickets=Array.isArray(ticketsRaw)?ticketsRaw:[];
+      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams,tickets});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
       if(ws&&ws.name)setWsName(ws.name);
       if(ws)setWsDmEnabled(ws.dm_enabled!==0);
@@ -9463,7 +9503,7 @@ function App(){
           <div style=${{display:'flex',alignItems:'center',gap:10,padding:'14px 18px',borderBottom:'1px solid var(--bd)'}}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input autoFocus class="inp" style=${{border:'none',background:'transparent',fontSize:16,flex:1,height:28,outline:'none',color:'var(--tx)'}}
-              placeholder="Search tasks, tickets, subtasks by ID or name..."
+              placeholder="Search by ID (T-xxx, tkt-xxx) or name... (Ctrl+K)"
               value=${globalSearch}
               onInput=${e=>setGlobalSearch(e.target.value)}
               onKeyDown=${e=>{if(e.key==='Escape')setShowGlobalSearch(false);}}/>
@@ -9482,6 +9522,17 @@ function App(){
                   results.push({type:'task',id:t.id,title:t.title,sub:proj?proj.name:'',color:TYPE_COLORS[t.task_type||'task']||'#1d4ed8',bg:TYPE_BG[t.task_type||'task']||'rgba(29,78,216,0.1)',item:t});
                 }
               });
+              // Search tickets by ID, title, or description
+              safe(data.tickets).forEach(t=>{
+                const tStr=(t.id+' '+(t.title||'')+' '+(t.description||'')).toLowerCase();
+                if(tStr.includes(q)){
+                  const tColors={bug:'#b91c1c',feature:'#1d4ed8',improvement:'#0e7490',task:'#15803d',question:'#6d28d9'};
+                  const tBg={bug:'rgba(185,28,28,0.10)',feature:'rgba(29,78,216,0.10)',improvement:'rgba(14,116,144,0.10)',task:'rgba(21,128,61,0.10)',question:'rgba(109,40,217,0.10)'};
+                  results.push({type:'ticket',id:t.id,title:t.title,sub:(t.type||'bug')+' · '+(t.status||'open'),color:tColors[t.type]||'#c2410c',bg:tBg[t.type]||'rgba(194,65,12,0.10)',item:t});
+                }
+              });
+              // Search subtasks by title
+              // (subtasks fetched lazily — skip for global search)
               // Search projects
               safe(scopedProjects).forEach(p=>{
                 if(p.id.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)){
@@ -9494,6 +9545,7 @@ function App(){
                   onClick=${()=>{
                     setShowGlobalSearch(false);
                     if(r.type==='task'){setView('tasks');}
+                    else if(r.type==='ticket'){setView('tickets');}
                     else if(r.type==='project'){setView('projects');setInitialProjectId(r.item.id);}
                   }}
                   style=${{display:'flex',alignItems:'center',gap:12,padding:'10px 18px',cursor:'pointer',borderBottom:'1px solid var(--bd)',transition:'background .1s'}}
