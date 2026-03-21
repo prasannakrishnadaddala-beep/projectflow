@@ -4430,7 +4430,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const TYPE_COLORS={task:'#1d4ed8',story:'#15803d',bug:'#b91c1c',epic:'#6d28d9',spike:'#b45309'};
   const TYPE_BG={task:'rgba(29,78,216,0.10)',story:'rgba(21,128,61,0.10)',bug:'rgba(185,28,28,0.10)',epic:'rgba(109,40,217,0.10)',spike:'rgba(180,83,9,0.10)'};
   const TYPE_BORDER={task:'rgba(29,78,216,0.2)',story:'rgba(21,128,61,0.2)',bug:'rgba(185,28,28,0.2)',epic:'rgba(109,40,217,0.2)',spike:'rgba(180,83,9,0.2)'};
-  const TYPE_COLORS={task:'var(--ac)',story:'var(--gn)',bug:'var(--rd)',epic:'var(--pu)',spike:'var(--am)'};
 
   useEffect(()=>{
     if(isEdit&&tab==='subtasks'){
