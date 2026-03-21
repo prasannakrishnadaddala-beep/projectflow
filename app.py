@@ -4086,7 +4086,7 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,callState,onCallAction,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true}){
-  const inCall=callState&&callState.status==='in-call';
+  const inCall=false; // Google Meet handles calls externally
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const baseView=(view||'dashboard').split(':')[0];
@@ -6227,14 +6227,17 @@ function MessagesView({projects,users,cu,tasks}){
         // Don't increment on every poll — just mark as unread (1) if newer
         setChannelUnread(prev=>{
           const merged={...prev};
+          const newProjs=new Set();
           for(const [projId,latestTs] of Object.entries(d)){
-            if(projId===pidRef.current)continue; // active channel — always clear
+            if(projId===pidRef.current)continue;
             const lastSeen=lastSeenMsgRef.current[projId]||'';
             const prevUnread=prev[projId]||0;
             if(latestTs&&latestTs>lastSeen){
-              merged[projId]=prevUnread||1; // mark unread if not already
+              merged[projId]=prevUnread||1;
+              newProjs.add(projId); // mark as having new messages
             }
           }
+          if(newProjs.size>0)setNewMsgProjects(prev2=>new Set([...prev2,...newProjs]));
           return merged;
         });
       }
@@ -6316,24 +6319,43 @@ function MessagesView({projects,users,cu,tasks}){
     setLastMsgTs(prev=>({...prev,[pid]:m.ts||new Date().toISOString()}));
   };
 
+  // Fixed order ref — set once, never changes (no re-sorting unless new msg arrives)
+  const fixedOrderRef=useRef(null);
+  const [newMsgProjects,setNewMsgProjects]=useState(new Set()); // projects with new msgs since load
+
+  // Build fixed order on first data
+  useEffect(()=>{
+    if(fixedOrderRef.current||!allProjects.length)return;
+    // Sort by last message timestamp descending (stable initial order)
+    const ts=lastMsgTs||{};
+    const sorted=[...allProjects].sort((a,b)=>{
+      const at=ts[a.id]||a.created||'';
+      const bt=ts[b.id]||b.created||'';
+      return bt.localeCompare(at);
+    });
+    fixedOrderRef.current=sorted.map(p=>p.id);
+  },[allProjects,lastMsgTs]);
+
   const sortedProjects=useMemo(()=>{
     let rows=[...allProjects];
     if(chanSearch.trim()){
       const q=chanSearch.toLowerCase();
       rows=rows.filter(p=>p.name.toLowerCase().includes(q));
+      return rows.sort((a,b)=>a.name.localeCompare(b.name));
     }
-    const orderTs=stableOrder||{};
-    const hasAnyTs=Object.keys(orderTs).length>0;
-    rows.sort((a,b)=>{
-      if(hasAnyTs){
-        const aTs=orderTs[a.id]||a.created||'';
-        const bTs=orderTs[b.id]||b.created||'';
-        return bTs.localeCompare(aTs);
-      }
-      return a.name.localeCompare(b.name);
-    });
+    const order=fixedOrderRef.current;
+    if(order&&order.length){
+      // Channels with new messages since load bubble to top
+      const newSet=newMsgProjects;
+      rows.sort((a,b)=>{
+        const an=newSet.has(a.id)?0:1, bn=newSet.has(b.id)?0:1;
+        if(an!==bn)return an-bn;
+        const ai=order.indexOf(a.id),bi=order.indexOf(b.id);
+        return (ai===-1?999:ai)-(bi===-1?999:bi);
+      });
+    }
     return rows;
-  },[allProjects,chanSearch,stableOrder]);
+  },[allProjects,chanSearch,newMsgProjects]);
 
   return html`<div class="fi" style=${{display:'flex',height:'100%',overflow:'hidden'}}>
 
@@ -6583,7 +6605,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
     <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
         ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(toUser.id)?1:.4}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
-          <button title=${'Start Instant Meet with '+toUser.name}
+          <button title=${'Start Google Meet with '+toUser.name}
             onClick=${()=>onStartHuddle&&onStartHuddle(toUser)}
             style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid var(--bd)',background:'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s',flexShrink:0}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -8142,955 +8164,93 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-/* ─── HuddleCall — Slack-style Popup Huddle ──────────────────────────────── */
+/* ─── GoogleMeetLauncher ────────────────────────────────────────────────── */
 function HuddleCall({cu,users,onStateChange,cmdRef}){
-  const [phase,setPhase]=useState('idle'); // idle | preview | in-call
-  const [roomId,setRoomId]=useState(null);
+  const [meetUrl,setMeetUrl]=useState(null);
+  const [showDialog,setShowDialog]=useState(false);
   const [roomName,setRoomName]=useState('');
-  const [meetUrl,setMeetUrl]=useState(null); // Google Meet link for this huddle session
-  const [participants,setParticipants]=useState([]);
-  const participantsRef=useRef([]);
-  const [muted,setMuted]=useState(false);
-  const [videoOn,setVideoOn]=useState(false);
-  const [elapsed,setElapsed]=useState(0);
-  const [incomingCall,setIncomingCall]=useState(null);
-  const [targetUser,setTargetUser]=useState(null);
-  const [speaking,setSpeaking]=useState({});
-  const [handRaised,setHandRaised]=useState(false);
-  const [raisedHands,setRaisedHands]=useState({}); // {uid: true} for remote participants
-  const [screenSharing,setScreenSharing]=useState(false);
-  const [remoteScreenUid,setRemoteScreenUid]=useState(null);
-  const remoteScreenRef=useRef(null);
-  const [showParticipants,setShowParticipants]=useState(false);
-  const [showInvite,setShowInvite]=useState(false);
-  const [previewMicOk,setPreviewMicOk]=useState(true);
-  const [minimized,setMinimized]=useState(false);
-  const [popupPos,setPopupPos]=useState({x:null,y:null});
-  const [dragging,setDragging]=useState(false);
-    const emojiPickerRef=useRef(null);
-  const [showChat,setShowChat]=useState(false);
-  const [chatMsgs,setChatMsgs]=useState([]);
-  const [chatTxt,setChatTxt]=useState('');
-  const [chatUnread,setChatUnread]=useState(0);
-  const chatRef=useRef(null);
-  const chatPollRef=useRef(null);
-  const lastChatCountRef=useRef(0);
-  const [floatingReactions,setFloatingReactions]=useState([]);
-  const dragOffset=useRef({x:0,y:0});
-  const mutedRef=useRef(false);
 
-  const localStream=useRef(null);
-  const localVideoRef=useRef(null);
-  const screenStream=useRef(null);
-  const pendingScreenUidsRef=useRef(new Set()); // tracks who sent screen-start before ontrack fired
-  const screenVideoRef=useRef(null);
-  const pcs=useRef({});
-  const audioEls=useRef({});
-  const remoteVideoRefs=useRef({});
-  const pollRef=useRef(null);
-  const pingRef=useRef(null);
-  const timerRef=useRef(null);
-  const roomIdRef=useRef(null);
-  const phaseRef=useRef('idle');
-  const analyserCtxRef=useRef({});
-
-  useEffect(()=>{roomIdRef.current=roomId;},[roomId]);
-  useEffect(()=>{participantsRef.current=participants;},[participants]);
-  useEffect(()=>{phaseRef.current=phase;},[phase]);
-  useEffect(()=>{mutedRef.current=muted;},[muted]);
-
-  useEffect(()=>{
-    onStateChange&&onStateChange({
-      status:phase==='in-call'?'in-call':'idle', roomId,roomName,participants,elapsed,muted,incomingCall,allUsers:users
-    });
-  },[phase,roomId,roomName,participants,elapsed,muted,incomingCall]);
-
-  if(cmdRef){
-    cmdRef.current={
-      openHuddle:(user)=>{setTargetUser(user||null);setPhase('preview');setMinimized(false);}, start:(name)=>doStart(name), join:(rid,rname)=>{setTargetUser(null);doJoin(rid,rname);}, leave:()=>cleanup(), mute:()=>toggleMute(), };
-  }
-
-  const STUN={
-    iceServers:[
-      {urls:'stun:stun.l.google.com:19302'}, {urls:'stun:stun1.l.google.com:19302'}, {urls:'stun:stun.relay.metered.ca:80'}, {urls:'turn:a.relay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'}, {urls:'turn:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'}, {urls:'turns:a.relay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'}, ], iceCandidatePoolSize:10, };
-  const fmtTime=s=>{const m=Math.floor(s/60),sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
-  const centerPos=(w,h)=>({x:Math.max(40,(window.innerWidth-w)/2),y:Math.max(40,(window.innerHeight-h)/2)});
-
-  const dismissedCallsRef=useRef(new Set());
-  const justLeftRef=useRef(false); // cooldown: prevent re-showing toast right after leaving
-
-  useEffect(()=>{
-    if(phase!=='idle')return;
-    let lastNotifiedId=null;
-    const id=setInterval(async()=>{
-      try{
-        const calls=await api.get('/api/calls');
-        if(!Array.isArray(calls)||calls.length===0){setIncomingCall(null);lastNotifiedId=null;return;}
-        const c=calls[0];
-        const parts=JSON.parse(c.participants||'[]');
-        if(justLeftRef.current||parts.includes(cu.id)||c.initiator===cu.id||dismissedCallsRef.current.has(c.id)){
-          setIncomingCall(null);return;
-        }
-        if(c.id===lastNotifiedId)return; // already showing this toast
-        lastNotifiedId=c.id;
-        const init=safe(users).find(u=>u.id===c.initiator);
-        setIncomingCall({id:c.id,name:c.name,initiatorName:(init&&init.name)||'Someone',initiator:init});
-        showBrowserNotif('📞 Incoming Instant Meet',(init?init.name:'Someone')+' started an Instant Meet — click to join',()=>{
-          if(window.electronAPI){window.electronAPI.focusWindow();}
-          else{window.focus();}
-          if(typeof huddleCmdRef!=='undefined'&&huddleCmdRef&&huddleCmdRef.current){
-            const cc=calls&&calls[0]||c;
-            setTimeout(()=>{if(huddleCmdRef.current.join)huddleCmdRef.current.join(cc.id,cc.name);},300);
-          }
-        },{requireInteraction:true,tag:'call-'+c.id});
-      }catch(e){}
-    },4000);
-    return()=>clearInterval(id);
-  },[phase,cu,users]);
-
-  useEffect(()=>{
-    if(phase!=='preview')return;
-    navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{s.getTracks().forEach(t=>t.stop());setPreviewMicOk(true);}).catch(()=>setPreviewMicOk(false));
-    setPopupPos(p=>(p&&p.x!==null)?p:centerPos(460,380));
-  },[phase]);
-
-  useEffect(()=>{
-    if(phase==='in-call')setPopupPos(p=>(p&&p.x!==null)?p:centerPos(780,540));
-    if(phase==='idle')setPopupPos({x:null,y:null});
-  },[phase]);
-
-  const onDragStart=e=>{
-    if(e.button!==0)return;
-    if(!popupPos||popupPos.x===null)return;
-    setDragging(true);
-    dragOffset.current={x:e.clientX-popupPos.x,y:e.clientY-popupPos.y};
-    e.preventDefault();
-  };
-  useEffect(()=>{
-    if(!dragging)return;
-    const mm=e=>setPopupPos({
-      x:Math.max(0,Math.min(window.innerWidth-80,e.clientX-dragOffset.current.x)), y:Math.max(0,Math.min(window.innerHeight-60,e.clientY-dragOffset.current.y))
-    });
-    const mu=()=>setDragging(false);
-    window.addEventListener('mousemove',mm);window.addEventListener('mouseup',mu);
-    return()=>{window.removeEventListener('mousemove',mm);window.removeEventListener('mouseup',mu);};
-  },[dragging]);
-
-  const detectSpeaking=(uid,stream)=>{
-    try{
-      if(analyserCtxRef.current[uid]){try{analyserCtxRef.current[uid].ctx.close();}catch(e){}}
-      const ctx=new(window.AudioContext||window.webkitAudioContext)();
-      const src=ctx.createMediaStreamSource(stream);
-      const an=ctx.createAnalyser();an.fftSize=512;an.smoothingTimeConstant=0.3;
-      src.connect(an);
-      analyserCtxRef.current[uid]={ctx,an};
-      let raf;
-      const tick=()=>{
-        if(!analyserCtxRef.current[uid])return;
-        const d=new Uint8Array(an.frequencyBinCount);an.getByteFrequencyData(d);
-        const avg=d.slice(0,100).reduce((a,b)=>a+b,0)/100;
-        setSpeaking(s=>{const v=avg>12;if(s[uid]===v)return s;return{...s,[uid]:v};});
-        raf=requestAnimationFrame(tick);
-      };
-      raf=requestAnimationFrame(tick);
-      analyserCtxRef.current[uid].raf=raf;
-    }catch(e){}
+  const genMeetUrl=()=>{
+    // Generate a unique meet.google.com style room code
+    const chars='abcdefghijklmnopqrstuvwxyz';
+    const seg=n=>[...Array(n)].map(()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+    return 'https://meet.google.com/'+seg(3)+'-'+seg(4)+'-'+seg(3);
   };
 
-  const stopSpeakingDetect=(uid)=>{
-    if(analyserCtxRef.current[uid]){
-      try{cancelAnimationFrame(analyserCtxRef.current[uid].raf);}catch(e){}
-      try{analyserCtxRef.current[uid].ctx.close();}catch(e){}
-      delete analyserCtxRef.current[uid];
-    }
-  };
-
-  const createPC=(remoteUid,rid)=>{
-    if(pcs.current[remoteUid]){try{pcs.current[remoteUid].close();}catch(e){}}
-    const pc=new RTCPeerConnection(STUN);
-    if(localStream.current)localStream.current.getTracks().forEach(t=>pc.addTrack(t,localStream.current));
-    if(screenStream.current)screenStream.current.getTracks().forEach(t=>pc.addTrack(t,screenStream.current));
-
-    pc.ontrack=e=>{
-      const stream=e.streams[0]||new MediaStream([e.track]);
-      if(e.track.kind==='audio'){
-        if(!audioEls.current[remoteUid]){
-          const el=document.createElement('audio');
-          el.autoplay=true;el.playsInline=true;
-          el.muted=false;
-          // Low-latency settings
-          try{el.latencyHint='interactive';}catch(ex){}
-          el.style.cssText='position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
-          document.body.appendChild(el);
-          audioEls.current[remoteUid]=el;
-        }
-        audioEls.current[remoteUid].srcObject=stream;
-        audioEls.current[remoteUid].play().catch(()=>{});
-        detectSpeaking(remoteUid,stream);
-      } else if(e.track.kind==='video'){
-        const lbl=(e.track.label||'').toLowerCase();
-        const isScreenByHint=e.track.contentHint==='detail'||e.track.contentHint==='text';
-        const isScreenByLabel=lbl.includes('screen')||lbl.includes('display')||lbl.includes('monitor')||
-          lbl.includes('entire')||lbl.includes('window')||lbl.includes('tab');
-
-        const isScreen=isScreenByHint||isScreenByLabel||pendingScreenUidsRef.current.has(remoteUid);
-
-        if(isScreen){
-          setRemoteScreenUid(remoteUid);
-          const tryAttach=(attempts)=>{
-            if(remoteScreenRef.current){
-              remoteScreenRef.current.srcObject=stream;
-              remoteScreenRef.current.muted=false; // ensure audio plays
-              remoteScreenRef.current.play().catch(e=>console.warn('screen play:',e));
-            } else if(attempts<20){
-              setTimeout(()=>tryAttach(attempts+1),150);
-            }
-          };
-          setTimeout(()=>tryAttach(0),100); // small delay so React renders the video element
-          e.track.onended=()=>{
-            setRemoteScreenUid(null);
-            if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;
-            pendingScreenUidsRef.current.delete(remoteUid);
-          };
-        } else {
-          const tryAttachCam=(attempts)=>{
-            const el=remoteVideoRefs.current[remoteUid];
-            if(el){
-              // Always force reattach — clear then set to handle re-enable
-              el.srcObject=null;
-              requestAnimationFrame(()=>{el.srcObject=stream;el.play().catch(()=>{});});
-            }
-            else if(attempts<15){setTimeout(()=>tryAttachCam(attempts+1),100);}
-          };
-          requestAnimationFrame(()=>tryAttachCam(0));
-        }
-      }
+  useEffect(()=>{
+    if(cmdRef)cmdRef.current={
+      openHuddle:(user)=>{
+        const url=genMeetUrl();
+        const name=user?'Meet with '+user.name:'Team Instant Meet';
+        setMeetUrl(url);setRoomName(name);setShowDialog(true);
+        onStateChange&&onStateChange({status:'idle'});
+      },
+      start:()=>{
+        const url=genMeetUrl();
+        setMeetUrl(url);setRoomName('Team Instant Meet');setShowDialog(true);
+      },
+      leave:()=>{setShowDialog(false);setMeetUrl(null);},
     };
+  },[]);
 
-    pc.onicecandidate=e=>{
-      if(e.candidate&&roomIdRef.current)
-        api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:remoteUid,type:'ice',data:e.candidate.toJSON()});
-    };
-
-    pc.onconnectionstatechange=()=>{
-      if(pc.connectionState==='failed'||pc.connectionState==='closed'){
-        try{pc.close();}catch(ex){}delete pcs.current[remoteUid];
-      }
-    };
-
-    pcs.current[remoteUid]=pc;return pc;
-  };
-
-  const startSignalPoll=rid=>{
-    if(pollRef.current)clearInterval(pollRef.current);
-    pollRef.current=setInterval(async()=>{
-      if(phaseRef.current!=='in-call')return;
-      try{
-        const sigs=await api.get('/api/calls/'+rid+'/signals');
-        if(!Array.isArray(sigs))return;
-        for(const sig of sigs){
-          const from=sig.from_user;let data;
-          try{data=typeof sig.data==='string'?JSON.parse(sig.data):sig.data;}catch{continue;}
-          if(sig.type==='offer'){
-            const pc=pcs.current[from]||createPC(from,rid);
-            try{
-              await pc.setRemoteDescription(new RTCSessionDescription(data));
-              const ans=await pc.createAnswer();
-              await pc.setLocalDescription(ans);
-              await api.post('/api/calls/'+rid+'/signal',{to_user:from,type:'answer',data:{type:ans.type,sdp:ans.sdp}});
-              // After answering, re-attach any existing remote video (handles camera restart)
-              setTimeout(()=>{
-                const receivers=pc.getReceivers();
-                const vr=receivers.find(r=>r.track&&r.track.kind==='video'&&r.track.readyState==='live');
-                if(vr&&!pendingScreenUidsRef.current.has(from)){
-                  const el=remoteVideoRefs.current[from];
-                  if(el&&(!el.srcObject||el.srcObject.getVideoTracks().length===0)){
-                    const ms=new MediaStream([vr.track]);
-                    el.srcObject=ms;el.play().catch(()=>{});
-                  }
-                }
-              },500);
-            }catch(ex){}
-          } else if(sig.type==='answer'){
-            const pc=pcs.current[from];
-            if(pc&&pc.signalingState==='have-local-offer'){try{await pc.setRemoteDescription(new RTCSessionDescription(data));}catch(ex){}}
-          } else if(sig.type==='ice'){
-            const pc=pcs.current[from];
-            if(pc&&pc.remoteDescription){try{await pc.addIceCandidate(new RTCIceCandidate(data));}catch(ex){}}          } else if(sig.type==='screen-start'){
-            pendingScreenUidsRef.current.add(from);
-            setRemoteScreenUid(from);
-            // Retry attaching screen track with polling — element may not be mounted yet
-            let _ssAttempts=0;
-            const _ssRetry=()=>{
-              _ssAttempts++;
-              const el=remoteScreenRef.current;
-              if(el&&(!el.srcObject||el.srcObject.getVideoTracks().every(t=>t.readyState!=='live'))){
-                const pc2=pcs.current[from];
-                if(pc2){
-                  const vrs=pc2.getReceivers().filter(r=>r.track&&r.track.kind==='video'&&r.track.readyState==='live');
-                  if(vrs.length>0){
-                    const ms=new MediaStream([vrs[vrs.length-1].track]);
-                    el.srcObject=ms;
-                    el.muted=true;
-                    el.play().catch(()=>{});
-                    return;
-                  }
-                }
-              } else if(el&&el.srcObject){
-                // Check if the existing track is still live
-                const tracks=el.srcObject.getVideoTracks();
-                if(tracks.length>0&&tracks[0].readyState==='live')return; // truly live
-                // Track is dead — clear and retry
-                el.srcObject=null;
-              }
-              if(_ssAttempts<25){setTimeout(_ssRetry,200);}
-            };
-            setTimeout(_ssRetry,200);
-          } else if(sig.type==='screen-stop'){
-            setRemoteScreenUid(null);
-            pendingScreenUidsRef.current.delete(from);
-            if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;
-          } else if(sig.type==='reaction'){
-            const id=Date.now()+Math.random();
-            setFloatingReactions(prev=>[...prev,{id,emoji:data.emoji,x:15+Math.random()*70,label:data.from||''}]);
-            setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
-          } else if(sig.type==='hand'){
-            const hid='hand-'+from;
-            setRaisedHands(prev=>({...prev,[from]:data.raised||false}));
-            if(data.raised){
-              setFloatingReactions(prev=>[...prev.filter(r=>r.id!==hid),{id:hid,emoji:'✋',x:10+Math.random()*30,label:(data.from||'Someone')+' raised hand'}]);
-              // Auto-hide tile indicator after 5s
-              setTimeout(()=>{
-                setFloatingReactions(prev=>prev.filter(r=>r.id!==hid));
-                setRaisedHands(prev=>({...prev,[from]:false}));
-              },5000);
-            } else {
-              setFloatingReactions(prev=>prev.filter(r=>r.id!==hid));
-              setRaisedHands(prev=>({...prev,[from]:false}));
-            }
-          }
-        }
-      }catch(e){}
-    },600);
-  };
-
-  const startPing=rid=>{
-    if(pingRef.current)clearInterval(pingRef.current);
-    pingRef.current=setInterval(async()=>{
-      try{
-        const r=await api.post('/api/calls/'+rid+'/ping',{});
-        if(!r||r.error){cleanup();return;}
-        setParticipants(r.participants||[]);
-      }catch(e){}
-    },4000);
-  };
-
-  const startTimer=()=>{
-    setElapsed(0);if(timerRef.current)clearInterval(timerRef.current);
-    timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);
-  };
-
-  const getAudio=async()=>{
-    try{return await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});}
-    catch(e){return null;}
-  };
-
-  const doStart=async(name)=>{
-    const s=await getAudio();
-    if(!s){alert('Microphone access required. Please allow it in your browser.');return;}
-    localStream.current=s;
-    s.getAudioTracks().forEach(t=>{t.enabled=!mutedRef.current;});
-    detectSpeaking(cu.id,s);
-    const roomLabel=name||(targetUser?cu.name+' ↔ '+targetUser.name:cu.name+"'s Instant Meet");
-    const r=await api.post('/api/calls',{name:roomLabel});
-    if(!r||r.error){alert('Could not start huddle.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
-    setRoomId(r.room_id);setRoomName(r.name||roomLabel);
-    setMeetUrl('https://meet.google.com/new');
-    setParticipants([cu.id]);setPhase('in-call');setIncomingCall(null);
-    setPopupPos(centerPos(780,540));
-    if(targetUser){
-      setTimeout(()=>api.post('/api/calls/'+r.room_id+'/invite/'+targetUser.id,{}),500);
-    }
-    playSound('notif');startSignalPoll(r.room_id);startPing(r.room_id);startTimer();startChatPoll(r.room_id);
-  };
-
-  const doJoin=async(rid,rname)=>{
-    const s=await getAudio();
-    if(!s){alert('Microphone access required.');return;}
-    localStream.current=s;
-    s.getAudioTracks().forEach(t=>{t.enabled=!mutedRef.current;});
-    detectSpeaking(cu.id,s);
-    const r=await api.post('/api/calls/'+rid+'/join',{});
-    if(!r||r.error){alert(r&&r.error||'Could not join.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
-    const parts=r.participants||[];
-    setRoomId(rid);setRoomName(r.name||rname||'Huddle');
-    // Always use meet.google.com/new — opens a fresh meeting room
-    // Participants share this URL to join the same meeting
-    setMeetUrl('https://meet.google.com/new');
-    setParticipants(parts);setPhase('in-call');setIncomingCall(null);
-    setPopupPos(centerPos(780,540));
-    playSound('notif');
-    startChatPoll(rid);
-    for(const uid of parts){
-      if(uid===cu.id)continue;
-      const pc=createPC(uid,rid);
-      try{
-        const offer=await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await api.post('/api/calls/'+rid+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
-      }catch(ex){}
-    }
-    startSignalPoll(rid);startPing(rid);startTimer();
-  };
-
-  const cleanup=async()=>{
-    if(pollRef.current)clearInterval(pollRef.current);
-    if(pingRef.current)clearInterval(pingRef.current);
-    if(timerRef.current)clearInterval(timerRef.current);
-    Object.values(pcs.current).forEach(pc=>{try{pc.close();}catch(e){}});pcs.current={};
-    Object.keys(analyserCtxRef.current).forEach(uid=>stopSpeakingDetect(uid));
-    if(localStream.current){localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;}
-    if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
-    Object.values(audioEls.current).forEach(el=>{try{el.srcObject=null;el.remove();}catch(e){}});audioEls.current={};
-    if(roomIdRef.current){
-      dismissedCallsRef.current.add(roomIdRef.current); // never show this room again
-      justLeftRef.current=true; // suppress incoming toast for 6s after leaving
-      setTimeout(()=>{justLeftRef.current=false;},6000);
-      try{await api.post('/api/calls/'+roomIdRef.current+'/leave',{});}catch(e){}
-    }
-    setRoomId(null);setRoomName('');setParticipants([]);
-    setPhase('idle');setMuted(false);setVideoOn(false);setElapsed(0);
-    setHandRaised(false);setRaisedHands({});setScreenSharing(false);setSpeaking({});
-    if(chatPollRef.current)clearInterval(chatPollRef.current);
-    setChatMsgs([]);setChatTxt('');setChatUnread(0);lastChatCountRef.current=0;setShowChat(false);
-    setRemoteScreenUid(null);setFloatingReactions([]);setMeetUrl(null);
-    if(remoteScreenRef.current)remoteScreenRef.current.srcObject=null;
-    setTargetUser(null);setMinimized(false);setShowInvite(false);
-  };
-
-  const startChatPoll=(rid)=>{
-    if(chatPollRef.current)clearInterval(chatPollRef.current);
-    const getOther=()=>participantsRef.current.find(uid=>uid!==cu.id)||null;
-    const doFetch=async()=>{
-      const other=getOther();if(!other)return;
-      try{const d=await api.get('/api/dm/'+other);if(Array.isArray(d)){setChatMsgs(d);if(d.length>lastChatCountRef.current){if(!showChat)setChatUnread(p=>p+(d.length-lastChatCountRef.current));lastChatCountRef.current=d.length;}}}catch(e){}
-    };
-    doFetch();chatPollRef.current=setInterval(doFetch,1500);
-  };
-  const sendChatMsg=async()=>{
-    const txt=chatTxt.trim();if(!txt)return;
-    const other=participantsRef.current.find(uid=>uid!==cu.id);if(!other)return;
-    setChatTxt('');
-    await api.post('/api/dm',{recipient:other,content:txt});
-    const d=await api.get('/api/dm/'+other);
-    if(Array.isArray(d)){setChatMsgs(d);lastChatCountRef.current=d.length;}
-  };
-  useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[chatMsgs]);
-  useEffect(()=>{if(showChat)setChatUnread(0);},[showChat]);
-
-  const sendReaction=(emoji)=>{
-    const id=Date.now();
-    setFloatingReactions(prev=>[...prev,{id,emoji,x:20+Math.random()*60,label:'You'}]);
-    setTimeout(()=>setFloatingReactions(prev=>prev.filter(r=>r.id!==id)),3000);
-    const room=roomIdRef.current;if(!room)return;
-    participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
-      api.post('/api/calls/'+room+'/signal',{to_user:uid,type:'reaction',data:{emoji,from:cu.name}}).catch(()=>{});
-    });
-  };
-
-  const toggleMute=()=>{
-    if(localStream.current){
-      const newMuted=!mutedRef.current;
-      localStream.current.getAudioTracks().forEach(t=>{t.enabled=!newMuted;});
-      setMuted(newMuted);
-    }
-  };
-
-  const toggleVideo=async()=>{
-    if(!videoOn){
-      try{
-        const vs=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'}});
-        const camTrack=vs.getVideoTracks()[0];
-        if(!camTrack)return;
-
-        if(localStream.current){
-
-          localStream.current.getVideoTracks().forEach(t=>{t.stop();localStream.current.removeTrack(t);});
-          localStream.current.addTrack(camTrack);
-        }
-
-        if(localVideoRef.current&&localStream.current){
-          localVideoRef.current.srcObject=localStream.current;
-          localVideoRef.current.play().catch(()=>{});
-        }
-
-        for(const [uid,pc] of Object.entries(pcs.current)){
-          const senders=pc.getSenders();
-          const vs2=senders.find(s=>s.track&&s.track.kind==='video');
-          if(vs2){
-            await vs2.replaceTrack(camTrack).catch(async()=>{
-              pc.addTrack(camTrack,localStream.current);
-            });
-          } else {
-            pc.addTrack(camTrack,localStream.current);
-          }
-          try{
-            const offer=await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            await api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
-          }catch(ex){}
-        }
-        setVideoOn(true);
-      }catch(e){alert('Camera access denied or not available.');}
-    } else {
-      if(localStream.current){
-        localStream.current.getVideoTracks().forEach(t=>{t.stop();try{localStream.current.removeTrack(t);}catch(ex){}});
-      }
-      if(localVideoRef.current)localVideoRef.current.srcObject=null;
-
-      for(const [uid,pc] of Object.entries(pcs.current)){
-        const senders=pc.getSenders();
-        const vs=senders.find(s=>s.track&&s.track.kind==='video');
-        if(vs)vs.replaceTrack(null).catch(()=>{});
-      }
-      setVideoOn(false);
-    }
-  };
-
-  const toggleScreenShare=async()=>{
-    if(!screenSharing){
-      try{
-        const ss=await navigator.mediaDevices.getDisplayMedia({
-          video:{cursor:'always',displaySurface:'monitor',width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}}, audio:false
-        });
-        screenStream.current=ss;
-
-        setScreenSharing(true);
-        requestAnimationFrame(()=>{
-          requestAnimationFrame(()=>{
-            if(screenVideoRef.current){
-              screenVideoRef.current.srcObject=ss;
-              screenVideoRef.current.play().catch(()=>{});
-            }
-          });
-        });
-
-        const renegotiate=async(uid,pc)=>{
-          const senders=pc.getSenders();
-          const screenTrack=ss.getVideoTracks()[0];
-          if(!screenTrack)return;
-
-          const videoSender=senders.find(s=>s.track&&s.track.kind==='video'&&
-            (s.track.label.toLowerCase().includes('camera')||s.track===localStream.current?.getVideoTracks()[0]));
-          if(videoSender){
-            await videoSender.replaceTrack(screenTrack).catch(()=>{
-
-              pc.addTrack(screenTrack,ss);
-            });
-          } else {
-            pc.addTrack(screenTrack,ss);
-          }
-          try{
-            const offer=await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            await api.post('/api/calls/'+roomIdRef.current+'/signal',{
-              to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}
-            });
-          }catch(ex){console.warn('Screen share renegotiate failed:',ex);}
-
-          api.post('/api/calls/'+roomIdRef.current+'/signal',{
-            to_user:uid,type:'screen-start',data:{from:cu.id,name:cu.name||'Someone'}
-          }).catch(()=>{});
-        };
-
-        for(const [uid,pc] of Object.entries(pcs.current)){
-          await renegotiate(uid,pc);
-        }
-
-        ss.getVideoTracks()[0].onended=async()=>{
-          setScreenSharing(false);
-          if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
-          screenStream.current=null;
-
-          if(localStream.current){
-            const camTrack=localStream.current.getVideoTracks()[0];
-            if(camTrack){
-              for(const [uid,pc] of Object.entries(pcs.current)){
-                const senders=pc.getSenders();
-                const vs=senders.find(s=>s.track&&s.track.kind==='video');
-                if(vs)vs.replaceTrack(camTrack).catch(()=>{});
-              }
-            }
-          }
-
-          if(roomIdRef.current){
-            Object.keys(pcs.current).forEach(uid=>{
-              api.post('/api/calls/'+roomIdRef.current+'/signal',{
-                to_user:uid,type:'screen-stop',data:{}
-              }).catch(()=>{});
-            });
-          }
-        };
-      }catch(e){
-        if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
-        setScreenSharing(false);
-        if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
-      }
-    } else {
-
-      if(screenStream.current){screenStream.current.getTracks().forEach(t=>t.stop());screenStream.current=null;}
-      if(screenVideoRef.current)screenVideoRef.current.srcObject=null;
-      setScreenSharing(false);
-      if(localStream.current){
-        const camTrack=localStream.current.getVideoTracks()[0];
-        if(camTrack){
-          for(const [uid,pc] of Object.entries(pcs.current)){
-            const senders=pc.getSenders();
-            const vs=senders.find(s=>s.track&&s.track.kind==='video');
-            if(vs)vs.replaceTrack(camTrack).catch(()=>{});
-          }
-        }
-      }
-      if(roomIdRef.current){
-        Object.keys(pcs.current).forEach(uid=>{
-          api.post('/api/calls/'+roomIdRef.current+'/signal',{
-            to_user:uid,type:'screen-stop',data:{}
-          }).catch(()=>{});
-        });
-      }
-    }
-  };
-
-  const inviteUser=async(uid)=>{
-    if(!roomIdRef.current)return;
-    await api.post('/api/calls/'+roomIdRef.current+'/invite/'+uid,{});
-    const pc=createPC(uid,roomIdRef.current);
-    try{
-      const offer=await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await api.post('/api/calls/'+roomIdRef.current+'/signal',{to_user:uid,type:'offer',data:{type:offer.type,sdp:offer.sdp}});
-    }catch(ex){}
-  };
-
-  const partUsers=participants.map(id=>safe(users).find(u=>u.id===id)||{id,name:'?',avatar:'?',color:'#aaff00'});
-  const notInCall=safe(users).filter(u=>u.id!==cu.id&&!participants.includes(u.id));
-
-  const incomingToast=incomingCall&&phase==='idle'?html`
-    <div style=${{position:'fixed',bottom:24,right:24,zIndex:9100,background:'#1a1625',border:'1px solid rgba(34,197,94,.35)',borderRadius:18,padding:'16px 18px',boxShadow:'0 16px 60px rgba(0,0,0,.7)',minWidth:300,animation:'slideUp .3s cubic-bezier(.2,.8,.4,1)'}}>
-      <div style=${{display:'flex',alignItems:'center',gap:11,marginBottom:14}}>
-        <div style=${{position:'relative',flexShrink:0}}>
-          ${incomingCall.initiator?html`<${Av} u=${incomingCall.initiator} size=${44}/>`:
-            html`<div style=${{width:44,height:44,borderRadius:14,background:'linear-gradient(135deg,#22c55e,#16a34a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:700,color:'#fff'}}>${(incomingCall.initiatorName||'?')[0]}</div>`}
-          <div style=${{position:'absolute',bottom:-2,right:-2,width:16,height:16,borderRadius:'50%',background:'#22c55e',border:'2px solid #1a1625',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+  if(!showDialog||!meetUrl)return null;
+  return html`
+    <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',zIndex:9900,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}}
+      onClick=${e=>{if(e.target===e.currentTarget){setShowDialog(false);setMeetUrl(null);}}}>
+      <div style=${{width:'min(440px,92vw)',background:'var(--sf)',borderRadius:18,boxShadow:'0 24px 80px rgba(0,0,0,.4)',border:'1px solid var(--bd)',overflow:'hidden'}}>
+        <!-- Header -->
+        <div style=${{background:'linear-gradient(135deg,#1a73e8,#0d47a1)',padding:'20px 22px 18px',position:'relative'}}>
+          <button onClick=${()=>{setShowDialog(false);setMeetUrl(null);}}
+            style=${{position:'absolute',top:12,right:12,width:28,height:28,borderRadius:7,background:'rgba(255,255,255,.15)',border:'none',cursor:'pointer',color:'#fff',fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          <div style=${{display:'flex',alignItems:'center',gap:10}}>
+            <div style=${{width:40,height:40,borderRadius:12,background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="white" strokeWidth="2" strokeLinecap="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="white" strokeWidth="2"/></svg>
+            </div>
+            <div>
+              <div style=${{color:'#fff',fontWeight:700,fontSize:16}}>${roomName}</div>
+              <div style=${{color:'rgba(255,255,255,.7)',fontSize:12}}>Google Meet · Instant Room</div>
+            </div>
           </div>
         </div>
-        <div style=${{flex:1}}>
-          <div style=${{fontSize:13,fontWeight:700,color:'#fff',marginBottom:2}}>${incomingCall.initiatorName}</div>
-          <div style=${{fontSize:11,color:'rgba(255,255,255,.5)',marginBottom:3}}>${incomingCall.name}</div>
-          <div style=${{display:'flex',alignItems:'center',gap:4}}>
-            <div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 1s infinite'}}></div>
-            <span style=${{fontSize:10,color:'#22c55e',fontWeight:600}}>Instant Meet in progress</span>
-          </div>
-        </div>
-        <button onClick=${()=>{if(incomingCall)dismissedCallsRef.current.add(incomingCall.id);setIncomingCall(null);}} style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.35)',fontSize:19,lineHeight:1,padding:4}}>✕</button>
-      </div>
-      <div style=${{display:'flex',gap:8}}>
-        <button style=${{flex:1,height:40,borderRadius:11,background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:7,boxShadow:'0 4px 18px rgba(34,197,94,.35)'}}
-          onClick=${()=>{const c=incomingCall;setIncomingCall(null);doJoin(c.id,c.name);}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-          Join Instant Meet
-        </button>
-        <button style=${{width:40,height:40,borderRadius:11,background:'rgba(239,68,68,.15)',border:'1px solid rgba(239,68,68,.3)',color:'var(--rd2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}
-          onClick=${()=>{if(incomingCall)dismissedCallsRef.current.add(incomingCall.id);setIncomingCall(null);}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-    </div>`:null;
-
-  const previewPopup=phase==='preview'&&popupPos&&popupPos.x!==null?html`
-    <div style=${{position:'fixed',left:(popupPos&&popupPos.x||100)+'px',top:(popupPos&&popupPos.y||60)+'px',width:'460px',zIndex:8600,borderRadius:20,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.75)',background:'#1a1625',border:'1px solid rgba(255,255,255,.08)',userSelect:dragging?'none':'auto'}}>
-      <div onMouseDown=${onDragStart} style=${{background:'#221e30',padding:'13px 18px',display:'flex',alignItems:'center',gap:10,cursor:'move',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-        <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1}}>${targetUser?'Huddle with '+targetUser.name:'Start a Huddle'}</span>
-        <button onClick=${()=>{setPhase('idle');setTargetUser(null);}} style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.4)',fontSize:20,lineHeight:1,padding:0}}>✕</button>
-      </div>
-      <div style=${{background:'#2d2640',minHeight:200,display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden',padding:'24px'}}>
-        <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 20% 50%,rgba(99,102,241,.18) 0%,transparent 60%),radial-gradient(ellipse at 80% 30%,rgba(34,197,94,.12) 0%,transparent 60%)',pointerEvents:'none'}}></div>
-        <div style=${{position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
-          <div style=${{position:'relative'}}>
-            ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
-              html`<img src=${cu.avatar_data} style=${{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'3px solid rgba(255,255,255,.15)'}}/>`:
-              html`<div style=${{width:80,height:80,borderRadius:'50%',background:cu.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff',border:'3px solid rgba(255,255,255,.15)'}}>${(cu.avatar||cu.name||'?')[0]}</div>`}
-            ${previewMicOk?html`<div style=${{position:'absolute',bottom:2,right:2,width:20,height:20,borderRadius:'50%',background:'#22c55e',border:'2.5px solid #2d2640',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>
-            </div>`:
-            html`<div style=${{position:'absolute',bottom:2,right:2,width:20,height:20,borderRadius:'50%',background:'#ef4444',border:'2.5px solid #2d2640',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            </div>`}
-          </div>
-          <div style=${{display:'flex',gap:8}}>
-            <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'}
-              style=${{width:40,height:40,borderRadius:11,background:muted?'rgba(239,68,68,.2)':'rgba(255,255,255,.1)',border:'1.5px solid '+(muted?'rgba(239,68,68,.4)':'rgba(255,255,255,.15)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:muted?'var(--rd2)':'#fff',transition:'all .15s'}}>
-              ${muted?html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`:
-              html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}
+        <!-- Body -->
+        <div style=${{padding:'20px 22px'}}>
+          <div style=${{fontSize:12,color:'var(--tx3)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:.5}}>Your meeting link</div>
+          <div style=${{display:'flex',gap:8,marginBottom:16}}>
+            <div style=${{flex:1,padding:'10px 12px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,fontSize:12,fontFamily:'monospace',color:'var(--ac)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              ${meetUrl}
+            </div>
+            <button onClick=${()=>{navigator.clipboard.writeText(meetUrl).then(()=>window._pfToast&&window._pfToast('ok','✓ Copied','Link copied to clipboard'));}}
+              style=${{padding:'10px 14px',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,cursor:'pointer',color:'var(--tx2)',fontSize:12,fontWeight:600,flexShrink:0,transition:'all .15s'}}
+              onMouseEnter=${e=>{e.currentTarget.style.background='var(--ac3)';e.currentTarget.style.color='var(--ac)';}}
+              onMouseLeave=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.color='var(--tx2)';}}>
+              Copy
             </button>
           </div>
-          ${targetUser?html`<div style=${{fontSize:12,color:'rgba(255,255,255,.5)',textAlign:'center'}}>
-            Inviting <b style=${{color:'#fff'}}>${targetUser.name}</b> to join automatically
-          </div>`:null}
-        </div>
-      </div>
-      ${!previewMicOk?html`
-        <div style=${{background:'rgba(251,191,36,.08)',borderTop:'1px solid rgba(251,191,36,.2)',padding:'8px 16px',display:'flex',alignItems:'center',gap:8}}>
-          <span>⚠️</span>
-          <span style=${{fontSize:11,color:'var(--pu)'}}>Microphone blocked. Click the lock icon in your address bar to allow access.</span>
-        </div>`:null}
-      <div style=${{padding:'14px 18px',background:'#1a1625',display:'flex',gap:10}}>
-        <button style=${{flex:1,height:42,borderRadius:12,background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.1)',color:'rgba(255,255,255,.6)',cursor:'pointer',fontWeight:600,fontSize:13}}
-          onClick=${()=>{setPhase('idle');setTargetUser(null);}}>Cancel</button>
-        <button style=${{flex:2,height:42,borderRadius:12,background:previewMicOk?'linear-gradient(135deg,#22c55e,#16a34a)':'rgba(255,255,255,.08)',border:'none',color:previewMicOk?'#fff':'rgba(255,255,255,.3)',cursor:previewMicOk?'pointer':'not-allowed',fontWeight:700,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:previewMicOk?'0 6px 20px rgba(34,197,94,.3)':'none',transition:'all .2s'}}
-          onClick=${previewMicOk?()=>{doStart();}:null}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-          Start Instant Meet
-        </button>
-      </div>
-    </div>`:null;
-
-  const callPopup=phase==='in-call'&&popupPos&&popupPos.x!==null?html`
-    <div style=${{position:'fixed',
-      left:minimized?(popupPos&&popupPos.x||100)+'px':'0',
-      top:minimized?(popupPos&&popupPos.y||60)+'px':'0',
-      width:minimized?'auto':'100vw',
-      height:minimized?'auto':'100vh',
-      zIndex:8600,
-      borderRadius:minimized?100:0,
-      overflow:minimized?'visible':'hidden',
-      boxShadow:minimized?'0 8px 32px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.4)':'0 32px 100px rgba(0,0,0,.85)',
-      background:minimized?'rgba(10,10,20,.92)':'#0d0d1a',
-      border:minimized?'1px solid rgba(255,255,255,.12)':'none',
-      backdropFilter:minimized?'blur(20px)':'none',
-      display:'flex',flexDirection:'column',
-      transition:dragging?'none':'all .25s cubic-bezier(.4,0,.2,1)',
-      userSelect:dragging?'none':'auto'}}>
-      <div onMouseDown=${onDragStart}
-        style=${{
-          background:minimized?'transparent':'rgba(0,0,0,.5)',
-          padding:minimized?'8px 14px':'9px 14px',
-          display:'flex',alignItems:'center',
-          gap:minimized?10:8,
-          cursor:'move',flexShrink:0,
-          backdropFilter:minimized?'none':'blur(10px)',
-          borderBottom:minimized?'none':'1px solid rgba(255,255,255,.05)',
-          borderRadius:minimized?100:0,
-          minWidth:minimized?220:undefined
-        }}>
-        <!-- Live indicator dot -->
-        <div style=${{width:7,height:7,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
-        <!-- Mic icon -->
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
-        <!-- Room name -->
-        <span style=${{fontSize:12,fontWeight:700,color:'#fff',flex:minimized?'unset':1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:minimized?120:undefined}}>${roomName||'Instant Meet'}</span>
-        <!-- Timer — styled as green pill in minimized mode -->
-        <span style=${{fontSize:11,color:'#22c55e',fontFamily:'monospace',fontWeight:800,flexShrink:0,background:minimized?'rgba(34,197,94,.12)':'transparent',padding:minimized?'2px 8px':'0',borderRadius:minimized?100:0,border:minimized?'1px solid rgba(34,197,94,.25)':'none'}}>${fmtTime(elapsed)}</span>
-                ${minimized?html`
-          <div style=${{display:'flex',marginLeft:4}}>
-            ${partUsers.slice(0,4).map((u,i)=>html`
-              <div key=${u.id} style=${{marginLeft:i>0?-6:0,border:'1.5px solid #0d0d1a',borderRadius:'50%',zIndex:4-i}}>
-                <${Av} u=${u} size=${22}/>
-              </div>`)}
-          </div>`:null}
-                ${meetUrl?html`
-          <a href=${meetUrl} target="_blank" rel="noopener"
-            onClick=${e=>e.stopPropagation()}
-            title="Start Google Meet — opens a new meeting room"
-            style=${{
-              display:'flex',alignItems:'center',gap:5, padding:'4px 10px',borderRadius:7, background:'rgba(66,133,244,0.18)', border:'1px solid rgba(66,133,244,0.35)', color:'#7bb3f7',fontSize:10,fontWeight:700, textDecoration:'none',cursor:'pointer', transition:'all .15s',flexShrink:0, letterSpacing:'.02em',marginLeft:4
-            }}
-            onMouseEnter=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.32)';e.currentTarget.style.borderColor='rgba(66,133,244,0.6)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.18)';e.currentTarget.style.borderColor='rgba(66,133,244,0.35)';}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style=${{flexShrink:0}}>
-              <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="#7bb3f7" strokeWidth="2" strokeLinecap="round"/>
-              <rect x="3" y="6" width="12" height="12" rx="2" stroke="#7bb3f7" strokeWidth="2"/>
-            </svg>
-            Meet
-          </a>`:null}
-                <div style=${{display:'flex',gap:4,marginLeft:6,flexShrink:0}}>
-          <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}}
-            title=${minimized?'Expand':'Minimize'}
-            style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.12)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.7)',transition:'all .15s'}}>
-            ${minimized
-              ?html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`
-              :html`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="14" y2="10"/></svg>`}
-          </button>
-        </div>
-      </div>
-      ${!minimized?html`
-                <div style=${{flex:1,display:'flex',overflow:'hidden',position:'relative'}}>
-                    <div style=${{position:'absolute',inset:0,background:'radial-gradient(ellipse at 10% 40%,rgba(170,255,0,.15) 0%,transparent 55%),radial-gradient(ellipse at 85% 15%,rgba(251,146,60,.12) 0%,transparent 50%),radial-gradient(ellipse at 50% 85%,rgba(34,197,94,.08) 0%,transparent 50%)',pointerEvents:'none'}}></div>
-                    <div style=${{flex:1,display:'flex',flexWrap:'wrap',gap:10,padding:'14px',alignContent:'center',justifyContent:'center',position:'relative',zIndex:1}}>
-            ${partUsers.map(u=>{
-              const tileW=partUsers.length===1?360:partUsers.length<=2?320:partUsers.length<=4?220:160;
-              const tileH=partUsers.length===1?280:partUsers.length<=2?240:partUsers.length<=4?170:130;
-              return html`
-              <div key=${u.id} style=${{position:'relative',width:tileW,height:tileH,borderRadius:14,overflow:'hidden',background:'rgba(255,255,255,.05)',border:'2px solid '+(speaking[u.id]?'#22c55e':'rgba(255,255,255,.07)'),transition:'border-color .2s,box-shadow .2s',boxShadow:speaking[u.id]?'0 0 0 3px rgba(34,197,94,.2)':'none',flexShrink:0}}>
-                                ${u.id!==cu.id?html`<video ref=${el=>{if(el)remoteVideoRefs.current[u.id]=el;}} autoPlay playsInline style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
-                ${u.id===cu.id&&videoOn?html`<video ref=${localVideoRef} autoPlay playsInline muted style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
-                                <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1,pointerEvents:'none',background:'rgba(20,20,40,.3)'}}>
-                  ${u.avatar_data&&u.avatar_data.startsWith('data:image')?
-                    html`<img src=${u.avatar_data} style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',objectFit:'cover',border:'2.5px solid rgba(255,255,255,.2)',opacity:(u.id===cu.id&&videoOn)||u.id!==cu.id?0:1,transition:'opacity .3s'}}/>`:
-                    html`<div style=${{width:partUsers.length<=2?72:52,height:partUsers.length<=2?72:52,borderRadius:'50%',background:u.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:partUsers.length<=2?26:20,fontWeight:700,color:'#fff',border:'2.5px solid rgba(255,255,255,.15)'}}>${(u.avatar||u.name||'?')[0]}</div>`}
-                </div>
-                                <div style=${{position:'absolute',bottom:7,left:7,right:7,zIndex:3,display:'flex',alignItems:'center',gap:5}}>
-                  <div style=${{flex:1,background:'rgba(0,0,0,.6)',backdropFilter:'blur(6px)',borderRadius:8,padding:'3px 8px',display:'flex',alignItems:'center',gap:5,minWidth:0}}>
-                    ${speaking[u.id]?html`<div style=${{width:6,height:6,borderRadius:'50%',background:'#22c55e',flexShrink:0,animation:'pulse .8s infinite'}}></div>`:null}
-                    <span style=${{fontSize:11,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}${u.id===cu.id?' (you)':''}</span>
-                  </div>
-                  ${(u.id===cu.id?handRaised:raisedHands[u.id])?html`
-                    <div style=${{background:'rgba(251,191,36,.9)',borderRadius:7,padding:'3px 6px',fontSize:14,lineHeight:1,animation:'pulse .9s infinite',flexShrink:0}}
-                      title="${u.name} raised hand">✋</div>`:null}
-                </div>
-              </div>`;})}
-          </div>
-          ${(screenSharing||remoteScreenUid)?html`
-            <div style=${{position:'absolute',inset:0,zIndex:20,background:'#000',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-              ${screenSharing?html`
-                <video ref=${screenVideoRef} autoPlay playsInline muted
-                  style=${{flex:1,width:'100%',objectFit:'contain',minHeight:0,display:'block'}}></video>`:null}
-              ${remoteScreenUid&&!screenSharing?html`
-                <video ref=${remoteScreenRef} autoPlay playsInline
-                  style=${{flex:1,width:'100%',objectFit:'contain',minHeight:0,display:'block'}}></video>`:null}
-              <div style=${{position:'absolute',top:10,left:12,zIndex:22,display:'flex',gap:8,alignItems:'center'}}>
-                <div style=${{background:'var(--ac)',color:'var(--ac-tx)',borderRadius:8,padding:'4px 14px',fontSize:12,fontWeight:700}}>
-                  📺 ${screenSharing?'You are sharing':(safe(users).find(u=>u.id===remoteScreenUid)||{name:'Someone'}).name+' is sharing'}
-                </div>
-                ${screenSharing?html`<button onClick=${toggleScreenShare} style=${{background:'rgba(239,68,68,.9)',border:'none',borderRadius:8,padding:'4px 14px',fontSize:12,fontWeight:700,color:'#fff',cursor:'pointer'}}>Stop</button>`:null}
-              </div>
-              <div style=${{position:'absolute',bottom:0,left:0,right:0,zIndex:22,height:110,display:'flex',gap:8,padding:'8px 14px',background:'linear-gradient(to top,rgba(0,0,0,.85),transparent)',overflowX:'auto',alignItems:'flex-end'}}>
-                ${partUsers.map(u=>html`
-                  <div key=${u.id} style=${{position:'relative',width:140,height:90,borderRadius:10,overflow:'hidden',background:'rgba(20,20,40,.95)',border:'2px solid '+(speaking[u.id]?'#22c55e':'rgba(255,255,255,.15)'),flexShrink:0}}>
-                    ${u.id!==cu.id?html`<video ref=${el=>{if(el)remoteVideoRefs.current[u.id]=el;}} autoPlay playsInline style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
-                    ${u.id===cu.id&&videoOn?html`<video ref=${localVideoRef} autoPlay playsInline muted style=${{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}></video>`:null}
-                    <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      ${u.avatar_data&&u.avatar_data.startsWith('data:image')?html`<img src=${u.avatar_data} style=${{width:36,height:36,borderRadius:'50%',objectFit:'cover'}}/>`:html`<div style=${{width:36,height:36,borderRadius:'50%',background:u.color||'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>`}
-                    </div>
-                    <div style=${{position:'absolute',bottom:3,left:3,right:3,background:'rgba(0,0,0,.75)',borderRadius:5,padding:'2px 6px',display:'flex',alignItems:'center',gap:3}}>
-                      ${speaking[u.id]?html`<div style=${{width:5,height:5,borderRadius:'50%',background:'#22c55e',animation:'pulse .8s infinite',flexShrink:0}}></div>`:null}
-                      <span style=${{fontSize:10,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}${u.id===cu.id?' (you)':''}</span>
-                    </div>
-                  </div>`)}
-              </div>
-            </div>`:null}
-                    ${(showParticipants||showInvite)?html`
-            <div style=${{width:260,background:'rgba(10,10,22,.93)',backdropFilter:'blur(16px)',borderLeft:'1px solid rgba(255,255,255,.08)',display:'flex',flexDirection:'column',overflow:'hidden',zIndex:2,flexShrink:0}}>
-              <div style=${{display:'flex',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
-                ${[['People',showParticipants,()=>{setShowParticipants(true);setShowInvite(false);}], ['Invite',showInvite,()=>{setShowInvite(true);setShowParticipants(false);}]
-                ].map(([lbl,active,fn])=>html`
-                  <button key=${lbl} onClick=${fn} style=${{flex:1,padding:'9px 4px',background:active?'rgba(37,99,235,.12)':'none',border:'none',cursor:'pointer',fontSize:10,fontWeight:700,color:active?'#99ee00':'rgba(255,255,255,.4)',textTransform:'uppercase',letterSpacing:.8,borderBottom:active?'2px solid #99ee00':'2px solid transparent',transition:'all .15s'}}>
-                    ${lbl}
-                  </button>`)}
-              </div>
-              ${showParticipants?html`<div style=${{flex:1,overflowY:'auto',padding:'8px'}}>${partUsers.map(u=>html`<div key=${u.id} style=${{display:'flex',alignItems:'center',gap:7,padding:'7px 9px',borderRadius:9,background:'rgba(255,255,255,.04)',marginBottom:4}}><div style=${{position:'relative',flexShrink:0}}><${Av} u=${u} size=${28}/><div style=${{position:'absolute',bottom:-1,right:-1,width:9,height:9,borderRadius:'50%',background:speaking[u.id]?'#22c55e':'#374151',border:'1.5px solid #0a0a16'}}></div></div><span style=${{fontSize:12,color:'rgba(255,255,255,.85)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${u.name}${u.id===cu.id?' (you)':''}</span></div>`)}</div>`:null}
-              ${showInvite?html`<div style=${{flex:1,overflowY:'auto',padding:'8px'}}><div style=${{fontSize:10,color:'rgba(255,255,255,.35)',marginBottom:8}}>Click to invite</div>${notInCall.map(u=>html`<button key=${u.id} onClick=${()=>inviteUser(u.id)} style=${{width:'100%',display:'flex',alignItems:'center',gap:7,padding:'7px 9px',borderRadius:9,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',cursor:'pointer',marginBottom:4}} onMouseEnter=${e=>e.currentTarget.style.background='rgba(34,197,94,.1)'} onMouseLeave=${e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}><${Av} u=${u} size=${26}/><span style=${{fontSize:11,color:'rgba(255,255,255,.8)',flex:1,textAlign:'left',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`)}</div>`:null}
-            </div>`:null}
-        </div>
-                <div style=${{background:'rgba(0,0,0,.65)',backdropFilter:'blur(14px)',padding:'8px 16px',display:'flex',alignItems:'center',gap:6,borderTop:'1px solid rgba(255,255,255,.05)',flexShrink:0}}>
-                    <div style=${{display:'flex',alignItems:'center',gap:6,marginRight:'auto'}}>
-            <button style=${{width:34,height:34,borderRadius:9,background:'rgba(255,255,255,.06)',border:'none',cursor:'default',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.4)'}} title="Connection quality">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="16" width="4" height="6" rx="1" opacity=".4"/><rect x="7" y="11" width="4" height="11" rx="1" opacity=".6"/><rect x="13" y="6" width="4" height="16" rx="1" opacity=".8"/><rect x="19" y="1" width="4" height="21" rx="1"/></svg>
-          </button>
-          ${meetUrl?html`
+          <div style=${{display:'flex',gap:10}}>
+            <button onClick=${()=>{setShowDialog(false);setMeetUrl(null);}}
+              style=${{flex:1,height:42,borderRadius:11,background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)',cursor:'pointer',fontWeight:600,fontSize:14,transition:'all .15s'}}
+              onMouseEnter=${e=>e.currentTarget.style.background='var(--bd)'}
+              onMouseLeave=${e=>e.currentTarget.style.background='var(--sf2)'}>
+              Cancel
+            </button>
             <a href=${meetUrl} target="_blank" rel="noopener"
-              title="Open in Google Meet"
-              style=${{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:8, background:'rgba(66,133,244,0.15)',border:'1px solid rgba(66,133,244,0.3)', color:'#93c5fd',fontSize:10,fontWeight:700,textDecoration:'none', letterSpacing:'.02em',transition:'all .15s'}}
-              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.28)';}}
-              onMouseLeave=${e=>{e.currentTarget.style.background='rgba(66,133,244,0.15)';}}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                <path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round"/>
-                <rect x="3" y="6" width="12" height="12" rx="2" stroke="#93c5fd" strokeWidth="2"/>
-              </svg>
-              Google Meet
-            </a>`:null}
+              onClick=${()=>{setShowDialog(false);}}
+              style=${{flex:2,height:42,borderRadius:11,background:'linear-gradient(135deg,#1a73e8,#1557b0)',border:'none',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',gap:8,textDecoration:'none',boxShadow:'0 4px 16px rgba(26,115,232,.4)',transition:'all .15s'}}
+              onMouseEnter=${e=>e.currentTarget.style.transform='translateY(-1px)'}
+              onMouseLeave=${e=>e.currentTarget.style.transform='none'}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14" stroke="white" strokeWidth="2" strokeLinecap="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="white" strokeWidth="2"/></svg>
+              Open in Google Meet
+            </a>
           </div>
-                    ${[
-            {icon:muted?'mic-off':'mic',label:muted?'Unmute':'Mute',active:muted,color:'var(--rd2)',action:toggleMute,svgOn:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,svgOff:html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`}, ].map(btn=>html`
-            <div key=${btn.label} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-              <button onClick=${btn.action} style=${{width:44,height:44,borderRadius:13,background:btn.active?'rgba(239,68,68,.2)':'rgba(255,255,255,.09)',border:'1.5px solid '+(btn.active?'rgba(239,68,68,.4)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:btn.active?btn.color:'#fff',transition:'all .15s'}}>
-                ${btn.active?btn.svgOn:btn.svgOff}
-              </button>
-              <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>${btn.label}</span>
-            </div>`)}
-                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleVideo} style=${{width:44,height:44,borderRadius:13,background:videoOn?'rgba(37,99,235,.22)':'rgba(255,255,255,.09)',border:'1.5px solid '+(videoOn?'rgba(59,130,246,.6)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:videoOn?'#93c5fd':'#fff',transition:'all .15s',boxShadow:videoOn?'0 0 10px rgba(59,130,246,.3)':'none'}}>
-              ${videoOn?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`:
-              html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`}
-            </button>
-            <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>${videoOn?'Video on':'Video'}</span>
+          <div style=${{marginTop:12,padding:'10px 12px',background:'rgba(26,115,232,.07)',borderRadius:9,border:'1px solid rgba(26,115,232,.15)',fontSize:11,color:'var(--tx3)',lineHeight:1.6}}>
+            Share this link with your team. Anyone with the link can join. 
+            The meeting stays open until everyone leaves.
           </div>
-                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${toggleScreenShare} style=${{width:44,height:44,borderRadius:13, background:screenSharing?'rgba(37,99,235,.35)':'rgba(255,255,255,.09)', border:'1.5px solid '+(screenSharing?'rgba(59,130,246,.7)':'rgba(255,255,255,.12)'), cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center', color:screenSharing?'#93c5fd':'#fff',transition:'all .15s', boxShadow:screenSharing?'0 0 12px rgba(59,130,246,.4)':'none'}}>
-              ${screenSharing
-                ?html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" fill="rgba(59,130,246,.3)"/><path d="M8 21h8M12 17v4"/><line x1="8" y1="10" x2="16" y2="10" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/></svg>`
-                :html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`}
-            </button>
-            <span style=${{fontSize:8,color:screenSharing?'#93c5fd':'rgba(255,255,255,.35)',lineHeight:1}}>${screenSharing?'Sharing':'Share'}</span>
-          </div>
-                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${()=>{
-              const nv=!handRaised;setHandRaised(nv);
-              const room=roomIdRef.current;if(!room)return;
-              // Send signal to all peers
-              participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
-                api.post('/api/calls/'+room+'/signal',{to_user:uid,type:'hand',data:{raised:nv,from:cu.name||'You'}}).catch(()=>{});
-              });
-              // Auto-lower for EVERYONE (including raiser) after 5s
-              if(nv){
-                setTimeout(()=>{
-                  setHandRaised(false); // lower raiser's own hand too
-                  const r=roomIdRef.current;if(!r)return;
-                  participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
-                    api.post('/api/calls/'+r+'/signal',{to_user:uid,type:'hand',data:{raised:false,from:cu.name}}).catch(()=>{});
-                  });
-                },5000);
-              }
-            }} style=${{width:44,height:44,borderRadius:13,background:handRaised?'rgba(251,191,36,.3)':'rgba(255,255,255,.09)',border:'1.5px solid '+(handRaised?'rgba(251,191,36,.8)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,transition:'all .15s',boxShadow:handRaised?'0 0 16px rgba(251,191,36,.6)':'none',animation:handRaised?'pulse 1s infinite':'none'}}>
-              ${handRaised?'✋':'🖐'}
-            </button>
-            <span style=${{fontSize:8,color:handRaised?'rgba(251,191,36,.95)':'rgba(255,255,255,.35)',lineHeight:1,fontWeight:handRaised?700:400}}>Hand</span>
-          </div>
-                    <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
-            <button onClick=${()=>{setShowInvite(p=>!p||showParticipants);setShowParticipants(false);}}
-              style=${{width:44,height:44,borderRadius:13,background:(showInvite||showParticipants)?'rgba(37,99,235,.22)':'rgba(255,255,255,.09)',border:'1.5px solid '+((showInvite||showParticipants)?'rgba(59,130,246,.6)':'rgba(255,255,255,.12)'),cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:(showInvite||showParticipants)?'#93c5fd':'#fff',transition:'all .15s',position:'relative'}}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              <span style=${{position:'absolute',top:-2,right:-2,width:15,height:15,borderRadius:'50%',background:'#22c55e',fontSize:8,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',border:'1.5px solid #0d0d1a'}}>${participants.length}</span>
-            </button>
-            <span style=${{fontSize:8,color:'rgba(255,255,255,.35)',lineHeight:1}}>People</span>
-          </div>
-                    <div style=${{marginLeft:'auto'}}>
-            <button onClick=${cleanup} style=${{height:42,borderRadius:12,background:'linear-gradient(135deg,#ef4444,#dc2626)',border:'none',color:'#fff',padding:'0 20px',cursor:'pointer',fontWeight:700,fontSize:13,display:'flex',alignItems:'center',gap:7,boxShadow:'0 4px 16px rgba(239,68,68,.35)'}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.98.37 2.03.57 3.13.57a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2c0 1.1.2 2.15.57 3.13a2 2 0 0 1-.45 2.11L8.09 10.27"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              Leave
-            </button>
-          </div>
-        </div>`:null}
-    </div>`:null;
-
-  const reactionsOverlay=floatingReactions.length>0?html`
-    <div style=${{
-      position:'fixed', bottom:popupPos?Math.max(120,(window.innerHeight-(popupPos.y||0))-540+120)+'px':'140px', left:popupPos?popupPos.x+'px':'50%', transform:popupPos?'none':'translateX(-50%)', zIndex:9300,pointerEvents:'none',width:320,height:200,overflow:'hidden'
-    }}>
-      ${floatingReactions.map(r=>html`
-        <div key=${r.id} style=${{
-          position:'absolute', left:r.x+'%', bottom:0, display:'flex',flexDirection:'column',alignItems:'center',gap:3, animation:'floatUp 2.8s cubic-bezier(.2,.8,.4,1) forwards', pointerEvents:'none'
-        }}>
-          <span style=${{fontSize:32,filter:'drop-shadow(0 2px 4px rgba(0,0,0,.5))'}}>${r.emoji}</span>
-          ${r.label&&r.label!=='You'?html`
-            <span style=${{fontSize:10,fontWeight:700,color:'#fff', background:'rgba(0,0,0,.75)',borderRadius:6, padding:'2px 7px',whiteSpace:'nowrap', backdropFilter:'blur(4px)'}}>${r.label}</span>`:null}
-        </div>`)}
-    </div>`:null;
-
-  return html`<div>${incomingToast}${previewPopup}${callPopup}${reactionsOverlay}</div>`;
+        </div>
+      </div>
+    </div>`;
 }
+
 
 /* ─── App ─────────────────────────────────────────────────────────────────── */
 function App(){
@@ -9132,14 +8292,13 @@ function App(){
   // Presence heartbeat — ping every 30s, fetch online users every 15s
   useEffect(()=>{
     if(!cu)return;
-    const beat=()=>api.post('/api/presence',{}).catch(()=>{});
-    beat(); // immediate on mount
-    const beatId=setInterval(beat,20000);
-    window.addEventListener('focus',beat); // trigger on tab focus too
     const fetchPresence=()=>api.get('/api/presence').then(ids=>{if(Array.isArray(ids))setOnlineUsers(new Set(ids));}).catch(()=>{});
-    fetchPresence();
-    const presId=setInterval(fetchPresence,10000);
-    return()=>{clearInterval(beatId);clearInterval(presId);};
+    const beat=()=>api.post('/api/presence',{}).then(fetchPresence).catch(()=>{});
+    beat(); // immediate on mount — beat then fetch
+    const beatId=setInterval(beat,15000);
+    window.addEventListener('focus',beat);
+    const presId=setInterval(fetchPresence,8000);
+    return()=>{clearInterval(beatId);clearInterval(presId);window.removeEventListener('focus',beat);};
   },[cu]);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
   const [showNotifBanner,setShowNotifBanner]=useState(false);
@@ -9181,7 +8340,7 @@ function App(){
     }
   },[cu]);
 
-  const [callState,setCallState]=useState({status:'idle',roomId:null,roomName:'',participants:[],elapsed:0,muted:false,incomingCall:null,allUsers:[]});
+  const [callState,setCallState]=useState({status:'idle'});
   const huddleCmdRef=useRef({});
 
   const [teamLoading,setTeamLoading]=useState(false);
@@ -9342,7 +8501,17 @@ function App(){
     return()=>{ clearInterval(id); if(triggerPollRef.current===pollOnce) triggerPollRef.current=null; };
   },[cu,addToast]);
 
-  const onDmRead=useCallback(sid=>{setDmUnread(prev=>prev.filter(x=>x.sender!==sid));},[]);
+  const onDmRead=useCallback(sid=>{
+    setDmUnread(prev=>prev.filter(x=>x.sender!==sid));
+    // Also clear DM notifications from this sender in the panel
+    setData(prev=>{
+      const toDelete=prev.notifs.filter(n=>n.type==='dm'&&(n.sender_id===sid||n.sender===sid));
+      toDelete.forEach(n=>{
+        api.del('/api/notifications/'+n.id).catch(()=>{});
+      });
+      return {...prev,notifs:prev.notifs.filter(n=>!(n.type==='dm'&&(n.sender_id===sid||n.sender===sid)))};
+    });
+  },[]);
   const logout=async()=>{
     if(window._pfPushUnsubscribe) await window._pfPushUnsubscribe().catch(()=>{});
     await api.post('/api/auth/logout',{});
@@ -9487,7 +8656,7 @@ function App(){
         callState=${{...callState,allUsers:data.users}}
         onCallAction=${async cmd=>{
           const h=huddleCmdRef.current;
-          if(cmd.action==='open_huddle')h.openHuddle&&h.openHuddle(cmd.targetUser||null);
+          if(cmd.action==='open_huddle'||cmd.action==='show')h.openHuddle&&h.openHuddle(cmd.targetUser||null);
           else if(cmd.action==='start')h.start&&h.start(cmd.name);
           else if(cmd.action==='join')h.join&&h.join(cmd.roomId,cmd.roomName);
           else if(cmd.action==='leave')h.leave&&h.leave();
@@ -9577,9 +8746,11 @@ function App(){
               // Search tasks by ID or title
               safe(data.tasks).forEach(t=>{
                 if(!t||!t.id||!t.title)return;
-                if(t.id.toLowerCase().includes(q)||t.title.toLowerCase().includes(q)){
-                  const proj=safe(scopedProjects).find(p=>p.id===t.project);
-                  results.push({type:'task',id:t.id,title:t.title,sub:proj?proj.name:'',color:TYPE_COLORS[t.task_type||'task']||'#1d4ed8',bg:TYPE_BG[t.task_type||'task']||'rgba(29,78,216,0.1)',item:t});
+                const tid=(t.id||'').toLowerCase();
+                const ttl=(t.title||'').toLowerCase();
+                if(tid.includes(q)||ttl.includes(q)){
+                  const proj=(data.projects||[]).find(p=>p.id===t.project);
+                  results.push({type:t.task_type||'task',id:t.id,title:t.title,sub:proj?proj.name:'',color:TYPE_COLORS[t.task_type||'task']||'#1d4ed8',bg:TYPE_BG[t.task_type||'task']||'rgba(29,78,216,0.1)',item:t,nav:'tasks'});
                 }
               });
               // Search tickets by ID, title, or description
