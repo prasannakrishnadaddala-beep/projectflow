@@ -2339,6 +2339,19 @@ def icon_512():
     return Response(png_data, mimetype='image/png',
         headers={'Cache-Control':'public,max-age=86400'})
 
+@app.route("/sitemap.xml")
+def sitemap():
+    xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.vewit.in/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+</urlset>'''
+    return xml, 200, {"Content-Type": "application/xml"}
+
+@app.route("/robots.txt")
+def robots():
+    txt = "User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: https://www.vewit.in/sitemap.xml"
+    return txt, 200, {"Content-Type": "text/plain"}
+
 @app.route("/",defaults={"p":""})
 @app.route("/<path:p>")
 def root(p):
@@ -2352,7 +2365,22 @@ LANDING_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VEUIT — Team Project Management & AI Assistant</title>
+<title>VEUIT — AI-Powered Team Collaboration Platform</title>
+<meta name="description" content="VEUIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timelines and team productivity — all in one place."/>
+<meta name="keywords" content="VEUIT, team collaboration, project management, task management, AI assistant, direct messages, productivity, tickets, timeline"/>
+<meta name="author" content="VEUIT"/>
+<meta name="robots" content="index, follow"/>
+<meta name="theme-color" content="#0f172a"/>
+<link rel="canonical" href="https://www.vewit.in/"/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://www.vewit.in/"/>
+<meta property="og:title" content="VEUIT — AI-Powered Team Collaboration Platform"/>
+<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform."/>
+<meta property="og:site_name" content="VEUIT"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="VEUIT — AI-Powered Team Collaboration"/>
+<meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"VEUIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform for project management, tasks, direct messaging and productivity.","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
 <meta name="description" content="VEUIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
@@ -2545,9 +2573,8 @@ footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
 </nav>
 
 <section class="hero">
-  <canvas id="hero-canvas"></canvas>
   <div class="hero-content">
-    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEUIT v4.0 — AI-Powered</div>
+    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEUIT — Team Collaboration Platform</div>
     <h1 class="a2">The workspace your<br/>team <span class="blue">actually uses.</span></h1>
     <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, Instant Meet, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
     <div class="hero-actions a4">
@@ -2887,81 +2914,6 @@ window.addEventListener('scroll',()=>{
   nav.style.background=window.scrollY>30?'rgba(255,255,255,0.97)':'rgba(255,255,255,0.88)';
 },{passive:true});
 
-// Hero ocean waves canvas — same as login page
-const cv=document.getElementById('hero-canvas');
-const ctx=cv.getContext('2d');
-let frame=0,animId;
-const resize=()=>{cv.width=cv.offsetWidth||window.innerWidth;cv.height=cv.offsetHeight||window.innerHeight;};
-resize();window.addEventListener('resize',resize,{passive:true});
-
-const waveConfigs=[
-  {spd:.00042,amp:.048,freq:2.2,ph:0,     fill:'rgba(147,197,253,',stroke:'rgba(96,165,250,', base:.50},
-  {spd:.00031,amp:.040,freq:1.8,ph:2.0,   fill:'rgba(96,165,250,', stroke:'rgba(59,130,246,', base:.56},
-  {spd:.00051,amp:.032,freq:2.7,ph:4.1,   fill:'rgba(59,130,246,', stroke:'rgba(37,99,235,',  base:.61},
-  {spd:.00024,amp:.026,freq:1.5,ph:1.2,   fill:'rgba(37,99,235,',  stroke:'rgba(29,78,216,',  base:.66},
-  {spd:.00058,amp:.020,freq:3.1,ph:3.4,   fill:'rgba(29,78,216,',  stroke:'rgba(30,64,175,',  base:.70},
-];
-const pts=Array.from({length:28},()=>({
-  x:Math.random(),y:Math.random()*.45,
-  vx:(Math.random()-.5)*.00012,vy:(Math.random()-.5)*.0001,
-  r:.6+Math.random()*1.2,ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.008,
-}));
-const bubbles=Array.from({length:16},()=>({
-  x:Math.random(),y:.45+Math.random()*.45,r:1.5+Math.random()*4,
-  vy:-.00025-Math.random()*.0003,ph:Math.random()*Math.PI*2,sp:.007+Math.random()*.005,a:.06+Math.random()*.1,
-}));
-const sparks=Array.from({length:24},()=>({
-  x:Math.random(),yb:.46+Math.random()*.18,ph:Math.random()*Math.PI*2,sp:.018+Math.random()*.014,sz:.6+Math.random()*1.2,
-}));
-
-function drawCanvas(){
-  const W=cv.width,H=cv.height;frame++;const t=frame*.016;
-  const bg=ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,'#ffffff');bg.addColorStop(.28,'#f0f9ff');bg.addColorStop(.5,'#dbeafe');bg.addColorStop(.72,'#bfdbfe');bg.addColorStop(1,'#93c5fd');
-  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-  const sg=ctx.createRadialGradient(W*.8,H*.05,0,W*.8,H*.05,W*.5);
-  sg.addColorStop(0,'rgba(254,240,138,0.4)');sg.addColorStop(.3,'rgba(253,224,71,0.12)');sg.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
-  pts.forEach(p=>{
-    p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
-    if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=.45;if(p.y>.45)p.y=0;
-    const a=(.07+Math.sin(p.ph)*.05)*(1-p.y/.45);
-    ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
-    ctx.fillStyle='rgba(59,130,246,'+a+')';ctx.fill();
-  });
-  ctx.lineWidth=.4;
-  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
-    const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H;
-    const d=Math.sqrt(dx*dx+dy*dy);
-    if(d<W*.13){ctx.strokeStyle='rgba(147,197,253,'+(0.05*(1-d/(W*.13)))+')';ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.stroke();}
-  }
-  const hy=H*.47;
-  const hl=ctx.createLinearGradient(0,hy,W,hy);
-  hl.addColorStop(0,'rgba(255,255,255,0)');hl.addColorStop(.5,'rgba(219,234,254,0.55)');hl.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=hl;ctx.fillRect(0,hy-1,W,3);
-  waveConfigs.forEach((w,wi)=>{
-    const ph=t*w.spd*1000+w.ph;
-    ctx.beginPath();ctx.moveTo(0,H);
-    for(let x=0;x<=W;x+=2){const xn=x/W;const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp+Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)+Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
-    ctx.lineTo(W,H);ctx.closePath();ctx.fillStyle=w.fill+[.13,.12,.11,.10,.09][wi]+')';ctx.fill();
-    ctx.beginPath();
-    for(let x=0;x<=W;x+=2){const xn=x/W;const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp+Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)+Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
-    ctx.strokeStyle=w.stroke+[.07,.06,.06,.05,.05][wi]+')';ctx.lineWidth=1.1;ctx.stroke();
-    if(wi===0){for(let fx=W*.04;fx<W;fx+=W*.09+Math.sin(fx*.01)*W*.02){const xn=fx/W;const fy=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp+Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3));const fa=.09+Math.sin(t*.9+fx*.008)*.04;const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,20+Math.sin(t+fx*.01)*5);fg.addColorStop(0,'rgba(255,255,255,'+fa+')');fg.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(fx,fy,22,5,0,0,Math.PI*2);ctx.fill();}}
-  });
-  bubbles.forEach(b=>{
-    b.y+=b.vy;b.ph+=b.sp;if(b.y<.42)b.y=.5+Math.random()*.3;
-    const bx=b.x*W+Math.sin(b.ph)*6,by=b.y*H,ba=b.a*(0.4+Math.sin(b.ph)*.6);
-    ctx.beginPath();ctx.arc(bx,by,b.r,0,Math.PI*2);ctx.strokeStyle='rgba(147,197,253,'+ba+')';ctx.lineWidth=.7;ctx.stroke();
-    ctx.beginPath();ctx.arc(bx-b.r*.3,by-b.r*.35,b.r*.28,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,'+(ba*.5)+')';ctx.fill();
-  });
-  sparks.forEach(s=>{
-    s.ph+=s.sp;const sx=s.x*W+Math.sin(s.ph*.4)*10,sy=H*(s.yb+Math.sin(s.ph*.3)*.015),sa=(Math.sin(s.ph)+1)/2;
-    if(sa>.35){const a=sa*.2;ctx.save();ctx.translate(sx,sy);ctx.fillStyle='rgba(255,255,255,'+a+')';ctx.beginPath();ctx.moveTo(0,-s.sz*2.2);ctx.lineTo(s.sz*.35,-s.sz*.35);ctx.lineTo(s.sz*2.2,0);ctx.lineTo(s.sz*.35,s.sz*.35);ctx.lineTo(0,s.sz*2.2);ctx.lineTo(-s.sz*.35,s.sz*.35);ctx.lineTo(-s.sz*2.2,0);ctx.lineTo(-s.sz*.35,-s.sz*.35);ctx.closePath();ctx.fill();ctx.restore();}
-  });
-  animId=requestAnimationFrame(drawCanvas);
-}
-drawCanvas();
 </script>
 </body>
 </html>"""
@@ -2969,7 +2921,10 @@ drawCanvas();
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>VEUITPro</title>
+<title>VEUIT — Sign In</title>
+<meta name="description" content="Sign in to VEUIT — AI-powered team collaboration platform."/>
+<meta name="robots" content="noindex"/>
+<link rel="canonical" href="https://www.vewit.in/"/>
 <link rel="manifest" href="/manifest.json"/>
 <meta name="theme-color" content="#1d4ed8"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -3011,9 +2966,9 @@ if('serviceWorker' in navigator){
         }
         if(e.data && e.data.type === 'PF_NOTIF_CLICK'){
           window.focus();
-          var tag = e.data.tag;
-          if(tag && window._pfNotifHandlers && window._pfNotifHandlers[tag]){
-            try{ window._pfNotifHandlers[tag](); }catch(err){}
+          var tag=e.data.tag;
+          if(tag&&window._pfNotifHandlers&&window._pfNotifHandlers[tag]){
+            try{window._pfNotifHandlers[tag]();}catch(err){}
             delete window._pfNotifHandlers[tag];
           }
         }
@@ -3706,7 +3661,7 @@ function AuthScreen({onLogin}){
         position:'absolute',top:'50%',left:'50%', transform:'translate(-50%,-50%)', textAlign:'center',zIndex:10,pointerEvents:'none', width:'80%', }}>
         <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(255,255,255,0.7)',border:'1px solid rgba(147,197,253,0.6)',padding:'5px 14px',borderRadius:100,marginBottom:18,backdropFilter:'blur(8px)'}}>
           <div style=${{width:5,height:5,borderRadius:'50%',background:'#3b82f6'}}></div>
-          <span style=${{fontSize:11,color:'#1d4ed8',fontWeight:700,letterSpacing:.05}}>AI-POWERED · MULTI-TENANT · v4.0</span>
+          <span style=${{fontSize:11,color:'#1d4ed8',fontWeight:700,letterSpacing:.05}}>TEAM COLLABORATION · AI-POWERED</span>
         </div>
         <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.5vw,2rem)',fontWeight:800,color:'#1e3a5f',lineHeight:1.2,marginBottom:10,letterSpacing:-.03}}>
           Where teams<br/>ship together
@@ -4192,18 +4147,18 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
           <div style=${{padding:'2px 4px 4px 10px',display:'flex',flexDirection:'column',gap:1}}>
             ${safe(users).filter(u=>u.id!==cu?.id).slice(0,8).map(u=>{
               const isOnline=onlineUsers.has(u.id);
+              const firstName=(u.name||'').split(' ')[0];
               const unreadCnt=(dmUnread.find(x=>x.user_id===u.id||x.sender===u.id)||{}).cnt||0;
               return html`
-              <button key=${u.id} onClick=${()=>setView('dm:'+u.id)}
-                title=${u.name}
+              <button key=${u.id} onClick=${()=>setView('dm:'+u.id)} title=${u.name}
                 style=${{display:'flex',alignItems:'center',gap:7,width:'100%',padding:'4px 6px',borderRadius:7,border:'none',cursor:'pointer',background:'transparent',transition:'background .1s'}}
                 onMouseEnter=${e=>e.currentTarget.style.background='rgba(37,99,235,0.12)'}
                 onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
                 <div style=${{position:'relative',flexShrink:0}}>
-                  <div style=${{width:22,height:22,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>
+                  <div style=${{width:22,height:22,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||firstName||'?')[0]}</div>
                   <div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',background:isOnline?'#22c55e':'#475569',border:'1.5px solid #0f172a',boxShadow:isOnline?'0 0 5px rgba(34,197,94,.8)':'none',transition:'background .3s,box-shadow .3s'}}></div>
                 </div>
-                <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.92)':'rgba(148,163,184,0.45)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${u.name}</span>
+                <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.92)':'rgba(148,163,184,0.45)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${firstName}</span>
                 ${unreadCnt>0?html`<span style=${{minWidth:15,height:15,borderRadius:8,background:'var(--cy)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',flexShrink:0}}>${unreadCnt}</span>`:null}
               </button>`;
             })}
@@ -4361,7 +4316,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
               <${Av} u=${cu} size=${24}/>
               <div style=${{lineHeight:1.2}}>
                 <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)'}}>${cu&&cu.name?cu.name.split(' ')[0]:''}</div>
-                <div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace'}}>${cu&&cu.role||''}</div>
+
               </div>
             </div>
             ${showProfile?html`
@@ -6692,7 +6647,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,dmEnabled=true,initialUserId
 /* ─── NotifsView ──────────────────────────────────────────────────────────── */
 function NotifsView({notifs,reload,onNavigate}){
   const NT={
-    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}};
+    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}, call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Instant Meet'}, };
   const unread=safe(notifs).filter(n=>!n.read).length;
   const handleClick=async(n)=>{
     if(!n.read) await api.put('/api/notifications/'+n.id+'/read',{});
@@ -7720,11 +7675,7 @@ async function requestNotifPermission(){
 
 async function showBrowserNotif(title,body,onClick,opts={}){
   const tag=opts.tag||'pf-'+Date.now();
-  // Always store handler by tag for SW click routing
-  if(onClick){
-    window._pfNotifHandlers=window._pfNotifHandlers||{};
-    window._pfNotifHandlers[tag]=onClick;
-  }
+  if(onClick){window._pfNotifHandlers=window._pfNotifHandlers||{};window._pfNotifHandlers[tag]=onClick;}
   if(window.__TAURI__){
     try{
       const {isPermissionGranted,requestPermission,sendNotification}=window.__TAURI__.notification;
@@ -7736,12 +7687,7 @@ async function showBrowserNotif(title,body,onClick,opts={}){
   if(!('Notification' in window)||Notification.permission!=='granted')return;
   if(window._pfSWReg){
     try{
-      await window._pfSWReg.showNotification(title,{
-        body, icon:NOTIF_ICON, badge:NOTIF_ICON, tag,
-        vibrate:[200,100,200],
-        requireInteraction:opts.requireInteraction||false,
-        data:{tag}
-      });
+      await window._pfSWReg.showNotification(title,{body,icon:NOTIF_ICON,badge:NOTIF_ICON,tag,vibrate:[200,100,200],requireInteraction:opts.requireInteraction||false,data:{tag}});
       return;
     }catch(e){}
   }
@@ -7756,7 +7702,7 @@ async function showBrowserNotif(title,body,onClick,opts={}){
 window._pfToast=window._pfToast||null; // will be set to addToast fn after mount
 
 const TOAST_CFG={
-  dm:      {icon:'💬', color:'var(--ac)', bg:'var(--ac3)', nav:'dm'}, task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'}, status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'}, comment: {icon:'💬', color:'var(--pu)', bg:'rgba(167,139,250,.1)', nav:'tasks'}, deadline:{icon:'⏰', color:'var(--am)', bg:'rgba(245,158,11,.1)', nav:'tasks'}, project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'}, reminder:{icon:'⏰', color:'var(--rd)', bg:'rgba(255,68,68,.1)', nav:'reminders'}, message: {icon:'#️⃣', color:'#a78bfa', bg:'rgba(167,139,250,.1)', nav:'messages'}, default: {icon:'🔔', color:'var(--ac)', bg:'var(--ac3)', nav:'notifs'},
+  dm:      {icon:'💬', color:'var(--ac)', bg:'var(--ac3)', nav:'dm'}, call:    {icon:'📞', color:'var(--gn)', bg:'rgba(62,207,110,.12)', nav:'dashboard'}, task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'}, status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'}, comment: {icon:'💬', color:'var(--pu)', bg:'rgba(167,139,250,.1)', nav:'tasks'}, deadline:{icon:'⏰', color:'var(--am)', bg:'rgba(245,158,11,.1)', nav:'tasks'}, project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'}, reminder:{icon:'⏰', color:'var(--rd)', bg:'rgba(255,68,68,.1)', nav:'reminders'}, message: {icon:'#️⃣', color:'#a78bfa', bg:'rgba(167,139,250,.1)', nav:'messages'}, default: {icon:'🔔', color:'var(--ac)', bg:'var(--ac3)', nav:'notifs'},
 };
 
 function ToastStack({toasts,onDismiss,onNav}){
@@ -8309,7 +8255,7 @@ function App(){
   const notify=useCallback((type,title,body,navTo,opts={})=>{
     addToast(type,title,body);
     showBrowserNotif(title,body,()=>setView(navTo),{...opts,tag:opts.tag||type+'-'+Date.now()});
-    playSound('notif');
+    playSound(type==='call'?'call':'notif');
   },[addToast]);
 
   useEffect(()=>{
@@ -8434,8 +8380,8 @@ function App(){
 
   const prevNotifIdsRef=useRef(null); // null = not yet seeded
   const NTITLES={
-    task_assigned:'✅ Task assigned to you', status_change:'🔄 Task status changed', comment:'💬 New comment on task', deadline:'⏰ Deadline approaching', dm:'📨 New direct message', project_added:'📁 Added to a project', reminder:'⏰ Reminder', message:'#️⃣ New channel message', };
-  const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',message:'messages'};
+    task_assigned:'✅ Task assigned to you', status_change:'🔄 Task status changed', comment:'💬 New comment on task', deadline:'⏰ Deadline approaching', dm:'📨 New direct message', project_added:'📁 Added to a project', reminder:'⏰ Reminder', call:'📞 Huddle call', message:'#️⃣ New channel message', };
+  const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dm',message:'messages'};
   useEffect(()=>{
     if(!cu)return;
 
@@ -8450,7 +8396,7 @@ function App(){
         const brandNew=d.filter(n=>!prevNotifIdsRef.current.has(n.id));
         brandNew.forEach(n=>{
           if(n.type==='dm')return; // DMs handled by separate poll
-          if(n.type==='call') return; // calls removed
+          if(n.type==='call') return;
           const title=NTITLES[n.type]||'VEUIT';
           const nav=NNAV[n.type]||'notifs';
           addToast(n.type,title,n.content||'');
@@ -8651,14 +8597,21 @@ function App(){
             api.del('/api/notifications/'+n.id).catch(()=>{});
             // Remove from local state instantly — panel clears without waiting for reload
             setData(prev=>({...prev,notifs:prev.notifs.filter(x=>x.id!==n.id)}));
-            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',message:'messages'};
+            const nav={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dm',message:'messages'};
             const dest=nav[n.type]||'notifs';
             // DM: open sender's chat thread
             if(n.type==='dm'||n.type==='message'){
               const senderId=n.sender_id||n.sender||null;
               if(senderId)setDmTargetUser(senderId);
             }
-            if(n.type==='call') return; // calls removed
+            // Call: open Jitsi with the caller directly
+            if(n.type==='call'){
+              const senderId=n.sender_id||n.sender||null;
+              if(senderId){
+                const callerUser=data.users.find(u=>u.id===senderId);
+                if(senderId)setDmTargetUser(senderId);
+              }
+            }
             setView(dest);
           }}
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
