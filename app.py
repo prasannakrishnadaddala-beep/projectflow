@@ -5,7 +5,7 @@ Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 """
 import os, sys, json, hashlib, secrets, random, urllib.request, urllib.error
 import socket, threading, time, webbrowser, mimetypes, base64, smtplib
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -4183,23 +4183,26 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,cal
             }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
           </button>`)}
         ${!col&&(wsDmEnabled||(cu&&(cu.role==='Admin'||cu.role==='Manager')))&&users&&users.length>0?html`
-          <div style=${{padding:'4px 4px 2px 12px',display:'flex',flexDirection:'column',gap:1}}>
+          <div style=${{padding:'2px 4px 4px 10px',display:'flex',flexDirection:'column',gap:1}}>
             ${safe(users).filter(u=>u.id!==cu?.id).slice(0,8).map(u=>{
               const isOnline=onlineUsers.has(u.id);
-              const unreadCnt=(dmUnread.find(x=>x.user_id===u.id)||{}).cnt||0;
+              const unreadCnt=(dmUnread.find(x=>x.user_id===u.id||x.sender===u.id)||{}).cnt||0;
               return html`
-              <button key=${u.id}
-                onClick=${()=>setView('dm:'+u.id)}
-                title=${u.name+(isOnline?' (Online)':'')}
+              <button key=${u.id} onClick=${()=>setView('dm:'+u.id)}
+                title=${u.name+(isOnline?' · Online':' · Offline')}
                 style=${{display:'flex',alignItems:'center',gap:7,width:'100%',padding:'4px 6px',borderRadius:7,border:'none',cursor:'pointer',background:'transparent',transition:'background .1s'}}
                 onMouseEnter=${e=>e.currentTarget.style.background='rgba(37,99,235,0.12)'}
                 onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
                 <div style=${{position:'relative',flexShrink:0}}>
-                  <div style=${{width:20,height:20,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>
-                  <div style=${{position:'absolute',bottom:-1,right:-1,width:7,height:7,borderRadius:'50%',background:isOnline?'#22c55e':'rgba(148,163,184,0.4)',border:'1.5px solid #0f172a',boxShadow:isOnline?'0 0 4px rgba(34,197,94,0.7)':'none',transition:'background .3s'}}></div>
+                  <div style=${{width:22,height:22,borderRadius:'50%',background:u.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff'}}>${(u.avatar||u.name||'?')[0]}</div>
+                  <div style=${{position:'absolute',bottom:-1,right:-1,width:8,height:8,borderRadius:'50%',
+                    background:isOnline?'#22c55e':'#475569',
+                    border:'1.5px solid #0f172a',
+                    boxShadow:isOnline?'0 0 5px rgba(34,197,94,0.8)':'none',
+                    transition:'background .3s,box-shadow .3s'}}></div>
                 </div>
-                <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.9)':'rgba(148,163,184,0.55)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${u.name}</span>
-                ${unreadCnt>0?html`<span style=${{minWidth:14,height:14,borderRadius:7,background:'var(--cy)',color:'#fff',fontSize:8,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 3px',flexShrink:0}}>${unreadCnt}</span>`:null}
+                <span style=${{fontSize:11,color:isOnline?'rgba(203,213,225,0.95)':'rgba(148,163,184,0.5)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:isOnline?600:400}}>${u.name}</span>
+                ${unreadCnt>0?html`<span style=${{minWidth:15,height:15,borderRadius:8,background:'var(--cy)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px',flexShrink:0}}>${unreadCnt}</span>`:null}
               </button>`;
             })}
           </div>`:null}
@@ -8237,155 +8240,287 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-/* ─── PeerJS Video Call — No login, no third-party auth, pure WebRTC P2P ── */
+/* ─── WebRTC Video Call — signaled via Flask backend, no login needed ─── */
 function HuddleCall({cu,users,onStateChange,cmdRef}){
-  const [room,setRoom]=useState(null);
-  const [remoteUser,setRemoteUser]=useState(null);
+  const [callState,setCallState]=useState(null); // null | {roomId,remoteUser,role:'caller'|'callee'}
+  const [phase,setPhase]=useState('idle'); // idle|ringing|connecting|connected|error
+  const [incomingCall,setIncomingCall]=useState(null); // {roomId,callerName,callerId}
   const [minimized,setMinimized]=useState(false);
-  const [status,setStatus]=useState('connecting');
   const [muted,setMuted]=useState(false);
   const [camOff,setCamOff]=useState(false);
   const [elapsed,setElapsed]=useState(0);
-  const [errorMsg,setErrorMsg]=useState('');
-  const peerRef=useRef(null);
-  const callRef=useRef(null);
+  const [errMsg,setErrMsg]=useState('');
+
+  const pcRef=useRef(null);
   const localStreamRef=useRef(null);
   const localVidRef=useRef(null);
   const remoteVidRef=useRef(null);
   const timerRef=useRef(null);
-  const peerJsLoaded=useRef(false);
+  const pollRef=useRef(null);
+  const roomRef=useRef(null);
 
-  const ensurePeerJS=()=>new Promise((res,rej)=>{
-    if(window.Peer){res();return;}
-    if(peerJsLoaded.current){const w=()=>window.Peer?res():setTimeout(w,100);w();return;}
-    peerJsLoaded.current=true;
-    const s=document.createElement('script');
-    s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-    s.onload=()=>res();s.onerror=()=>rej(new Error('PeerJS failed to load'));
-    document.head.appendChild(s);
-  });
+  const ICE_SERVERS=[
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'stun:stun.cloudflare.com:3478'},
+  ];
+
+  const fmtTime=s=>{const m=Math.floor(s/60);return m+':'+(s%60<10?'0':'')+s%60;};
 
   const cleanup=()=>{
     if(timerRef.current){clearInterval(timerRef.current);timerRef.current=null;}
-    if(callRef.current){try{callRef.current.close();}catch(e){}}
-    callRef.current=null;
+    if(pollRef.current){clearInterval(pollRef.current);pollRef.current=null;}
+    if(pcRef.current){try{pcRef.current.close();}catch(e){}pcRef.current=null;}
     if(localStreamRef.current){localStreamRef.current.getTracks().forEach(t=>t.stop());localStreamRef.current=null;}
-    if(peerRef.current){try{peerRef.current.destroy();}catch(e){}}
-    peerRef.current=null;
     if(localVidRef.current)localVidRef.current.srcObject=null;
     if(remoteVidRef.current)remoteVidRef.current.srcObject=null;
+    roomRef.current=null;
   };
 
-  const attachStream=(vidEl,stream)=>{if(!vidEl||!stream)return;vidEl.srcObject=stream;vidEl.play().catch(()=>{});};
-  const getMedia=async()=>{const s=await navigator.mediaDevices.getUserMedia({video:true,audio:true});localStreamRef.current=s;attachStream(localVidRef.current,s);return s;};
-  const startTimer=()=>{setElapsed(0);timerRef.current=setInterval(()=>setElapsed(e=>e+1),1000);};
-  const fmtTime=s=>{const m=Math.floor(s/60);return m+':'+(s%60<10?'0':'')+s%60;};
-
-  const startCall=async(targetUser)=>{
-    try{
-      setStatus('connecting');await ensurePeerJS();
-      const stream=await getMedia();
-      const peer=new window.Peer(cu.id+'-c-'+Date.now(),{debug:0});
-      peerRef.current=peer;
-      peer.on('open',()=>{
-        setStatus('calling');
-        const call=peer.call(targetUser.id,stream);
-        callRef.current=call;
-        if(!call){setErrorMsg('Could not reach peer');setStatus('error');return;}
-        call.on('stream',rs=>{attachStream(remoteVidRef.current,rs);setStatus('connected');startTimer();onStateChange&&onStateChange({status:'in-call'});});
-        call.on('close',()=>hangup());
-        call.on('error',e=>{setErrorMsg(e.message||'Call error');setStatus('error');});
-      });
-      peer.on('error',e=>{setErrorMsg(e.message||'Peer error');setStatus('error');});
-    }catch(e){setErrorMsg(e.message||'Camera/mic access denied');setStatus('error');}
-  };
-
-  const answerCall=async()=>{
-    try{
-      setStatus('connecting');await ensurePeerJS();
-      const stream=await getMedia();
-      const tryPeer=(pid)=>{
-        const peer=new window.Peer(pid,{debug:0});
-        peerRef.current=peer;
-        const answerIncoming=(call)=>{
-          callRef.current=call;call.answer(stream);
-          call.on('stream',rs=>{attachStream(remoteVidRef.current,rs);setStatus('connected');startTimer();onStateChange&&onStateChange({status:'in-call'});});
-          call.on('close',()=>hangup());
-          call.on('error',e=>{setErrorMsg(e.message||'Call error');setStatus('error');});
-        };
-        peer.on('open',()=>setStatus('ringing'));
-        peer.on('call',call=>answerIncoming(call));
-        peer.on('error',e=>{
-          if(e.type==='unavailable-id'){setTimeout(()=>{try{peer.destroy();}catch(x){}tryPeer(pid+'-r');},600);}
-          else{setErrorMsg(e.message||'Peer error');setStatus('error');}
-        });
-      };
-      tryPeer(cu.id);
-    }catch(e){setErrorMsg(e.message||'Camera/mic access denied');setStatus('error');}
-  };
-
-  const hangup=()=>{
-    cleanup();setRoom(null);setRemoteUser(null);setMinimized(false);
-    setStatus('connecting');setElapsed(0);setErrorMsg('');
+  const hangup=(roomId)=>{
+    const rid=roomId||roomRef.current;
+    cleanup();
+    setCallState(null);setPhase('idle');setIncomingCall(null);setMinimized(false);
+    setElapsed(0);setErrMsg('');setMuted(false);setCamOff(false);
     onStateChange&&onStateChange({status:'idle'});
+    if(rid) api.post('/api/calls/'+rid+'/leave',{}).catch(()=>{});
   };
-  const toggleMute=()=>{if(!localStreamRef.current)return;localStreamRef.current.getAudioTracks().forEach(t=>{t.enabled=!t.enabled;});setMuted(m=>!m);};
-  const toggleCam=()=>{if(!localStreamRef.current)return;localStreamRef.current.getVideoTracks().forEach(t=>{t.enabled=!t.enabled;});setCamOff(c=>!c);};
 
+  const getMedia=async()=>{
+    const s=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    localStreamRef.current=s;
+    if(localVidRef.current){localVidRef.current.srcObject=s;localVidRef.current.play().catch(()=>{});}
+    return s;
+  };
+
+  const sendSignal=(roomId,toUser,type,data)=>
+    api.post('/api/calls/'+roomId+'/signal',{to_user:toUser,type,data});
+
+  const createPC=(roomId,remoteUserId)=>{
+    const pc=new RTCPeerConnection({iceServers:ICE_SERVERS});
+    pcRef.current=pc;
+    // Add local tracks
+    if(localStreamRef.current)
+      localStreamRef.current.getTracks().forEach(t=>pc.addTrack(t,localStreamRef.current));
+    // ICE candidates → send to remote
+    pc.onicecandidate=e=>{
+      if(e.candidate) sendSignal(roomId,remoteUserId,'ice',{candidate:e.candidate});
+    };
+    // Remote stream → show in video
+    pc.ontrack=e=>{
+      if(remoteVidRef.current){
+        remoteVidRef.current.srcObject=e.streams[0];
+        remoteVidRef.current.play().catch(()=>{});
+      }
+      setPhase('connected');
+      if(!timerRef.current){
+        timerRef.current=setInterval(()=>setElapsed(x=>x+1),1000);
+      }
+      onStateChange&&onStateChange({status:'in-call'});
+    };
+    pc.onconnectionstatechange=()=>{
+      if(pc.connectionState==='failed'||pc.connectionState==='disconnected'){
+        setErrMsg('Connection lost');setPhase('error');
+      }
+    };
+    return pc;
+  };
+
+  // Poll for signals and handle them
+  const startPolling=(roomId,remoteUserId)=>{
+    if(pollRef.current)clearInterval(pollRef.current);
+    pollRef.current=setInterval(async()=>{
+      try{
+        const sigs=await api.get('/api/calls/'+roomId+'/signals');
+        if(!Array.isArray(sigs))return;
+        for(const sig of sigs){
+          const d=typeof sig.data==='string'?JSON.parse(sig.data):sig.data;
+          const pc=pcRef.current;
+          if(sig.type==='offer'&&pc){
+            await pc.setRemoteDescription(new RTCSessionDescription(d));
+            const ans=await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            sendSignal(roomId,remoteUserId,'answer',ans);
+          } else if(sig.type==='answer'&&pc){
+            if(pc.signalingState==='have-local-offer')
+              await pc.setRemoteDescription(new RTCSessionDescription(d));
+          } else if(sig.type==='ice'&&pc&&d.candidate){
+            try{await pc.addIceCandidate(new RTCIceCandidate(d.candidate));}catch(e){}
+          } else if(sig.type==='hangup'){
+            hangup(roomId);
+          } else if(sig.type==='ring'&&phase==='idle'&&!callState){
+            // Incoming call notification
+            setIncomingCall({roomId:sig.room_id||roomId,callerName:d.callerName,callerId:sig.from_user||d.callerId});
+          }
+        }
+      }catch(e){}
+    },1200);
+  };
+
+  // ── Caller initiates ─────────────────────────────────────────────────────
+  const startCall=async(remoteUser)=>{
+    try{
+      setPhase('connecting');
+      const stream=await getMedia();
+      // Create a DB-backed room
+      const room=await api.post('/api/calls',{name:'Call with '+remoteUser.name});
+      if(!room||!room.room_id){setErrMsg('Could not create room');setPhase('error');return;}
+      const roomId=room.room_id;
+      roomRef.current=roomId;
+      // Notify callee via signal channel
+      await sendSignal(roomId,remoteUser.id,'ring',{callerName:cu.name,callerId:cu.id});
+      // Notify via push notification too
+      api.post('/api/meet/notify',{target_id:remoteUser.id,room_name:roomId,caller_name:cu.name}).catch(()=>{});
+      const pc=createPC(roomId,remoteUser.id);
+      // Create offer
+      const offer=await pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true});
+      await pc.setLocalDescription(offer);
+      await sendSignal(roomId,remoteUser.id,'offer',offer);
+      setCallState({roomId,remoteUser,role:'caller'});
+      setPhase('ringing');
+      startPolling(roomId,remoteUser.id);
+    }catch(e){
+      setErrMsg(e.message||'Camera/mic denied');setPhase('error');
+    }
+  };
+
+  // ── Callee answers ────────────────────────────────────────────────────────
+  const answerCall=async(incoming)=>{
+    try{
+      setIncomingCall(null);
+      setPhase('connecting');
+      const stream=await getMedia();
+      const {roomId,callerId,callerName}=incoming;
+      roomRef.current=roomId;
+      const callerUser=safe(users).find(u=>u.id===callerId)||{id:callerId,name:callerName,color:'#2563eb'};
+      const pc=createPC(roomId,callerId);
+      setCallState({roomId,remoteUser:callerUser,role:'callee'});
+      // Join the room
+      await api.post('/api/calls/'+roomId+'/join',{});
+      startPolling(roomId,callerId);
+    }catch(e){
+      setErrMsg(e.message||'Camera/mic denied');setPhase('error');
+    }
+  };
+
+  const rejectCall=()=>{
+    if(incomingCall)
+      sendSignal(incomingCall.roomId,incomingCall.callerId,'hangup',{}).catch(()=>{});
+    setIncomingCall(null);
+  };
+
+  const toggleMute=()=>{
+    if(!localStreamRef.current)return;
+    localStreamRef.current.getAudioTracks().forEach(t=>{t.enabled=!t.enabled;});
+    setMuted(m=>!m);
+  };
+  const toggleCam=()=>{
+    if(!localStreamRef.current)return;
+    localStreamRef.current.getVideoTracks().forEach(t=>{t.enabled=!t.enabled;});
+    setCamOff(c=>!c);
+  };
+
+  // Global ring poller — always runs when logged in, listens for incoming calls
+  useEffect(()=>{
+    if(!cu)return;
+    // Create a dedicated room for ring signals using the user's own presence
+    const ringPoll=setInterval(async()=>{
+      if(callState||phase!=='idle')return; // already in a call
+      try{
+        // Poll all recent call rooms for ring signals directed to us
+        const rooms=await api.get('/api/calls').catch(()=>[]);
+        if(!Array.isArray(rooms))return;
+        for(const r of rooms){
+          if(r.status!=='active')continue;
+          const sigs=await api.get('/api/calls/'+r.id+'/signals').catch(()=>[]);
+          if(!Array.isArray(sigs))continue;
+          for(const sig of sigs){
+            if(sig.type==='ring'){
+              const d=typeof sig.data==='string'?JSON.parse(sig.data):sig.data;
+              setIncomingCall({roomId:r.id,callerName:d.callerName||'Someone',callerId:d.callerId||sig.from_user});
+              return;
+            }
+          }
+        }
+      }catch(e){}
+    },2000);
+    return()=>clearInterval(ringPoll);
+  },[cu,callState,phase]);
+
+  // Expose commands
   useEffect(()=>{
     if(!cmdRef)return;
     cmdRef.current={
-      openHuddle:(user)=>{if(!user||!cu)return;setRemoteUser(user);setRoom('pf-'+Date.now());setMinimized(false);},
-      start:()=>{setRemoteUser(null);setRoom('pfp-'+Date.now());setMinimized(false);},
-      leave:hangup,show:()=>setMinimized(false),
+      openHuddle:(user)=>{if(!user||!cu)return;startCall(user);},
+      start:()=>{},
+      leave:()=>hangup(roomRef.current),
+      show:()=>setMinimized(false),
     };
-  },[cu]);
+  },[cu,users]);
 
-  useEffect(()=>{
-    if(!room||!cu)return;
-    if(remoteUser){const isCaller=cu.id<remoteUser.id;if(isCaller)startCall(remoteUser);else answerCall();}
-    else answerCall();
-    return()=>cleanup();
-  },[room]);
-
-  if(!room)return null;
-
-  const statusLabel={connecting:'Starting camera…',calling:'Calling…',ringing:'Waiting for call…',connected:fmtTime(elapsed),error:'Failed'}[status]||'…';
+  const remoteUser=callState?.remoteUser;
+  const phaseLabel={connecting:'Starting camera…',ringing:'Ringing…',connected:fmtTime(elapsed),error:'Failed'}[phase]||'…';
 
   return html`
-    <div style=${{position:'fixed',bottom:minimized?16:0,right:minimized?16:0,width:minimized?'280px':'100vw',height:minimized?'52px':'100vh',zIndex:9800,borderRadius:minimized?14:0,overflow:'hidden',boxShadow:minimized?'0 8px 40px rgba(0,0,0,.7)':'none',transition:'all .3s cubic-bezier(.4,0,.2,1)',display:'flex',flexDirection:'column',background:'#0d1117'}}>
-      <div style=${{display:'flex',alignItems:'center',gap:10,padding:'0 14px',height:52,flexShrink:0,background:'rgba(0,0,0,.7)',backdropFilter:'blur(12px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.08)',cursor:minimized?'pointer':'default'}} onClick=${minimized?()=>setMinimized(false):null}>
-        <div style=${{width:8,height:8,borderRadius:'50%',background:status==='connected'?'#22c55e':'#f59e0b',boxShadow:status==='connected'?'0 0 8px #22c55e':'0 0 8px #f59e0b',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
-        <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${remoteUser?'Meet · '+remoteUser.name:'Instant Meet'}</span>
-        <span style=${{fontSize:10,color:status==='connected'?'#22c55e':'#f59e0b',fontFamily:'monospace',fontWeight:700,background:status==='connected'?'rgba(34,197,94,.12)':'rgba(245,158,11,.12)',padding:'2px 8px',borderRadius:100,border:'1px solid '+(status==='connected'?'rgba(34,197,94,.3)':'rgba(245,158,11,.3)'),flexShrink:0}}>${statusLabel}</span>
-        <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}} style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',color:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:13}} title=${minimized?'Expand':'Minimise'}>${minimized?'⛶':'—'}</button>
-        ${!minimized?html`<button onClick=${hangup} style=${{height:30,padding:'0 14px',borderRadius:8,background:'rgba(239,68,68,.25)',border:'1px solid rgba(239,68,68,.5)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:12,flexShrink:0}}>Leave</button>`:null}
-      </div>
-      ${!minimized?html`
-        <div style=${{flex:1,position:'relative',background:'#0d1117',overflow:'hidden'}}>
-          <video ref=${remoteVidRef} autoplay playsinline style=${{width:'100%',height:'100%',objectFit:'cover',background:'#111',display:status==='connected'?'block':'none'}}></video>
-          ${status!=='connected'?html`
-            <div style=${{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16,background:'#0d1117'}}>
-              ${remoteUser?html`<div style=${{width:72,height:72,borderRadius:'50%',background:remoteUser.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:700,color:'#fff'}}>${(remoteUser.avatar||remoteUser.name||'?')[0]}</div>`:null}
-              <div style=${{fontSize:16,fontWeight:700,color:'#fff'}}>${remoteUser?remoteUser.name:'Instant Meet'}</div>
-              ${status==='error'?html`<div style=${{fontSize:13,color:'#f87171',textAlign:'center',maxWidth:300,padding:'0 24px'}}>${errorMsg||'Connection failed'}</div><button class="btn bp" style=${{marginTop:8}} onClick=${hangup}>Close</button>`
-              :html`<div style=${{display:'flex',alignItems:'center',gap:10,color:'#94a3b8',fontSize:13}}><div style=${{width:16,height:16,border:'2px solid rgba(255,255,255,.2)',borderTop:'2px solid #22c55e',borderRadius:'50%',animation:'sp .8s linear infinite'}}></div>${statusLabel}</div>`}
+    <div>
+      <!-- ── Incoming call banner ── -->
+      ${incomingCall?html`
+        <div style=${{position:'fixed',top:24,right:24,zIndex:9900,background:'#1e293b',border:'1px solid rgba(34,197,94,.4)',borderRadius:16,padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)',display:'flex',alignItems:'center',gap:14,minWidth:300,animation:'slideUp .3s ease'}}>
+          <div style=${{width:46,height:46,borderRadius:'50%',background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:700,color:'#fff',flexShrink:0,boxShadow:'0 0 0 3px rgba(34,197,94,.3)',animation:'pulse 1.5s infinite'}}>
+            📞
+          </div>
+          <div style=${{flex:1}}>
+            <div style=${{fontSize:13,fontWeight:700,color:'#fff',marginBottom:2}}>${incomingCall.callerName}</div>
+            <div style=${{fontSize:11,color:'#22c55e',fontWeight:600}}>Incoming video call…</div>
+          </div>
+          <button onClick=${()=>answerCall(incomingCall)}
+            style=${{padding:'8px 14px',borderRadius:10,background:'#22c55e',border:'none',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer',flexShrink:0}}>
+            Accept
+          </button>
+          <button onClick=${rejectCall}
+            style=${{padding:'8px 12px',borderRadius:10,background:'rgba(239,68,68,.2)',border:'1px solid rgba(239,68,68,.4)',color:'#f87171',fontWeight:700,fontSize:12,cursor:'pointer',flexShrink:0}}>
+            Decline
+          </button>
+        </div>`:null}
+
+      <!-- ── Active call window ── -->
+      ${callState?html`
+        <div style=${{position:'fixed',bottom:minimized?16:0,right:minimized?16:0,width:minimized?'280px':'100vw',height:minimized?'52px':'100vh',zIndex:9800,borderRadius:minimized?14:0,overflow:'hidden',boxShadow:minimized?'0 8px 40px rgba(0,0,0,.7)':'none',transition:'all .3s cubic-bezier(.4,0,.2,1)',display:'flex',flexDirection:'column',background:'#0d1117'}}>
+          <!-- Topbar -->
+          <div style=${{display:'flex',alignItems:'center',gap:10,padding:'0 14px',height:52,flexShrink:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(12px)',borderBottom:minimized?'none':'1px solid rgba(255,255,255,.08)',cursor:minimized?'pointer':'default'}} onClick=${minimized?()=>setMinimized(false):null}>
+            <div style=${{width:8,height:8,borderRadius:'50%',background:phase==='connected'?'#22c55e':'#f59e0b',boxShadow:phase==='connected'?'0 0 8px #22c55e':'0 0 8px #f59e0b',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" style=${{flexShrink:0}}><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.87v6.26a1 1 0 0 1-1.447.899L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
+            <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${remoteUser?'Meet · '+remoteUser.name:'Instant Meet'}</span>
+            <span style=${{fontSize:10,color:phase==='connected'?'#22c55e':'#f59e0b',fontFamily:'monospace',fontWeight:700,background:phase==='connected'?'rgba(34,197,94,.12)':'rgba(245,158,11,.12)',padding:'2px 8px',borderRadius:100,border:'1px solid '+(phase==='connected'?'rgba(34,197,94,.3)':'rgba(245,158,11,.3)'),flexShrink:0}}>${phaseLabel}</span>
+            <button onClick=${e=>{e.stopPropagation();setMinimized(m=>!m);}} style=${{width:28,height:28,borderRadius:8,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.15)',cursor:'pointer',color:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:13}}>${minimized?'⛶':'—'}</button>
+            ${!minimized?html`<button onClick=${()=>hangup(callState.roomId)} style=${{height:30,padding:'0 14px',borderRadius:8,background:'rgba(239,68,68,.25)',border:'1px solid rgba(239,68,68,.5)',color:'#f87171',cursor:'pointer',fontWeight:700,fontSize:12,flexShrink:0}}>Leave</button>`:null}
+          </div>
+          ${!minimized?html`
+            <div style=${{flex:1,position:'relative',background:'#0d1117',overflow:'hidden'}}>
+              <video ref=${remoteVidRef} autoplay playsinline style=${{width:'100%',height:'100%',objectFit:'cover',display:phase==='connected'?'block':'none'}}></video>
+              ${phase!=='connected'?html`
+                <div style=${{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16}}>
+                  ${remoteUser?html`<div style=${{width:80,height:80,borderRadius:'50%',background:remoteUser.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,fontWeight:700,color:'#fff',boxShadow:'0 0 0 4px rgba(255,255,255,.1)'}}>${(remoteUser.avatar||remoteUser.name||'?')[0]}</div>`:null}
+                  <div style=${{fontSize:18,fontWeight:700,color:'#fff'}}>${remoteUser?remoteUser.name:'Connecting…'}</div>
+                  ${phase==='error'
+                    ?html`<div style=${{fontSize:13,color:'#f87171',textAlign:'center',maxWidth:300}}>${errMsg}</div><button class="btn bp" style=${{marginTop:12}} onClick=${()=>hangup(callState.roomId)}>Close</button>`
+                    :html`<div style=${{display:'flex',alignItems:'center',gap:10,color:'#94a3b8',fontSize:13}}><div style=${{width:16,height:16,border:'2px solid rgba(255,255,255,.2)',borderTop:'2px solid #22c55e',borderRadius:'50%',animation:'sp .8s linear infinite'}}></div>${phaseLabel}</div>`}
+                </div>`:null}
+              <!-- PiP local video -->
+              <div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,overflow:'hidden',border:'2px solid rgba(255,255,255,.15)',boxShadow:'0 4px 20px rgba(0,0,0,.6)',background:'#1a1a2e',display:camOff?'none':'block'}}>
+                <video ref=${localVidRef} autoplay muted playsinline style=${{width:'100%',height:'100%',objectFit:'cover',transform:'scaleX(-1)'}}></video>
+              </div>
+              ${camOff?html`<div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,border:'2px solid rgba(255,255,255,.15)',background:'#1a1a2e',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:6}}><div style=${{fontSize:22}}>📷</div><div style=${{fontSize:10,color:'#94a3b8'}}>Camera off</div></div>`:null}
+              <!-- Controls -->
+              <div style=${{position:'absolute',bottom:0,left:0,right:0,height:72,background:'linear-gradient(to top,rgba(0,0,0,.9),transparent)',display:'flex',alignItems:'center',justifyContent:'center',gap:16,paddingBottom:10}}>
+                <button onClick=${toggleMute} style=${{width:48,height:48,borderRadius:'50%',border:'none',cursor:'pointer',background:muted?'rgba(239,68,68,.35)':'rgba(255,255,255,.14)',color:muted?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>${muted?'🔇':'🎙️'}</button>
+                <button onClick=${toggleCam} style=${{width:48,height:48,borderRadius:'50%',border:'none',cursor:'pointer',background:camOff?'rgba(239,68,68,.35)':'rgba(255,255,255,.14)',color:camOff?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>${camOff?'📷':'📹'}</button>
+                <button onClick=${()=>hangup(callState.roomId)} style=${{width:56,height:56,borderRadius:'50%',border:'none',cursor:'pointer',background:'#ef4444',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,boxShadow:'0 4px 20px rgba(239,68,68,.6)'}}>📵</button>
+              </div>
             </div>`:null}
-          <div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,overflow:'hidden',border:'2px solid rgba(255,255,255,.15)',boxShadow:'0 4px 20px rgba(0,0,0,.6)',background:'#1a1a2e',display:camOff?'none':'block'}}>
-            <video ref=${localVidRef} autoplay muted playsinline style=${{width:'100%',height:'100%',objectFit:'cover',transform:'scaleX(-1)'}}></video>
-          </div>
-          ${camOff?html`<div style=${{position:'absolute',bottom:80,right:16,width:140,height:90,borderRadius:10,border:'2px solid rgba(255,255,255,.15)',background:'#1a1a2e',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:6}}><div style=${{fontSize:22}}>📷</div><div style=${{fontSize:10,color:'#94a3b8'}}>Camera off</div></div>`:null}
-          <div style=${{position:'absolute',bottom:0,left:0,right:0,height:70,background:'linear-gradient(to top,rgba(0,0,0,.85),transparent)',display:'flex',alignItems:'center',justifyContent:'center',gap:14,paddingBottom:8}}>
-            <button onClick=${toggleMute} title=${muted?'Unmute':'Mute'} style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',background:muted?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',color:muted?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${muted?'🔇':'🎙️'}</button>
-            <button onClick=${toggleCam} title=${camOff?'Camera on':'Camera off'} style=${{width:46,height:46,borderRadius:'50%',border:'none',cursor:'pointer',background:camOff?'rgba(239,68,68,.3)':'rgba(255,255,255,.12)',color:camOff?'#f87171':'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>${camOff?'📷':'📹'}</button>
-            <button onClick=${hangup} title="Leave call" style=${{width:52,height:52,borderRadius:'50%',border:'none',cursor:'pointer',background:'#ef4444',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 16px rgba(239,68,68,.5)'}}>📵</button>
-          </div>
         </div>`:null}
     </div>`;
 }
-
-
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   const [view,setView]=useState('dashboard');const [col,setCol]=useState(()=>{try{return localStorage.getItem('pf_col')==='1';}catch{return false;}});
