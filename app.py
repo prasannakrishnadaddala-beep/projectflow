@@ -804,8 +804,9 @@ def register():
 @login_required
 def update_presence():
     with get_db() as db:
+        # Store without Z suffix so string comparisons work consistently
         db.execute("UPDATE users SET last_active=? WHERE id=? AND workspace_id=?",
-                   (ts(), session["user_id"], wid()))
+                   (datetime.utcnow().isoformat(), session["user_id"], wid()))
         return jsonify({"ok": True})
 
 @app.route("/api/presence")
@@ -813,11 +814,39 @@ def update_presence():
 def get_presence():
     """Returns list of user IDs active in last 2 minutes."""
     with get_db() as db:
-        cutoff = (datetime.utcnow() - timedelta(minutes=2)).isoformat()
+        # Use 3-minute window; strip Z suffix so string comparison is consistent
+        cutoff = (datetime.utcnow() - timedelta(minutes=3)).isoformat()
         rows = db.execute(
-            "SELECT id FROM users WHERE workspace_id=? AND last_active>?",
+            "SELECT id FROM users WHERE workspace_id=? AND REPLACE(last_active,'Z','')>?",
             (wid(), cutoff)).fetchall()
         return jsonify([r["id"] for r in rows])
+
+@app.route("/api/meet/notify", methods=["POST"])
+@login_required
+def meet_notify():
+    """Send a Google Meet call notification to a specific user."""
+    d = request.json or {}
+    target_id = d.get("target_id")
+    meet_url = d.get("meet_url", "https://meet.new")
+    if not target_id:
+        return jsonify({"error": "target_id required"}), 400
+    with get_db() as db:
+        caller = db.execute("SELECT name FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        cname = caller["name"] if caller else "Someone"
+        nid = f"n{int(datetime.now().timestamp()*1000)}"
+        try:
+            db.execute(
+                "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
+                (nid, wid(), "call",
+                 f"📹 {cname} is calling you on Google Meet — click to join",
+                 target_id, 0, ts(), session["user_id"]))
+        except:
+            db.execute(
+                "INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                (nid, wid(), "call",
+                 f"📹 {cname} is calling you on Google Meet — click to join",
+                 target_id, 0, ts()))
+        return jsonify({"ok": True, "caller": cname})
 
 @app.route("/api/auth/me")
 def me():
@@ -6601,8 +6630,17 @@ function DirectMessages({cu,users,dmUnread,onDmRead,onStartHuddle,dmEnabled=true
       <div style=${{padding:'11px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:11,flexShrink:0}}>
         ${toUser?html`<div style=${{position:'relative'}}><${Av} u=${toUser} size=${36}/><div style=${{position:'absolute',bottom:0,right:0,width:9,height:9,borderRadius:'50%',background:onlineUsers.has(toUser.id)?'var(--gn)':'var(--tx3)',border:'2px solid var(--sf)',opacity:onlineUsers.has(toUser.id)?1:.4}}></div></div><div><div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${toUser.name}</div><div class="tx3-11">${toUser.role}</div></div>
           <button title=${'Start Google Meet with '+toUser.name+' (opens in new tab)'}
-            onClick=${()=>window.open('https://meet.new','_blank','noopener,noreferrer')}
-            style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid var(--bd)',background:'var(--sf2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx2)',transition:'all .15s',flexShrink:0}}>
+            onClick=${async ()=>{
+              // 1. Open Google Meet immediately for the caller
+              window.open('https://meet.new','_blank','noopener,noreferrer');
+              // 2. Show confirmation toast to caller
+              window._pfToast&&window._pfToast('ok','📹 Google Meet started','Share the link from your browser with '+toUser.name);
+              // 3. Send notification to the recipient
+              try{
+                await api.post('/api/meet/notify',{target_id:toId,meet_url:'https://meet.new'});
+              }catch(e){}
+            }}
+            style=${{marginLeft:'auto',width:34,height:34,borderRadius:10,border:'1px solid rgba(26,115,232,.4)',background:'rgba(26,115,232,.08)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#1a73e8',transition:'all .15s',flexShrink:0}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>
             </svg>
@@ -8358,6 +8396,8 @@ function App(){
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   // Expose search opener for topbar button
   useEffect(()=>{window._pfOpenSearch=()=>{setShowGlobalSearch(v=>!v);setGlobalSearch('');setSearchSubtasks([]);};},[]);
+  // Expose DM target setter for notification click handlers
+  useEffect(()=>{window._pfSetDmTarget=(uid)=>{setDmTargetUser(uid);};},[]);
   // Fetch subtask search results
   useEffect(()=>{
     const q=(globalSearch||'').trim();
@@ -8448,7 +8488,7 @@ function App(){
   const prevNotifIdsRef=useRef(null); // null = not yet seeded
   const NTITLES={
     task_assigned:'✅ Task assigned to you', status_change:'🔄 Task status changed', comment:'💬 New comment on task', deadline:'⏰ Deadline approaching', dm:'📨 New direct message', project_added:'📁 Added to a project', reminder:'⏰ Reminder', call:'📞 Huddle call', message:'#️⃣ New channel message', };
-  const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dashboard',message:'messages'};
+  const NNAV={task_assigned:'tasks',status_change:'tasks',comment:'tasks',deadline:'tasks',dm:'dm',project_added:'projects',reminder:'reminders',call:'dm',message:'messages'};
   useEffect(()=>{
     if(!cu)return;
 
@@ -8462,7 +8502,20 @@ function App(){
         }
         const brandNew=d.filter(n=>!prevNotifIdsRef.current.has(n.id));
         brandNew.forEach(n=>{
-          if(n.type==='dm'||n.type==='call')return;
+          if(n.type==='dm')return; // DMs handled by separate poll
+          if(n.type==='call'){
+            // Show a prominent call notification
+            const callerName=n.content.replace('📹 ','').split(' is calling')[0]||'Someone';
+            addToast('call','📹 Incoming Google Meet',n.content||'');
+            showBrowserNotif('📹 Google Meet Call',n.content||'',()=>{
+              if(n.sender_id||n.sender){
+                window._pfSetDmTarget&&window._pfSetDmTarget(n.sender_id||n.sender);
+              }
+              setView('dm');
+            },{tag:'call-'+n.id,requireInteraction:true});
+            playSound('call');
+            return;
+          }
           const title=NTITLES[n.type]||'ProjectFlowPro';
           const nav=NNAV[n.type]||'notifs';
           addToast(n.type,title,n.content||'');
