@@ -1287,6 +1287,23 @@ def update_task(tid):
         return jsonify(dict(db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()))
 
 
+@app.route("/api/subtasks/search")
+@login_required
+def search_subtasks():
+    q = request.args.get("q","").strip().lower()
+    if not q or len(q) < 2:
+        return jsonify([])
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT s.*, t.title as task_title, t.project
+            FROM subtasks s
+            JOIN tasks t ON s.task_id = t.id
+            WHERE s.workspace_id = ?
+            AND (LOWER(s.id) LIKE ? OR LOWER(s.title) LIKE ?)
+            LIMIT 10
+        """, (wid(), f"%{q}%", f"%{q}%")).fetchall()
+        return jsonify([dict(r) for r in rows])
+
 @app.route("/api/tasks/<tid>/subtasks", methods=["GET"])
 @login_required
 def get_subtasks(tid):
@@ -6176,6 +6193,14 @@ function MessagesView({projects,users,cu,tasks}){
       if(Array.isArray(d)&&d.length){
         allProjectsLoadedRef.current=true;
         setAllProjects(d);
+        // If stableOrder not yet set, use creation order (alphabetical) as stable base
+        if(!orderSetRef.current){
+          orderSetRef.current=true;
+          // Sort by name initially — overwritten when first message timestamps arrive
+          const initial={};
+          d.forEach(p=>{initial[p.id]=p.created||'';});
+          setStableOrder(initial);
+        }
       }
     });
   },[]);
@@ -8292,6 +8317,9 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         if(!audioEls.current[remoteUid]){
           const el=document.createElement('audio');
           el.autoplay=true;el.playsInline=true;
+          el.muted=false;
+          // Low-latency settings
+          try{el.latencyHint='interactive';}catch(ex){}
           el.style.cssText='position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
           document.body.appendChild(el);
           audioEls.current[remoteUid]=el;
@@ -8327,8 +8355,12 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
         } else {
           const tryAttachCam=(attempts)=>{
             const el=remoteVideoRefs.current[remoteUid];
-            if(el){el.srcObject=stream;el.play().catch(()=>{});}
-            else if(attempts<10){setTimeout(()=>tryAttachCam(attempts+1),100);}
+            if(el){
+              // Always force reattach — clear then set to handle re-enable
+              el.srcObject=null;
+              requestAnimationFrame(()=>{el.srcObject=stream;el.play().catch(()=>{});});
+            }
+            else if(attempts<15){setTimeout(()=>tryAttachCam(attempts+1),100);}
           };
           requestAnimationFrame(()=>tryAttachCam(0));
         }
@@ -8405,7 +8437,11 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
                   }
                 }
               } else if(el&&el.srcObject){
-                return; // already attached
+                // Check if the existing track is still live
+                const tracks=el.srcObject.getVideoTracks();
+                if(tracks.length>0&&tracks[0].readyState==='live')return; // truly live
+                // Track is dead — clear and retry
+                el.srcObject=null;
               }
               if(_ssAttempts<25){setTimeout(_ssRetry,200);}
             };
@@ -8469,6 +8505,7 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
     const r=await api.post('/api/calls',{name:roomLabel});
     if(!r||r.error){alert('Could not start huddle.');localStream.current.getTracks().forEach(t=>t.stop());localStream.current=null;return;}
     setRoomId(r.room_id);setRoomName(r.name||roomLabel);
+    setMeetUrl('https://meet.google.com/new');
     setParticipants([cu.id]);setPhase('in-call');setIncomingCall(null);
     setPopupPos(centerPos(780,540));
     if(targetUser){
@@ -9006,11 +9043,10 @@ function HuddleCall({cu,users,onStateChange,cmdRef}){
               participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
                 api.post('/api/calls/'+room+'/signal',{to_user:uid,type:'hand',data:{raised:nv,from:cu.name||'You'}}).catch(()=>{});
               });
-              // When raising: send a 'hand-hide' signal after 5s so remote views auto-hide
-              // But do NOT lower the raiser's own button — they stay visually raised
+              // Auto-lower for EVERYONE (including raiser) after 5s
               if(nv){
                 setTimeout(()=>{
-                  // Only hide on remote viewers — raiser keeps their hand raised
+                  setHandRaised(false); // lower raiser's own hand too
                   const r=roomIdRef.current;if(!r)return;
                   participantsRef.current.filter(uid=>uid!==cu.id).forEach(uid=>{
                     api.post('/api/calls/'+r+'/signal',{to_user:uid,type:'hand',data:{raised:false,from:cu.name}}).catch(()=>{});
@@ -9089,7 +9125,8 @@ function App(){
   },[cu]);
   const [dmUnread,setDmUnread]=useState([]);
   const [globalSearch,setGlobalSearch]=useState('');
-  const [showGlobalSearch,setShowGlobalSearch]=useState(false);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
+  const [showGlobalSearch,setShowGlobalSearch]=useState(false);
+  const [searchSubtasks,setSearchSubtasks]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
   const [onlineUsers,setOnlineUsers]=useState(new Set());
 
   // Presence heartbeat — ping every 30s, fetch online users every 15s
@@ -9170,7 +9207,18 @@ function App(){
 
   useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   // Expose search opener for topbar button
-  useEffect(()=>{window._pfOpenSearch=()=>{setShowGlobalSearch(v=>!v);setGlobalSearch('');};},[]);
+  useEffect(()=>{window._pfOpenSearch=()=>{setShowGlobalSearch(v=>!v);setGlobalSearch('');setSearchSubtasks([]);};},[]);
+  // Fetch subtask search results
+  useEffect(()=>{
+    const q=(globalSearch||'').trim();
+    if(!q||q.length<2){setSearchSubtasks([]);return;}
+    const t=setTimeout(()=>{
+      api.get('/api/subtasks/search?q='+encodeURIComponent(q))
+        .then(d=>{if(Array.isArray(d))setSearchSubtasks(d);})
+        .catch(()=>{});
+    },300); // debounce
+    return()=>clearTimeout(t);
+  },[globalSearch]);
   // Global search shortcut: Cmd+K / Ctrl+K
   useEffect(()=>{
     const h=(e)=>{
@@ -9513,17 +9561,29 @@ function App(){
           <div style=${{maxHeight:400,overflowY:'auto'}}>
             ${(()=>{
               const q=(globalSearch||'').trim().toLowerCase();
-              if(!q||q.length<2)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>Type to search tasks, tickets by ID or name</div>`;
+              if(!q||q.length<1)return html`
+  <div style=${{padding:'16px 18px'}}> 
+    <div style=${{fontSize:12,color:'var(--tx2)',fontWeight:600,marginBottom:8}}>Search by:</div>
+    <div style=${{display:'flex',gap:8,flexWrap:'wrap'}}>
+      ${[['Task ID','T-015-305','#1d4ed8'],['Bug','T-xxx bug','#b91c1c'],['Ticket ID','TK-xxx','#c2410c'],['Subtask','ST-xxx','#475569'],['Project name','SecOps','#15803d']].map(([label,ex,color])=>html`
+        <div style=${{padding:'4px 10px',borderRadius:7,background:color+'11',border:'1px solid '+color+'33',fontSize:11,color,cursor:'pointer',fontWeight:600}}
+          onClick=${()=>setGlobalSearch(ex)}>
+          ${label}
+        </div>`)}
+    </div>
+  </div>
+`;
               const results=[];
               // Search tasks by ID or title
-              safe(scopedTasks).forEach(t=>{
+              safe(data.tasks).forEach(t=>{
+                if(!t||!t.id||!t.title)return;
                 if(t.id.toLowerCase().includes(q)||t.title.toLowerCase().includes(q)){
                   const proj=safe(scopedProjects).find(p=>p.id===t.project);
                   results.push({type:'task',id:t.id,title:t.title,sub:proj?proj.name:'',color:TYPE_COLORS[t.task_type||'task']||'#1d4ed8',bg:TYPE_BG[t.task_type||'task']||'rgba(29,78,216,0.1)',item:t});
                 }
               });
               // Search tickets by ID, title, or description
-              safe(data.tickets).forEach(t=>{
+              safe(data.tickets||[]).forEach(t=>{
                 const tStr=(t.id+' '+(t.title||'')+' '+(t.description||'')).toLowerCase();
                 if(tStr.includes(q)){
                   const tColors={bug:'#b91c1c',feature:'#1d4ed8',improvement:'#0e7490',task:'#15803d',question:'#6d28d9'};
@@ -9534,19 +9594,25 @@ function App(){
               // Search subtasks by title
               // (subtasks fetched lazily — skip for global search)
               // Search projects
-              safe(scopedProjects).forEach(p=>{
-                if(p.id.toLowerCase().includes(q)||p.name.toLowerCase().includes(q)){
-                  results.push({type:'project',id:p.id,title:p.name,sub:'Project',color:p.color||'var(--ac)',bg:'rgba(29,78,216,0.06)',item:p});
+              safe(data.projects).forEach(p=>{
+                if(!p||!p.id||!p.name)return;
+                if(p.id.toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q)){
+                  results.push({type:'project',id:p.id,title:p.name,sub:'Project',color:p.color||'#1d4ed8',bg:'rgba(29,78,216,0.06)',item:p,nav:'projects'});
                 }
               });
-              if(!results.length)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>No results for "${globalSearch}"</div>`;
-              return results.slice(0,12).map((r,i)=>html`
+              // Subtask search results (async fetched)
+              safe(searchSubtasks).forEach(s=>{
+                if(!s||!s.id)return;
+                results.push({type:'subtask',id:s.id.slice(0,12),title:s.title||'',sub:'↳ '+(s.task_title||'Task'),color:'#475569',bg:'rgba(71,85,105,0.10)',item:s,nav:'tasks'});
+              });
+              if(!results.length)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>No results for "${q}"</div>`;
+              return results.slice(0,15).map((r,i)=>html`
                 <div key=${i}
                   onClick=${()=>{
                     setShowGlobalSearch(false);
-                    if(r.type==='task'){setView('tasks');}
+                    if(r.nav==='projects'){setView('projects');setInitialProjectId(r.item.id);}
                     else if(r.type==='ticket'){setView('tickets');}
-                    else if(r.type==='project'){setView('projects');setInitialProjectId(r.item.id);}
+                    else{setView('tasks');}
                   }}
                   style=${{display:'flex',alignItems:'center',gap:12,padding:'10px 18px',cursor:'pointer',borderBottom:'1px solid var(--bd)',transition:'background .1s'}}
                   onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
