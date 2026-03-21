@@ -2640,7 +2640,7 @@ def contact_form():
           <p style="color:#64748b;font-size:13px;margin:0;">In the meantime, you can <a href="https://www.vewit.in" style="color:#2563eb;">explore VEWIT</a> or reply to this email if you have anything to add.</p>
         </div>
         <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">© 2025 VEWIT · <a href="https://www.vewit.in" style="color:#2563eb;">www.vewit.in</a></p>
+          <p style="margin:0;font-size:12px;color:#94a3b8;">© 2026 VEWIT · <a href="https://www.vewit.in" style="color:#2563eb;">www.vewit.in</a></p>
         </div>
       </div>
     </body>
@@ -3802,7 +3802,7 @@ async function handleContactForm(e){
       <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-copy">© 2025 VEWIT — AI-Powered Team Collaboration · <a href="/about" style="color:inherit;opacity:.7">About</a></div>
+      <div class="footer-copy">© 2026 VEWIT — AI-Powered Team Collaboration</div>
       <div class="footer-badges"><div class="fb">v4.0</div><div class="fb">PostgreSQL</div><div class="fb">AI-Powered</div><div class="fb">bcrypt</div></div>
     </div>
   </div>
