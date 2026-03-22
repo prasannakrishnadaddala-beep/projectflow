@@ -1102,22 +1102,31 @@ def _totp_qr_base64(secret, email, issuer="VEWIT"):
 @app.route("/api/auth/totp/setup", methods=["POST"])
 @login_required
 def totp_setup():
-    """Begin TOTP setup: generate a secret and return QR code for the current user."""
+    """Begin TOTP setup: generate a secret and return otpauth URL + optional QR."""
     with get_db() as db:
         u = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
         if not u:
             return jsonify({"error": "User not found"}), 404
-        # Generate a fresh secret (overwrite unverified ones, keep verified)
         if u.get("totp_verified"):
             return jsonify({"error": "TOTP already configured. Reset it first."}), 400
         secret = _totp_generate_secret()
         db.execute("UPDATE users SET totp_secret=?, totp_verified=0 WHERE id=?", (secret, u["id"]))
-        qr = _totp_qr_base64(secret, u["email"])
         otpauth = _totp_qr_url(secret, u["email"])
+        # Try to generate server-side QR (optional — client will render its own too)
+        qr = None
+        try:
+            import qrcode as _qrc, io as _io
+            _qr = _qrc.QRCode(error_correction=_qrc.constants.ERROR_CORRECT_M, box_size=8, border=4)
+            _qr.add_data(otpauth); _qr.make(fit=True)
+            _img = _qr.make_image(fill_color="black", back_color="white")
+            _buf = _io.BytesIO(); _img.save(_buf, 'PNG')
+            qr = "data:image/png;base64," + base64.b64encode(_buf.getvalue()).decode()
+        except Exception:
+            pass  # Client-side QRCode.js will handle it
         return jsonify({
             "secret": secret,
             "otpauth": otpauth,
-            "qr_image": qr,
+            "qr_image": qr,   # None if qrcode lib not installed — client renders instead
             "email": u["email"]
         })
 
@@ -4588,7 +4597,7 @@ window._pfPushUnsubscribe = async function(){
 <script>
 (function(){
   var libs=[
-    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js', 'https://unpkg.com/htm@3.1.1/dist/htm.js', ];
+    'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.7/Recharts.js', 'https://unpkg.com/htm@3.1.1/dist/htm.js', 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js', ];
   function loadNext(i){
     if(i>=libs.length)return;
     var s=document.createElement('script');
@@ -5608,21 +5617,61 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-/* ─── PersonalTwoFAToggle — shown in profile panel for all users ─────────── */
+/* ─── QRCodeDisplay — client-side QR via QRCode.js CDN ─────────────────────── */
+function QRCodeDisplay({otpauth,size}){
+  const ref=useRef(null);
+  const sz=size||200;
+  useEffect(()=>{
+    if(!ref.current||!otpauth)return;
+    ref.current.innerHTML='';
+    const render=()=>{
+      if(window.QRCode){
+        try{
+          new window.QRCode(ref.current,{
+            text:otpauth,width:sz,height:sz,
+            colorDark:'#000000',colorLight:'#ffffff',
+            correctLevel:window.QRCode.CorrectLevel.M
+          });
+          return;
+        }catch(e){}
+      }
+      // Fallback: QR Server API (no lib needed)
+      const img=document.createElement('img');
+      img.src='https://api.qrserver.com/v1/create-qr-code/?size='+sz+'x'+sz+'&data='+encodeURIComponent(otpauth)+'&ecc=M&margin=8';
+      img.style.cssText='width:'+sz+'px;height:'+sz+'px;display:block;image-rendering:pixelated;border-radius:4px';
+      img.alt='QR Code';
+      ref.current.appendChild(img);
+    };
+    if(window.QRCode) render();
+    else {
+      // Wait briefly for QRCode.js to load
+      let tries=0;
+      const t=setInterval(()=>{
+        if(window.QRCode||tries>20){clearInterval(t);render();}
+        tries++;
+      },150);
+    }
+  },[otpauth,sz]);
+  return html`<div ref=${ref} style=${{width:sz+'px',height:sz+'px',display:'inline-flex',alignItems:'center',justifyContent:'center'}}></div>`;
+}
+
+/* ─── PersonalTwoFAToggle — profile panel ─────────────────────────────────── */
 function PersonalTwoFAToggle({cu,setCu}){
-  const [configured,setConfigured]=useState(()=>!!(cu&&cu.totp_configured));
+  const [configured,setConfigured]=useState(()=>!!(cu&&(cu.totp_configured||cu.totp_verified)));
   const [showSetup,setShowSetup]=useState(false);
   const [totpData,setTotpData]=useState(null);
   const [verifyToken,setVerifyToken]=useState('');
   const [verifying,setVerifying]=useState(false);
   const [resetting,setResetting]=useState(false);
   const [msg,setMsg]=useState('');
+  const inpRef=useRef(null);
 
   const startSetup=async()=>{
     setMsg('');
     const r=await api.post('/api/auth/totp/setup',{});
     if(r.error){setMsg(r.error);return;}
     setTotpData(r);setShowSetup(true);setVerifyToken('');
+    setTimeout(()=>{if(inpRef.current)inpRef.current.focus();},400);
   };
 
   const confirmSetup=async()=>{
@@ -5651,76 +5700,53 @@ function PersonalTwoFAToggle({cu,setCu}){
 
   return html`
     <div>
-      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:msg||showSetup?10:0}}>
+      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:(msg||showSetup)?8:0}}>
         <div style=${{flex:1}}>
           <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>
             🔐 Authenticator App
             ${configured?html`<span style=${{fontSize:9,padding:'2px 7px',borderRadius:100,background:'rgba(74,222,128,0.15)',color:'#4ade80',fontWeight:700}}>ACTIVE</span>`:null}
           </div>
           <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>
-            ${configured?'Google Authenticator protects your account':'Not set up — add extra security'}
+            ${configured?'Protects your login with 2FA':'Not set up — add login security'}
           </div>
         </div>
         ${!configured?html`
-          <button class="btn bp" style=${{padding:'5px 12px',fontSize:10,flexShrink:0,borderRadius:8}}
-            onClick=${startSetup}>
+          <button class="btn bp" style=${{padding:'5px 12px',fontSize:10,flexShrink:0,borderRadius:8}} onClick=${startSetup}>
             📱 Setup
           </button>`:html`
-          <button class="btn brd" style=${{padding:'5px 10px',fontSize:10,flexShrink:0,borderRadius:8}}
-            onClick=${resetTotp} disabled=${resetting}>
+          <button class="btn brd" style=${{padding:'5px 10px',fontSize:10,flexShrink:0,borderRadius:8}} onClick=${resetTotp} disabled=${resetting}>
             ${resetting?'…':'Remove'}
           </button>`}
       </div>
 
-      ${msg?html`<div style=${{fontSize:10,color:msg.startsWith('✓')?'#4ade80':'var(--rd)',fontWeight:600,padding:'4px 0'}}>${msg}</div>`:null}
+      ${msg?html`<div style=${{fontSize:10,color:msg.startsWith('✓')?'#4ade80':'#f87171',fontWeight:600,padding:'3px 0'}}>${msg}</div>`:null}
 
       ${showSetup&&totpData?html`
         <div style=${{marginTop:10,padding:14,background:'var(--sf2)',borderRadius:12,border:'1px solid var(--bd)'}}>
-
-          <!-- QR code — shown big and centered -->
           <div style=${{textAlign:'center',marginBottom:12}}>
-            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-              <span style=${{fontSize:14}}>📱</span> Scan with Google Authenticator
+            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',marginBottom:8}}>📱 Scan with Google Authenticator</div>
+            <div style=${{display:'inline-block',background:'white',padding:8,borderRadius:10,border:'2px solid var(--bd)',boxShadow:'0 4px 16px rgba(0,0,0,0.15)'}}>
+              <${QRCodeDisplay} otpauth=${totpData.otpauth} size=${180}/>
             </div>
-            ${totpData.qr_image?html`
-              <div style=${{display:'inline-block',background:'white',padding:10,borderRadius:10,border:'2px solid var(--bd)',boxShadow:'0 4px 16px rgba(0,0,0,0.15)'}}>
-                <img src=${totpData.qr_image}
-                  style=${{width:180,height:180,display:'block',imageRendering:'pixelated'}}
-                  alt="Google Authenticator QR Code"
-                  onError=${e=>{e.target.style.display='none';e.target.nextSibling.style.display='block';}}
-                />
-                <div style=${{display:'none',width:180,height:180,background:'#f8fafc',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#64748b',textAlign:'center',padding:10}}>
-                  QR failed to load.<br/>Use manual key below.
-                </div>
-              </div>`:html`
-              <div style=${{width:180,height:180,background:'#f1f5f9',borderRadius:10,border:'2px dashed #cbd5e1',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#64748b',textAlign:'center',padding:12}}>
-                QR not available.<br/>Use manual key below.
-              </div>`}
-            <div style=${{fontSize:9,color:'var(--tx3)',marginTop:6}}>Open Google Authenticator → tap + → Scan QR</div>
+            <div style=${{fontSize:9,color:'var(--tx3)',marginTop:5}}>Tap + in Google Authenticator → Scan QR code</div>
           </div>
 
-          <!-- Manual entry key -->
           <div style=${{marginBottom:10}}>
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.6,marginBottom:4}}>Manual Key (if you can't scan)</div>
-            <div style=${{fontFamily:'monospace',fontSize:11,background:'var(--bg)',padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',wordBreak:'break-all',color:'var(--ac)',marginBottom:4,userSelect:'all',letterSpacing:3,textAlign:'center',fontWeight:700}}>
-              ${totpData.secret}
-            </div>
-            <div style=${{fontSize:9,color:'var(--tx3)',textAlign:'center'}}>Tap to select → copy → paste in app</div>
+            <div style=${{fontSize:9,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.6,marginBottom:4}}>Or enter key manually:</div>
+            <div style=${{fontFamily:'monospace',fontSize:11,background:'var(--bg)',padding:'7px 10px',borderRadius:8,border:'1px solid var(--bd)',color:'var(--ac)',textAlign:'center',fontWeight:700,letterSpacing:3,userSelect:'all',wordBreak:'break-all'}}>${totpData.secret}</div>
           </div>
 
-          <!-- Verify code -->
-          <div style=${{fontSize:10,fontWeight:600,color:'var(--tx2)',marginBottom:6}}>After scanning, enter the 6-digit code:</div>
-          <input class="inp" type="text" inputMode="numeric" pattern="[0-9]*" autoFocus
+          <div style=${{fontSize:10,fontWeight:600,color:'var(--tx2)',marginBottom:6}}>Enter the 6-digit code from your app:</div>
+          <input class="inp" ref=${inpRef} type="text" inputMode="numeric" pattern="[0-9]*"
             value=${verifyToken}
             onInput=${e=>setVerifyToken(e.target.value.replace(/\D/g,'').slice(0,6))}
             onKeyDown=${e=>e.key==='Enter'&&confirmSetup()}
-            placeholder="0  0  0  0  0  0"
-            style=${{textAlign:'center',fontSize:20,fontWeight:700,fontFamily:'monospace',letterSpacing:8,marginBottom:8,height:48}}/>
-          ${msg&&!msg.startsWith('✓')?html`<div style=${{fontSize:10,color:'var(--rd)',marginBottom:6,textAlign:'center'}}>${msg}</div>`:null}
+            placeholder="000000"
+            style=${{textAlign:'center',fontSize:24,fontWeight:700,fontFamily:'monospace',letterSpacing:10,marginBottom:8,height:52}}/>
+          ${msg&&!msg.startsWith('✓')?html`<div style=${{fontSize:10,color:'#f87171',marginBottom:6,textAlign:'center'}}>${msg}</div>`:null}
           <div style=${{display:'flex',gap:7}}>
             <button class="btn bg" style=${{flex:1,justifyContent:'center',fontSize:11}} onClick=${()=>{setShowSetup(false);setTotpData(null);setMsg('');}}>Cancel</button>
-            <button class="btn bp" style=${{flex:1,justifyContent:'center',fontSize:11}}
-              onClick=${confirmSetup} disabled=${verifying||verifyToken.replace(/\s/g,'').length!==6}>
+            <button class="btn bp" style=${{flex:1,justifyContent:'center',fontSize:11}} onClick=${confirmSetup} disabled=${verifying||verifyToken.replace(/\s/g,'').length!==6}>
               ${verifying?html`<span class="spin"></span>`:'✓ Confirm & Enable'}
             </button>
           </div>
@@ -8539,15 +8565,9 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
 
               <div style=${{display:'grid',gridTemplateColumns:'auto 1fr',gap:20,marginBottom:20,alignItems:'start'}}>
                 <div style=${{textAlign:'center'}}>
-                  ${totpData.qr_image?html`
-                    <div style=${{background:'white',padding:10,borderRadius:10,border:'1px solid var(--bd)',display:'inline-block',boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
-                      <img src=${totpData.qr_image}
-                        style=${{width:160,height:160,display:'block',imageRendering:'pixelated'}}
-                        alt="QR Code"/>
-                    </div>`:html`
-                    <div style=${{width:160,height:160,background:'var(--sf2)',borderRadius:10,border:'2px dashed var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--tx3)',textAlign:'center',padding:12}}>
-                      QR unavailable.<br/>Use manual key →
-                    </div>`}
+                  <div style=${{background:'white',padding:10,borderRadius:10,border:'1px solid var(--bd)',display:'inline-block',boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
+                    <${QRCodeDisplay} otpauth=${totpData.otpauth} size=${160}/>
+                  </div>
                   <div style=${{fontSize:9,color:'var(--tx3)',marginTop:6}}>Scan with Google Authenticator</div>
                 </div>
                 <div>
