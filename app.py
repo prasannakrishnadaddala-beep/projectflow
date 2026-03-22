@@ -8253,10 +8253,10 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
         ${stats.map((s,i)=>html`
           <div key=${i} onClick=${()=>onNav(s.nav)}
             style=${{background:'var(--sf)',borderRadius:14,padding:'12px 14px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .16s',border:'1px solid var(--bd2)'}}
-            onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color;e.currentTarget.style.transform='translateY(-2px)';}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color||'var(--ac)';e.currentTarget.style.transform='translateY(-2px)';}}
             onMouseLeave=${e=>{e.currentTarget.style.borderColor='';e.currentTarget.style.transform='';}}>
-            <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:s.color,borderRadius:'16px 16px 0 0'}}></div>
-            <div style=${{width:26,height:26,borderRadius:7,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color,marginBottom:8}}>${s.icon}</div>
+            <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:s.color||'var(--ac)',borderRadius:'16px 16px 0 0'}}></div>
+            <div style=${{width:26,height:26,borderRadius:7,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color||'var(--ac)',marginBottom:8}}>${s.icon}</div>
             <div style=${{fontSize:24,fontWeight:700,color:'var(--tx)',lineHeight:1,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:-1}}>${s.val}</div>
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:5,fontWeight:500}}>${s.label}</div>
           </div>`)}
@@ -8281,12 +8281,12 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
                 ${total===0?html`<circle cx="60" cy="60" r="42" fill="none" stroke="var(--bd)" strokeWidth="14"/>`:
                   slices.map(({item,dash,gap,rot},i)=>html`
                     <circle key=${i} cx="60" cy="60" r="42" fill="none"
-                      stroke=${item.item.color} strokeWidth="14"
+                      stroke=${item.color||'var(--bd)'} strokeWidth="14"
                       strokeDasharray=${dash+" "+gap}
                       strokeDashoffset=${circ*0.25}
                       transform=${"rotate("+rot+" 60 60)"}
                       style=${{cursor:'pointer',transition:'opacity .15s'}}
-                      onClick=${()=>onNav('tasks:priority:'+item.item.priKey)}
+                      onClick=${()=>onNav('tasks:priority:'+item.priKey)}
                       onMouseEnter=${e=>e.target.setAttribute('opacity','0.75')}
                       onMouseLeave=${e=>e.target.setAttribute('opacity','1')}
                     />`)}
@@ -8299,7 +8299,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
             <div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<3?'1px solid var(--bd)':'none',cursor:'pointer'}}
               onClick=${()=>onNav('tasks:priority:'+item.priKey)}>
               <div style=${{display:'flex',alignItems:'center',gap:7}}>
-                <div style=${{width:7,height:7,borderRadius:2,background:item.color}}></div>
+                <div style=${{width:7,height:7,borderRadius:2,background:item.color||'var(--bd)'}}></div>
                 <span style=${{fontSize:12,color:'var(--tx2)'}}>${item.name}</span>
               </div>
               <span style=${{fontSize:12,color:'var(--tx)',fontFamily:'monospace',fontWeight:700}}>${item.value}</span>
@@ -8318,12 +8318,12 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
             return html`<div key=${proj.id} style=${{marginBottom:11}}>
               <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
                 <div style=${{display:'flex',alignItems:'center',gap:6}}>
-                  <div style=${{width:7,height:7,borderRadius:2,background:proj.color}}></div>
+                  <div style=${{width:7,height:7,borderRadius:2,background:proj.color||'var(--ac)'}}></div>
                   <span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${proj.name}</span>
                 </div>
                 <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace'}}>${pc}%</span>
               </div>
-              <${Prog} pct=${pc} color=${proj.color}/>
+              <${Prog} pct=${pc} color=${proj.color||'var(--ac)'}/>
             </div>`;
           })}
           </div>
