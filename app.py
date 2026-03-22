@@ -979,14 +979,64 @@ def login():
                 sent = send_otp_email(email, code, u["name"])
                 if sent:
                     return jsonify({"otp_required": True, "email": email, "name": u["name"]}), 200
+        # Check TOTP 2FA before creating session
+        totp_rec = db.execute("SELECT secret,enabled FROM totp_secrets WHERE user_id=? AND enabled=1",
+                               (u["id"],)).fetchone()
+        if totp_rec:
+            # Store pending auth in a short-lived session key, not full login
+            session["_totp_pending_uid"] = u["id"]
+            session["_totp_pending_ws"]  = u["workspace_id"]
+            return jsonify({"totp_required": True, "email": email}), 200
+
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
+        session.pop("_logged_out", None)
         try:
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
         except Exception: pass
         return jsonify(dict(u))
+
+
+# ── TOTP verification during login ───────────────────────────────────────────
+@app.route("/api/auth/totp-login", methods=["POST"])
+def totp_login():
+    """Verify TOTP code for pending 2FA login."""
+    d = request.json or {}
+    code = d.get("code","").strip()
+    uid  = session.get("_totp_pending_uid")
+    ws_id= session.get("_totp_pending_ws")
+    if not uid:
+        return jsonify({"error":"No pending 2FA login. Please log in again."}),400
+    with get_db() as db:
+        rec = db.execute("SELECT secret,backup_codes FROM totp_secrets WHERE user_id=? AND enabled=1",(uid,)).fetchone()
+        if not rec:
+            return jsonify({"error":"2FA record not found"}),400
+        if _totp_verify(rec["secret"], code):
+            session.pop("_totp_pending_uid", None)
+            session.pop("_totp_pending_ws",  None)
+            session.pop("_logged_out", None)
+            session.permanent = True
+            session["user_id"] = uid
+            session["workspace_id"] = ws_id
+            db.execute("UPDATE users SET last_active=? WHERE id=?",(datetime.utcnow().isoformat(),uid))
+            u = db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
+            return jsonify(dict(u))
+        # Check backup codes
+        backup = json.loads(rec["backup_codes"] or "[]")
+        if code.upper() in backup:
+            backup.remove(code.upper())
+            db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),uid))
+            session.pop("_totp_pending_uid", None)
+            session.pop("_totp_pending_ws",  None)
+            session.pop("_logged_out", None)
+            session.permanent = True
+            session["user_id"] = uid
+            session["workspace_id"] = ws_id
+            u = db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
+            return jsonify(dict(u))
+        return jsonify({"error":"Invalid code. Check your authenticator app."}),401
 
 @app.route("/api/auth/verify-otp",methods=["POST"])
 def verify_otp():
@@ -1039,7 +1089,13 @@ def resend_otp():
     return jsonify({"error":"Failed to send email. Check SMTP settings."}),500
 
 @app.route("/api/auth/logout",methods=["POST"])
-def logout(): session.clear(); return jsonify({"ok":True})
+def logout():
+    session.clear()
+    session["_logged_out"] = True  # prevents /api/auth/me from auto-logging back in
+    response = jsonify({"ok": True})
+    # Expire the session cookie immediately in the browser
+    response.set_cookie("session", "", expires=0, httponly=True, samesite="Lax")
+    return response
 
 @app.route("/signout")
 @app.route("/sign-out")
@@ -1137,6 +1193,8 @@ def meet_notify():
 
 @app.route("/api/auth/me")
 def me():
+    # Respect explicit logout — don't auto-restore session
+    if session.get("_logged_out"): return jsonify({"error":"Logged out"}),401
     if "user_id" not in session: return jsonify({"error":"Not logged in"}),401
     with get_db() as db:
         u=db.execute("SELECT * FROM users WHERE id=?",(session["user_id"],)).fetchone()
@@ -4428,14 +4486,14 @@ nav{position:fixed;top:0;left:0;right:0;z-index:300;height:58px;display:flex;ali
 @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 .t-item{display:flex;align-items:center;gap:7px;padding:0 28px;font-size:.78rem;color:var(--tx3);white-space:nowrap;flex-shrink:0;}
 .t-sep{color:var(--sf3);margin-left:14px;}
-.t-hi{color:var(--ac);font-weight:600;}
+.t-hi{font-weight:700;background:linear-gradient(135deg,var(--ac),#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 
 /* ── STATS ──────────────────────────────────────── */
 .stats{padding:56px 0;background:var(--sf);}
 .stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
 .stat-card{background:#fff;text-align:center;padding:24px 16px;border-radius:14px;border:1px solid var(--sf3);transition:transform .2s,box-shadow .2s;}
 .stat-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(37,99,235,.08);}
-.stat-n{font-size:2.2rem;font-weight:900;color:var(--ac);letter-spacing:-.04em;line-height:1;}
+.stat-n{font-size:2.2rem;font-weight:900;background:linear-gradient(135deg,var(--ac),#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.04em;line-height:1;}
 .stat-l{font-size:.8rem;color:var(--tx3);font-weight:500;margin-top:6px;}
 
 /* ── SECTIONS ────────────────────────────────────── */
@@ -4479,7 +4537,14 @@ section{padding:88px 0;position:relative;}
 .ben::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:transparent;border-radius:16px 16px 0 0;transition:background .3s;}
 .ben:hover::before{background:linear-gradient(90deg,transparent,rgba(37,99,235,.2),transparent);}
 .ben.wide{grid-column:span 2;}
-.ben-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;background:var(--sf2);border:1px solid var(--sf3);}
+.ben-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;background:var(--ac3);border:1px solid var(--ac4);}
+.ben:nth-child(2) .ben-ico{background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.15);}
+.ben:nth-child(3) .ben-ico{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.15);}
+.ben:nth-child(4) .ben-ico{background:rgba(14,165,233,.08);border-color:rgba(14,165,233,.15);}
+.ben:nth-child(5) .ben-ico{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.15);}
+.ben:nth-child(6) .ben-ico{background:rgba(6,182,212,.08);border-color:rgba(6,182,212,.15);}
+.ben:nth-child(7) .ben-ico{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.15);}
+.ben:nth-child(8) .ben-ico{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.15);}
 .ben h3{font-size:.95rem;font-weight:700;margin-bottom:7px;color:var(--tx);}
 .ben p{font-size:.86rem;color:var(--tx3);line-height:1.65;}
 .ben-list{list-style:none;margin-top:11px;display:flex;flex-direction:column;gap:5px;}
@@ -4520,15 +4585,15 @@ section{padding:88px 0;position:relative;}
 
 /* ── SECURITY ─────────────────────────────────── */
 .sec-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.sec-card{background:#fff;border:1.5px solid var(--sf3);border-radius:14px;padding:24px;display:flex;gap:14px;align-items:flex-start;transition:all .18s;}
+.sec-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:24px;display:flex;gap:14px;align-items:flex-start;transition:all .18s;backdrop-filter:blur(8px);}
 .sec-card:hover{border-color:var(--ac4);}
 .sec-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
 .sec-ico.blue{background:rgba(37,99,235,.08);}
 .sec-ico.green{background:rgba(22,163,74,.08);}
 .sec-ico.purple{background:rgba(124,58,237,.08);}
 .sec-ico.amber{background:rgba(217,119,6,.08);}
-.sec-card h4{font-size:.9rem;font-weight:700;margin-bottom:5px;color:var(--tx);}
-.sec-card p{font-size:.83rem;color:var(--tx3);line-height:1.6;}
+.sec-card h4{font-size:.9rem;font-weight:700;margin-bottom:5px;color:#fff;}
+.sec-card p{font-size:.83rem;color:rgba(255,255,255,.55);line-height:1.6;}
 
 /* ── TESTIMONIAL / QUOTE ─────────────────────── */
 .quote-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
@@ -4610,7 +4675,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
         <div class="hero-badge-dot"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
         v5.0 — AI Standup · Code Review · Risk Predictor · 2FA
       </div>
-      <h1>Ship faster.<br/>Stay <em>in sync.</em></h1>
+      <h1>Ship <span style="background:linear-gradient(135deg,#2563eb,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">faster.</span><br/>Stay in <em>sync.</em></h1>
       <p class="hero-sub">Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, 2FA, time tracking — one platform built for engineering teams that move fast.</p>
       <div class="hero-actions">
         <a href="/?action=register" class="btn btn-solid btn-lg">Start Free — No Card Needed →</a>
@@ -4737,7 +4802,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 </div>
 
 <!-- AI FEATURES -->
-<section id="ai" style="background:#fafbfc;">
+<section id="ai" style="background:linear-gradient(180deg,#f8fafc 0%,#eff6ff 50%,#f5f3ff 100%);">
   <div class="wrap">
     <div class="centered">
       <div class="sec-tag">AI-Powered Tools</div>
@@ -4907,12 +4972,12 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 </section>
 
 <!-- SECURITY -->
-<section id="security" class="role-section">
+<section id="security" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);color:#fff;">
   <div class="wrap">
     <div class="centered">
-      <div class="sec-tag">Security &amp; Access Control</div>
-      <h2 class="sec-title">Enterprise-grade security, zero complexity</h2>
-      <p class="sec-sub">Multi-layered security built for teams that take data protection seriously — without the enterprise price tag.</p>
+      <div class="sec-tag" style="background:rgba(255,255,255,.1);color:#a5b4fc;border-color:rgba(165,180,252,.3)">Security &amp; Access Control</div>
+      <h2 class="sec-title" style="color:#fff">Enterprise-grade security, zero complexity</h2>
+      <p class="sec-sub" style="color:rgba(255,255,255,.65)">Multi-layered security built for teams that take data protection seriously — without the enterprise price tag.</p>
     </div>
     <div class="sec-grid">
       <div class="sec-card">
@@ -4962,7 +5027,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 </section>
 
 <!-- ROLE MATRIX -->
-<section id="roles" style="background:#fff;">
+<section id="roles" style="background:#fff;border-top:3px solid transparent;border-image:linear-gradient(90deg,#2563eb,#7c3aed,#db2777) 1;">
   <div class="wrap">
     <div class="centered">
       <div class="sec-tag">Role Permissions</div>
@@ -5067,7 +5132,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
         <div class="quote-stars">★★★★★</div>
         <p class="quote-text">"The AI standup generator alone saves our team 30 minutes every morning. It pulls from actual task data, not just what people remember to type."</p>
         <div class="quote-author">
-          <div class="quote-av" style="background:#2563eb;">AK</div>
+          <div class="quote-av" style="background:linear-gradient(135deg,#2563eb,#7c3aed);">AK</div>
           <div><div class="quote-name">Arjun Kumar</div><div class="quote-role">Engineering Manager, FinTech startup</div></div>
         </div>
       </div>
@@ -5075,7 +5140,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
         <div class="quote-stars">★★★★★</div>
         <p class="quote-text">"The code review bot caught a SQL injection vulnerability that passed our normal review. It's like having a senior engineer on call 24/7."</p>
         <div class="quote-author">
-          <div class="quote-av" style="background:#7c3aed;">SR</div>
+          <div class="quote-av" style="background:linear-gradient(135deg,#7c3aed,#db2777);">SR</div>
           <div><div class="quote-name">Sneha Reddy</div><div class="quote-role">Lead Developer, SaaS company</div></div>
         </div>
       </div>
@@ -5083,7 +5148,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
         <div class="quote-stars">★★★★★</div>
         <p class="quote-text">"The intake forms to tickets flow completely replaced our email support. Clients submit, tickets are created, assigned, and tracked — all automatically."</p>
         <div class="quote-author">
-          <div class="quote-av" style="background:#16a34a;">MP</div>
+          <div class="quote-av" style="background:linear-gradient(135deg,#16a34a,#0891b2);">MP</div>
           <div><div class="quote-name">Meera Pillai</div><div class="quote-role">Product Manager, Agency</div></div>
         </div>
       </div>
@@ -5850,6 +5915,9 @@ function AuthScreen({onLogin}){
   const [otpStep,setOtpStep]=useState(false);
   const [otpEmail,setOtpEmail]=useState('');
   const [otpCode,setOtpCode]=useState('');
+  const [totpLoginStep,setTotpLoginStep]=useState(false);
+  const [totpLoginCode,setTotpLoginCode]=useState('');
+  const totpLoginRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
   const cvRef=useRef(null);
@@ -6013,6 +6081,7 @@ function AuthScreen({onLogin}){
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
       if(r.error)setErr(r.error);
+      else if(r.totp_required){setTotpLoginStep(true);setErr('');}
       else if(r.otp_required){setOtpEmail(r.email);setOtpStep(true);setOtpResendCd(60);}
       else onLogin(r);
     } else {
@@ -6030,6 +6099,26 @@ function AuthScreen({onLogin}){
     const r=await api.post('/api/auth/verify-otp',{email:otpEmail,code:otpCode});
     if(r.error){setErr(r.error);setOtpCode('');}else onLogin(r);
     setBusy(false);
+  };
+
+  const submitTotpLogin=async()=>{
+    const code=totpLoginCode.replace(/\D/g,'');
+    if(code.length!==6){setErr('Enter the 6-digit code from your authenticator app.');return;}
+    setErr('');setBusy(true);
+    const r=await api.post('/api/auth/totp-login',{code});
+    setBusy(false);
+    if(r.error){setErr(r.error);setTotpLoginCode('');totpLoginRefs[0].current?.focus();}
+    else{setTotpLoginStep(false);onLogin(r);}
+  };
+  const handleTotpLoginDigit=(i,val)=>{
+    const digits=totpLoginCode.split('');digits[i]=val.replace(/\D/g,'').slice(-1);
+    const nc=digits.join('');setTotpLoginCode(nc);
+    if(val&&i<5)totpLoginRefs[i+1].current?.focus();
+    if(nc.length===6&&digits.every(d=>d))setTimeout(submitTotpLogin,80);
+  };
+  const handleTotpLoginKey=(i,e)=>{
+    if(e.key==='Backspace'&&!totpLoginCode[i]&&i>0)totpLoginRefs[i-1].current?.focus();
+    if(e.key==='Enter'&&totpLoginCode.length===6)submitTotpLogin();
   };
   const resendOtp=async()=>{
     if(otpResendCd>0)return;setErr('');
@@ -6095,6 +6184,34 @@ function AuthScreen({onLogin}){
       flex:1,minHeight:'100vh',background:'#ffffff', display:'flex',alignItems:'center',justifyContent:'center', padding:'40px 36px',overflowY:'auto', borderLeft:'1px solid #f1f5f9', }}>
       <div style=${{width:'100%',maxWidth:400}}>
         ${child}
+      </div>
+    </div>`;
+
+  if(totpLoginStep) return html`
+    <div style=${{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:20}}>
+      <div style=${{width:'min(420px,100%)',background:'var(--sf)',borderRadius:16,padding:'32px 28px',border:'1px solid var(--bd)',boxShadow:'0 8px 40px rgba(0,0,0,.08)'}}>
+        <div style=${{textAlign:'center',marginBottom:24}}>
+          <div style=${{fontSize:36,marginBottom:8}}>🔐</div>
+          <div style=${{fontSize:18,fontWeight:700,color:'var(--tx)',marginBottom:6}}>Two-Factor Authentication</div>
+          <div style=${{fontSize:13,color:'var(--tx3)',lineHeight:1.6}}>Enter the 6-digit code from your authenticator app (Google Authenticator, Authy, 1Password)</div>
+        </div>
+        ${err?html`<div style=${{padding:'10px 14px',background:'rgba(185,28,28,.07)',border:'1px solid rgba(185,28,28,.2)',borderRadius:8,color:'#b91c1c',fontSize:13,marginBottom:16,textAlign:'center'}}>${err}</div>`:null}
+        <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}}>
+          ${[0,1,2,3,4,5].map(i=>html`
+            <input key=${i} ref=${totpLoginRefs[i]} type="text" inputMode="numeric"
+              maxLength="1" value=${totpLoginCode[i]||''}
+              onInput=${e=>handleTotpLoginDigit(i,e.target.value)}
+              onKeyDown=${e=>handleTotpLoginKey(i,e)}
+              style=${{width:44,height:52,textAlign:'center',fontSize:24,fontWeight:700,fontFamily:'monospace',
+                border:'2px solid '+(totpLoginCode[i]?'var(--ac)':'var(--bd)'),
+                borderRadius:10,background:'var(--sf2)',color:'var(--tx)',outline:'none',transition:'border-color .15s'}}/>`)}
+        </div>
+        <button class="btn bp" style=${{width:'100%',padding:'11px',fontSize:15,marginBottom:10,borderRadius:10}} onClick=${submitTotpLogin} disabled=${busy||totpLoginCode.replace(/\D/g,'').length<6}>
+          ${busy?html`<span class="spin"></span>`:null} ${busy?'Verifying…':'Verify →'}
+        </button>
+        <button style=${{width:'100%',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:13,padding:8}} onClick=${()=>{setTotpLoginStep(false);setTotpLoginCode('');setErr('');}}>
+          ← Back to login
+        </button>
       </div>
     </div>`;
 
@@ -9181,6 +9298,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,dmEnabled=true,initialUserId
             <div style=${{width:28,flexShrink:0}}>${!isMe&&(i===0||msgs[i-1].sender!==m.sender)?html`<${Av} u=${toUser} size=${28}/>`:null}</div>
             <div style=${{display:'flex',flexDirection:'column',gap:2,alignItems:isMe?'flex-end':'flex-start',maxWidth:'68%'}}>
               <div style=${{padding:'9px 13px',borderRadius:14,fontSize:13,lineHeight:1.55,wordBreak:'break-word',background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)',border:isMe?'none':'1px solid var(--bd)',borderBottomRightRadius:isMe?3:14,borderBottomLeftRadius:isMe?14:3}}>${m.content}</div>
+              <${MsgReactions} msgId=${m.id} msgType="dm" cu=${cu} users=${[cu,toUser].filter(Boolean)}/>
               ${showT?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',margin:'0 2px'}}>${ago(m.ts)}</span>`:null}
             </div>
           </div>`;})}
@@ -11775,10 +11893,18 @@ function TOTPSetupPanel({cu}){
 function OnboardingChecklist({cu,projects,users,tasks,setView,onDismiss}){
   const [wsData,setWsData]=useState(null);
   const [totpOn,setTotpOn]=useState(false);
+  const [fetched,setFetched]=useState(false);
   useEffect(()=>{
-    api.get('/api/workspace').then(d=>setWsData(d));
-    api.get('/api/totp/status').then(d=>setTotpOn(d?.enabled||false));
+    Promise.all([
+      api.get('/api/workspace'),
+      api.get('/api/totp/status')
+    ]).then(([ws,totp])=>{
+      setWsData(ws);
+      setTotpOn(totp?.enabled||false);
+      setFetched(true);
+    }).catch(()=>setFetched(true));
   },[]);
+  if(!fetched) return null; // don't flash while loading
   const hasAiKey=wsData&&wsData.ai_api_key&&wsData.ai_api_key.length>0;
   const hasTasks=tasks&&tasks.length>0;
   const steps=[
@@ -11790,7 +11916,9 @@ function OnboardingChecklist({cu,projects,users,tasks,setView,onDismiss}){
   ];
   const done=steps.filter(s=>s.done).length;
   const pct=Math.round((done/steps.length)*100);
-  if(done===steps.length){return null;}
+  // Auto-dismiss when all done
+  useEffect(()=>{if(fetched&&done===steps.length){onDismiss&&onDismiss();}},([fetched,done]));
+  if(done===steps.length) return null;
   return html`
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 18px',marginBottom:14}}>
       <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
@@ -12990,7 +13118,7 @@ function App(){
     try{ await api.post('/api/auth/logout',{}); }catch(e){}
     setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);
     // Redirect to login immediately — clears all state and shows auth page
-    window.location.href='/?action=login';
+    window.location.href='/?action=login&ts='+Date.now();
   };
 
   useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
