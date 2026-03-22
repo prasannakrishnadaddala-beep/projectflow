@@ -156,42 +156,12 @@ app.config.update(
     MAX_CONTENT_LENGTH=150*1024*1024)
 CORS(app, supports_credentials=True)
 
-@app.after_request
-def add_headers(response):
-    """Add performance and security headers to every response."""
-    # Auth endpoints must NEVER be cached — a stale /api/auth/me response
-    # allows a logged-out browser to appear authenticated. No exceptions.
-    if request.path.startswith('/api/auth/'):
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-    elif request.path.startswith('/api/'):
-        if request.method == 'GET':
-            response.headers['Cache-Control'] = 'private, max-age=5'
-        else:
-            response.headers['Cache-Control'] = 'no-store'
-    # Security headers
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    return response
-
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#aaff00"]
 
 def get_db(autocommit=False):
-    """Get DB connection with retry logic for transient connection errors."""
-    import time as _t
-    last_err = None
-    for attempt in range(3):
-        try:
-            conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
-            conn.autocommit = autocommit
-            return _DB(conn)
-        except Exception as e:
-            last_err = e
-            if attempt < 2:
-                _t.sleep(0.2 * (attempt + 1))  # 200ms, 400ms backoff
-    raise RuntimeError(f"DB connection failed after 3 attempts: {last_err}")
+    conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+    conn.autocommit = autocommit  # pg8000 supports autocommit property
+    return _DB(conn)
 def hash_pw(p):
     """Hash password with bcrypt (falls back to sha256 for legacy check)."""
     try:
@@ -227,22 +197,6 @@ def _otp_cleanup():
                 del _otp_store[k]
 
 _threading.Thread(target=_otp_cleanup, daemon=True).start()
-
-def _background_scheduler():
-    """Run periodic background jobs: recurring tasks, digest emails."""
-    import time as _t
-    _last_digest = 0
-    while True:
-        _t.sleep(3600)  # check every hour
-        try: _spawn_recurring_tasks()
-        except: pass
-        now = _t.time()
-        if now - _last_digest >= 86400:  # daily digest
-            try: _run_digest()
-            except: pass
-            _last_digest = now
-
-_threading.Thread(target=_background_scheduler, daemon=True).start()
 
 def generate_otp():
     """Generate a 6-digit OTP."""
@@ -687,111 +641,6 @@ def init_db():
         except: pass
         try: db.execute("ALTER TABLE tasks ADD COLUMN labels TEXT DEFAULT '[]'")
         except: pass
-        # ── New feature migrations ─────────────────────────────────────────────
-        try: db.execute("ALTER TABLE tasks ADD COLUMN recurring TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN recur_parent TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN depends_on TEXT DEFAULT '[]'")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN time_logged INTEGER DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE projects ADD COLUMN budget REAL DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE projects ADD COLUMN budget_spent REAL DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE workspaces ADD COLUMN white_label_name TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE workspaces ADD COLUMN white_label_logo TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE workspaces ADD COLUMN referral_code TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE workspaces ADD COLUMN digest_enabled INTEGER DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE workspaces ADD COLUMN digest_frequency TEXT DEFAULT 'daily'")
-        except: pass
-        try: db.execute("ALTER TABLE users ADD COLUMN is_guest INTEGER DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE users ADD COLUMN guest_projects TEXT DEFAULT '[]'")
-        except: pass
-        try:
-            db.executescript("""
-            CREATE TABLE IF NOT EXISTS time_logs (
-                id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
-                user_id TEXT, description TEXT, minutes INTEGER DEFAULT 0,
-                logged_date TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS docs (
-                id TEXT PRIMARY KEY, workspace_id TEXT, project_id TEXT,
-                title TEXT, content TEXT, author TEXT,
-                created TEXT, updated TEXT, is_public INTEGER DEFAULT 0);
-            CREATE TABLE IF NOT EXISTS goals (
-                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT,
-                description TEXT, owner TEXT, status TEXT DEFAULT 'active',
-                progress INTEGER DEFAULT 0, due TEXT, created TEXT,
-                team_id TEXT DEFAULT '');
-            CREATE TABLE IF NOT EXISTS goal_krs (
-                id TEXT PRIMARY KEY, goal_id TEXT, workspace_id TEXT,
-                title TEXT, target REAL DEFAULT 100, current REAL DEFAULT 0,
-                unit TEXT DEFAULT '%', created TEXT);
-            CREATE TABLE IF NOT EXISTS custom_fields (
-                id TEXT PRIMARY KEY, workspace_id TEXT, entity_type TEXT DEFAULT 'task',
-                name TEXT, field_type TEXT DEFAULT 'text',
-                options TEXT DEFAULT '[]', created TEXT);
-            CREATE TABLE IF NOT EXISTS custom_field_values (
-                id TEXT PRIMARY KEY, workspace_id TEXT, field_id TEXT,
-                entity_id TEXT, value TEXT, updated TEXT);
-            CREATE TABLE IF NOT EXISTS task_templates (
-                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
-                description TEXT, priority TEXT DEFAULT 'medium',
-                stage TEXT DEFAULT 'backlog', labels TEXT DEFAULT '[]',
-                subtasks TEXT DEFAULT '[]', created TEXT);
-            CREATE TABLE IF NOT EXISTS webhooks_config (
-                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
-                url TEXT, events TEXT DEFAULT '[]',
-                secret TEXT, active INTEGER DEFAULT 1, created TEXT);
-            CREATE TABLE IF NOT EXISTS api_keys (
-                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
-                name TEXT, key_hash TEXT, key_prefix TEXT,
-                scopes TEXT DEFAULT '[]', last_used TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
-                action TEXT, entity_type TEXT, entity_id TEXT,
-                details TEXT, ip TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS sprints (
-                id TEXT PRIMARY KEY, workspace_id TEXT, project_id TEXT,
-                name TEXT, goal TEXT, status TEXT DEFAULT 'planning',
-                start_date TEXT, end_date TEXT, velocity INTEGER DEFAULT 0, created TEXT);
-            CREATE TABLE IF NOT EXISTS referrals (
-                id TEXT PRIMARY KEY, referrer_ws TEXT, referred_ws TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS announcements (
-                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, content TEXT,
-                author TEXT, pinned INTEGER DEFAULT 0, created TEXT, expires TEXT DEFAULT '');
-            CREATE TABLE IF NOT EXISTS announcement_reads (
-                id TEXT PRIMARY KEY, announcement_id TEXT, user_id TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS message_reactions (
-                id TEXT PRIMARY KEY, workspace_id TEXT, message_id TEXT, message_type TEXT DEFAULT 'channel',
-                user_id TEXT, emoji TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS message_threads (
-                id TEXT PRIMARY KEY, workspace_id TEXT, parent_id TEXT, sender TEXT,
-                content TEXT, ts TEXT);
-            CREATE TABLE IF NOT EXISTS intake_forms (
-                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
-                project_id TEXT, fields TEXT DEFAULT '[]', active INTEGER DEFAULT 1,
-                created_by TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS intake_submissions (
-                id TEXT PRIMARY KEY, form_id TEXT, workspace_id TEXT,
-                data TEXT DEFAULT '{}', ticket_id TEXT, submitter_email TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS totp_secrets (
-                id TEXT PRIMARY KEY, user_id TEXT, secret TEXT,
-                enabled INTEGER DEFAULT 0, backup_codes TEXT DEFAULT '[]', created TEXT);
-            CREATE TABLE IF NOT EXISTS standup_reports (
-                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
-                report_date TEXT, content TEXT, created TEXT);
-            CREATE TABLE IF NOT EXISTS code_reviews (
-                id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT, ticket_id TEXT,
-                diff_text TEXT, review_result TEXT, author TEXT, created TEXT);
-            """)
-        except: pass
         try: db.execute("""CREATE TABLE IF NOT EXISTS subtasks (
             id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
             title TEXT, done INTEGER DEFAULT 0, assignee TEXT DEFAULT '', created TEXT)""")
@@ -804,54 +653,6 @@ def init_db():
             db.execute("ALTER TABLE workspaces ADD COLUMN from_email TEXT")
             db.execute("ALTER TABLE workspaces ADD COLUMN email_enabled INTEGER DEFAULT 1")
         except: pass
-        # ── Performance indexes — critical for unlimited scale ─────────────
-        try:
-            db.executescript("""
-            CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id);
-            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_created ON tasks(workspace_id, created DESC);
-            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_stage ON tasks(workspace_id, stage);
-            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_assignee ON tasks(workspace_id, assignee);
-            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_project ON tasks(workspace_id, project);
-            CREATE INDEX IF NOT EXISTS idx_tasks_team ON tasks(workspace_id, team_id);
-            CREATE INDEX IF NOT EXISTS idx_tasks_sprint ON tasks(workspace_id, sprint);
-            CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(workspace_id, due);
-            CREATE INDEX IF NOT EXISTS idx_projects_workspace ON projects(workspace_id);
-            CREATE INDEX IF NOT EXISTS idx_projects_team ON projects(workspace_id, team_id);
-            CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(workspace_id, owner);
-            CREATE INDEX IF NOT EXISTS idx_tickets_workspace ON tickets(workspace_id);
-            CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(workspace_id, status);
-            CREATE INDEX IF NOT EXISTS idx_tickets_assignee ON tickets(workspace_id, assignee);
-            CREATE INDEX IF NOT EXISTS idx_tickets_team ON tickets(workspace_id, team_id);
-            CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(workspace_id, project, ts DESC);
-            CREATE INDEX IF NOT EXISTS idx_dm_recipient ON direct_messages(workspace_id, recipient, read);
-            CREATE INDEX IF NOT EXISTS idx_dm_sender ON direct_messages(workspace_id, sender);
-            CREATE INDEX IF NOT EXISTS idx_notifs_user ON notifications(workspace_id, user_id, read);
-            CREATE INDEX IF NOT EXISTS idx_notifs_created ON notifications(workspace_id, user_id, ts DESC);
-            CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(workspace_id, task_id);
-            CREATE INDEX IF NOT EXISTS idx_files_task ON files(workspace_id, task_id);
-            CREATE INDEX IF NOT EXISTS idx_files_project ON files(workspace_id, project_id);
-            CREATE INDEX IF NOT EXISTS idx_time_logs_task ON time_logs(workspace_id, task_id);
-            CREATE INDEX IF NOT EXISTS idx_time_logs_user ON time_logs(workspace_id, user_id, logged_date);
-            CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(workspace_id, user_id, fired);
-            CREATE INDEX IF NOT EXISTS idx_teams_workspace ON teams(workspace_id);
-            CREATE INDEX IF NOT EXISTS idx_docs_workspace ON docs(workspace_id, project_id);
-            CREATE INDEX IF NOT EXISTS idx_audit_workspace ON audit_logs(workspace_id, created DESC);
-            CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(workspace_id, message_id);
-            CREATE INDEX IF NOT EXISTS idx_threads_parent ON message_threads(workspace_id, parent_id);
-            CREATE INDEX IF NOT EXISTS idx_sprints_project ON sprints(workspace_id, project_id);
-            CREATE INDEX IF NOT EXISTS idx_goals_workspace ON goals(workspace_id, status);
-            CREATE INDEX IF NOT EXISTS idx_users_workspace ON users(workspace_id);
-            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-            CREATE INDEX IF NOT EXISTS idx_tasks_due_stage ON tasks(workspace_id, due, stage);
-            CREATE INDEX IF NOT EXISTS idx_tasks_assignee_stage ON tasks(workspace_id, assignee, stage);
-            CREATE INDEX IF NOT EXISTS idx_projects_members ON projects(workspace_id, members);
-            CREATE INDEX IF NOT EXISTS idx_msg_thread_parent ON message_threads(workspace_id, parent_id, ts);
-            CREATE INDEX IF NOT EXISTS idx_reactions_user ON message_reactions(workspace_id, user_id, message_id);
-            CREATE INDEX IF NOT EXISTS idx_ann_workspace ON announcements(workspace_id, pinned, created DESC);
-            CREATE INDEX IF NOT EXISTS idx_intake_forms ON intake_forms(workspace_id, active);
-            """)
-        except Exception as e:
-            print(f"Index creation: {e}")
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
             legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
@@ -925,30 +726,6 @@ def login_required(f):
 
 def wid(): return session.get("workspace_id","")
 
-# Lightweight in-memory workspace settings cache (TTL=60s per workspace)
-import time as _time_mod
-_ws_cache = {}
-_ws_cache_ttl = {}
-def get_ws_cached(ws_id):
-    """Return cached workspace settings, refreshing every 60s."""
-    now = _time_mod.time()
-    if ws_id in _ws_cache and now - _ws_cache_ttl.get(ws_id,0) < 60:
-        return _ws_cache[ws_id]
-    try:
-        with get_db() as db:
-            ws = db.execute("SELECT * FROM workspaces WHERE id=?",(ws_id,)).fetchone()
-            if ws:
-                _ws_cache[ws_id] = dict(ws)
-                _ws_cache_ttl[ws_id] = now
-                return _ws_cache[ws_id]
-    except: pass
-    return None
-
-def invalidate_ws_cache(ws_id):
-    """Call after updating workspace settings."""
-    _ws_cache.pop(ws_id, None)
-    _ws_cache_ttl.pop(ws_id, None)
-
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/api/auth/login",methods=["POST"])
 def login():
@@ -983,64 +760,14 @@ def login():
                 sent = send_otp_email(email, code, u["name"])
                 if sent:
                     return jsonify({"otp_required": True, "email": email, "name": u["name"]}), 200
-        # Check TOTP 2FA before creating session
-        totp_rec = db.execute("SELECT secret,enabled FROM totp_secrets WHERE user_id=? AND enabled=1",
-                               (u["id"],)).fetchone()
-        if totp_rec:
-            # Store pending auth in a short-lived session key, not full login
-            session["_totp_pending_uid"] = u["id"]
-            session["_totp_pending_ws"]  = u["workspace_id"]
-            return jsonify({"totp_required": True, "email": email}), 200
-
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
-        session.pop("_logged_out", None)
         try:
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
         except Exception: pass
         return jsonify(dict(u))
-
-
-# ── TOTP verification during login ───────────────────────────────────────────
-@app.route("/api/auth/totp-login", methods=["POST"])
-def totp_login():
-    """Verify TOTP code for pending 2FA login."""
-    d = request.json or {}
-    code = d.get("code","").strip()
-    uid  = session.get("_totp_pending_uid")
-    ws_id= session.get("_totp_pending_ws")
-    if not uid:
-        return jsonify({"error":"No pending 2FA login. Please log in again."}),400
-    with get_db() as db:
-        rec = db.execute("SELECT secret,backup_codes FROM totp_secrets WHERE user_id=? AND enabled=1",(uid,)).fetchone()
-        if not rec:
-            return jsonify({"error":"2FA record not found"}),400
-        if _totp_verify(rec["secret"], code):
-            session.pop("_totp_pending_uid", None)
-            session.pop("_totp_pending_ws",  None)
-            session.pop("_logged_out", None)
-            session.permanent = True
-            session["user_id"] = uid
-            session["workspace_id"] = ws_id
-            db.execute("UPDATE users SET last_active=? WHERE id=?",(datetime.utcnow().isoformat(),uid))
-            u = db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
-            return jsonify(dict(u))
-        # Check backup codes
-        backup = json.loads(rec["backup_codes"] or "[]")
-        if code.upper() in backup:
-            backup.remove(code.upper())
-            db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),uid))
-            session.pop("_totp_pending_uid", None)
-            session.pop("_totp_pending_ws",  None)
-            session.pop("_logged_out", None)
-            session.permanent = True
-            session["user_id"] = uid
-            session["workspace_id"] = ws_id
-            u = db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
-            return jsonify(dict(u))
-        return jsonify({"error":"Invalid code. Check your authenticator app."}),401
 
 @app.route("/api/auth/verify-otp",methods=["POST"])
 def verify_otp():
@@ -1093,25 +820,14 @@ def resend_otp():
     return jsonify({"error":"Failed to send email. Check SMTP settings."}),500
 
 @app.route("/api/auth/logout",methods=["POST"])
-def logout():
-    session.clear()
-    session["_logged_out"] = True  # prevents /api/auth/me from auto-logging back in
-    response = jsonify({"ok": True})
-    # Expire the session cookie immediately in the browser
-    response.set_cookie("session", "", expires=0, httponly=True, samesite="Lax")
-    return response
+def logout(): session.clear(); return jsonify({"ok":True})
 
 @app.route("/signout")
 @app.route("/sign-out")
 def signout_redirect():
-    """GET /signout — clear session, expire cookie, redirect to login."""
+    """GET /signout — clear session and redirect to login page."""
     session.clear()
-    resp = app.make_response(
-        '<html><head><meta http-equiv="refresh" content="0;url=/?action=login"/></head><body>Signing out...</body></html>'
-    )
-    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
-    resp.set_cookie(cookie_name, "", expires=0, httponly=True, samesite="Lax", path="/")
-    return resp
+    return '<html><head><meta http-equiv="refresh" content="0;url=/?action=login"/></head><body>Signing out...</body></html>'
 
 
 @app.route("/api/auth/register",methods=["POST"])
@@ -1202,8 +918,6 @@ def meet_notify():
 
 @app.route("/api/auth/me")
 def me():
-    # Session is fully cleared + cookie expired on logout.
-    # Absence of user_id is the only check needed.
     if "user_id" not in session: return jsonify({"error":"Not logged in"}),401
     with get_db() as db:
         u=db.execute("SELECT * FROM users WHERE id=?",(session["user_id"],)).fetchone()
@@ -1227,7 +941,6 @@ def update_workspace():
     with get_db() as db:
         if "name" in d: db.execute("UPDATE workspaces SET name=? WHERE id=?",(d["name"],wid()))
         if "ai_api_key" in d: db.execute("UPDATE workspaces SET ai_api_key=? WHERE id=?",(d["ai_api_key"],wid()))
-        invalidate_ws_cache(wid())
         if "smtp_server" in d: db.execute("UPDATE workspaces SET smtp_server=? WHERE id=?",(d["smtp_server"],wid()))
         if "smtp_port" in d: db.execute("UPDATE workspaces SET smtp_port=? WHERE id=?",(d["smtp_port"],wid()))
         if "smtp_username" in d: db.execute("UPDATE workspaces SET smtp_username=? WHERE id=?",(d["smtp_username"],wid()))
@@ -1290,17 +1003,19 @@ def test_email():
 @login_required
 def get_users():
     with get_db() as db:
-        caller = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        can_see_pw = (caller["role"] if caller else "") in ("Admin","Manager")
-        # Never return password hash or avatar_data blob; conditionally return plain_password
-        rows = db.execute(
-            "SELECT id,workspace_id,name,email,role,avatar,color,created,"
-            "COALESCE(last_active,'') as last_active,"
-            "COALESCE(is_guest,0) as is_guest "
-            + (", COALESCE(plain_password,'') as plain_password " if can_see_pw else "")
-            + "FROM users WHERE workspace_id=? ORDER BY name",
-            (wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
+        rows = db.execute("SELECT * FROM users WHERE workspace_id=? ORDER BY name",(wid(),)).fetchall()
+        caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        caller_role = caller["role"] if caller else "Developer"
+        can_see_passwords = caller_role in ("Admin", "Manager")
+        users = []
+        for r in rows:
+            u = dict(r)
+            u.pop('avatar_data', None)
+            u.pop('password', None)
+            if not can_see_passwords:
+                u.pop('plain_password', None)  # only Admin/Manager can see passwords
+            users.append(u)
+        return jsonify(users)
 
 @app.route("/api/users",methods=["POST"])
 @login_required
@@ -1375,23 +1090,15 @@ def get_projects_last_messages():
 @login_required
 def get_projects():
     team_id = request.args.get("team_id","")
-    page    = max(1, int(request.args.get("page","1") or 1))
-    limit   = min(200, max(10, int(request.args.get("limit","200") or 200)))
-    offset  = (page-1)*limit
     with get_db() as db:
-        cols = "id,workspace_id,name,description,owner,members,start_date,target_date,progress,color,created,team_id,COALESCE(budget,0) as budget,COALESCE(budget_spent,0) as budget_spent"
         if team_id:
             rows = db.execute(
-                "SELECT "+cols+" FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC LIMIT ? OFFSET ?",
-                (wid(), team_id, limit, offset)).fetchall()
-            total = db.execute("SELECT COUNT(*) as cnt FROM projects WHERE workspace_id=? AND team_id=?",
-                               (wid(),team_id)).fetchone()["cnt"]
+                "SELECT * FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC",
+                (wid(), team_id)).fetchall()
         else:
             rows = db.execute(
-                "SELECT "+cols+" FROM projects WHERE workspace_id=? ORDER BY created DESC LIMIT ? OFFSET ?",
-                (wid(), limit, offset)).fetchall()
-            total = db.execute("SELECT COUNT(*) as cnt FROM projects WHERE workspace_id=?",(wid(),)).fetchone()["cnt"]
-        return jsonify({"items":[dict(r) for r in rows],"total":total,"page":page,"limit":limit})
+                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
 
 @app.route("/api/projects",methods=["POST"])
 @login_required
@@ -1483,61 +1190,32 @@ def bulk_assign_team():
 @app.route("/api/tasks")
 @login_required
 def get_tasks():
-    team_id  = request.args.get("team_id","")
-    stage    = request.args.get("stage","")
-    assignee = request.args.get("assignee","")
-    project  = request.args.get("project","")
-    priority = request.args.get("priority","")
-    page     = max(1, int(request.args.get("page","1") or 1))
-    limit    = min(500, max(10, int(request.args.get("limit","500") or 500)))
-    offset   = (page-1)*limit
+    team_id = request.args.get("team_id","")
     with get_db() as db:
-        where  = ["t.workspace_id=?"]
-        params = [wid()]
         if team_id:
             team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
             member_ids = json.loads(team["member_ids"] if team else "[]")
-            proj_ids   = [p["id"] for p in db.execute(
-                "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()]
-            if proj_ids and member_ids:
-                ph_p = ",".join("?"*len(proj_ids))
-                ph_m = ",".join("?"*len(member_ids))
-                where.append("(t.team_id=? OR t.project IN("+ph_p+") OR t.assignee IN("+ph_m+"))")
-                params += [team_id] + proj_ids + member_ids
-            elif proj_ids:
-                ph_p = ",".join("?"*len(proj_ids))
-                where.append("(t.team_id=? OR t.project IN("+ph_p+"))")
-                params += [team_id] + proj_ids
-            elif member_ids:
-                ph_m = ",".join("?"*len(member_ids))
-                where.append("(t.team_id=? OR t.assignee IN("+ph_m+"))")
-                params += [team_id] + member_ids
-            else:
-                where.append("t.team_id=?")
-                params.append(team_id)
-        if stage:    where.append("t.stage=?");    params.append(stage)
-        if assignee: where.append("t.assignee=?"); params.append(assignee)
-        if project:  where.append("t.project=?");  params.append(project)
-        if priority: where.append("t.priority=?"); params.append(priority)
-        where_sql = " AND ".join(where)
-        cols = ("t.id,t.workspace_id,t.title,t.description,t.project,t.assignee,"
-                "t.priority,t.stage,t.created,t.due,t.pct,t.comments,t.team_id,"
-                "t.parent_id,t.story_points,t.sprint,t.task_type,t.labels,"
-                "t.recurring,t.recur_parent,t.depends_on,"
-                "COALESCE(t.time_logged,0) as time_logged")
-        rows = db.execute(
-            "SELECT "+cols+" FROM tasks t WHERE "+where_sql+" ORDER BY t.created DESC LIMIT ? OFFSET ?",
-            params+[limit,offset]).fetchall()
-        total_row = db.execute("SELECT COUNT(*) as cnt FROM tasks t WHERE "+where_sql, params).fetchone()
-        total_count = total_row["cnt"] if total_row else 0
-        return jsonify({"items":[dict(r) for r in rows],"total":total_count,"page":page,"limit":limit,"pages":max(1,(total_count+limit-1)//limit)})
+            team_projects = db.execute(
+                "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
+            proj_ids = [p["id"] for p in team_projects]
+            all_tasks = db.execute(
+                "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+            proj_set = set(proj_ids)
+            mem_set = set(member_ids)
+            filtered = [t for t in all_tasks if
+                (t["team_id"] and t["team_id"]==team_id) or
+                (t["assignee"] and t["assignee"] in mem_set) or
+                (t["project"] and t["project"] in proj_set)]
+            return jsonify([dict(r) for r in filtered])
+        return jsonify([dict(r) for r in db.execute(
+            "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
 
 def next_task_id(db, ws):
-    """Race-condition-free ID using high-res timestamp + random suffix."""
-    import time, random
-    ts_ms = int(time.time() * 1000)
-    rand3 = random.randint(100,999)
-    return f"T-{ts_ms % 10000000:07d}-{rand3}"
+    import time
+    base = int(time.time() * 1000)
+    row=db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=?",(ws,)).fetchone()
+    count=row['cnt'] if row else 0
+    return f"T-{count+1:03d}-{base % 10000}"
 
 @app.route("/api/tasks",methods=["POST"])
 @login_required
@@ -1629,8 +1307,7 @@ def update_task(tid):
         if comments_val is None: comments_val=json.loads(t["comments"] or "[]")
         db.execute("""UPDATE tasks SET title=?,description=?,project=?,assignee=?,
                       priority=?,stage=?,due=?,pct=?,comments=?,team_id=?,
-                      story_points=?,task_type=?,labels=?,sprint=?,
-                      recurring=?,depends_on=? WHERE id=? AND workspace_id=?""",
+                      story_points=?,task_type=?,labels=?,sprint=? WHERE id=? AND workspace_id=?""",
                    (d.get("title",t["title"]),d.get("description",t["description"]),
                     d.get("project",t["project"]),d.get("assignee",t["assignee"]),
                     d.get("priority",t["priority"]),d.get("stage",t["stage"]),
@@ -1641,8 +1318,6 @@ def update_task(tid):
                     d.get("task_type",tf("task_type","task")),
                     labels_val,
                     d.get("sprint",tf("sprint","")),
-                    d.get("recurring",tf("recurring","")),
-                    json.dumps(d.get("depends_on",json.loads(t.get("depends_on") or "[]"))),
                     tid,wid()))
         if d.get("stage") and d["stage"]!=old_stage:
             base_ts2=int(datetime.now().timestamp()*1000)
@@ -1828,28 +1503,11 @@ def del_file(fid):
 @app.route("/api/messages")
 @login_required
 def get_messages():
-    project = request.args.get("project","")
-    limit   = min(200, int(request.args.get("limit","100") or 100))
-    before  = request.args.get("before","")
-    if not project: return jsonify([])
+    project=request.args.get("project","")
     with get_db() as db:
-        if before:
-            rows=db.execute(
-                "SELECT m.id,m.workspace_id,m.sender,m.project,m.content,m.ts,"
-                "COALESCE(m.is_system,0) as is_system,COALESCE(m.pinned,0) as pinned,"
-                "u.name as sender_name,u.avatar as sender_avatar,u.color as sender_color "
-                "FROM messages m LEFT JOIN users u ON m.sender=u.id "
-                "WHERE m.project=? AND m.workspace_id=? AND m.ts<? "
-                "ORDER BY m.ts DESC LIMIT ?",(project,wid(),before,limit)).fetchall()
-        else:
-            rows=db.execute(
-                "SELECT m.id,m.workspace_id,m.sender,m.project,m.content,m.ts,"
-                "COALESCE(m.is_system,0) as is_system,COALESCE(m.pinned,0) as pinned,"
-                "u.name as sender_name,u.avatar as sender_avatar,u.color as sender_color "
-                "FROM messages m LEFT JOIN users u ON m.sender=u.id "
-                "WHERE m.project=? AND m.workspace_id=? "
-                "ORDER BY m.ts DESC LIMIT ?",(project,wid(),limit)).fetchall()
-        return jsonify(list(reversed([dict(r) for r in rows])))
+        rows=db.execute("SELECT * FROM messages WHERE project=? AND workspace_id=? ORDER BY ts",
+                        (project,wid())).fetchall()
+        return jsonify([dict(r) for r in rows])
 
 @app.route("/api/messages",methods=["POST"])
 @login_required
@@ -1864,17 +1522,12 @@ def send_message():
         project_row=db.execute("SELECT name FROM projects WHERE id=? AND workspace_id=?",(d.get("project",""),wid())).fetchone()
         proj_name=project_row["name"] if project_row else "a project"
         preview=d.get("content","")[:60]+("..." if len(d.get("content",""))>60 else "")
-        # Only notify project members, not entire workspace
-        try:
-            proj_members_row = db.execute("SELECT members FROM projects WHERE id=? AND workspace_id=?",(d.get("project",""),wid())).fetchone()
-            proj_member_ids = json.loads(proj_members_row["members"] if proj_members_row and proj_members_row["members"] else "[]")
-        except: proj_member_ids = []
+        members=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
         base_ts=int(datetime.now().timestamp()*1000)
-        for i,uid in enumerate(proj_member_ids):
-            if uid == session["user_id"]: continue
+        for i,m in enumerate(members):
             nid=f"n{base_ts+i}"
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",uid,0,ts()))
+                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",m["id"],0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()))
 
 # ── Direct Messages ───────────────────────────────────────────────────────────
@@ -2063,38 +1716,26 @@ def team_dashboard(tid):
 @app.route("/api/tickets", methods=["GET"])
 @login_required
 def get_tickets():
-    status   = request.args.get("status","")
-    team_id  = request.args.get("team_id","")
-    assignee = request.args.get("assignee","")
-    page     = max(1, int(request.args.get("page","1") or 1))
-    limit    = min(200, max(10, int(request.args.get("limit","100") or 100)))
-    offset   = (page-1)*limit
+    status=request.args.get("status","")
+    team_id=request.args.get("team_id","")
     with get_db() as db:
-        where  = ["t.workspace_id=?"]
-        params = [wid()]
         if team_id:
-            team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
-            member_ids = json.loads(team["member_ids"] if team else "[]")
-            proj_ids   = [p["id"] for p in db.execute(
-                "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()]
-            if proj_ids and member_ids:
-                ph_p=",".join("?"*len(proj_ids)); ph_m=",".join("?"*len(member_ids))
-                where.append("(t.team_id=? OR t.project IN("+ph_p+") OR t.assignee IN("+ph_m+"))")
-                params += [team_id]+proj_ids+member_ids
-            elif proj_ids:
-                where.append("(t.team_id=? OR t.project IN("+",".join("?"*len(proj_ids))+"))")
-                params += [team_id]+proj_ids
-            else:
-                where.append("t.team_id=?"); params.append(team_id)
-        if status:   where.append("t.status=?");   params.append(status)
-        if assignee: where.append("t.assignee=?"); params.append(assignee)
-        where_sql = " AND ".join(where)
-        rows  = db.execute(
-            "SELECT t.*,u.name as reporter_name FROM tickets t LEFT JOIN users u ON t.reporter=u.id "
-            "WHERE "+where_sql+" ORDER BY t.created DESC LIMIT ? OFFSET ?",
-            params+[limit,offset]).fetchall()
-        total = db.execute("SELECT COUNT(*) as cnt FROM tickets t WHERE "+where_sql,params).fetchone()["cnt"]
-        return jsonify({"items":[dict(r) for r in rows],"total":total,"page":page,"limit":limit})
+            team=db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
+            member_ids=json.loads(team["member_ids"] if team else "[]")
+            team_projs=db.execute("SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
+            proj_ids=[p["id"] for p in team_projs]
+            all_rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+            mem_set=set(member_ids); proj_set=set(proj_ids)
+            rows=[r for r in all_rows if
+                (r["team_id"] if "team_id" in r.keys() else "")==team_id or
+                (r["assignee"] and r["assignee"] in mem_set) or
+                (r["project"] and r["project"] in proj_set)]
+            if status: rows=[r for r in rows if r["status"]==status]
+        elif status:
+            rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? AND status=? ORDER BY created DESC",(wid(),status)).fetchall()
+        else:
+            rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
 
 @app.route("/api/tickets", methods=["POST"])
 @login_required
@@ -2510,1235 +2151,6 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
             action_results.append({"type":"error","message":str(ex)})
 
     return jsonify({"message":clean_text,"actions":action_results,"raw":ai_text})
-
-
-# ── Audit log helper ──────────────────────────────────────────────────────────
-def audit(db, action, entity_type='', entity_id='', details=''):
-    try:
-        aid = f"al{int(__import__('time').time()*1000)}"
-        ip = request.remote_addr or ''
-        db.execute("INSERT INTO audit_logs VALUES (?,?,?,?,?,?,?,?,?)",
-                   (aid, wid(), session.get('user_id',''), action, entity_type, entity_id, details, ip, ts()))
-    except: pass
-
-# ── Time Tracking ─────────────────────────────────────────────────────────────
-@app.route("/api/time-logs", methods=["GET"])
-@login_required
-def get_time_logs():
-    task_id = request.args.get("task_id","")
-    with get_db() as db:
-        if task_id:
-            rows = db.execute("SELECT tl.*,u.name as user_name FROM time_logs tl LEFT JOIN users u ON tl.user_id=u.id WHERE tl.workspace_id=? AND tl.task_id=? ORDER BY tl.created DESC",(wid(),task_id)).fetchall()
-        else:
-            rows = db.execute("SELECT tl.*,u.name as user_name FROM time_logs tl LEFT JOIN users u ON tl.user_id=u.id WHERE tl.workspace_id=? ORDER BY tl.created DESC LIMIT 200",(wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/time-logs", methods=["POST"])
-@login_required
-def create_time_log():
-    d = request.json or {}
-    if not d.get("task_id"): return jsonify({"error":"task_id required"}),400
-    if not d.get("minutes",0): return jsonify({"error":"minutes required"}),400
-    with get_db() as db:
-        lid = f"tl{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO time_logs VALUES (?,?,?,?,?,?,?,?)",
-                   (lid,wid(),d["task_id"],session["user_id"],d.get("description",""),
-                    int(d["minutes"]),d.get("logged_date",ts()[:10]),ts()))
-        db.execute("UPDATE tasks SET time_logged=COALESCE(time_logged,0)+? WHERE id=? AND workspace_id=?",
-                   (int(d["minutes"]),d["task_id"],wid()))
-        audit(db,"time_log","task",d["task_id"],f"{d['minutes']}min logged")
-        return jsonify({"ok":True,"id":lid})
-
-@app.route("/api/time-logs/<lid>", methods=["DELETE"])
-@login_required
-def delete_time_log(lid):
-    with get_db() as db:
-        row = db.execute("SELECT * FROM time_logs WHERE id=? AND workspace_id=?",(lid,wid())).fetchone()
-        if not row: return jsonify({"error":"Not found"}),404
-        db.execute("UPDATE tasks SET time_logged=MAX(0,COALESCE(time_logged,0)-?) WHERE id=? AND workspace_id=?",
-                   (row["minutes"],row["task_id"],wid()))
-        db.execute("DELETE FROM time_logs WHERE id=?",(lid,))
-        return jsonify({"ok":True})
-
-# ── Task Dependencies ─────────────────────────────────────────────────────────
-@app.route("/api/tasks/<tid>/dependencies", methods=["GET"])
-@login_required
-def get_task_deps(tid):
-    with get_db() as db:
-        task = db.execute("SELECT depends_on FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
-        if not task: return jsonify([])
-        dep_ids = json.loads(task["depends_on"] or "[]")
-        deps = []
-        for did in dep_ids:
-            t = db.execute("SELECT id,title,stage,priority FROM tasks WHERE id=?",(did,)).fetchone()
-            if t: deps.append(dict(t))
-        return jsonify(deps)
-
-@app.route("/api/tasks/<tid>/dependencies", methods=["POST"])
-@login_required
-def add_task_dep(tid):
-    d = request.json or {}
-    dep_id = d.get("dep_id","")
-    if not dep_id: return jsonify({"error":"dep_id required"}),400
-    if dep_id == tid: return jsonify({"error":"Cannot depend on self"}),400
-    with get_db() as db:
-        task = db.execute("SELECT depends_on FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
-        if not task: return jsonify({"error":"Task not found"}),404
-        deps = json.loads(task["depends_on"] or "[]")
-        if dep_id not in deps: deps.append(dep_id)
-        db.execute("UPDATE tasks SET depends_on=? WHERE id=? AND workspace_id=?",(json.dumps(deps),tid,wid()))
-        return jsonify({"ok":True,"depends_on":deps})
-
-@app.route("/api/tasks/<tid>/dependencies/<dep_id>", methods=["DELETE"])
-@login_required
-def remove_task_dep(tid,dep_id):
-    with get_db() as db:
-        task = db.execute("SELECT depends_on FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
-        if not task: return jsonify({"error":"Not found"}),404
-        deps = [x for x in json.loads(task["depends_on"] or "[]") if x != dep_id]
-        db.execute("UPDATE tasks SET depends_on=? WHERE id=? AND workspace_id=?",(json.dumps(deps),tid,wid()))
-        return jsonify({"ok":True})
-
-# ── Recurring Tasks ───────────────────────────────────────────────────────────
-@app.route("/api/tasks/<tid>/recurring", methods=["PUT"])
-@login_required
-def set_recurring(tid):
-    d = request.json or {}
-    pattern = d.get("pattern","") # daily|weekly|monthly|""
-    with get_db() as db:
-        db.execute("UPDATE tasks SET recurring=? WHERE id=? AND workspace_id=?",(pattern,tid,wid()))
-        return jsonify({"ok":True})
-
-def _spawn_recurring_tasks():
-    """Run periodically to create recurring task instances."""
-    try:
-        with get_db() as db:
-            now_date = datetime.utcnow().date()
-            tasks = db.execute("SELECT * FROM tasks WHERE recurring!='' AND recurring IS NOT NULL").fetchall()
-            for t in tasks:
-                pattern = t["recurring"]
-                if not pattern: continue
-                last_due = t["due"] or t["created"][:10]
-                try: last_dt = datetime.strptime(last_due[:10],"%Y-%m-%d").date()
-                except: continue
-                if pattern=="daily": next_dt = last_dt + timedelta(days=1)
-                elif pattern=="weekly": next_dt = last_dt + timedelta(weeks=1)
-                elif pattern=="monthly":
-                    m = last_dt.month+1 if last_dt.month<12 else 1
-                    y = last_dt.year if last_dt.month<12 else last_dt.year+1
-                    next_dt = last_dt.replace(year=y,month=m)
-                else: continue
-                if next_dt <= now_date:
-                    existing = db.execute("SELECT id FROM tasks WHERE recur_parent=? AND due=?",(t["id"],str(next_dt))).fetchone()
-                    if not existing:
-                        new_id = next_task_id(db, t["workspace_id"])
-                        db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                   (new_id,t["workspace_id"],t["title"],t["description"],t["project"],
-                                    t["assignee"],t["priority"],"backlog",ts(),str(next_dt),0,"[]",
-                                    t.get("team_id",""),t["id"],0,"","task","[]"))
-                        db.execute("UPDATE tasks SET due=?,recurring=? WHERE id=? AND workspace_id=?",
-                                   (str(next_dt),pattern,t["id"],t["workspace_id"]))
-    except Exception as e:
-        print(f"Recurring tasks error: {e}")
-
-
-# ── AI Doc Generation ─────────────────────────────────────────────────────────
-@app.route("/api/docs/generate", methods=["POST"])
-@login_required
-def generate_doc():
-    d = request.json or {}
-    prompt = d.get("prompt","").strip()
-    doc_type = d.get("doc_type","general")  # general|architecture|api|readme|runbook
-    project_id = d.get("project_id","")
-    if not prompt: return jsonify({"error":"Prompt required"}),400
-
-    with get_db() as db:
-        ws = db.execute("SELECT ai_api_key,name FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
-        if not api_key:
-            return jsonify({"error":"NO_KEY","message":"Configure your Anthropic API key in Settings to use AI doc generation."}),400
-
-        projects = db.execute("SELECT id,name,description FROM projects WHERE workspace_id=?",(wid(),)).fetchall()
-        proj_ctx = "\n".join([f"- {p['name']}: {p['description']}" for p in projects]) or "No projects"
-        proj_name = ""
-        if project_id:
-            p = db.execute("SELECT name,description FROM projects WHERE id=?",(project_id,)).fetchone()
-            if p: proj_name = p["name"]
-
-    TYPE_INSTRUCTIONS = {
-        "general": "Write a comprehensive, well-structured technical document. Use clear headings, bullet points where appropriate, and code blocks for any code examples.",
-        "architecture": """Write an architectural documentation document. Include:
-1. Overview section
-2. System components and their responsibilities
-3. A Mermaid.js architecture diagram (use ```mermaid code blocks with graph TD or flowchart LR syntax)
-4. Data flow description
-5. Technology stack
-6. Deployment considerations
-Make the Mermaid diagram detailed and accurate to the described system.""",
-        "api": """Write API documentation. Include:
-1. Overview
-2. Authentication
-3. Base URL
-4. Endpoints table with Method, Path, Description
-5. Request/Response examples in JSON code blocks
-6. Error codes""",
-        "readme": """Write a professional README.md. Include:
-1. Project title and badge line
-2. Short description
-3. Features list
-4. Installation steps (with code blocks)
-5. Usage examples
-6. Configuration
-7. Contributing section""",
-        "runbook": """Write an operational runbook. Include:
-1. Service overview
-2. Prerequisites
-3. Common operations (step by step)
-4. Troubleshooting guide
-5. Escalation contacts placeholder
-6. Monitoring and alerts"""
-    }
-
-    system = f"""You are a senior technical writer for the workspace "{ws['name'] if ws else 'VEWIT'}".
-Generate professional technical documentation based on the user's request.
-{TYPE_INSTRUCTIONS.get(doc_type, TYPE_INSTRUCTIONS['general'])}
-Projects in this workspace:
-{proj_ctx}
-{"Focus on the project: " + proj_name if proj_name else ""}
-Output ONLY the document content — no preamble, no meta-commentary.
-For Mermaid diagrams, always wrap in ```mermaid code fences."""
-
-    try:
-        req_data = json.dumps({
-            "model": "claude-sonnet-4-5",
-            "max_tokens": 3000,
-            "system": system,
-            "messages": [{"role":"user","content": prompt}]
-        }).encode()
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=req_data, method="POST",
-            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            result = json.loads(resp.read().decode())
-            generated = result["content"][0]["text"]
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        if e.code == 401: return jsonify({"error":"INVALID_KEY","message":"Invalid API key."}),400
-        return jsonify({"error":"API_ERROR","message":f"AI error: {body[:200]}"}),500
-    except Exception as e:
-        return jsonify({"error":"NETWORK_ERROR","message":str(e)}),500
-
-    # Auto-save the generated doc
-    title_line = generated.split('\n')[0].lstrip('#').strip() or prompt[:60]
-    did = f"doc{int(__import__('time').time()*1000)}"
-    now = ts()
-    with get_db() as db:
-        db.execute("INSERT INTO docs VALUES (?,?,?,?,?,?,?,?,?)",
-                   (did, wid(), project_id, title_line, generated,
-                    session["user_id"], now, now, 0))
-    return jsonify({"ok":True,"id":did,"title":title_line,"content":generated})
-
-# ── Docs / Wiki ───────────────────────────────────────────────────────────────
-@app.route("/api/docs", methods=["GET"])
-@login_required
-def get_docs():
-    project_id = request.args.get("project_id","")
-    with get_db() as db:
-        if project_id:
-            rows = db.execute("SELECT d.*,u.name as author_name FROM docs d LEFT JOIN users u ON d.author=u.id WHERE d.workspace_id=? AND d.project_id=? ORDER BY d.updated DESC",(wid(),project_id)).fetchall()
-        else:
-            rows = db.execute("SELECT d.*,u.name as author_name FROM docs d LEFT JOIN users u ON d.author=u.id WHERE d.workspace_id=? ORDER BY d.updated DESC",(wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/docs", methods=["POST"])
-@login_required
-def create_doc():
-    d = request.json or {}
-    if not d.get("title"): return jsonify({"error":"Title required"}),400
-    with get_db() as db:
-        did = f"doc{int(__import__('time').time()*1000)}"
-        now = ts()
-        db.execute("INSERT INTO docs VALUES (?,?,?,?,?,?,?,?,?)",
-                   (did,wid(),d.get("project_id",""),d["title"],d.get("content",""),
-                    session["user_id"],now,now,0))
-        audit(db,"create","doc",did,d["title"])
-        return jsonify({"ok":True,"id":did})
-
-@app.route("/api/docs/<did>", methods=["PUT"])
-@login_required
-def update_doc(did):
-    d = request.json or {}
-    with get_db() as db:
-        doc = db.execute("SELECT * FROM docs WHERE id=? AND workspace_id=?",(did,wid())).fetchone()
-        if not doc: return jsonify({"error":"Not found"}),404
-        db.execute("UPDATE docs SET title=?,content=?,project_id=?,is_public=?,updated=? WHERE id=?",
-                   (d.get("title",doc["title"]),d.get("content",doc["content"]),
-                    d.get("project_id",doc["project_id"]),int(d.get("is_public",doc["is_public"])),ts(),did))
-        return jsonify({"ok":True})
-
-@app.route("/api/docs/<did>", methods=["DELETE"])
-@login_required
-def delete_doc(did):
-    with get_db() as db:
-        db.execute("DELETE FROM docs WHERE id=? AND workspace_id=?",(did,wid()))
-        return jsonify({"ok":True})
-
-# ── Goals / OKRs ──────────────────────────────────────────────────────────────
-@app.route("/api/goals", methods=["GET"])
-@login_required
-def get_goals():
-    with get_db() as db:
-        goals = db.execute("SELECT g.*,u.name as owner_name FROM goals g LEFT JOIN users u ON g.owner=u.id WHERE g.workspace_id=? ORDER BY g.created DESC",(wid(),)).fetchall()
-        result = []
-        for g in goals:
-            krs = db.execute("SELECT * FROM goal_krs WHERE goal_id=?",(g["id"],)).fetchall()
-            gd = dict(g); gd["krs"] = [dict(k) for k in krs]
-            result.append(gd)
-        return jsonify(result)
-
-@app.route("/api/goals", methods=["POST"])
-@login_required
-def create_goal():
-    d = request.json or {}
-    if not d.get("title"): return jsonify({"error":"Title required"}),400
-    with get_db() as db:
-        gid = f"g{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO goals VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (gid,wid(),d["title"],d.get("description",""),
-                    d.get("owner",session["user_id"]),"active",0,d.get("due",""),ts(),d.get("team_id","")))
-        for kr in d.get("krs",[]):
-            kid = f"kr{int(__import__('time').time()*1000)}{secrets.token_hex(2)}"
-            db.execute("INSERT INTO goal_krs VALUES (?,?,?,?,?,?,?,?)",
-                       (kid,gid,wid(),kr.get("title",""),kr.get("target",100),0,kr.get("unit","%"),ts()))
-        return jsonify({"ok":True,"id":gid})
-
-@app.route("/api/goals/<gid>", methods=["PUT"])
-@login_required
-def update_goal(gid):
-    d = request.json or {}
-    with get_db() as db:
-        g = db.execute("SELECT * FROM goals WHERE id=? AND workspace_id=?",(gid,wid())).fetchone()
-        if not g: return jsonify({"error":"Not found"}),404
-        # Auto-calc progress from KRs
-        krs = db.execute("SELECT * FROM goal_krs WHERE goal_id=?",(gid,)).fetchall()
-        if krs:
-            pct = sum(min(100,int((k["current"]/k["target"])*100)) if k["target"]>0 else 0 for k in krs) // len(krs)
-        else: pct = d.get("progress",g["progress"])
-        db.execute("UPDATE goals SET title=?,description=?,status=?,progress=?,due=?,owner=? WHERE id=?",
-                   (d.get("title",g["title"]),d.get("description",g["description"]),
-                    d.get("status",g["status"]),pct,d.get("due",g["due"]),
-                    d.get("owner",g["owner"]),gid))
-        # Update KRs
-        for kr in d.get("krs",[]):
-            if kr.get("id"):
-                db.execute("UPDATE goal_krs SET current=?,title=?,target=?,unit=? WHERE id=?",
-                           (kr.get("current",0),kr.get("title",""),kr.get("target",100),kr.get("unit","%"),kr["id"]))
-        return jsonify({"ok":True})
-
-@app.route("/api/goals/<gid>", methods=["DELETE"])
-@login_required
-def delete_goal(gid):
-    with get_db() as db:
-        db.execute("DELETE FROM goal_krs WHERE goal_id=?",(gid,))
-        db.execute("DELETE FROM goals WHERE id=? AND workspace_id=?",(gid,wid()))
-        return jsonify({"ok":True})
-
-# ── Custom Fields ─────────────────────────────────────────────────────────────
-@app.route("/api/custom-fields", methods=["GET"])
-@login_required
-def get_custom_fields():
-    entity = request.args.get("entity","task")
-    with get_db() as db:
-        rows = db.execute("SELECT * FROM custom_fields WHERE workspace_id=? AND entity_type=? ORDER BY created",(wid(),entity)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/custom-fields", methods=["POST"])
-@login_required
-def create_custom_field():
-    d = request.json or {}
-    if not d.get("name"): return jsonify({"error":"Name required"}),400
-    with get_db() as db:
-        fid = f"cf{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO custom_fields VALUES (?,?,?,?,?,?,?)",
-                   (fid,wid(),d.get("entity_type","task"),d["name"],
-                    d.get("field_type","text"),json.dumps(d.get("options",[])),ts()))
-        return jsonify({"ok":True,"id":fid})
-
-@app.route("/api/custom-fields/<fid>", methods=["DELETE"])
-@login_required
-def delete_custom_field(fid):
-    with get_db() as db:
-        db.execute("DELETE FROM custom_field_values WHERE field_id=?",(fid,))
-        db.execute("DELETE FROM custom_fields WHERE id=? AND workspace_id=?",(fid,wid()))
-        return jsonify({"ok":True})
-
-@app.route("/api/custom-field-values/<entity_id>", methods=["GET"])
-@login_required
-def get_cfv(entity_id):
-    with get_db() as db:
-        rows = db.execute("SELECT cfv.*,cf.name,cf.field_type FROM custom_field_values cfv JOIN custom_fields cf ON cfv.field_id=cf.id WHERE cfv.workspace_id=? AND cfv.entity_id=?",(wid(),entity_id)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/custom-field-values", methods=["POST"])
-@login_required
-def set_cfv():
-    d = request.json or {}
-    with get_db() as db:
-        existing = db.execute("SELECT id FROM custom_field_values WHERE workspace_id=? AND field_id=? AND entity_id=?",(wid(),d["field_id"],d["entity_id"])).fetchone()
-        if existing:
-            db.execute("UPDATE custom_field_values SET value=?,updated=? WHERE id=?",(d.get("value",""),ts(),existing["id"]))
-        else:
-            vid = f"cfv{int(__import__('time').time()*1000)}"
-            db.execute("INSERT INTO custom_field_values VALUES (?,?,?,?,?,?)",(vid,wid(),d["field_id"],d["entity_id"],d.get("value",""),ts()))
-        return jsonify({"ok":True})
-
-# ── Task Templates ────────────────────────────────────────────────────────────
-@app.route("/api/task-templates", methods=["GET"])
-@login_required
-def get_task_templates():
-    with get_db() as db:
-        rows = db.execute("SELECT * FROM task_templates WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/task-templates", methods=["POST"])
-@login_required
-def create_task_template():
-    d = request.json or {}
-    if not d.get("name"): return jsonify({"error":"Name required"}),400
-    with get_db() as db:
-        tid = f"tt{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO task_templates VALUES (?,?,?,?,?,?,?,?,?)",
-                   (tid,wid(),d["name"],d.get("description",""),d.get("priority","medium"),
-                    d.get("stage","backlog"),json.dumps(d.get("labels",[])),
-                    json.dumps(d.get("subtasks",[])),ts()))
-        return jsonify({"ok":True,"id":tid})
-
-@app.route("/api/task-templates/<tid>", methods=["DELETE"])
-@login_required
-def delete_task_template(tid):
-    with get_db() as db:
-        db.execute("DELETE FROM task_templates WHERE id=? AND workspace_id=?",(tid,wid()))
-        return jsonify({"ok":True})
-
-# ── Sprints ───────────────────────────────────────────────────────────────────
-@app.route("/api/sprints", methods=["GET"])
-@login_required
-def get_sprints():
-    project_id = request.args.get("project_id","")
-    with get_db() as db:
-        if project_id:
-            rows = db.execute("SELECT * FROM sprints WHERE workspace_id=? AND project_id=? ORDER BY created DESC",(wid(),project_id)).fetchall()
-        else:
-            rows = db.execute("SELECT * FROM sprints WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
-        result = []
-        for s in rows:
-            sd = dict(s)
-            tasks_in_sprint = db.execute("SELECT id,title,stage,story_points FROM tasks WHERE workspace_id=? AND sprint=?",(wid(),s["id"])).fetchall()
-            sd["tasks"] = [dict(t) for t in tasks_in_sprint]
-            sd["total_points"] = sum(t["story_points"] or 0 for t in tasks_in_sprint)
-            sd["done_points"] = sum(t["story_points"] or 0 for t in tasks_in_sprint if t["stage"]=="completed")
-            result.append(sd)
-        return jsonify(result)
-
-@app.route("/api/sprints", methods=["POST"])
-@login_required
-def create_sprint():
-    d = request.json or {}
-    if not d.get("name"): return jsonify({"error":"Name required"}),400
-    with get_db() as db:
-        sid = f"sp{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO sprints VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (sid,wid(),d.get("project_id",""),d["name"],d.get("goal",""),
-                    "planning",d.get("start_date",""),d.get("end_date",""),0,ts()))
-        return jsonify({"ok":True,"id":sid})
-
-@app.route("/api/sprints/<sid>", methods=["PUT"])
-@login_required
-def update_sprint(sid):
-    d = request.json or {}
-    with get_db() as db:
-        s = db.execute("SELECT * FROM sprints WHERE id=? AND workspace_id=?",(sid,wid())).fetchone()
-        if not s: return jsonify({"error":"Not found"}),404
-        db.execute("UPDATE sprints SET name=?,goal=?,status=?,start_date=?,end_date=? WHERE id=?",
-                   (d.get("name",s["name"]),d.get("goal",s["goal"]),d.get("status",s["status"]),
-                    d.get("start_date",s["start_date"]),d.get("end_date",s["end_date"]),sid))
-        if d.get("task_ids"):
-            db.execute("UPDATE tasks SET sprint='' WHERE workspace_id=? AND sprint=?",(wid(),sid))
-            for task_id in d["task_ids"]:
-                db.execute("UPDATE tasks SET sprint=? WHERE id=? AND workspace_id=?",(sid,task_id,wid()))
-        return jsonify({"ok":True})
-
-@app.route("/api/sprints/<sid>", methods=["DELETE"])
-@login_required
-def delete_sprint(sid):
-    with get_db() as db:
-        db.execute("UPDATE tasks SET sprint='' WHERE workspace_id=? AND sprint=?",(wid(),sid))
-        db.execute("DELETE FROM sprints WHERE id=? AND workspace_id=?",(sid,wid()))
-        return jsonify({"ok":True})
-
-# ── Webhooks ──────────────────────────────────────────────────────────────────
-def fire_webhooks(db, event, payload):
-    try:
-        hooks = db.execute("SELECT * FROM webhooks_config WHERE workspace_id=? AND active=1",(wid(),)).fetchall()
-        for h in hooks:
-            events = json.loads(h["events"] or "[]")
-            if event not in events and "*" not in events: continue
-            body = json.dumps({"event":event,"workspace_id":wid(),"data":payload}).encode()
-            req = urllib.request.Request(h["url"],data=body,method="POST",
-                headers={"Content-Type":"application/json","X-VEWIT-Event":event,"X-VEWIT-Secret":h["secret"] or ""})
-            try:
-                with urllib.request.urlopen(req,timeout=5) as r: pass
-            except: pass
-    except: pass
-
-@app.route("/api/webhooks", methods=["GET"])
-@login_required
-def get_webhooks():
-    with get_db() as db:
-        rows = db.execute("SELECT id,name,url,events,active,created FROM webhooks_config WHERE workspace_id=?",(wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/webhooks", methods=["POST"])
-@login_required
-def create_webhook():
-    d = request.json or {}
-    if not d.get("url"): return jsonify({"error":"URL required"}),400
-    with get_db() as db:
-        wh_id = f"wh{int(__import__('time').time()*1000)}"
-        secret = secrets.token_hex(16)
-        db.execute("INSERT INTO webhooks_config VALUES (?,?,?,?,?,?,?,?)",
-                   (wh_id,wid(),d.get("name","Webhook"),d["url"],
-                    json.dumps(d.get("events",["*"])),secret,1,ts()))
-        return jsonify({"ok":True,"id":wh_id,"secret":secret})
-
-@app.route("/api/webhooks/<wh_id>", methods=["PUT"])
-@login_required
-def update_webhook(wh_id):
-    d = request.json or {}
-    with get_db() as db:
-        h = db.execute("SELECT * FROM webhooks_config WHERE id=? AND workspace_id=?",(wh_id,wid())).fetchone()
-        if not h: return jsonify({"error":"Not found"}),404
-        db.execute("UPDATE webhooks_config SET name=?,url=?,events=?,active=? WHERE id=?",
-                   (d.get("name",h["name"]),d.get("url",h["url"]),
-                    json.dumps(d.get("events",json.loads(h["events"] or "[]"))),
-                    int(d.get("active",h["active"])),wh_id))
-        return jsonify({"ok":True})
-
-@app.route("/api/webhooks/<wh_id>", methods=["DELETE"])
-@login_required
-def delete_webhook(wh_id):
-    with get_db() as db:
-        db.execute("DELETE FROM webhooks_config WHERE id=? AND workspace_id=?",(wh_id,wid()))
-        return jsonify({"ok":True})
-
-# ── API Keys ──────────────────────────────────────────────────────────────────
-@app.route("/api/api-keys", methods=["GET"])
-@login_required
-def get_api_keys():
-    with get_db() as db:
-        rows = db.execute("SELECT id,name,key_prefix,scopes,last_used,created FROM api_keys WHERE workspace_id=? AND user_id=?",(wid(),session["user_id"])).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/api-keys", methods=["POST"])
-@login_required
-def create_api_key():
-    d = request.json or {}
-    raw_key = f"vwt_{secrets.token_hex(24)}"
-    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-    prefix = raw_key[:12]
-    with get_db() as db:
-        kid = f"ak{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO api_keys VALUES (?,?,?,?,?,?,?,?,?)",
-                   (kid,wid(),session["user_id"],d.get("name","My API Key"),
-                    key_hash,prefix,json.dumps(d.get("scopes",["read"])),None,ts()))
-        return jsonify({"ok":True,"key":raw_key,"id":kid,"prefix":prefix})
-
-@app.route("/api/api-keys/<kid>", methods=["DELETE"])
-@login_required
-def delete_api_key(kid):
-    with get_db() as db:
-        db.execute("DELETE FROM api_keys WHERE id=? AND workspace_id=? AND user_id=?",(kid,wid(),session["user_id"]))
-        return jsonify({"ok":True})
-
-# ── Audit Logs ────────────────────────────────────────────────────────────────
-@app.route("/api/audit-logs", methods=["GET"])
-@login_required
-def get_audit_logs():
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
-        rows = db.execute("SELECT al.*,u.name as user_name FROM audit_logs al LEFT JOIN users u ON al.user_id=u.id WHERE al.workspace_id=? ORDER BY al.created DESC LIMIT 100",(wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-# ── Guest access ──────────────────────────────────────────────────────────────
-@app.route("/api/guests", methods=["POST"])
-@login_required
-def invite_guest():
-    d = request.json or {}
-    email = d.get("email","").strip().lower()
-    if not email: return jsonify({"error":"Email required"}),400
-    project_ids = d.get("project_ids",[])
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
-        existing = db.execute("SELECT id FROM users WHERE email=? AND workspace_id=?",(email,wid())).fetchone()
-        if existing: return jsonify({"error":"User already exists"}),400
-        uid = f"g{int(__import__('time').time()*1000)}"
-        raw_pw = secrets.token_hex(8)
-        db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",
-                   (uid,wid(),d.get("name",email.split("@")[0]),email,
-                    hash_pw(raw_pw),"Viewer","G","#64748b",ts()))
-        db.execute("UPDATE users SET is_guest=1,guest_projects=? WHERE id=?",(json.dumps(project_ids),uid))
-        ws = db.execute("SELECT name FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        body = f"<p>You've been invited as a guest to <b>{ws['name'] if ws else 'VEWIT'}</b>.</p><p>Email: {email}<br>Password: {raw_pw}</p><p>Login at your VEWIT workspace.</p>"
-        threading.Thread(target=send_email,args=(email,"Guest Invitation — VEWIT",body,wid()),daemon=True).start()
-        return jsonify({"ok":True,"id":uid,"temp_password":raw_pw})
-
-# ── Referral System ───────────────────────────────────────────────────────────
-@app.route("/api/referral", methods=["GET"])
-@login_required
-def get_referral():
-    with get_db() as db:
-        ws = db.execute("SELECT referral_code FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        code = ws["referral_code"] if ws and ws["referral_code"] else ""
-        if not code:
-            code = secrets.token_hex(6).upper()
-            db.execute("UPDATE workspaces SET referral_code=? WHERE id=?",(code,wid()))
-        count = db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_ws=?",(wid(),)).fetchone()
-        return jsonify({"code":code,"referrals":count["cnt"] if count else 0})
-
-@app.route("/api/referral/use", methods=["POST"])
-def use_referral():
-    d = request.json or {}
-    code = d.get("code","").strip().upper()
-    ws_id = d.get("workspace_id","")
-    if not code or not ws_id: return jsonify({"error":"Missing params"}),400
-    with get_db() as db:
-        referrer = db.execute("SELECT id FROM workspaces WHERE referral_code=?",(code,)).fetchone()
-        if not referrer: return jsonify({"error":"Invalid code"}),404
-        if referrer["id"] == ws_id: return jsonify({"error":"Cannot self-refer"}),400
-        existing = db.execute("SELECT id FROM referrals WHERE referred_ws=?",(ws_id,)).fetchone()
-        if existing: return jsonify({"ok":True,"already":True})
-        rid = f"ref{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO referrals VALUES (?,?,?,?)",(rid,referrer["id"],ws_id,ts()))
-        return jsonify({"ok":True})
-
-# ── Email Digest ──────────────────────────────────────────────────────────────
-def _send_digest_for_workspace(ws):
-    try:
-        with get_db() as db:
-            tasks = db.execute("SELECT * FROM tasks WHERE workspace_id=?",(ws["id"],)).fetchall()
-            users = db.execute("SELECT * FROM users WHERE workspace_id=?",(ws["id"],)).fetchall()
-            by_stage = {}
-            for t in tasks:
-                by_stage.setdefault(t["stage"],[]).append(t)
-            rows_html = ""
-            for stage, items in by_stage.items():
-                rows_html += f"<tr><td style='padding:8px;border-bottom:1px solid #e2e8f0'><b>{stage.title()}</b></td><td style='padding:8px;border-bottom:1px solid #e2e8f0'>{len(items)}</td></tr>"
-            overdue = [t for t in tasks if t.get("due") and t["due"]<datetime.utcnow().strftime("%Y-%m-%d") and t.get("stage")!="completed"]
-            overdue_html = "".join(f"<li>{t['title']} (due {t['due']})</li>" for t in overdue[:5])
-            body = f"""<h2>VEWIT Daily Digest — {ws['name']}</h2>
-            <h3>Task Summary</h3><table border='0' cellpadding='0' cellspacing='0'>{rows_html}</table>
-            {"<h3>⚠️ Overdue Tasks</h3><ul>"+overdue_html+"</ul>" if overdue else ""}
-            <p><small>Unsubscribe in Workspace Settings → Digest.</small></p>"""
-            for u in users:
-                if u.get("email"):
-                    send_email(u["email"],f"Daily Digest — {ws['name']}",body,ws["id"])
-    except Exception as e:
-        print(f"Digest error for {ws.get('id')}: {e}")
-
-def _run_digest():
-    try:
-        with get_db() as db:
-            workspaces = db.execute("SELECT * FROM workspaces WHERE digest_enabled=1").fetchall()
-            for ws in workspaces:
-                threading.Thread(target=_send_digest_for_workspace,args=(dict(ws),),daemon=True).start()
-    except Exception as e:
-        print(f"Digest runner error: {e}")
-
-
-# ── Announcements ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/announcements", methods=["GET"])
-@login_required
-def get_announcements():
-    with get_db() as db:
-        rows = db.execute(
-            "SELECT a.*,u.name as author_name FROM announcements a LEFT JOIN users u ON a.author=u.id "
-            "WHERE a.workspace_id=? ORDER BY a.pinned DESC, a.created DESC",(wid(),)).fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
-            read = db.execute("SELECT id FROM announcement_reads WHERE announcement_id=? AND user_id=?",
-                              (r["id"],session["user_id"])).fetchone()
-            d["read"] = bool(read)
-            result.append(d)
-        return jsonify(result)
-
-@app.route("/api/announcements", methods=["POST"])
-@login_required
-def create_announcement():
-    d = request.json or {}
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
-        aid = f"ann{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO announcements VALUES (?,?,?,?,?,?,?,?)",
-                   (aid,wid(),d.get("title",""),d.get("content",""),
-                    session["user_id"],int(d.get("pinned",0)),ts(),d.get("expires","")))
-        users = db.execute("SELECT id FROM users WHERE workspace_id=?",(wid(),)).fetchall()
-        for u in users:
-            if u["id"] == session["user_id"]: continue
-            nid = f"n{int(__import__('time').time()*1000)}{secrets.token_hex(2)}"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"announcement",f"Announcement: {d.get('title','')}",u["id"],0,ts()))
-        return jsonify({"ok":True,"id":aid})
-
-@app.route("/api/announcements/<aid>/read", methods=["POST"])
-@login_required
-def mark_announcement_read(aid):
-    with get_db() as db:
-        existing = db.execute("SELECT id FROM announcement_reads WHERE announcement_id=? AND user_id=?",
-                              (aid,session["user_id"])).fetchone()
-        if not existing:
-            rid = f"ar{int(__import__('time').time()*1000)}"
-            db.execute("INSERT INTO announcement_reads VALUES (?,?,?,?)",(rid,aid,session["user_id"],ts()))
-        return jsonify({"ok":True})
-
-@app.route("/api/announcements/<aid>", methods=["DELETE"])
-@login_required
-def delete_announcement(aid):
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
-        db.execute("DELETE FROM announcement_reads WHERE announcement_id=?",(aid,))
-        db.execute("DELETE FROM announcements WHERE id=? AND workspace_id=?",(aid,wid()))
-        return jsonify({"ok":True})
-
-# ── Message Reactions ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/reactions/<msg_type>/<msg_id>", methods=["GET"])
-@login_required
-def get_reactions(msg_type, msg_id):
-    with get_db() as db:
-        rows = db.execute(
-            "SELECT emoji, user_id FROM message_reactions WHERE workspace_id=? AND message_id=? AND message_type=?",
-            (wid(),msg_id,msg_type)).fetchall()
-        grouped = {}
-        for r in rows:
-            if r["emoji"] not in grouped: grouped[r["emoji"]] = []
-            grouped[r["emoji"]].append(r["user_id"])
-        return jsonify(grouped)
-
-@app.route("/api/reactions/<msg_type>/<msg_id>", methods=["POST"])
-@login_required
-def toggle_reaction(msg_type, msg_id):
-    d = request.json or {}
-    emoji = d.get("emoji","like")
-    with get_db() as db:
-        existing = db.execute(
-            "SELECT id FROM message_reactions WHERE workspace_id=? AND message_id=? AND message_type=? AND user_id=? AND emoji=?",
-            (wid(),msg_id,msg_type,session["user_id"],emoji)).fetchone()
-        if existing:
-            db.execute("DELETE FROM message_reactions WHERE id=?",(existing["id"],))
-            return jsonify({"ok":True,"action":"removed"})
-        rid = f"r{int(__import__('time').time()*1000)}{secrets.token_hex(2)}"
-        db.execute("INSERT INTO message_reactions VALUES (?,?,?,?,?,?,?)",
-                   (rid,wid(),msg_id,msg_type,session["user_id"],emoji,ts()))
-        return jsonify({"ok":True,"action":"added"})
-
-# ── Message Threads ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/messages/<mid>/thread", methods=["GET"])
-@login_required
-def get_thread(mid):
-    with get_db() as db:
-        rows = db.execute(
-            "SELECT t.*,u.name as sender_name FROM message_threads t LEFT JOIN users u ON t.sender=u.id "
-            "WHERE t.workspace_id=? AND t.parent_id=? ORDER BY t.ts",(wid(),mid)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/messages/<mid>/thread", methods=["POST"])
-@login_required
-def post_thread_reply(mid):
-    d = request.json or {}
-    content = d.get("content","").strip()
-    if not content: return jsonify({"error":"Empty"}),400
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if cu and cu["role"] == "Viewer": return jsonify({"error":"Viewers cannot post"}),403
-        tid = f"th{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO message_threads VALUES (?,?,?,?,?,?)",
-                   (tid,wid(),mid,session["user_id"],content,ts()))
-        return jsonify({"ok":True,"id":tid})
-
-# ── AI Daily Standup ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/ai/standup", methods=["POST"])
-@login_required
-def ai_standup():
-    d = request.json or {}
-    target_user_id = d.get("user_id", session["user_id"])
-    with get_db() as db:
-        ws = db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
-        if not api_key: return jsonify({"error":"NO_KEY"}),400
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        cu_role = cu["role"] if cu else "Viewer"
-        if cu_role in ("Developer","Tester") and target_user_id != session["user_id"]:
-            return jsonify({"error":"Forbidden"}),403
-        target_user = db.execute("SELECT name FROM users WHERE id=? AND workspace_id=?",(target_user_id,wid())).fetchone()
-        if not target_user: return jsonify({"error":"User not found"}),404
-        today_str = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
-        yesterday = (__import__("datetime").datetime.utcnow() - __import__("datetime").timedelta(days=1)).strftime("%Y-%m-%d")
-        tasks = db.execute(
-            "SELECT title,stage,priority,due,pct FROM tasks WHERE workspace_id=? AND assignee=? ORDER BY created DESC LIMIT 20",
-            (wid(),target_user_id)).fetchall()
-        time_logs = db.execute(
-            "SELECT tl.description,tl.minutes,t.title as task_title FROM time_logs tl LEFT JOIN tasks t ON tl.task_id=t.id "
-            "WHERE tl.workspace_id=? AND tl.user_id=? AND tl.logged_date>=? ORDER BY tl.created DESC LIMIT 10",
-            (wid(),target_user_id,yesterday)).fetchall()
-        task_ctx = "\n".join([f"- [{t['stage']}] {t['title']} ({t['pct']}% done)" for t in tasks])
-        time_ctx = "\n".join([f"- {l['task_title']}: {l['minutes']}min" for l in time_logs]) or "No time logged recently"
-        prompt = f"Generate a daily standup for {target_user['name']}. Tasks: {task_ctx or 'None'}. Recent time logs: {time_ctx}. Today: {today_str}. Format: 3 sections: What I did yesterday, What I am doing today, Blockers. Be concise, bullet-pointed."
-    try:
-        req_data = json.dumps({"model":"claude-sonnet-4-5","max_tokens":500,"messages":[{"role":"user","content":prompt}]}).encode()
-        req = urllib.request.Request("https://api.anthropic.com/v1/messages",data=req_data,method="POST",
-            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
-        with urllib.request.urlopen(req,timeout=30) as resp:
-            result = json.loads(resp.read().decode())
-            report = result["content"][0]["text"]
-    except Exception as e:
-        return jsonify({"error":str(e)}),500
-    with get_db() as db:
-        sid = f"sr{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO standup_reports VALUES (?,?,?,?,?,?)",
-                   (sid,wid(),target_user_id,today_str,report,ts()))
-    return jsonify({"ok":True,"report":report,"user":target_user["name"]})
-
-# ── AI Code Review ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/ai/code-review", methods=["POST"])
-@login_required
-def ai_code_review():
-    d = request.json or {}
-    diff = d.get("diff","").strip()
-    context = d.get("context","")
-    if not diff: return jsonify({"error":"No diff provided"}),400
-    with get_db() as db:
-        ws = db.execute("SELECT ai_api_key FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
-        if not api_key: return jsonify({"error":"NO_KEY"}),400
-    system = f"You are a senior code reviewer. Review this diff and give structured feedback with: Summary, Issues Found (Critical/Major/Minor), Suggestions, Security Notes, and a Verdict (Approve/Request Changes/Reject). Context: {context or 'None'}"
-    try:
-        req_data = json.dumps({"model":"claude-sonnet-4-5","max_tokens":1500,"system":system,
-            "messages":[{"role":"user","content":f"Review this diff:\n```\n{diff[:6000]}\n```"}]}).encode()
-        req = urllib.request.Request("https://api.anthropic.com/v1/messages",data=req_data,method="POST",
-            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
-        with urllib.request.urlopen(req,timeout=45) as resp:
-            result = json.loads(resp.read().decode())
-            review = result["content"][0]["text"]
-    except Exception as e:
-        return jsonify({"error":str(e)}),500
-    with get_db() as db:
-        rid = f"cr{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO code_reviews VALUES (?,?,?,?,?,?,?,?)",
-                   (rid,wid(),d.get("task_id",""),d.get("ticket_id",""),diff[:6000],review,session["user_id"],ts()))
-    return jsonify({"ok":True,"review":review,"id":rid})
-
-# ── AI Risk ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/ai/risk", methods=["GET"])
-@login_required
-def ai_risk():
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin","Manager","TeamLead"):
-            return jsonify({"error":"Forbidden"}),403
-        ws = db.execute("SELECT ai_api_key FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
-        if not api_key: return jsonify({"error":"NO_KEY"}),400
-        projects = db.execute("SELECT * FROM projects WHERE workspace_id=?",(wid(),)).fetchall()
-        tasks = db.execute("SELECT * FROM tasks WHERE workspace_id=?",(wid(),)).fetchall()
-        today = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
-    summaries = []
-    for p in projects:
-        ptasks = [t for t in tasks if t["project"] == p["id"]]
-        overdue = len([t for t in ptasks if t.get("due","") and t["due"] < today and t["stage"] != "completed"])
-        blocked = len([t for t in ptasks if t["stage"] == "blocked"])
-        pct_done = round(sum(t["pct"] or 0 for t in ptasks) / max(len(ptasks),1))
-        summaries.append(f"Project '{p['name']}': {len(ptasks)} tasks, {overdue} overdue, {blocked} blocked, {pct_done}% avg done, deadline: {p.get('target_date','unknown')}")
-    prompt = "Analyze these projects for risk. For each: PROJECT name, RISK level (LOW/MEDIUM/HIGH/CRITICAL), REASON (one sentence), ACTIONS (2-3 bullets). Today: " + today + ". Projects:\n" + "\n".join(summaries)
-    try:
-        req_data = json.dumps({"model":"claude-sonnet-4-5","max_tokens":1500,"messages":[{"role":"user","content":prompt}]}).encode()
-        req = urllib.request.Request("https://api.anthropic.com/v1/messages",data=req_data,method="POST",
-            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
-        with urllib.request.urlopen(req,timeout=45) as resp:
-            result = json.loads(resp.read().decode())
-            analysis = result["content"][0]["text"]
-    except Exception as e:
-        return jsonify({"error":str(e)}),500
-    return jsonify({"ok":True,"analysis":analysis})
-
-# ── Intake Forms ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/forms", methods=["GET"])
-@login_required
-def get_forms():
-    with get_db() as db:
-        rows = db.execute("SELECT * FROM intake_forms WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-@app.route("/api/forms", methods=["POST"])
-@login_required
-def create_form():
-    d = request.json or {}
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin","Manager","TeamLead"): return jsonify({"error":"Forbidden"}),403
-        fid = f"frm{int(__import__('time').time()*1000)}"
-        db.execute("INSERT INTO intake_forms VALUES (?,?,?,?,?,?,?,?,?)",
-                   (fid,wid(),d.get("title",""),d.get("description",""),
-                    d.get("project_id",""),json.dumps(d.get("fields",[])),1,session["user_id"],ts()))
-        return jsonify({"ok":True,"id":fid,"url":f"/form/{fid}"})
-
-@app.route("/api/forms/<fid>", methods=["PUT"])
-@login_required
-def update_form(fid):
-    d = request.json or {}
-    with get_db() as db:
-        f = db.execute("SELECT * FROM intake_forms WHERE id=? AND workspace_id=?",(fid,wid())).fetchone()
-        if not f: return jsonify({"error":"Not found"}),404
-        db.execute("UPDATE intake_forms SET title=?,description=?,fields=?,project_id=?,active=? WHERE id=?",
-                   (d.get("title",f["title"]),d.get("description",f["description"]),
-                    json.dumps(d.get("fields",json.loads(f["fields"] or "[]"))),
-                    d.get("project_id",f["project_id"]),int(d.get("active",f["active"])),fid))
-        return jsonify({"ok":True})
-
-@app.route("/api/forms/<fid>", methods=["DELETE"])
-@login_required
-def delete_form(fid):
-    with get_db() as db:
-        db.execute("DELETE FROM intake_forms WHERE id=? AND workspace_id=?",(fid,wid()))
-        return jsonify({"ok":True})
-
-@app.route("/form/<fid>")
-def public_form(fid):
-    with get_db() as db:
-        f = db.execute("SELECT * FROM intake_forms WHERE id=? AND active=1",(fid,)).fetchone()
-        if not f: return "Form not found or inactive",404
-        ws = db.execute("SELECT name FROM workspaces WHERE id=?",(f["workspace_id"],)).fetchone()
-        ws_name = ws["name"] if ws else "VEWIT"
-        fields_html = ""
-        for field in json.loads(f["fields"] or "[]"):
-            ft = field.get("type","text"); fn = field.get("name",""); flbl = field.get("label",fn)
-            req = "required" if field.get("required") else ""
-            star = "*" if req else ""
-            if ft == "textarea":
-                fields_html += f'<div class="fg"><label>{flbl}{star}</label><textarea name="{fn}" {req} rows="4"></textarea></div>'
-            elif ft == "select":
-                opts = "".join(f'<option value="{o}">{o}</option>' for o in field.get("options",[]))
-                fields_html += f'<div class="fg"><label>{flbl}</label><select name="{fn}" {req}><option value="">Select...</option>{opts}</select></div>'
-            else:
-                fields_html += f'<div class="fg"><label>{flbl}{star}</label><input type="{ft}" name="{fn}" {req}/></div>'
-    css = """*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#f8fafc;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.card{background:#fff;border-radius:16px;padding:36px;width:100%;max-width:560px;box-shadow:0 4px 24px rgba(0,0,0,.08)}h1{font-size:22px;font-weight:700;color:#0f172a;margin-bottom:6px}p{font-size:14px;color:#64748b;margin-bottom:24px;line-height:1.6}.fg{margin-bottom:16px}label{font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:5px}input,textarea,select{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;color:#1e293b;outline:none;font-family:inherit}input:focus,textarea:focus,select:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1)}button{width:100%;padding:12px;background:#1d4ed8;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}button:hover{background:#1e40af}.badge{display:inline-block;padding:2px 10px;background:#eff6ff;color:#1d4ed8;border-radius:99px;font-size:12px;font-weight:600;margin-bottom:16px}"""
-    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{f["title"]}</title><style>{css}</style></head><body><div class="card"><div class="badge">{ws_name}</div><h1>{f["title"]}</h1><p>{f["description"] or "Fill out the form below."}</p><div id="fw"><form id="if">{fields_html}<div class="fg"><label>Your email (optional)</label><input type="email" name="_email" placeholder="your@email.com"/></div><button type="submit">Submit</button></form></div></div><script>document.getElementById("if").onsubmit=async(e)=>{{e.preventDefault();const data={{}};new FormData(e.target).forEach((v,k)=>data[k]=v);const r=await fetch("/api/forms/{fid}/submit",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify(data)}});if(r.ok)document.getElementById("fw").innerHTML='<div style="text-align:center;padding:32px"><h2 style="color:#15803d">Submitted!</h2><p>Your response has been received.</p></div>'}};</script></body></html>"""
-
-@app.route("/api/forms/<fid>/submit", methods=["POST"])
-def submit_form(fid):
-    data = request.json or {}
-    with get_db() as db:
-        f = db.execute("SELECT * FROM intake_forms WHERE id=? AND active=1",(fid,)).fetchone()
-        if not f: return jsonify({"error":"Form not found"}),404
-        sid = f"sub{int(__import__('time').time()*1000)}"
-        submitter_email = data.pop("_email","")
-        ticket_title = f"[Form] {f['title']} submission"
-        ticket_body = "\n".join([f"**{k}**: {v}" for k,v in data.items()])
-        tid = f"TK-{sid[-8:]}"
-        db.execute("INSERT INTO tickets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                   (tid,f["workspace_id"],ticket_title,ticket_body,
-                    "task","medium","open","",submitter_email,f["project_id"],"[]",ts(),ts(),f["workspace_id"]))
-        db.execute("INSERT INTO intake_submissions VALUES (?,?,?,?,?,?,?)",
-                   (sid,fid,f["workspace_id"],json.dumps(data),tid,submitter_email,ts()))
-        return jsonify({"ok":True})
-
-@app.route("/api/forms/<fid>/submissions", methods=["GET"])
-@login_required
-def get_form_submissions(fid):
-    with get_db() as db:
-        rows = db.execute("SELECT * FROM intake_submissions WHERE form_id=? AND workspace_id=? ORDER BY created DESC",(fid,wid())).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-# ── TOTP 2FA — Pure Python (no pyotp needed) ──────────────────────────────────────────
-import hmac as _hmac, hashlib as _hashlib, struct as _struct, base64 as _base64
-
-def _totp_generate(secret_b32, window=0):
-    """Pure-Python TOTP — RFC 6238 / RFC 4226. No external deps."""
-    import time as _t
-    try:
-        key = _base64.b32decode(secret_b32.upper() + '=' * ((8 - len(secret_b32) % 8) % 8))
-    except Exception:
-        return None
-    t = int(_t.time()) // 30 + window
-    msg = _struct.pack('>Q', t)
-    h = _hmac.new(key, msg, _hashlib.sha1).digest()
-    offset = h[-1] & 0x0f
-    code = _struct.unpack('>I', h[offset:offset+4])[0] & 0x7fffffff
-    return str(code % 1000000).zfill(6)
-
-def _totp_verify(secret_b32, code):
-    """Verify with ±1 window tolerance."""
-    code = str(code).strip()
-    for w in [-1, 0, 1]:
-        if _totp_generate(secret_b32, w) == code:
-            return True
-    return False
-
-def _b32_secret():
-    raw = secrets.token_bytes(20)
-    return _base64.b32encode(raw).decode().rstrip('=')
-
-@app.route("/api/totp/setup", methods=["POST"])
-@login_required
-def totp_setup():
-    with get_db() as db:
-        existing = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
-        if existing and existing["enabled"]: return jsonify({"error":"2FA already enabled"}),400
-        secret = _b32_secret()
-        user = db.execute("SELECT email,name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        email = user["email"] if user else "user"
-        uri = f"otpauth://totp/VEWIT:{email}?secret={secret}&issuer=VEWIT&algorithm=SHA1&digits=6&period=30"
-        backup_codes = [secrets.token_hex(4).upper() for _ in range(8)]
-        tid = f"totp{int(__import__('time').time()*1000)}"
-        if existing:
-            db.execute("UPDATE totp_secrets SET secret=?,backup_codes=?,enabled=0 WHERE user_id=?",
-                      (secret,json.dumps(backup_codes),session["user_id"]))
-        else:
-            db.execute("INSERT INTO totp_secrets VALUES (?,?,?,?,?,?)",
-                      (tid,session["user_id"],secret,0,json.dumps(backup_codes),ts()))
-        return jsonify({"ok":True,"secret":secret,"uri":uri,"backup_codes":backup_codes})
-
-@app.route("/api/totp/verify", methods=["POST"])
-@login_required
-def totp_verify():
-    d = request.json or {}
-    code = d.get("code","").strip()
-    with get_db() as db:
-        rec = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
-        if not rec: return jsonify({"error":"2FA not set up"}),400
-        if _totp_verify(rec["secret"], code):
-            db.execute("UPDATE totp_secrets SET enabled=1 WHERE user_id=?",(session["user_id"],))
-            return jsonify({"ok":True,"message":"2FA enabled successfully"})
-        backup = json.loads(rec["backup_codes"] or "[]")
-        if code.upper() in backup:
-            backup.remove(code.upper())
-            db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),session["user_id"]))
-            return jsonify({"ok":True,"message":"Backup code used","remaining":len(backup)})
-        return jsonify({"error":"Invalid code — please try again"}),400
-
-@app.route("/api/totp/disable", methods=["POST"])
-@login_required
-def totp_disable():
-    with get_db() as db:
-        db.execute("UPDATE totp_secrets SET enabled=0 WHERE user_id=?",(session["user_id"],))
-        return jsonify({"ok":True})
-
-@app.route("/api/totp/status", methods=["GET"])
-@login_required
-def totp_status():
-    with get_db() as db:
-        rec = db.execute("SELECT enabled FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
-        return jsonify({"enabled":bool(rec and rec["enabled"])})
-
-# ── Time Report ────────────────────────────────────────────────────────────────────────────
-@app.route("/api/reports/time", methods=["GET"])
-@login_required
-def time_report():
-    period = request.args.get("period","week")
-    user_filter = request.args.get("user_id","")
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if cu and cu["role"] in ("Developer","Tester"): user_filter = session["user_id"]
-        now = __import__("datetime").datetime.utcnow()
-        if period == "week": start = (now - __import__("datetime").timedelta(days=7)).strftime("%Y-%m-%d")
-        elif period == "month": start = now.replace(day=1).strftime("%Y-%m-%d")
-        else: start = (now - __import__("datetime").timedelta(days=90)).strftime("%Y-%m-%d")
-        q = "SELECT tl.*,u.name as user_name,t.title as task_title,p.name as project_name FROM time_logs tl LEFT JOIN users u ON tl.user_id=u.id LEFT JOIN tasks t ON tl.task_id=t.id LEFT JOIN projects p ON t.project=p.id WHERE tl.workspace_id=? AND tl.logged_date>=?"
-        params = [wid(), start]
-        if user_filter: q += " AND tl.user_id=?"; params.append(user_filter)
-        rows = db.execute(q + " ORDER BY tl.logged_date DESC", params).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-
-
-# ── Mentions ──────────────────────────────────────────────────────────────────
-@app.route("/api/mentions", methods=["GET"])
-@login_required
-def get_mentions():
-    with get_db() as db:
-        rows = db.execute(
-            "SELECT n.*,u.name as sender_name FROM notifications n LEFT JOIN users u ON n.sender_id=u.id "
-            "WHERE n.workspace_id=? AND n.user_id=? AND n.type='mention' ORDER BY n.ts DESC LIMIT 50",
-            (wid(),session["user_id"])).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-
-# ── Pinned Messages ───────────────────────────────────────────────────────────
-@app.route("/api/messages/<mid>/pin", methods=["POST"])
-@login_required
-def pin_message(mid):
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin","Manager","TeamLead"):
-            return jsonify({"error":"Forbidden"}),403
-        try: db.execute("ALTER TABLE messages ADD COLUMN pinned INTEGER DEFAULT 0")
-        except: pass
-        db.execute("UPDATE messages SET pinned=1 WHERE id=? AND workspace_id=?",(mid,wid()))
-        return jsonify({"ok":True})
-
-@app.route("/api/messages/<mid>/unpin", methods=["POST"])
-@login_required
-def unpin_message(mid):
-    with get_db() as db:
-        db.execute("UPDATE messages SET pinned=0 WHERE id=? AND workspace_id=?",(mid,wid()))
-        return jsonify({"ok":True})
-
-@app.route("/api/projects/<pid>/pinned-messages", methods=["GET"])
-@login_required
-def get_pinned_messages(pid):
-    with get_db() as db:
-        try: db.execute("ALTER TABLE messages ADD COLUMN pinned INTEGER DEFAULT 0")
-        except: pass
-        rows = db.execute(
-            "SELECT m.*,u.name as sender_name FROM messages m LEFT JOIN users u ON m.sender=u.id "
-            "WHERE m.workspace_id=? AND m.project=? AND m.pinned=1 ORDER BY m.ts DESC",
-            (wid(),pid)).fetchall()
-        return jsonify([dict(r) for r in rows])
-
-
-
-# ── Dashboard summary — fast counts, no full data loads ──────────────────────
-@app.route("/api/dashboard/summary")
-@login_required
-def dashboard_summary():
-    """Returns counts and lightweight summary — frontend uses this for Dashboard view."""
-    team_id = request.args.get("team_id","")
-    with get_db() as db:
-        ws_id = wid()
-        uid   = session["user_id"]
-        today = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
-
-        if team_id:
-            # Get team project IDs and member IDs
-            team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,ws_id)).fetchone()
-            member_ids = json.loads(team["member_ids"] if team else "[]")
-            proj_rows  = db.execute("SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(ws_id,team_id)).fetchall()
-            proj_ids   = [p["id"] for p in proj_rows]
-            task_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=?",(ws_id,team_id)).fetchone()["cnt"]
-            active_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND stage NOT IN ('completed','backlog')",(ws_id,team_id)).fetchone()["cnt"]
-            done_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND stage='completed'",(ws_id,team_id)).fetchone()["cnt"]
-            blocked_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND stage='blocked'",(ws_id,team_id)).fetchone()["cnt"]
-            overdue_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND due<? AND stage!='completed'",(ws_id,team_id,today)).fetchone()["cnt"]
-        else:
-            task_count    = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=?",(ws_id,)).fetchone()["cnt"]
-            active_count  = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND stage NOT IN ('completed','backlog')",(ws_id,)).fetchone()["cnt"]
-            done_count    = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND stage='completed'",(ws_id,)).fetchone()["cnt"]
-            blocked_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND stage='blocked'",(ws_id,)).fetchone()["cnt"]
-            overdue_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND due<? AND stage!='completed'",(ws_id,today)).fetchone()["cnt"]
-
-        proj_count   = db.execute("SELECT COUNT(*) as cnt FROM projects WHERE workspace_id=?",(ws_id,)).fetchone()["cnt"]
-        member_count = db.execute("SELECT COUNT(*) as cnt FROM users WHERE workspace_id=?",(ws_id,)).fetchone()["cnt"]
-        open_tickets = db.execute("SELECT COUNT(*) as cnt FROM tickets WHERE workspace_id=? AND status='open'",(ws_id,)).fetchone()["cnt"]
-        my_tasks     = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND assignee=? AND stage!='completed'",(ws_id,uid)).fetchone()["cnt"]
-        my_tickets   = db.execute("SELECT COUNT(*) as cnt FROM tickets WHERE workspace_id=? AND assignee=? AND status NOT IN ('closed','resolved')",(ws_id,uid)).fetchone()["cnt"]
-        unread_notifs = db.execute("SELECT COUNT(*) as cnt FROM notifications WHERE workspace_id=? AND user_id=? AND read=0",(ws_id,uid)).fetchone()["cnt"]
-
-        # Recent activity - last 5 completed tasks
-        recent = db.execute(
-            "SELECT t.id,t.title,t.stage,t.priority,u.name as assignee_name "
-            "FROM tasks t LEFT JOIN users u ON t.assignee=u.id "
-            "WHERE t.workspace_id=? ORDER BY t.created DESC LIMIT 8",(ws_id,)).fetchall()
-
-        # Priority breakdown
-        priority_counts = {p:db.execute(
-            "SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND priority=? AND stage!='completed'",(ws_id,p)).fetchone()["cnt"]
-            for p in ["critical","high","medium","low"]}
-
-        return jsonify({
-            "tasks":       {"total":task_count,"active":active_count,"done":done_count,"blocked":blocked_count,"overdue":overdue_count},
-            "projects":    proj_count,
-            "members":     member_count,
-            "tickets":     {"open":open_tickets},
-            "my":          {"tasks":my_tasks,"tickets":my_tickets},
-            "unread":      unread_notifs,
-            "priority":    priority_counts,
-            "recent":      [dict(r) for r in recent],
-        })
-
-# ── Lightweight poll endpoint — only fetch what changed ──────────────────────
-@app.route("/api/poll")
-@login_required
-def poll():
-    """Lightweight polling — returns only unread notification count + DM count.
-    Frontend polls this every 15s instead of re-fetching all data."""
-    with get_db() as db:
-        uid = session["user_id"]
-        ws  = wid()
-        unread_notifs = db.execute(
-            "SELECT COUNT(*) as cnt FROM notifications WHERE workspace_id=? AND user_id=? AND read=0",(ws,uid)).fetchone()["cnt"]
-        unread_dm = db.execute(
-            "SELECT sender, COUNT(*) as cnt FROM direct_messages WHERE workspace_id=? AND recipient=? AND read=0 GROUP BY sender",(ws,uid)).fetchall()
-        return jsonify({
-            "notif_count": unread_notifs,
-            "dm_unread":   [{"sender":r["sender"],"cnt":r["cnt"]} for r in unread_dm],
-            "ts":          __import__("time").time()
-        })
-
-
-# ── Budget Tracking ───────────────────────────────────────────────────────────
-@app.route("/api/projects/<pid>/budget", methods=["GET"])
-@login_required
-def get_project_budget(pid):
-    with get_db() as db:
-        p = db.execute("SELECT budget,budget_spent FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
-        if not p: return jsonify({"error":"Not found"}),404
-        logs = db.execute("SELECT * FROM time_logs WHERE workspace_id=? AND task_id IN (SELECT id FROM tasks WHERE project=? AND workspace_id=?)",(wid(),pid,wid())).fetchall()
-        return jsonify({"budget":p["budget"] or 0,"budget_spent":p["budget_spent"] or 0,"time_logged_minutes":sum(l["minutes"] for l in logs)})
-
-@app.route("/api/projects/<pid>/budget", methods=["PUT"])
-@login_required
-def update_project_budget(pid):
-    d = request.json or {}
-    with get_db() as db:
-        db.execute("UPDATE projects SET budget=?,budget_spent=? WHERE id=? AND workspace_id=?",
-                   (d.get("budget",0),d.get("budget_spent",0),pid,wid()))
-        return jsonify({"ok":True})
-
-# ── Public status page ────────────────────────────────────────────────────────
-@app.route("/status/<invite_code>")
-def public_status(invite_code):
-    with get_db() as db:
-        ws = db.execute("SELECT * FROM workspaces WHERE invite_code=?",(invite_code,)).fetchone()
-        if not ws: return "Workspace not found",404
-        projects = db.execute("SELECT id,name,color,progress FROM projects WHERE workspace_id=?",(ws["id"],)).fetchall()
-        tasks = db.execute("SELECT stage,COUNT(*) as cnt FROM tasks WHERE workspace_id=? GROUP BY stage",(ws["id"],)).fetchall()
-        stage_counts = {t["stage"]:t["cnt"] for t in tasks}
-        proj_html = "".join(f"<div style='padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px'><div style='display:flex;justify-content:space-between'><b>{p['name']}</b><span>{p['progress']}%</span></div><div style='height:6px;background:#e2e8f0;border-radius:3px;margin-top:6px'><div style='height:6px;background:{p['color'] or '#3b82f6'};border-radius:3px;width:{p['progress']}%'></div></div></div>" for p in projects)
-        stage_html = "".join(f"<span style='padding:4px 10px;background:#f1f5f9;border-radius:99px;font-size:13px;margin-right:6px'>{s}: <b>{c}</b></span>" for s,c in stage_counts.items())
-        return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>{ws['name']} — Status</title>
-        <meta name="viewport" content="width=device-width,initial-scale=1">
-        <style>body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#1e293b}}</style></head>
-        <body><h1>🟢 {ws['name']} — Project Status</h1><p style="color:#64748b">Live status page · Updated in real time</p>
-        <h2>Tasks by Stage</h2><div style="margin-bottom:20px">{stage_html}</div>
-        <h2>Projects</h2>{proj_html or '<p>No projects yet.</p>'}
-        </body></html>"""
-
-# ── White-label settings ──────────────────────────────────────────────────────
-@app.route("/api/workspace/white-label", methods=["PUT"])
-@login_required
-def update_white_label():
-    d = request.json or {}
-    with get_db() as db:
-        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        if not cu or cu["role"] not in ("Admin",): return jsonify({"error":"Forbidden"}),403
-        db.execute("UPDATE workspaces SET white_label_name=?,white_label_logo=? WHERE id=?",
-                   (d.get("name",""),d.get("logo",""),wid()))
-        return jsonify({"ok":True})
-
 
 # ── Export ────────────────────────────────────────────────────────────────────
 @app.route("/api/export/csv")
@@ -4345,25 +2757,17 @@ Sitemap: https://www.vewit.in/sitemap.xml"""
 @app.route("/tasks")
 @app.route("/messages")
 @app.route("/dm")
+@app.route("/dashboard")
+@app.route("/projects")
+@app.route("/tasks")
+@app.route("/messages")
+@app.route("/dm")
 @app.route("/tickets")
 @app.route("/timeline")
 @app.route("/reminders")
 @app.route("/settings")
 @app.route("/team")
 @app.route("/productivity")
-@app.route("/calendar")
-@app.route("/kanban")
-@app.route("/docs")
-@app.route("/goals")
-@app.route("/sprints")
-@app.route("/integrations")
-@app.route("/audit")
-@app.route("/announcements")
-@app.route("/standup")
-@app.route("/codereview")
-@app.route("/risk")
-@app.route("/timereport")
-@app.route("/forms")
 def app_page(**kwargs):
     """Serve the SPA for all clean URLs — JS picks up the path and sets the view."""
     return HTML
@@ -4376,842 +2780,1024 @@ def root(p):
         return HTML
     return LANDING_HTML
 
-LANDING_HTML = """
-<!DOCTYPE html>
+LANDING_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VEWIT — AI-Powered Team Collaboration &amp; Project Management Platform</title>
-<meta name="description" content="VEWIT — AI-powered team collaboration. Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, 2FA and more. Free to start."/>
-<meta name="keywords" content="VEWIT, AI project management, team collaboration software, kanban board, sprint planning, AI standup, code review bot, risk predictor, intake forms, 2FA security, time tracking"/>
+<title>VEWIT — AI-Powered Project Management &amp; Team Collaboration Platform</title>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timeline tracking and developer productivity — all in one place. Free to start."/>
+<meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
 <meta name="author" content="VEWIT"/>
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
-<meta name="theme-color" content="#0a0f1e"/>
+<meta name="googlebot" content="index, follow"/>
+<meta name="revisit-after" content="3 days"/>
+<meta name="language" content="English"/>
+<meta name="rating" content="general"/>
+<meta name="category" content="Business Software, Project Management, Team Collaboration"/>
+<meta name="theme-color" content="#0f172a"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="en" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="en-in" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="x-default" href="https://www.vewit.in/"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:description" content="Kanban, sprints, AI standup, code review bot, risk predictor, 2FA — all in one. Free to start."/>
+<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
 <meta property="og:site_name" content="VEWIT"/>
+<meta property="og:locale" content="en_IN"/>
 <meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
+<meta property="og:image:width" content="512"/>
+<meta property="og:image:height" content="512"/>
+<meta property="og:image:alt" content="VEWIT — AI-Powered Team Collaboration Platform"/>
+<meta property="og:site_name" content="VEWIT"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
-<meta name="twitter:description" content="Kanban, sprints, AI standup generator, code review bot, risk predictor — free to start."/>
+<meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform with kanban boards, sprint planning, AI standup, code review, risk predictor, 2FA and developer productivity analytics.","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"featureList":["AI Standup Generator","AI Code Review","AI Risk Predictor","Kanban Board","Sprint Planning","2FA Security","Time Tracking","Intake Forms","Docs Wiki"]}
+{"@context":"https://schema.org","@type":"SoftwareApplication",
+"name":"VEWIT","alternateName":"VEWIT Team Collaboration","url":"https://www.vewit.in",
+"description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
+"applicationCategory":"BusinessApplication","applicationSubCategory":"Project Management",
+"operatingSystem":"Web, PWA, iOS, Android",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"INR","availability":"https://schema.org/InStock"},
+"aggregateRating":{"@type":"AggregateRating","ratingValue":"5","reviewCount":"1"},
+"featureList":["AI-Powered Project Management","Kanban Task Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"],
+"screenshot":"https://www.vewit.in/icon-512.png",
+"softwareVersion":"4.0",
+"releaseNotes":"AI assistant, multi-workspace support, push notifications"}
 </script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite",
+"name":"VEWIT","url":"https://www.vewit.in",
+"potentialAction":{"@type":"SearchAction","target":"https://www.vewit.in/tasks?q={search_term_string}","query-input":"required name=search_term_string"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage",
+"mainEntity":[
+  {"@type":"Question","name":"What is VEWIT?","acceptedAnswer":{"@type":"Answer","text":"VEWIT is an AI-powered team collaboration platform that combines project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics in one unified workspace."}},
+  {"@type":"Question","name":"Is VEWIT free?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT is free to start. Create a workspace instantly with no credit card required."}},
+  {"@type":"Question","name":"How is VEWIT different from Jira?","acceptedAnswer":{"@type":"Answer","text":"Unlike Jira, VEWIT includes built-in direct messaging, support tickets, AI assistant, developer productivity analytics and timeline tracking all in one platform — no plugins or integrations needed."}},
+  {"@type":"Question","name":"Does VEWIT have an AI assistant?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT has a built-in AI assistant powered by Anthropic Claude that understands your actual projects and tasks and can answer questions, summarise work and generate task descriptions."}},
+  {"@type":"Question","name":"How many users can join a VEWIT workspace?","acceptedAnswer":{"@type":"Answer","text":"VEWIT supports unlimited team members in a workspace with six role levels: Admin, Manager, Team Lead, Developer, Tester and Viewer."}}
+]}
+</script>
+<meta name="description" content="VEWIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <style>
 :root{
-  --bg:#ffffff;--sf:#f8fafc;--sf2:#f1f5f9;--sf3:#e2e8f0;
-  --tx:#0a0f1e;--tx2:#1e293b;--tx3:#475569;--tx4:#94a3b8;
-  --ac:#2563eb;--ac2:#1d4ed8;--pu:#7c3aed;--pi:#db2777;
-  --gn:#16a34a;--cy:#0891b2;--am:#d97706;--rd:#dc2626;
-  --g1:linear-gradient(135deg,#2563eb,#7c3aed);
-  --g2:linear-gradient(135deg,#7c3aed,#db2777);
-  --g3:linear-gradient(135deg,#2563eb,#0891b2);
-  --r8:8px;--r12:12px;--r16:16px;--r20:20px;
+  --bg:#ffffff;--sf:#f8fafc;--sf2:#f1f5f9;--bd:rgba(37,99,235,0.12);--bd2:rgba(0,0,0,0.06);
+  --ac:#2563eb;--ac2:#1d4ed8;--ac3:rgba(37,99,235,0.08);
+  --tx:#0a0f1e;--tx2:#475569;--tx3:#94a3b8;
+  --ocean1:#e0f2fe;--ocean2:#bae6fd;--ocean3:#7dd3fc;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
-body{background:var(--bg);color:var(--tx);font-family:'Inter',system-ui,sans-serif;font-size:16px;line-height:1.65;overflow-x:hidden;}
-a{color:inherit;text-decoration:none;}
+body{background:#ffffff;color:var(--tx);font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.65;overflow-x:hidden;}
+h1,h2,h3,h4{font-family:'Syne',sans-serif;line-height:1.15;}
 
-/* ── NOISE TEXTURE OVERLAY ─────────────────────────── */
-body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.4;}
-
-/* ── NAV ──────────────────────────────────────────── */
-nav{position:fixed;top:0;left:0;right:0;z-index:300;height:60px;display:flex;align-items:center;
-  background:rgba(255,255,255,.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border-bottom:1px solid rgba(0,0,0,.06);}
-.nav-in{max-width:1200px;margin:0 auto;padding:0 32px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:20px;}
-.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:.97rem;color:var(--tx);letter-spacing:-.03em;}
-.logo-mark{width:32px;height:32px;border-radius:9px;background:var(--g1);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(37,99,235,.35);}
-.nav-links{display:flex;align-items:center;gap:2px;list-style:none;}
-.nav-links a{font-size:.84rem;font-weight:500;color:var(--tx3);padding:6px 13px;border-radius:var(--r8);transition:all .15s;}
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:56px;display:flex;align-items:center;background:rgba(255,255,255,0.88);backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.06);transition:background .3s;}
+.nav-inner{max-width:1160px;margin:0 auto;padding:0 28px;width:100%;display:flex;align-items:center;justify-content:space-between;}
+.logo{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:800;color:var(--tx);text-decoration:none;display:flex;align-items:center;gap:8px;letter-spacing:-.02em;}
+.logo-icon{width:28px;height:28px;border-radius:7px;background:var(--ac);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,0.3);}
+.nav-links{display:flex;align-items:center;gap:4px;list-style:none;}
+.nav-links a{color:var(--tx2);text-decoration:none;font-size:.875rem;padding:6px 12px;border-radius:7px;transition:all .18s;}
 .nav-links a:hover{color:var(--tx);background:var(--sf2);}
+.nav-pill{background:var(--ac3);color:var(--ac)!important;border:1px solid var(--bd);}
+.nav-pill:hover{background:rgba(37,99,235,0.12)!important;}
+.btn{display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;transition:all .18s;text-decoration:none;white-space:nowrap;}
+.btn-primary{background:var(--ac);color:#fff;padding:9px 20px;border-radius:9px;font-size:.875rem;box-shadow:0 2px 10px rgba(37,99,235,0.25);}
+.btn-primary:hover{background:var(--ac2);box-shadow:0 4px 18px rgba(37,99,235,0.35);transform:translateY(-1px);}
+.btn-outline{background:transparent;color:var(--tx);padding:9px 20px;border-radius:9px;font-size:.875rem;border:1.5px solid var(--bd2);}
+.btn-outline:hover{border-color:rgba(0,0,0,0.15);background:var(--sf);}
 .nav-cta{display:flex;gap:8px;align-items:center;}
-.btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;transition:all .17s;white-space:nowrap;}
-.btn-ghost{background:transparent;color:var(--tx3);padding:8px 18px;border-radius:var(--r8);font-size:.84rem;border:1.5px solid rgba(0,0,0,.12);}
-.btn-ghost:hover{color:var(--tx);border-color:rgba(0,0,0,.2);background:var(--sf);}
-.btn-grd{background:var(--g1);color:#fff;padding:9px 22px;border-radius:var(--r8);font-size:.84rem;box-shadow:0 4px 16px rgba(37,99,235,.3);}
-.btn-grd:hover{opacity:.92;box-shadow:0 6px 24px rgba(37,99,235,.4);transform:translateY(-1px);}
-.btn-lg{padding:14px 32px!important;font-size:.96rem!important;border-radius:12px!important;}
-.btn-white{background:#fff;color:#1d4ed8;padding:13px 28px;border-radius:12px;font-size:.96rem;box-shadow:0 4px 20px rgba(0,0,0,.15);}
-.btn-white:hover{background:#f0f9ff;transform:translateY(-1px);}
-.btn-outline-white{background:rgba(255,255,255,.1);color:#fff;padding:13px 28px;border-radius:12px;font-size:.96rem;border:1.5px solid rgba(255,255,255,.3);}
-.btn-outline-white:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.5);}
 
-/* ── HERO ─────────────────────────────────────────── */
-.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 32px 80px;position:relative;overflow:hidden;
-  background:linear-gradient(160deg,#0a0f1e 0%,#0f1b3d 40%,#1a0a2e 70%,#0a0f1e 100%);}
-/* Animated orbs */
-.hero::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;
-  background:radial-gradient(circle,rgba(37,99,235,.25) 0%,transparent 70%);
-  top:-100px;right:-100px;animation:orb1 8s ease-in-out infinite alternate;pointer-events:none;}
-.hero::after{content:'';position:absolute;width:500px;height:500px;border-radius:50%;
-  background:radial-gradient(circle,rgba(124,58,237,.2) 0%,transparent 70%);
-  bottom:-50px;left:-80px;animation:orb2 10s ease-in-out infinite alternate;pointer-events:none;}
-@keyframes orb1{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-60px,40px) scale(1.15);}}
-@keyframes orb2{0%{transform:translate(0,0) scale(1);}100%{transform:translate(50px,-40px) scale(1.1);}}
-/* Grid pattern */
-.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(37,99,235,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.07) 1px,transparent 1px);background-size:60px 60px;pointer-events:none;}
-.hero-in{position:relative;z-index:2;max-width:1200px;margin:0 auto;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center;}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);padding:5px 14px 5px 8px;border-radius:100px;font-size:.72rem;font-weight:700;color:rgba(255,255,255,.9);margin-bottom:24px;letter-spacing:.04em;text-transform:uppercase;backdrop-filter:blur(8px);}
-.badge-dot{width:22px;height:22px;border-radius:50%;background:var(--g1);display:flex;align-items:center;justify-content:center;}
-.hero h1{font-size:clamp(2.2rem,4vw,3.5rem);font-weight:900;color:#fff;margin-bottom:20px;line-height:1.06;letter-spacing:-.04em;}
-.hero h1 .grad{background:linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.hero-sub{font-size:1.02rem;color:rgba(255,255,255,.6);max-width:480px;margin-bottom:36px;line-height:1.75;}
-.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
-.hero-trust{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
-.trust-it{display:flex;align-items:center;gap:5px;font-size:.78rem;color:rgba(255,255,255,.45);}
-.trust-it svg{opacity:.6;}
+/* HERO */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 28px 0;position:relative;overflow:hidden;}
+.hero-content{position:relative;z-index:2;text-align:center;max-width:760px;margin:0 auto;}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);padding:5px 14px;border-radius:100px;font-size:.75rem;font-weight:700;color:var(--ac);margin-bottom:24px;letter-spacing:.05em;text-transform:uppercase;}
+.hero-badge-dot{width:5px;height:5px;background:var(--ac);border-radius:50%;}
+.hero h1{font-size:clamp(2.4rem,5.5vw,4rem);font-weight:800;color:var(--tx);margin-bottom:18px;letter-spacing:-.04em;line-height:1.1;}
+.hero h1 .blue{color:var(--ac);}
+.hero-sub{font-size:1.05rem;color:var(--tx2);max-width:520px;margin:0 auto 36px;font-weight:300;line-height:1.75;}
+.hero-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.btn-xl{padding:13px 28px!important;font-size:.96rem!important;border-radius:11px!important;}
+.hero-note{font-size:.78rem;color:var(--tx3);}
+.hero-note span{color:var(--ac);font-weight:600;}
 
-/* App window mockup */
-.hero-right{position:relative;}
-.app-win{border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);box-shadow:0 40px 100px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.05);background:#0d1117;}
-.win-bar{height:40px;background:#161b22;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 14px;gap:7px;}
-.wd{width:11px;height:11px;border-radius:50%;}
-.win-url{flex:1;margin:0 10px;height:22px;background:rgba(255,255,255,.06);border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;}
-.win-url-txt{font-size:.62rem;color:rgba(255,255,255,.35);font-family:'JetBrains Mono',monospace;}
-.win-body{display:flex;height:360px;}
-.win-sb{width:168px;flex-shrink:0;background:#0d1117;padding:10px 8px;border-right:1px solid rgba(255,255,255,.06);}
-.ws-head{display:flex;align-items:center;gap:8px;padding:7px 8px 12px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:8px;}
-.ws-av{width:28px;height:28px;border-radius:7px;background:var(--g1);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;color:#fff;flex-shrink:0;}
-.ws-nm{font-size:.7rem;font-weight:700;color:#e2e8f0;letter-spacing:-.01em;}
-.ws-sub{font-size:.58rem;color:#475569;}
-.nav-sec{font-size:.56rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#334155;padding:8px 8px 3px;}
-.nav-it{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:.68rem;color:#64748b;margin-bottom:1px;}
-.nav-it.act{background:rgba(37,99,235,.2);color:#93c5fd;}
-.nav-it svg{width:12px;height:12px;flex-shrink:0;}
-.win-main{flex:1;background:#0a0f1e;overflow:hidden;display:flex;flex-direction:column;}
-.win-hdr{height:38px;background:#0d1117;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 14px;justify-content:space-between;flex-shrink:0;}
-.win-title{font-size:.75rem;font-weight:700;color:#e2e8f0;}
-.win-badges{display:flex;gap:5px;}
-.win-badge{font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:99px;}
-.kan{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px;overflow:hidden;}
-.kcol{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px;}
-.kcol-h{font-size:.56rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;}
-.kcard{background:#161b22;border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:7px;margin-bottom:5px;border-left-width:2px;border-left-style:solid;}
-.kcard-t{font-size:.62rem;font-weight:500;color:#e2e8f0;margin-bottom:5px;line-height:1.4;}
-.ktag{display:inline-block;font-size:.52rem;padding:1.5px 5px;border-radius:3px;font-weight:600;margin-right:3px;}
-/* floating cards */
-.float-card{position:absolute;background:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.25);border:1px solid rgba(0,0,0,.07);}
-.fc-head{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
-.fc-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
-.fc-title{font-size:.7rem;font-weight:700;color:#0a0f1e;}
-.fc-body{font-size:.68rem;color:#475569;line-height:1.5;}
+/* APP MOCKUP */
+.hero-mockup{position:relative;z-index:2;width:100%;max-width:900px;margin:48px auto 0;}
+.mockup-frame{border-radius:16px 16px 0 0;overflow:hidden;box-shadow:0 -4px 60px rgba(37,99,235,0.12),0 0 0 1px rgba(0,0,0,0.06);background:#fff;}
+.mockup-topbar{height:36px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;padding:0 14px;gap:6px;}
+.m-dot{width:9px;height:9px;border-radius:50%;}
+.mockup-url{flex:1;margin:0 10px;height:18px;background:#f1f5f9;border-radius:5px;display:flex;align-items:center;padding:0 8px;}
+.mockup-url-txt{font-size:.6rem;color:#94a3b8;font-family:monospace;}
+.mockup-body{display:flex;height:360px;}
+.m-sidebar{width:180px;flex-shrink:0;background:#fafbfc;border-right:1px solid #f1f5f9;padding:12px 10px;display:flex;flex-direction:column;gap:2px;}
+.m-ws{display:flex;align-items:center;gap:7px;padding:7px 8px;margin-bottom:6px;border-radius:7px;background:#f1f5f9;}
+.m-ws-av{width:26px;height:26px;border-radius:6px;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;color:#fff;flex-shrink:0;}
+.m-ws-n{font-size:.72rem;font-weight:700;color:var(--tx);}
+.m-ws-s{font-size:.62rem;color:var(--tx3);}
+.m-sec{font-size:.58rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx3);padding:8px 8px 3px;}
+.m-nav{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;font-size:.72rem;color:var(--tx2);}
+.m-nav.act{background:rgba(37,99,235,0.08);color:var(--ac);}
+.m-badge{margin-left:auto;background:var(--ac);color:#fff;font-size:.55rem;font-weight:700;padding:1px 5px;border-radius:100px;}
+.m-main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.m-header{padding:11px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;}
+.m-title{font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;color:var(--tx);}
+.m-tabs{display:flex;gap:2px;}
+.m-tab{font-size:.62rem;padding:3px 9px;border-radius:5px;color:var(--tx3);}
+.m-tab.act{background:rgba(37,99,235,0.08);color:var(--ac);}
+.m-board{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:12px 14px;height:100%;align-content:start;}
+.m-col{background:#f8fafc;border:1px solid #f1f5f9;border-radius:7px;padding:8px;}
+.m-col-h{font-size:.6rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin-bottom:7px;display:flex;justify-content:space-between;}
+.m-col-c{width:15px;height:15px;border-radius:4px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--tx3);}
+.m-card{background:#fff;border:1px solid #f1f5f9;border-radius:6px;padding:7px;margin-bottom:6px;}
+.m-card-t{font-size:.66rem;font-weight:500;color:var(--tx);margin-bottom:5px;line-height:1.4;}
+.m-pill{display:inline-block;font-size:.54rem;padding:2px 5px;border-radius:100px;font-weight:600;}
+.pill-h{background:rgba(239,68,68,.08);color:#ef4444;}
+.pill-m{background:rgba(180,83,9,0.10);color:#f59e0b;}
+.pill-d{background:rgba(37,99,235,.08);color:#2563eb;}
+.pill-ok{background:rgba(34,197,94,.08);color:#16a34a;}
+.m-prog{height:2px;background:#f1f5f9;border-radius:100px;margin-top:6px;}
+.m-prog-fill{height:100%;border-radius:100px;background:var(--ac);}
+.m-prog-fill.g{background:#16a34a;}
+.m-prog-fill.o{background:#f59e0b;}
 
-/* ── TICKER ───────────────────────────────────────── */
-.ticker-wrap{overflow:hidden;padding:14px 0;background:linear-gradient(135deg,#0a0f1e,#1a0a2e);border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);}
-.ticker{display:flex;animation:tick 45s linear infinite;width:max-content;}
-@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-.t-it{display:flex;align-items:center;gap:8px;padding:0 28px;font-size:.78rem;color:rgba(255,255,255,.4);white-space:nowrap;flex-shrink:0;}
-.t-hi{font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.t-sep{color:rgba(255,255,255,.15);}
+/* STATS BAR */
+.stats-bar{padding:40px 0;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
+.stats-grid{max-width:1160px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e2e8f0;border-radius:12px;overflow:hidden;}
+.stat-item{background:#f8fafc;text-align:center;padding:24px 16px;}
+.stat-num{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;line-height:1;margin-bottom:5px;color:var(--ac);}
+.stat-lbl{font-size:.82rem;color:#475569;font-weight:500;}
 
-/* ── STATS ────────────────────────────────────────── */
-.stats{padding:72px 0;background:#fff;}
-.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
-.stat-card{text-align:center;padding:28px 16px;border-radius:var(--r16);border:1.5px solid var(--sf3);background:#fff;transition:all .2s;position:relative;overflow:hidden;}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--g1);opacity:0;transition:opacity .2s;}
-.stat-card:hover{transform:translateY(-4px);box-shadow:0 12px 36px rgba(37,99,235,.1);border-color:rgba(37,99,235,.2);}
-.stat-card:hover::before{opacity:1;}
-.stat-n{font-size:2.4rem;font-weight:900;background:var(--g1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:6px;}
-.stat-l{font-size:.8rem;color:var(--tx3);font-weight:500;}
-
-/* ── SECTIONS ─────────────────────────────────────── */
-section{padding:96px 0;}
-.wrap{max-width:1200px;margin:0 auto;padding:0 32px;}
-.sec-tag{display:inline-flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff;margin-bottom:12px;background:var(--g1);padding:4px 14px;border-radius:100px;box-shadow:0 2px 12px rgba(37,99,235,.3);}
-.sec-title{font-size:clamp(1.8rem,3vw,2.5rem);font-weight:900;max-width:580px;margin-bottom:12px;color:var(--tx);letter-spacing:-.03em;line-height:1.1;}
-.sec-sub{color:var(--tx3);font-size:.97rem;max-width:520px;margin-bottom:52px;line-height:1.8;}
+/* SECTIONS */
+section{padding:80px 0;}
+.wrap{max-width:1160px;margin:0 auto;padding:0 28px;}
+.sec-tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;background:var(--ac3);padding:3px 11px;border-radius:100px;border:1px solid var(--bd);}
+.sec-title{font-size:clamp(1.7rem,3vw,2.2rem);font-weight:800;max-width:540px;margin-bottom:10px;letter-spacing:-.025em;color:var(--tx);}
+.sec-sub{color:var(--tx2);font-size:.95rem;max-width:500px;margin-bottom:44px;font-weight:300;line-height:1.75;}
 .centered{text-align:center;}.centered .sec-title,.centered .sec-sub{margin-left:auto;margin-right:auto;}
 
-/* ── AI SECTION ───────────────────────────────────── */
-.ai-section{background:linear-gradient(160deg,#0a0f1e 0%,#0f1b3d 50%,#1a0a2e 100%);position:relative;overflow:hidden;}
-.ai-section::before{content:'';position:absolute;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.12) 0%,transparent 70%);top:-200px;right:-200px;pointer-events:none;}
-.ai-section::after{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.1) 0%,transparent 70%);bottom:-100px;left:-100px;pointer-events:none;}
-.ai-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;position:relative;z-index:2;}
-.ai-card{border-radius:var(--r16);padding:28px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);backdrop-filter:blur(12px);transition:all .25s;position:relative;overflow:hidden;}
-.ai-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.04),transparent);opacity:0;transition:opacity .25s;}
-.ai-card:hover{border-color:rgba(255,255,255,.2);transform:translateY(-4px);box-shadow:0 20px 60px rgba(0,0,0,.4);}
-.ai-card:hover::before{opacity:1;}
-.ai-card.span2{grid-column:span 2;}
-.ai-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:22px;}
-.ai-ic-blue{background:linear-gradient(135deg,rgba(37,99,235,.3),rgba(37,99,235,.1));border:1px solid rgba(37,99,235,.3);}
-.ai-ic-purple{background:linear-gradient(135deg,rgba(124,58,237,.3),rgba(124,58,237,.1));border:1px solid rgba(124,58,237,.3);}
-.ai-ic-red{background:linear-gradient(135deg,rgba(220,38,38,.25),rgba(220,38,38,.08));border:1px solid rgba(220,38,38,.25);}
-.ai-ic-green{background:linear-gradient(135deg,rgba(22,163,74,.25),rgba(22,163,74,.08));border:1px solid rgba(22,163,74,.25);}
-.ai-card h3{font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:10px;}
-.ai-card p{font-size:.88rem;color:rgba(255,255,255,.55);line-height:1.75;}
-.ai-list{list-style:none;margin-top:14px;display:flex;flex-direction:column;gap:8px;}
-.ai-list li{display:flex;align-items:flex-start;gap:8px;font-size:.84rem;color:rgba(255,255,255,.6);}
-.ai-list li::before{content:'';width:5px;height:5px;border-radius:50%;background:linear-gradient(135deg,#60a5fa,#a78bfa);flex-shrink:0;margin-top:8px;}
-.role-chip{font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(96,165,250,.15);color:#93c5fd;border:1px solid rgba(96,165,250,.25);margin-left:5px;}
-.code-prev{margin-top:18px;background:rgba(0,0,0,.4);border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:.72rem;line-height:1.8;border:1px solid rgba(255,255,255,.06);}
-.cp-c{color:#475569;}
-.cp-k{color:#93c5fd;}
-.cp-v{color:#86efac;}
-.cp-s{color:#fca5a5;}
+/* FEATURES BENTO */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.bc{background:#fff;border:1.5px solid #f1f5f9;border-radius:14px;padding:24px;transition:all .22s;cursor:default;position:relative;overflow:hidden;}
+.bc:hover{border-color:rgba(37,99,235,0.2);box-shadow:0 8px 32px rgba(37,99,235,0.08);transform:translateY(-2px);}
+.bc.span2{grid-column:span 2;}
+.bc.featured{border-color:rgba(37,99,235,0.15);background:linear-gradient(135deg,rgba(37,99,235,0.03) 0%,#fff 60%);}
+.b-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:13px;background:var(--ac3);border:1px solid var(--bd);}
+.bc h3{font-size:1rem;font-weight:700;margin-bottom:8px;color:#0a0f1e;}
+.bc p{font-size:.88rem;color:#334155;line-height:1.68;}
+.feat-list{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.feat-list li{display:flex;align-items:flex-start;gap:8px;font-size:.84rem;color:#334155;}
+.feat-list li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:7px;}
+.role-badge{font-size:.64rem;background:rgba(37,99,235,.08);color:var(--ac);padding:2px 8px;border-radius:100px;margin-left:5px;border:1px solid var(--bd);font-weight:600;}
 
-/* ── FEATURE BENTO ────────────────────────────────── */
-.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-.ben{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r16);padding:28px;transition:all .2s;cursor:default;position:relative;overflow:hidden;}
-.ben::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--g1);opacity:0;transition:opacity .2s;}
-.ben:hover{transform:translateY(-4px);box-shadow:0 16px 50px rgba(37,99,235,.08);border-color:rgba(37,99,235,.18);}
-.ben:hover::after{opacity:1;}
-.ben.wide{grid-column:span 2;}
-.ben-ico{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px;transition:transform .2s;}
-.ben:hover .ben-ico{transform:scale(1.1);}
-.ben-ico-1{background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(37,99,235,.04));border:1px solid rgba(37,99,235,.15);}
-.ben-ico-2{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(124,58,237,.04));border:1px solid rgba(124,58,237,.15);}
-.ben-ico-3{background:linear-gradient(135deg,rgba(22,163,74,.1),rgba(22,163,74,.03));border:1px solid rgba(22,163,74,.15);}
-.ben-ico-4{background:linear-gradient(135deg,rgba(14,165,233,.1),rgba(14,165,233,.03));border:1px solid rgba(14,165,233,.15);}
-.ben-ico-5{background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(245,158,11,.03));border:1px solid rgba(245,158,11,.15);}
-.ben-ico-6{background:linear-gradient(135deg,rgba(219,39,119,.1),rgba(219,39,119,.03));border:1px solid rgba(219,39,119,.15);}
-.ben-ico-7{background:linear-gradient(135deg,rgba(6,182,212,.1),rgba(6,182,212,.03));border:1px solid rgba(6,182,212,.15);}
-.ben-ico-8{background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(16,185,129,.03));border:1px solid rgba(16,185,129,.15);}
-.ben h3{font-size:.97rem;font-weight:700;margin-bottom:8px;color:var(--tx);}
-.ben p{font-size:.87rem;color:var(--tx3);line-height:1.7;}
-.ben-list{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:6px;}
-.ben-list li{display:flex;align-items:flex-start;gap:7px;font-size:.84rem;color:var(--tx2);}
-.ben-list li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--g1);flex-shrink:0;margin-top:8px;}
+/* MODULES */
+.modules-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:40px;}
+.mod-card{background:#fff;border:1.5px solid #f1f5f9;border-radius:11px;padding:16px 14px;text-align:center;transition:all .2s;}
+.mod-card:hover{border-color:rgba(37,99,235,.15);transform:translateY(-1px);box-shadow:0 4px 16px rgba(37,99,235,.07);}
+.mod-ico{font-size:1.6rem;margin-bottom:8px;}
+.mod-n{font-size:.84rem;font-weight:700;margin-bottom:3px;color:#0a0f1e;}
+.mod-d{font-size:.76rem;color:#475569;line-height:1.5;}
 
-/* ── SECURITY SECTION ─────────────────────────────── */
-.sec-section{background:linear-gradient(160deg,#0a0f1e 0%,#0c1a3b 50%,#150a2e 100%);position:relative;overflow:hidden;}
-.sec-section::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(96,165,250,.4),transparent);}
-.sec-section::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(167,139,250,.4),transparent);}
-.sec-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.sec-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:var(--r16);padding:26px;display:flex;gap:16px;align-items:flex-start;transition:all .2s;backdrop-filter:blur(8px);}
-.sec-card:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18);transform:translateY(-2px);}
-.sec-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
-.sec-ico-blue{background:linear-gradient(135deg,rgba(37,99,235,.35),rgba(37,99,235,.12));border:1px solid rgba(37,99,235,.3);}
-.sec-ico-purple{background:linear-gradient(135deg,rgba(124,58,237,.35),rgba(124,58,237,.12));border:1px solid rgba(124,58,237,.3);}
-.sec-ico-green{background:linear-gradient(135deg,rgba(22,163,74,.3),rgba(22,163,74,.1));border:1px solid rgba(22,163,74,.25);}
-.sec-ico-amber{background:linear-gradient(135deg,rgba(217,119,6,.3),rgba(217,119,6,.1));border:1px solid rgba(217,119,6,.25);}
-.sec-card h4{font-size:.93rem;font-weight:700;margin-bottom:6px;color:#fff;}
-.sec-card p{font-size:.84rem;color:rgba(255,255,255,.5);line-height:1.65;}
+/* HOW IT WORKS */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:44px;}
+.step{text-align:center;}
+.step-num{width:44px;height:44px;border-radius:50%;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-family:'Syne',sans-serif;font-weight:800;font-size:.9rem;color:var(--ac);background:var(--ac3);}
+.step h3{font-size:.95rem;font-weight:700;margin-bottom:6px;color:#0a0f1e;}
+.step p{font-size:.86rem;color:#334155;}
 
-/* ── ROLE MATRIX ──────────────────────────────────── */
-.role-section{background:var(--sf);}
-.role-table-wrap{overflow-x:auto;border-radius:var(--r16);border:1.5px solid var(--sf3);overflow:hidden;}
-.role-table{width:100%;border-collapse:collapse;font-size:.84rem;}
-.role-table th{background:#fff;padding:13px 16px;text-align:center;font-weight:700;font-size:.73rem;color:var(--tx2);border-bottom:1.5px solid var(--sf3);white-space:nowrap;}
-.role-table th.feat-col{text-align:left;min-width:200px;}
-.role-table td{padding:11px 16px;border-bottom:1px solid var(--sf3);background:#fff;text-align:center;vertical-align:middle;}
-.role-table td.feat-col{text-align:left;font-weight:500;color:var(--tx);background:#fafbfc;border-right:1.5px solid var(--sf3);}
-.role-table .cat-row td{background:linear-gradient(135deg,#eff6ff,#f5f3ff);font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#4338ca;padding:8px 16px;}
-.role-table tr:last-child td{border-bottom:none;}
-.pchip{display:inline-block;font-size:.68rem;font-weight:600;padding:2px 9px;border-radius:99px;}
-.pc-full{background:linear-gradient(135deg,rgba(22,163,74,.12),rgba(16,185,129,.08));color:#15803d;border:1px solid rgba(22,163,74,.2);}
-.pc-own{background:rgba(217,119,6,.1);color:#b45309;border:1px solid rgba(217,119,6,.2);}
-.pc-view{background:rgba(37,99,235,.08);color:#1d4ed8;border:1px solid rgba(37,99,235,.15);}
-.pc-no{color:#cbd5e1;font-size:.9rem;}
+/* CTA */
+.cta-section{padding:80px 0;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 50%,#e0f2fe 100%);}
+.cta-box{text-align:center;border:1.5px solid rgba(37,99,235,0.15);border-radius:20px;padding:64px 40px;background:#fff;position:relative;overflow:hidden;box-shadow:0 4px 40px rgba(37,99,235,0.08);}
+.cta-box::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:240px;height:2px;background:linear-gradient(90deg,transparent,var(--ac),transparent);}
+.cta-box h2{font-size:clamp(1.7rem,3vw,2.3rem);font-weight:800;margin-bottom:12px;color:var(--tx);letter-spacing:-.03em;}
+.cta-box p{color:var(--tx2);margin-bottom:30px;font-size:.96rem;max-width:440px;margin-left:auto;margin-right:auto;}
+.cta-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+.trust-row{display:flex;justify-content:center;align-items:center;gap:18px;flex-wrap:wrap;}
+.trust-item{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--tx3);}
+.trust-item span{color:var(--ac);font-weight:600;}
 
-/* ── HOW IT WORKS ─────────────────────────────────── */
-.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:52px;position:relative;}
-.steps-grid::before{content:'';position:absolute;top:23px;left:10%;right:10%;height:1px;background:linear-gradient(90deg,transparent,rgba(37,99,235,.3),rgba(124,58,237,.3),rgba(37,99,235,.3),transparent);z-index:0;}
-.step-card{text-align:center;position:relative;z-index:1;}
-.step-num{width:48px;height:48px;border-radius:50%;background:var(--g1);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-weight:800;font-size:.9rem;color:#fff;box-shadow:0 4px 20px rgba(37,99,235,.35);}
-.step-card h3{font-size:.97rem;font-weight:700;margin-bottom:8px;color:var(--tx);}
-.step-card p{font-size:.87rem;color:var(--tx3);line-height:1.65;}
+/* FOOTER */
+footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
+.footer-top{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:36px;margin-bottom:40px;}
+.footer-brand p{font-size:.82rem;color:var(--tx3);margin-top:9px;line-height:1.7;max-width:230px;}
+.footer-col h4{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx2);margin-bottom:12px;}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.footer-col a{color:var(--tx3);font-size:.82rem;text-decoration:none;transition:color .18s;}
+.footer-col a:hover{color:var(--tx2);}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:20px;border-top:1px solid #f1f5f9;flex-wrap:wrap;gap:10px;}
+.footer-copy{color:var(--tx3);font-size:.78rem;}
+.footer-badges{display:flex;gap:6px;}
+.fb{font-size:.7rem;padding:3px 9px;border-radius:100px;border:1px solid #e2e8f0;color:var(--tx3);}
 
-/* ── INTEGRATIONS ─────────────────────────────────── */
-.int-section{background:linear-gradient(135deg,#f0f9ff,#f5f3ff,#fce7f3);}
-.int-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;}
-.int-card{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r16);padding:20px 16px;text-align:center;transition:all .2s;position:relative;overflow:hidden;}
-.int-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--g1);transform:scaleX(0);transition:transform .2s;}
-.int-card:hover{transform:translateY(-3px);box-shadow:0 10px 32px rgba(37,99,235,.1);border-color:rgba(37,99,235,.2);}
-.int-card:hover::before{transform:scaleX(1);}
-.int-ico{font-size:1.9rem;margin-bottom:9px;}
-.int-n{font-size:.86rem;font-weight:700;color:var(--tx);margin-bottom:3px;}
-.int-d{font-size:.75rem;color:var(--tx3);line-height:1.45;}
+/* TICKER */
+.ticker-wrap{overflow:hidden;border-top:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;padding:10px 0;background:#fafbfc;}
+.ticker{display:flex;animation:ticker 32s linear infinite;}
+.ticker-item{display:flex;align-items:center;gap:8px;padding:0 28px;font-size:.76rem;color:var(--tx3);white-space:nowrap;flex-shrink:0;}
+.ticker-item .hi{color:var(--ac);font-weight:600;}
+.ticker-sep{color:#e2e8f0;margin-left:20px;}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 
-/* ── TESTIMONIALS ─────────────────────────────────── */
-.testimonial-section{background:#fff;}
-.quote-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.quote-card{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r20);padding:28px;transition:all .2s;position:relative;overflow:hidden;}
-.quote-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;opacity:0;transition:opacity .2s;}
-.quote-card:nth-child(1)::before{background:linear-gradient(90deg,#2563eb,#7c3aed);}
-.quote-card:nth-child(2)::before{background:linear-gradient(90deg,#7c3aed,#db2777);}
-.quote-card:nth-child(3)::before{background:linear-gradient(90deg,#16a34a,#0891b2);}
-.quote-card:hover{border-color:rgba(37,99,235,.2);box-shadow:0 12px 40px rgba(37,99,235,.08);transform:translateY(-3px);}
-.quote-card:hover::before{opacity:1;}
-.q-stars{font-size:.95rem;letter-spacing:2px;margin-bottom:14px;}
-.q-text{font-size:.91rem;color:var(--tx2);line-height:1.75;margin-bottom:20px;font-style:italic;}
-.q-author{display:flex;align-items:center;gap:11px;}
-.q-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:#fff;flex-shrink:0;}
-.q-name{font-size:.86rem;font-weight:700;color:var(--tx);}
-.q-role{font-size:.76rem;color:var(--tx3);}
+/* ANIMATIONS */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.a1{animation:fadeUp .6s .1s both;}.a2{animation:fadeUp .6s .22s both;}.a3{animation:fadeUp .6s .36s both;}
+.a4{animation:fadeUp .6s .5s both;}.a5{animation:fadeUp .6s .64s both;}
 
-/* ── FAQ ──────────────────────────────────────────── */
-.faq-section{background:var(--sf);}
-.faq-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
-.faq-item{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r16);padding:22px 24px;transition:all .2s;}
-.faq-item:hover{border-color:rgba(37,99,235,.2);box-shadow:0 6px 24px rgba(37,99,235,.07);}
-.faq-item h4{font-size:.93rem;font-weight:700;color:var(--tx);margin-bottom:8px;}
-.faq-item p{font-size:.86rem;color:var(--tx3);line-height:1.7;}
-
-/* ── CTA ──────────────────────────────────────────── */
-.cta-section{padding:100px 0;background:linear-gradient(160deg,#0a0f1e 0%,#0f1b3d 40%,#1a0a2e 70%,#0a0f1e 100%);position:relative;overflow:hidden;}
-.cta-section::before{content:'';position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.15) 0%,transparent 70%);top:-200px;left:-100px;pointer-events:none;}
-.cta-section::after{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.12) 0%,transparent 70%);bottom:-150px;right:-100px;pointer-events:none;}
-.cta-in{text-align:center;position:relative;z-index:2;}
-.cta-tag{display:inline-block;background:rgba(96,165,250,.15);color:#93c5fd;font-size:.72rem;font-weight:700;padding:4px 14px;border-radius:100px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:22px;border:1px solid rgba(96,165,250,.2);}
-.cta-in h2{font-size:clamp(2rem,4vw,3.2rem);font-weight:900;color:#fff;margin-bottom:14px;letter-spacing:-.04em;line-height:1.08;}
-.cta-in h2 .grad{background:linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.cta-in p{color:rgba(255,255,255,.55);font-size:1rem;max-width:440px;margin:0 auto 36px;line-height:1.75;}
-.cta-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:28px;}
-.cta-trust{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;}
-.ct-it{display:flex;align-items:center;gap:6px;font-size:.78rem;color:rgba(255,255,255,.45);}
-
-/* ── FOOTER ───────────────────────────────────────── */
-footer{padding:60px 0 36px;background:#0a0f1e;border-top:1px solid rgba(255,255,255,.06);}
-.footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px;}
-.footer-brand p{font-size:.83rem;color:rgba(255,255,255,.35);margin-top:10px;line-height:1.75;max-width:240px;}
-.footer-col h4{font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:14px;}
-.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:10px;}
-.footer-col a{color:rgba(255,255,255,.35);font-size:.84rem;transition:color .15s;}
-.footer-col a:hover{color:rgba(255,255,255,.8);}
-.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:28px;border-top:1px solid rgba(255,255,255,.06);flex-wrap:wrap;gap:12px;}
-.footer-copy{font-size:.79rem;color:rgba(255,255,255,.25);}
-.footer-badges{display:flex;gap:8px;}
-.fb{font-size:.7rem;padding:3px 10px;border-radius:100px;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.3);}
-
-/* ── ANIMATIONS ───────────────────────────────────── */
-@keyframes fadeUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
-.a1{animation:fadeUp .65s .08s both;}
-.a2{animation:fadeUp .65s .18s both;}
-.a3{animation:fadeUp .65s .3s both;}
-.a4{animation:fadeUp .65s .44s both;}
-.a5{animation:fadeUp .65s .6s both;}
-
-/* ── RESPONSIVE ───────────────────────────────────── */
-@media(max-width:1024px){
-  .hero-in{grid-template-columns:1fr;gap:48px;}
-  .hero-right{display:none;}
-  .ai-grid,.bento{grid-template-columns:1fr 1fr;}
-  .ai-card.span2,.ben.wide{grid-column:span 1;}
-  .steps-grid{grid-template-columns:1fr 1fr;}
-  .sec-grid{grid-template-columns:1fr;}
-  .quote-grid{grid-template-columns:1fr 1fr;}
-  .footer-grid{grid-template-columns:1fr 1fr;}
-  .int-grid{grid-template-columns:repeat(2,1fr);}
-  .stats-grid{grid-template-columns:repeat(3,1fr);}
-  .faq-grid{grid-template-columns:1fr;}
-}
-@media(max-width:640px){
-  .nav-links,.nav-cta .btn-ghost{display:none;}
-  .ai-grid,.bento,.quote-grid{grid-template-columns:1fr;}
-  .steps-grid{grid-template-columns:1fr;}
-  .footer-grid{grid-template-columns:1fr;}
-  .stats-grid{grid-template-columns:1fr 1fr;}
-  .int-grid{grid-template-columns:1fr 1fr;}
-  .hero{padding:90px 20px 50px;}
-  .steps-grid::before{display:none;}
-}
+/* RESPONSIVE */
+@media(max-width:960px){.bento{grid-template-columns:1fr 1fr;}.bc.span2{grid-column:span 1;}.modules-grid{grid-template-columns:repeat(2,1fr);}.steps{grid-template-columns:1fr 1fr;}.footer-top{grid-template-columns:1fr 1fr;}.stats-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:640px){.nav-links,.nav-cta .btn-outline{display:none;}.bento{grid-template-columns:1fr;}.steps{grid-template-columns:1fr;}.modules-grid{grid-template-columns:repeat(2,1fr);}.footer-top{grid-template-columns:1fr;}.stats-grid{grid-template-columns:1fr 1fr;}.m-board{grid-template-columns:repeat(2,1fr);}.mockup-body{height:240px;}.m-sidebar{width:140px;}}
 </style>
 </head>
 <body>
-<!-- NAV -->
+
 <nav id="nav">
-  <div class="nav-in">
+  <div class="nav-inner">
     <a href="/" class="logo">
-      <div class="logo-mark"><svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
+      <div class="logo-icon"><svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
       VEWIT
     </a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
-      <li><a href="#ai">AI Tools</a></li>
-      <li><a href="#security">Security</a></li>
-      <li><a href="#roles">Roles</a></li>
+      <li><a href="#modules">Modules</a></li>
       <li><a href="#how">How it works</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#contact">Contact</a></li>
     </ul>
     <div class="nav-cta">
-      <a href="/?action=login" class="btn btn-ghost">Sign In</a>
-      <a href="/?action=register" class="btn btn-grd">Get Started Free</a>
+      <a href="/?action=login" class="btn btn-outline">Sign In</a>
+      <a href="/?action=register" class="btn btn-primary">Get Started Free</a>
     </div>
   </div>
 </nav>
 
-<!-- HERO -->
 <section class="hero">
-  <div class="hero-grid"></div>
-  <div class="hero-in">
-    <div>
-      <div class="hero-badge a1">
-        <div class="badge-dot"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
-        v5.0 — AI Standup · Code Review · Risk · 2FA
+  <div class="hero-content">
+    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEWIT — Team Collaboration Platform</div>
+    <h1 class="a2">The workspace your<br/>team <span class="blue">actually uses.</span></h1>
+    <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, Instant Meet, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
+    <div class="hero-actions a4">
+      <a href="/?action=register" class="btn btn-primary btn-xl">Get Started Free →</a>
+      <a href="/?action=login" class="btn btn-outline btn-xl">Sign In</a>
+    </div>
+    <p class="hero-note a4">✓ Free to start &nbsp;·&nbsp; <span>No credit card</span> &nbsp;·&nbsp; Up in 2 minutes</p>
+  </div>
+    <div class="hero-mockup a5">
+        <div style="display:flex;justify-content:center;gap:6px;margin-bottom:12px;">
+      <button onclick="showTab('dash')" id="tab-dash" style="padding:6px 16px;border-radius:8px;border:1.5px solid #2563eb;background:#2563eb;color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;">Dashboard</button>
+      <button onclick="showTab('proj')" id="tab-proj" style="padding:6px 16px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;">Projects</button>
+    </div>
+
+    <div class="mockup-frame" id="mock-dash">
+      <div class="mockup-topbar">
+        <div class="m-dot" style="background:#ff5f57"></div>
+        <div class="m-dot" style="background:#febc2e"></div>
+        <div class="m-dot" style="background:#28c840"></div>
+        <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app</span></div>
       </div>
-      <h1 class="a2">Ship <span class="grad">faster.</span><br/>Stay in sync.</h1>
-      <p class="hero-sub a3">Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, 2FA — one platform built for engineering teams that move fast.</p>
-      <div class="hero-actions a4">
-        <a href="/?action=register" class="btn btn-grd btn-lg">Start Free — No Card Needed →</a>
-        <a href="#features" class="btn btn-outline-white btn-lg">See All Features</a>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
+          <span style="font-size:.6rem;color:#94a3b8;background:#1e293b;padding:2px 8px;border-radius:100px;">No reminders today</span>
+          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">A</div>
+        </div>
       </div>
-      <div class="hero-trust a4">
-        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever</div>
-        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>TOTP 2FA built-in</div>
-        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Your own AI key</div>
-        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Up in 2 min</div>
+      <div class="mockup-body" style="height:320px;">
+        <div class="m-sidebar">
+          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">12 members</div></div></div>
+          <div class="m-sec">Workspace</div>
+          <div class="m-nav act">📊 Dashboard</div>
+          <div class="m-nav">📁 Projects</div>
+          <div class="m-nav">✅ Tasks</div>
+          <div class="m-nav">💬 Messages</div>
+          <div class="m-sec">Tools</div>
+          <div class="m-nav">📅 Timeline</div>
+          <div class="m-nav">🎫 Tickets</div>
+          <div class="m-nav">👩‍💻 Analytics</div>
+        </div>
+        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
+                    <div style="padding:10px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;">
+            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Dashboard <span style="font-size:.68rem;font-weight:400;color:#94a3b8;margin-left:4px;">Acme Corp Team Dashboard</span></div>
+          </div>
+                    <div style="margin:8px 10px;padding:8px 12px;background:#fff;border-radius:10px;border:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;">P</div>
+              <div>
+                <div style="font-size:.75rem;font-weight:700;color:#0f172a;">Good day, Alex! 👋 <span style="background:#eff6ff;color:#2563eb;font-size:.6rem;padding:1px 7px;border-radius:100px;border:1px solid #bfdbfe;margin-left:3px;">Acme Corp</span></div>
+                <div style="font-size:.62rem;color:#64748b;">8 projects · 24 tasks · 6 members · 5 active tasks assigned to you</div>
+              </div>
+            </div>
+          </div>
+                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:0 10px 8px;">
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #2563eb;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">8</div><div style="font-size:.58rem;color:#64748b;">Total Projects</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #059669;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">24</div><div style="font-size:.58rem;color:#64748b;">Active Tasks</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #7c3aed;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">11</div><div style="font-size:.58rem;color:#64748b;">Completed</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #dc2626;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">0</div><div style="font-size:.58rem;color:#64748b;">Blocked</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #d97706;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">5</div><div style="font-size:.58rem;color:#64748b;">My Tasks</div></div>
+          </div>
+                    <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;margin:0 10px;">
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Priority Split</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Critical</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">3</div></div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#f97316;"></div><div style="font-size:.6rem;color:#334155;flex:1;">High</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">9</div></div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#7c3aed;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Medium</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">8</div></div>
+              <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#2563eb;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Low</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">4</div></div>
+            </div>
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Project Progress</div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">E-commerce Platform</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">72%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:72%;background:#059669;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Mobile App Redesign</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">65%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:65%;background:#f59e0b;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">API Gateway v2</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">81%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:81%;background:#ef4444;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Customer Portal</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">90%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:90%;background:#2563eb;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Analytics Dashboard</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">55%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:55%;background:#7c3aed;border-radius:2px;"></div></div></div>
+              </div>
+            </div>
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;">My Active Tasks</div><div style="font-size:.58rem;color:#ef4444;font-weight:600;">⚠ 1 overdue</div></div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #2563eb;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Review Q2 sprint plan</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">PLANNING</span><span style="font-size:.55rem;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;">HIGH</span></div></div>
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #7c3aed;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Fix auth token expiry bug</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;">CRITICAL</span></div></div>
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #059669;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Update API documentation</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">DEV</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="hero-right a5">
-      <div style="text-align:center;margin-bottom:10px;"><span style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.25);background:rgba(255,255,255,.06);padding:3px 12px;border-radius:99px;border:1px solid rgba(255,255,255,.08);">Live Preview</span></div>
-      <div class="app-win">
-        <div class="win-bar">
-          <div class="wd" style="background:#ff5f57"></div>
-          <div class="wd" style="background:#febc2e"></div>
-          <div class="wd" style="background:#28c840"></div>
-          <div class="win-url"><span class="win-url-txt">vewit.in/tasks</span></div>
+
+    <div class="mockup-frame" id="mock-proj" style="display:none;">
+      <div class="mockup-topbar">
+        <div class="m-dot" style="background:#ff5f57"></div>
+        <div class="m-dot" style="background:#febc2e"></div>
+        <div class="m-dot" style="background:#28c840"></div>
+        <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app/projects</span></div>
+      </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
         </div>
-        <div class="win-body">
-          <div class="win-sb">
-            <div class="ws-head">
-              <div class="ws-av">VW</div>
-              <div><div class="ws-nm">VEWIT Corp</div><div class="ws-sub">8 online</div></div>
-            </div>
-            <div class="nav-it act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Kanban</div>
-            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Channels</div>
-            <div class="nav-sec">AI Tools</div>
-            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>AI Standup</div>
-            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Code Review</div>
-            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>Risk Predictor</div>
-          </div>
-          <div class="win-main">
-            <div class="win-hdr">
-              <div class="win-title">Kanban Board</div>
-              <div class="win-badges">
-                <span class="win-badge" style="background:rgba(37,99,235,.15);color:#93c5fd;">Sprint 4</span>
-                <span class="win-badge" style="background:rgba(34,197,94,.12);color:#4ade80;">42 pts</span>
-              </div>
-            </div>
-            <div class="kan">
-              <div class="kcol"><div class="kcol-h" style="color:#64748b">Backlog<span style="background:#1e293b;color:#475569;font-size:.5rem;padding:1px 5px;border-radius:3px;">8</span></div>
-                <div class="kcard" style="border-left-color:#8b5cf6"><div class="kcard-t">Auth flow redesign</div><div><span class="ktag" style="background:rgba(139,92,246,.2);color:#a78bfa">5pt</span><span class="ktag" style="background:rgba(37,99,235,.15);color:#93c5fd">Design</span></div></div>
-                <div class="kcard" style="border-left-color:#8b5cf6"><div class="kcard-t">API rate limiting</div><div><span class="ktag" style="background:rgba(139,92,246,.2);color:#a78bfa">3pt</span></div></div>
-              </div>
-              <div class="kcol"><div class="kcol-h" style="color:#38bdf8">In Progress<span style="background:#0c4a6e;color:#38bdf8;font-size:.5rem;padding:1px 5px;border-radius:3px;">5</span></div>
-                <div class="kcard" style="border-left-color:#38bdf8"><div class="kcard-t">Payment gateway</div><div><span class="ktag" style="background:rgba(239,68,68,.2);color:#f87171">High</span><span class="ktag" style="background:rgba(14,165,233,.15);color:#38bdf8">8pt</span></div></div>
-                <div class="kcard" style="border-left-color:#38bdf8"><div class="kcard-t">Dashboard charts</div><div><span class="ktag" style="background:rgba(245,158,11,.2);color:#fbbf24">Med</span></div></div>
-              </div>
-              <div class="kcol"><div class="kcol-h" style="color:#fbbf24">Review<span style="background:#451a03;color:#fbbf24;font-size:.5rem;padding:1px 5px;border-radius:3px;">3</span></div>
-                <div class="kcard" style="border-left-color:#fbbf24"><div class="kcard-t">Mobile responsive</div><div><span class="ktag" style="background:rgba(245,158,11,.2);color:#fbbf24">3pt</span></div></div>
-              </div>
-              <div class="kcol"><div class="kcol-h" style="color:#4ade80">Done<span style="background:#052e16;color:#4ade80;font-size:.5rem;padding:1px 5px;border-radius:3px;">12</span></div>
-                <div class="kcard" style="border-left-color:#4ade80"><div class="kcard-t">User onboarding</div><div><span class="ktag" style="background:rgba(34,197,94,.15);color:#4ade80">Done</span></div></div>
-                <div class="kcard" style="border-left-color:#4ade80"><div class="kcard-t">Email notifications</div><div><span class="ktag" style="background:rgba(34,197,94,.15);color:#4ade80">Done</span></div></div>
-              </div>
-            </div>
-          </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
+          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">P</div>
         </div>
       </div>
-      <!-- Floating cards -->
-      <div class="float-card" style="bottom:-16px;right:-20px;max-width:210px;">
-        <div class="fc-head"><div class="fc-dot" style="background:#22c55e"></div><div class="fc-title">AI Standup Generated</div></div>
-        <div class="fc-body">✅ Merged auth PR<br/>🔨 Starting payment gateway<br/>🚧 Waiting on design review</div>
-      </div>
-      <div class="float-card" style="top:-14px;left:-20px;max-width:200px;">
-        <div class="fc-head"><div class="fc-dot" style="background:#f59e0b"></div><div class="fc-title" style="color:#b45309">⚠️ Risk Alert</div></div>
-        <div class="fc-body">Payment sprint — HIGH risk<br/>3 tasks overdue</div>
+      <div class="mockup-body" style="height:320px;">
+        <div class="m-sidebar">
+          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">4 members</div></div></div>
+          <div class="m-sec">Workspace</div>
+          <div class="m-nav">📊 Dashboard</div>
+          <div class="m-nav act">📁 Projects <span class="m-badge">12</span></div>
+          <div class="m-nav">✅ Tasks</div>
+          <div class="m-nav">💬 Messages</div>
+          <div class="m-sec">Tools</div>
+          <div class="m-nav">📅 Timeline</div>
+          <div class="m-nav">🎫 Tickets</div>
+          <div class="m-nav">👩‍💻 Analytics</div>
+        </div>
+        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
+          <div style="padding:8px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Projects <span style="font-size:.68rem;font-weight:400;color:#94a3b8;">8 projects · Acme Corp</span></div>
+            <div style="font-size:.62rem;color:#fff;background:#2563eb;padding:3px 9px;border-radius:6px;font-weight:600;">+ New Project</div>
+          </div>
+          <div style="padding:8px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;">
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">E-commerce Platform</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Next-gen shopping experience rebuild</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#059669;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Jan – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">72%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #f59e0b;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Mobile App Redesign</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">iOS & Android redesign with new UI</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#f59e0b;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">15 Feb – 15 May</span><span style="font-size:.58rem;color:#f59e0b;font-weight:600;">65%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #ef4444;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">API Gateway v2</div><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">High-performance REST & GraphQL gateway</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:78%;background:#ef4444;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 01 Aug</span><span style="font-size:.58rem;color:#ef4444;font-weight:600;">81%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #2563eb;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Customer Portal</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Self-service customer dashboard & billing</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:88%;background:#2563eb;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Feb – 31 Mar</span><span style="font-size:.58rem;color:#2563eb;font-weight:600;">90%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #7c3aed;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Analytics Dashboard</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Real-time KPI tracking and reporting</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:98%;background:#7c3aed;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">10 Jan – 30 Apr</span><span style="font-size:.58rem;color:#7c3aed;font-weight:600;">55%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">DevOps Pipeline</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">CI/CD automation & infrastructure as code</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:95%;background:#059669;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">88%</span></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </section>
+<script>
+function showTab(t){
+  document.getElementById('mock-dash').style.display=t==='dash'?'block':'none';
+  document.getElementById('mock-proj').style.display=t==='proj'?'block':'none';
+  document.getElementById('tab-dash').style.background=t==='dash'?'#2563eb':'#fff';
+  document.getElementById('tab-dash').style.color=t==='dash'?'#fff':'#64748b';
+  document.getElementById('tab-dash').style.borderColor=t==='dash'?'#2563eb':'#e2e8f0';
+  document.getElementById('tab-proj').style.background=t==='proj'?'#2563eb':'#fff';
+  document.getElementById('tab-proj').style.color=t==='proj'?'#fff':'#64748b';
+  document.getElementById('tab-proj').style.borderColor=t==='proj'?'#2563eb':'#e2e8f0';
+}
+</script>
 
-<!-- TICKER -->
 <div class="ticker-wrap">
   <div class="ticker">
-    <div class="t-it"><span class="t-hi">Kanban Board</span> Drag-drop task management <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">AI Standup</span> Auto-generate daily reports <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Code Review Bot</span> AI reviews your PR diffs <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Risk Predictor</span> Flag at-risk projects early <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Intake Forms</span> Public forms → auto tickets <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">TOTP 2FA</span> Authenticator app security <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Message Reactions</span> Emoji reactions on messages <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Time Reports</span> Billable hours tracking <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Sprint Planning</span> Velocity &amp; story points <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Announcements</span> Workspace-wide broadcasts <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Goals &amp; OKRs</span> Track key results <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Docs &amp; Wiki</span> AI-generated documentation <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Kanban Board</span> Drag-drop task management <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">AI Standup</span> Auto-generate daily reports <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Code Review Bot</span> AI reviews your PR diffs <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Risk Predictor</span> Flag at-risk projects early <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Intake Forms</span> Public forms → auto tickets <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">TOTP 2FA</span> Authenticator app security <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Message Reactions</span> Emoji reactions on messages <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Time Reports</span> Billable hours tracking <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Sprint Planning</span> Velocity &amp; story points <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Announcements</span> Workspace-wide broadcasts <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Goals &amp; OKRs</span> Track key results <span class="t-sep">·</span></div>
-    <div class="t-it"><span class="t-hi">Docs &amp; Wiki</span> AI-generated documentation <span class="t-sep">·</span></div>
+    <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
   </div>
 </div>
 
-<!-- STATS -->
-<div class="stats">
-  <div class="wrap">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-n">35+</div><div class="stat-l">Platform features</div></div>
-      <div class="stat-card"><div class="stat-n">6</div><div class="stat-l">Role levels + RBAC</div></div>
-      <div class="stat-card"><div class="stat-n">4</div><div class="stat-l">AI-powered tools</div></div>
-      <div class="stat-card"><div class="stat-n">Zero</div><div class="stat-l">Dependencies required</div></div>
-      <div class="stat-card"><div class="stat-n">Free</div><div class="stat-l">No credit card needed</div></div>
-    </div>
+<div class="stats-bar">
+  <div class="stats-grid">
+    <div class="stat-item"><div class="stat-num">∞</div><div class="stat-lbl">Multi-tenant workspaces</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#7c3aed">11+</div><div class="stat-lbl">Built-in modules</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#059669">6</div><div class="stat-lbl">User roles</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#d97706">150MB</div><div class="stat-lbl">Max file upload</div></div>
   </div>
 </div>
 
-<!-- AI FEATURES -->
-<section id="ai" class="ai-section">
-  <div class="wrap">
-    <div class="centered">
-      <div class="sec-tag">🤖 AI-Powered Tools</div>
-      <h2 class="sec-title" style="color:#fff">Your team's AI co-pilot</h2>
-      <p class="sec-sub" style="color:rgba(255,255,255,.55)">Four powerful AI tools built into your workflow — use your own Anthropic API key, zero vendor lock-in.</p>
-    </div>
-    <div class="ai-grid">
-      <div class="ai-card span2">
-        <div class="ai-icon ai-ic-blue">🤖</div>
-        <h3>AI Daily Standup Generator</h3>
-        <p>Automatically generates professional standup reports from task activity, time logs, and progress — no manual writing.</p>
-        <ul class="ai-list">
-          <li>Pulls from task changes, time logs, and comments from the last 24h</li>
-          <li>Managers generate standups for whole team; devs see their own<span class="role-chip">Role-gated</span></li>
-          <li>Auto-saves to standup history for retrospectives</li>
-          <li>Copy to clipboard and share in one click</li>
-        </ul>
-        <div class="code-prev">
-          <span class="cp-c">// Generated standup for Prasanna — today</span><br/>
-          <span class="cp-k">✅ Yesterday:</span> <span class="cp-v">Merged MuleSoft auth API to staging</span><br/>
-          <span class="cp-k">🔨 Today:</span> <span class="cp-v">Starting payment gateway integration (T-024)</span><br/>
-          <span class="cp-k">🚧 Blockers:</span> <span class="cp-s">Waiting on design review for checkout UI</span>
-        </div>
-      </div>
-      <div class="ai-card">
-        <div class="ai-icon ai-ic-purple">🔍</div>
-        <h3>AI Code Review Bot</h3>
-        <p>Paste any PR diff and get instant structured code review with bug detection, security analysis, and a clear verdict.</p>
-        <ul class="ai-list">
-          <li>🔴 Critical · 🟠 Major · 🟡 Minor classification</li>
-          <li>Security vulnerability detection</li>
-          <li>Approve / Request Changes / Reject verdict</li>
-          <li>Reviews saved to task or ticket history</li>
-        </ul>
-      </div>
-      <div class="ai-card">
-        <div class="ai-icon ai-ic-red">⚠️</div>
-        <h3>AI Risk Predictor</h3>
-        <p>Scans all projects for overdue tasks, blockers, and deadline proximity — flags each with risk level and actions.</p>
-        <ul class="ai-list">
-          <li>LOW / MEDIUM / HIGH / CRITICAL risk scoring</li>
-          <li>Overdue, blocked, completion rate analysis</li>
-          <li>Actionable recommendations per project</li>
-          <li>Admin, Manager, TeamLead only<span class="role-chip">Role-gated</span></li>
-        </ul>
-      </div>
-      <div class="ai-card">
-        <div class="ai-icon ai-ic-green">📄</div>
-        <h3>AI Docs &amp; Wiki Generator</h3>
-        <p>Generate technical documentation in seconds — architecture diagrams, API references, READMEs, and runbooks.</p>
-        <ul class="ai-list">
-          <li>5 doc types: General, Architecture, API, README, Runbook</li>
-          <li>Auto-renders Mermaid architecture diagrams</li>
-          <li>Auto-saves to your docs library</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- CORE FEATURES -->
 <section id="features">
   <div class="wrap">
     <div class="centered">
-      <div class="sec-tag">🚀 Platform Features</div>
+      <div class="sec-tag">Features</div>
       <h2 class="sec-title">Everything your team needs</h2>
-      <p class="sec-sub">35+ features across project management, communication, security and analytics — in a single workspace.</p>
+      <p class="sec-sub">One platform replaces your task tracker, chat tool, ticketing system, and analytics dashboard.</p>
     </div>
     <div class="bento">
-      <div class="ben wide">
-        <div class="ben-ico ben-ico-1">🗂</div>
-        <h3>Kanban Board &amp; Sprint Planning</h3>
-        <p>Visual drag-and-drop task board with 7 stages, story points, sprint assignment, task dependencies, recurring tasks, and time tracking.</p>
-        <ul class="ben-list">
-          <li>7 pipeline stages: Backlog → Planning → In Progress → Review → Testing → Done → Blocked</li>
-          <li>Story points, sprint velocity tracking, task dependencies</li>
-          <li>Recurring tasks (daily, weekly, monthly) auto-spawned by scheduler</li>
-          <li>Per-task time logging with timer and manual modes</li>
-        </ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico ben-ico-2">📢</div>
-        <h3>Announcements</h3>
-        <p>Workspace-wide broadcasts with pin support, read receipts, and push notifications.</p>
-        <ul class="ben-list"><li>Pinned banner until dismissed</li><li>Read receipt tracking</li><li>Push to all workspace members</li></ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico ben-ico-3">📝</div>
-        <h3>Forms &amp; Intake</h3>
-        <p>Public intake forms that auto-create support tickets on submission — no login needed for clients.</p>
-        <ul class="ben-list"><li>5 field types: text, email, textarea, select, number</li><li>Auto-creates ticket with form data</li><li>View all submissions</li></ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico ben-ico-4">💬</div>
-        <h3>Channels &amp; DMs</h3>
-        <p>Project channels with emoji reactions, threaded replies, file uploads, and private DMs — all real-time.</p>
-        <ul class="ben-list"><li>Emoji reactions on all messages</li><li>Threaded replies — Slack-style</li><li>Markdown rich text</li></ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico ben-ico-5">⏱️</div>
-        <h3>Time Report</h3>
-        <p>Complete time tracking with per-member, per-project breakdowns. Export to CSV for billing.</p>
-        <ul class="ben-list"><li>Timer mode + manual log entry</li><li>Weekly, monthly, quarterly views</li><li>One-click CSV export</li></ul>
-      </div>
-      <div class="ben wide">
-        <div class="ben-ico ben-ico-6">📊</div>
-        <h3>Timeline &amp; Dev Productivity</h3>
-        <p>Gantt-style timeline with health badges — plus a full developer productivity leaderboard with 0–100 score per engineer.</p>
-        <ul class="ben-list">
-          <li>Health badges: On Track · At Risk · Needs Attention · Overdue</li>
-          <li>Productivity score from velocity, completion rate, and time logged</li>
-          <li>Drill into any developer's full task history</li>
-        </ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico ben-ico-7">🏃</div>
-        <h3>Sprint Management</h3>
-        <p>Create and manage sprints with story points, velocity charts, and team capacity planning.</p>
-        <ul class="ben-list"><li>Sprint states: Planning → Active → Completed</li><li>Story point burndown</li><li>Assign tasks from any view</li></ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico ben-ico-8">🎯</div>
-        <h3>Goals &amp; OKRs</h3>
-        <p>Set company and team goals with key result tracking. Link results to sprints for auto-progress updates.</p>
-        <ul class="ben-list"><li>Quarterly goal views</li><li>KR progress tracking</li><li>Dashboard health badges</li></ul>
-      </div>
+      <div class="bc featured"><div class="b-ico">📋</div><h3>Smart Task Management</h3><p>Create, assign and track tasks with custom stage workflows, priorities, due dates and inline comments.</p><ul class="feat-list"><li>Custom stages: Backlog → Dev → Review → Done</li><li>Priority levels: Low, Medium, High, Critical</li><li>Inline comments & file attachments up to 150MB</li><li>Assignee management with avatar display</li></ul></div>
+      <div class="bc"><div class="b-ico">📁</div><h3>Project Workspaces</h3><p>Colour-coded projects with start & end dates, per-member access control, and live progress bars.</p><ul class="feat-list"><li>Start date + target date planning</li><li>Visual progress from task completion</li><li>Per-project team member access control</li></ul></div>
+      <div class="bc featured"><div class="b-ico">🤖</div><h3>AI Assistant</h3><p>Floating AI panel with full workspace context. Bring your own Anthropic API key.</p><ul class="feat-list"><li>Ask anything about tasks, projects & blockers</li><li>Smart EOD reports & sprint summaries</li><li>Bring your own API key (Anthropic)</li><li>Context-aware using live workspace data</li></ul></div>
+      <div class="bc span2"><div class="b-ico">📅</div><h3>Timeline Tracker <span class="role-badge">Admin / Manager</span></h3><p>Dual progress bars compare time elapsed against task completion % so you catch at-risk projects instantly. Auto health badges calculated from today's date.</p><ul class="feat-list"><li>Days spent & remaining — calculated from today</li><li>Health badges: On Track · At Risk · Needs Attention · Overdue</li><li>Filter by health status, sort by days remaining</li></ul></div>
+      <div class="bc"><div class="b-ico">👩‍💻</div><h3>Dev Productivity <span class="role-badge">Admin</span></h3><p>Full leaderboard with productivity score 0–100 per developer. Table + Chart views with drill-down.</p><ul class="feat-list"><li>Productivity score 0–100 auto-calculated</li><li>Table & chart view toggle</li><li>Drill into any developer's full task list</li></ul></div>
+      <div class="bc"><div class="b-ico">💬</div><h3>Messaging & DMs</h3><p>Per-project channels plus private one-on-one direct messages with unread badges.</p><ul class="feat-list"><li>Per-project message channels</li><li>Private direct messages</li><li>Start huddle directly from DMs</li></ul></div>
+      <div class="bc"><div class="b-ico">📞</div><h3>Instant Meet</h3><p>Instant in-app Instant Meet. Start from sidebar or DMs, invite mid-call.</p><ul class="feat-list"><li>One-click room creation</li><li>Invite participants mid-call</li><li>Mute/unmute controls</li></ul></div>
+      <div class="bc"><div class="b-ico">🎫</div><h3>Support Tickets</h3><p>Built-in bug tracking & support ticketing separate from project tasks.</p><ul class="feat-list"><li>Bug, feature-request & incident types</li><li>Status: Open · In Progress · Resolved</li><li>Threaded comments per ticket</li></ul></div>
+
     </div>
   </div>
 </section>
 
-<!-- SECURITY -->
-<section id="security" class="sec-section">
-  <div class="wrap">
-    <div class="centered">
-      <div class="sec-tag" style="background:rgba(96,165,250,.15);color:#93c5fd;border:1px solid rgba(96,165,250,.25)">🔐 Security</div>
-      <h2 class="sec-title" style="color:#fff">Enterprise-grade security,<br/>zero complexity</h2>
-      <p class="sec-sub" style="color:rgba(255,255,255,.5)">Multi-layered security for teams that take data protection seriously — without the enterprise price tag.</p>
-    </div>
-    <div class="sec-grid">
-      <div class="sec-card">
-        <div class="sec-ico sec-ico-blue">🔑</div>
-        <div><h4>TOTP Two-Factor Authentication</h4><p>Enable authenticator-based 2FA (Google Authenticator, Authy, 1Password). QR code setup, backup codes, instant activation. Prompted on every login when enabled. Admins can enforce workspace-wide.</p></div>
-      </div>
-      <div class="sec-card">
-        <div class="sec-ico sec-ico-purple">🛡️</div>
-        <div><h4>Role-Based Access Control</h4><p>6 granular roles — Admin, Manager, TeamLead, Developer, Tester, Viewer — each with fine-grained permissions across every feature. 26 permission toggles configurable from Settings.</p></div>
-      </div>
-      <div class="sec-card">
-        <div class="sec-ico sec-ico-green">📧</div>
-        <div><h4>OTP Email Verification</h4><p>Optional OTP-based login via email. Works with any SMTP provider — Gmail, SendGrid, Resend. Adds a second layer before accessing the dashboard.</p></div>
-      </div>
-      <div class="sec-card">
-        <div class="sec-ico sec-ico-amber">🔗</div>
-        <div><h4>API Key Management</h4><p>Generate scoped API keys for CI/CD pipelines and integrations. Keys are hashed at rest, shown only once on creation, and revocable at any time.</p></div>
-      </div>
-      <div class="sec-card">
-        <div class="sec-ico sec-ico-purple">👁️</div>
-        <div><h4>Guest Access</h4><p>Invite external collaborators as guests with access restricted to specific projects only — no workspace-wide access, no login required for intake forms.</p></div>
-      </div>
-      <div class="sec-card">
-        <div class="sec-ico sec-ico-blue">🔐</div>
-        <div><h4>Secure Session Management</h4><p>Server-side sessions with 7-day lifetime, HttpOnly cookies, bcrypt-hashed passwords, CORS protection, and automatic session invalidation on logout.</p></div>
-      </div>
+<section id="modules" style="padding-top:0;background:#f8fafc;">
+  <div class="wrap centered" style="padding-top:60px;padding-bottom:60px;">
+    <div class="sec-tag">All Modules</div>
+    <h2 class="sec-title">11 modules, one platform</h2>
+    <p class="sec-sub">Every module shares data automatically — tasks flow into analytics, tickets link to projects, reminders fire to notifications.</p>
+    <div class="modules-grid">
+      <div class="mod-card"><div class="mod-ico">📋</div><div class="mod-n">Task Board</div><div class="mod-d">Kanban with custom stages</div></div>
+      <div class="mod-card"><div class="mod-ico">📁</div><div class="mod-n">Projects</div><div class="mod-d">Multi-project management</div></div>
+      <div class="mod-card"><div class="mod-ico">🤖</div><div class="mod-n">AI Assistant</div><div class="mod-d">Workspace-aware AI</div></div>
+      <div class="mod-card"><div class="mod-ico">📅</div><div class="mod-n">Timeline</div><div class="mod-d">Health tracking per project</div></div>
+      <div class="mod-card"><div class="mod-ico">👩‍💻</div><div class="mod-n">Dev Analytics</div><div class="mod-d">Productivity leaderboard</div></div>
+      <div class="mod-card"><div class="mod-ico">💬</div><div class="mod-n">Messaging</div><div class="mod-d">Per-project channels</div></div>
+      <div class="mod-card"><div class="mod-ico">✉️</div><div class="mod-n">Direct DMs</div><div class="mod-d">Private conversations</div></div>
+      <div class="mod-card"><div class="mod-ico">📞</div><div class="mod-n">Instant Meet</div><div class="mod-d">Instant voice rooms</div></div>
+      <div class="mod-card"><div class="mod-ico">🎫</div><div class="mod-n">Tickets</div><div class="mod-d">Bug & support tracking</div></div>
+      <div class="mod-card"><div class="mod-ico">⏰</div><div class="mod-n">Reminders</div><div class="mod-d">Per-task alerts</div></div>
+      <div class="mod-card"><div class="mod-ico">🔔</div><div class="mod-n">Notifications</div><div class="mod-d">Push, email & in-app</div></div>
+      <div class="mod-card" style="border-color:rgba(37,99,235,.12);background:rgba(37,99,235,.02);"><div class="mod-ico">⚙️</div><div class="mod-n">Settings</div><div class="mod-d">SMTP, AI key, invite codes</div></div>
     </div>
   </div>
 </section>
 
-<!-- ROLE MATRIX -->
-<section id="roles" class="role-section">
-  <div class="wrap">
-    <div class="centered">
-      <div class="sec-tag">👥 Role Permissions</div>
-      <h2 class="sec-title">Right access for every member</h2>
-      <p class="sec-sub">Six pre-configured roles with 26 permission toggles — all customisable from Workspace Settings.</p>
-    </div>
-    <div class="role-table-wrap">
-      <table class="role-table">
-        <thead>
-          <tr>
-            <th class="feat-col">Feature</th>
-            <th>👑 Admin</th><th>🗂 Manager</th><th>🧑‍💼 TeamLead</th><th>💻 Developer</th><th>🔍 Tester</th><th>👁 Viewer</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="cat-row"><td colspan="7">Project &amp; Task Management</td></tr>
-          <tr><td class="feat-col">Create / Edit Projects</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
-          <tr><td class="feat-col">Kanban Board &amp; Tasks</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-own">Own tasks</span></td><td><span class="pchip pc-view">View</span></td><td><span class="pchip pc-view">View</span></td></tr>
-          <tr><td class="feat-col">Sprint Planning</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-own">Team sprints</span></td><td><span class="pchip pc-view">View</span></td><td><span class="pchip pc-view">View</span></td><td class="pc-no">—</td></tr>
-          <tr><td class="feat-col">Time Tracking</td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-own">Team only</span></td><td><span class="pchip pc-own">Own only</span></td><td><span class="pchip pc-own">Own only</span></td><td class="pc-no">—</td></tr>
-          <tr class="cat-row"><td colspan="7">Communication</td></tr>
-          <tr><td class="feat-col">Post Announcements</td><td><span class="pchip pc-full">Post + pin</span></td><td><span class="pchip pc-full">Post + pin</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
-          <tr><td class="feat-col">Channels + Reactions</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-view">View</span></td></tr>
-          <tr class="cat-row"><td colspan="7">AI Tools</td></tr>
-          <tr><td class="feat-col">AI Standup Generator</td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-own">Team only</span></td><td><span class="pchip pc-own">Own only</span></td><td><span class="pchip pc-own">Own only</span></td><td class="pc-no">—</td></tr>
-          <tr><td class="feat-col">AI Code Review</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-view">View results</span></td><td class="pc-no">—</td></tr>
-          <tr><td class="feat-col">AI Risk Predictor</td><td><span class="pchip pc-full">All projects</span></td><td><span class="pchip pc-full">All projects</span></td><td><span class="pchip pc-own">Team projects</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
-          <tr class="cat-row"><td colspan="7">Security</td></tr>
-          <tr><td class="feat-col">TOTP 2FA Setup</td><td><span class="pchip pc-full">Self + enforce</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td></tr>
-          <tr><td class="feat-col">Workspace Settings</td><td><span class="pchip pc-full">Full</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<!-- HOW IT WORKS -->
 <section id="how">
   <div class="wrap centered">
-    <div class="sec-tag">⚡ Getting Started</div>
-    <h2 class="sec-title">Up and running in minutes</h2>
-    <p class="sec-sub">No complex onboarding, no credit card, no setup fees. Productive the same day.</p>
-    <div class="steps-grid">
-      <div class="step-card"><div class="step-num">1</div><h3>Create workspace</h3><p>Register in under 60 seconds. Workspace is ready instantly — name it, set invite code, go.</p></div>
-      <div class="step-card"><div class="step-num">2</div><h3>Invite your team</h3><p>Share your invite code or send email invites. Assign roles — Admin, Manager, Developer, Tester, or Viewer.</p></div>
-      <div class="step-card"><div class="step-num">3</div><h3>Add your AI key</h3><p>Paste your Anthropic API key in Settings to unlock all four AI tools.</p></div>
-      <div class="step-card"><div class="step-num">4</div><h3>Ship faster</h3><p>Plan sprints, track on Kanban, run AI standups, review code — all from one place.</p></div>
+    <div class="sec-tag">How it works</div>
+    <h2 class="sec-title">Up and running in 4 steps</h2>
+    <p class="sec-sub">No DevOps required. Create a workspace, configure it once, invite your team.</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><h3>Create Account</h3><p>Sign up and create a new workspace. An invite code is generated instantly.</p></div>
+      <div class="step"><div class="step-num">2</div><h3>Configure</h3><p>Add your AI API key, set up SMTP for email notifications, customise settings.</p></div>
+      <div class="step"><div class="step-num">3</div><h3>Invite Team</h3><p>Share the invite code. Members join instantly with their chosen role.</p></div>
+      <div class="step"><div class="step-num">4</div><h3>Ship Together</h3><p>Create projects, assign tasks, huddle, use AI, track timelines. Ship faster.</p></div>
     </div>
   </div>
 </section>
 
-<!-- INTEGRATIONS -->
-<section id="integrations" class="int-section">
-  <div class="wrap centered">
-    <div class="sec-tag">🔗 Integrations</div>
-    <h2 class="sec-title">Connects to your stack</h2>
-    <p class="sec-sub">Webhooks, API keys, public intake forms, and email via any SMTP — build your own automation layer.</p>
-    <div class="int-grid">
-      <div class="int-card"><div class="int-ico">📬</div><div class="int-n">SMTP Email</div><div class="int-d">Gmail, SendGrid, Resend, any provider</div></div>
-      <div class="int-card"><div class="int-ico">🔗</div><div class="int-n">Webhooks</div><div class="int-d">HTTP POST on task, ticket, project events</div></div>
-      <div class="int-card"><div class="int-ico">🔑</div><div class="int-n">REST API Keys</div><div class="int-d">Scoped tokens for external access</div></div>
-      <div class="int-card"><div class="int-ico">📝</div><div class="int-n">Intake Forms</div><div class="int-d">Public URL → auto-ticket on submission</div></div>
-      <div class="int-card"><div class="int-ico">🤖</div><div class="int-n">Anthropic Claude</div><div class="int-d">Bring your own key — full AI suite</div></div>
-      <div class="int-card"><div class="int-ico">📱</div><div class="int-n">Push Notifications</div><div class="int-d">Web push — desktop and mobile</div></div>
-      <div class="int-card"><div class="int-ico">📞</div><div class="int-n">Instant Meet</div><div class="int-d">WebRTC video calls — no third-party</div></div>
-      <div class="int-card"><div class="int-ico">🌐</div><div class="int-n">Public Status Page</div><div class="int-d">Share project status via public URL</div></div>
+<section id="about">
+  <div class="wrap">
+    <div class="centered" style="margin-bottom:52px">
+      <div class="sec-tag">About VEWIT</div>
+      <h2 class="sec-title">One platform. Every tool your team needs.</h2>
+      <p class="sec-sub">Most engineering teams lose 2–3 hours a day switching between tools. VEWIT was built to end that — a single platform where planning, execution and communication happen together.</p>
     </div>
-  </div>
-</section>
 
-<!-- TESTIMONIALS -->
-<section class="testimonial-section">
-  <div class="wrap centered">
-    <div class="sec-tag">⭐ Trusted by Teams</div>
-    <h2 class="sec-title">Built for real engineering teams</h2>
-    <p class="sec-sub">From early-stage startups to established engineering orgs.</p>
-    <div class="quote-grid">
-      <div class="quote-card">
-        <div class="q-stars">★★★★★</div>
-        <p class="q-text">"The AI standup generator alone saves our team 30 minutes every morning. It pulls from actual task data, not just what people remember to type."</p>
-        <div class="q-author"><div class="q-av" style="background:linear-gradient(135deg,#2563eb,#7c3aed)">AK</div><div><div class="q-name">Arjun Kumar</div><div class="q-role">Engineering Manager, FinTech startup</div></div></div>
+    <!-- Origin story / mission -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:56px;align-items:center">
+      <div>
+        <div class="sec-tag" style="margin-bottom:14px">Our mission</div>
+        <h3 style="font-size:clamp(20px,2.5vw,28px);font-weight:800;color:var(--tx);margin-bottom:16px;letter-spacing:-.02em;line-height:1.3">Replace the tool chaos with clarity</h3>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">The average team uses Jira for tasks, Slack for chat, Confluence for docs, Notion for planning and spreadsheets for tracking. Each switch breaks focus and loses context.</p>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">VEWIT puts your projects, tasks, direct messages, support tickets, timeline and analytics under one roof — with an AI assistant that understands <em>your actual work</em>, not just general knowledge.</p>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75">The result: less overhead, faster delivery, and a team that stays in sync without the noise.</p>
       </div>
-      <div class="quote-card">
-        <div class="q-stars">★★★★★</div>
-        <p class="q-text">"The code review bot caught a SQL injection vulnerability that passed our normal review. It's like having a senior engineer on call 24/7."</p>
-        <div class="q-author"><div class="q-av" style="background:linear-gradient(135deg,#7c3aed,#db2777)">SR</div><div><div class="q-name">Sneha Reddy</div><div class="q-role">Lead Developer, SaaS company</div></div></div>
-      </div>
-      <div class="quote-card">
-        <div class="q-stars">★★★★★</div>
-        <p class="q-text">"Intake forms to tickets completely replaced our email support. Clients submit, tickets are created, assigned, and tracked — all automatically."</p>
-        <div class="q-author"><div class="q-av" style="background:linear-gradient(135deg,#16a34a,#0891b2)">MP</div><div><div class="q-name">Meera Pillai</div><div class="q-role">Product Manager, Agency</div></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">12+</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Built-in modules</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">6</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Access roles</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">AI</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Claude-powered</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">PWA</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Works on mobile</div>
+        </div>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- FAQ -->
-<section id="faq" class="faq-section">
-  <div class="wrap centered">
-    <div class="sec-tag">❓ FAQ</div>
-    <h2 class="sec-title">Common questions</h2>
-    <p class="sec-sub">Everything you need to know before getting started.</p>
-    <div class="faq-grid" style="text-align:left">
-      <div class="faq-item"><h4>Is VEWIT really free?</h4><p>Yes — free to start with no credit card. All core features are immediately available with no paywalls.</p></div>
-      <div class="faq-item"><h4>How does the AI work?</h4><p>AI features use the Anthropic Claude API with your own key. No markup — you pay Anthropic directly at their rates.</p></div>
-      <div class="faq-item"><h4>How is VEWIT different from Jira + Slack?</h4><p>One platform replaces both — channels, DMs, tickets, kanban, sprints, timeline, AI tools, and forms. No integration tax.</p></div>
-      <div class="faq-item"><h4>Is my data secure?</h4><p>bcrypt passwords, HttpOnly cookies, TOTP 2FA, OTP email verification, API keys hashed at rest, automatic session invalidation on logout.</p></div>
-      <div class="faq-item"><h4>Can external clients submit tickets?</h4><p>Yes — Intake Forms create a public URL. Clients submit without logging in; a ticket is automatically created with all form data.</p></div>
-      <div class="faq-item"><h4>Can I control what each member sees?</h4><p>Yes — 6 role levels with 26 individual permission toggles. Guest access restricts users to specific projects only.</p></div>
+    <!-- Who it's for — role cards using landing theme -->
+    <div class="sec-tag centered" style="display:block;text-align:center;margin-bottom:12px">Who uses VEWIT</div>
+    <h3 style="text-align:center;font-size:clamp(18px,2.5vw,26px);font-weight:800;color:var(--tx);margin-bottom:32px;letter-spacing:-.02em">Built for every layer of your team</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:56px">
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">👑</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Admin</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Full workspace control — SMTP, AI keys, invite codes, roles and all settings</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🗂️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Manager</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Create and manage projects, assign tasks, view team analytics and productivity</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🏷️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Team Lead</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Lead sub-teams, assign work to members, track progress and unblock delivery</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">💻</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Developer</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Own tasks, track story points, log progress, DM teammates and use the AI assistant</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🔍</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Tester</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Raise and manage tickets, link bugs to tasks, track resolution across sprints</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">👁️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Viewer</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Read-only visibility into projects, tasks and team progress — perfect for stakeholders</p>
+      </div>
+    </div>
+
+    <!-- VEWIT vs others comparison — premium redesign -->
+    <div class="centered" style="margin-bottom:40px">
+      <div class="sec-tag">VEWIT vs the alternatives</div>
+      <h3 style="font-size:clamp(20px,2.8vw,30px);font-weight:800;color:var(--tx);margin-top:12px;letter-spacing:-.03em;line-height:1.2">Stop paying for 5 tools when 1 does it all</h3>
+      <p style="color:var(--tx3);font-size:14px;margin-top:10px;max-width:520px;margin-left:auto;margin-right:auto">Every capability your team needs — built-in, not bolted on.</p>
+    </div>
+
+    <div style="overflow-x:auto;margin-bottom:64px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.07);border:1px solid var(--bd)">
+      <table style="width:100%;border-collapse:collapse;min-width:600px">
+
+        <!-- Header -->
+        <thead>
+          <tr>
+            <th style="padding:20px 24px;text-align:left;background:var(--sf);border-bottom:1px solid var(--bd);width:35%">
+              <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">Capability</span>
+            </th>
+            <!-- VEWIT column — highlighted -->
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:2px solid var(--ac);position:relative;width:21%">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="width:28px;height:28px;border-radius:8px;background:var(--ac);display:flex;align-items:center;justify-content:center;margin-bottom:2px">
+                  <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+                </div>
+                <span style="font-size:14px;font-weight:800;color:var(--tx);letter-spacing:-.01em">VEWIT</span>
+              </div>
+            </th>
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
+              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Jira + Slack</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
+            </th>
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
+              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Notion + Linear</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <!-- Row macro: cap | vewit | jira | notion -->
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📋</span>
+              Project &amp; task management
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💬</span>
+              Direct messaging
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">via Slack</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</span>
+              AI assistant (workspace-aware)
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
+                <span style="font-size:10px;color:#94a3b8">Partial</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🎫</span>
+              Support ticket system
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📅</span>
+              Timeline / Gantt view
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
+                <span style="font-size:10px;color:#94a3b8">Partial</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📊</span>
+              Developer productivity analytics
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔔</span>
+              Push notifications (desktop)
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🏢</span>
+              Multi-workspace / multi-tenant
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Expensive</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+              </div>
+            </td>
+          </tr>
+          <!-- Pricing footer row -->
+          <tr style="background:var(--sf2)">
+            <td style="padding:18px 24px;font-size:13px;font-weight:700;color:var(--tx)">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:28px;height:28px;border-radius:8px;background:var(--ac3);border:1px solid var(--bd);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💰</span>
+                Monthly cost per user
+              </div>
+            </td>
+            <td style="text-align:center;background:linear-gradient(160deg,rgba(37,99,235,.12),rgba(37,99,235,.06));padding:18px 24px;border-top:2px solid var(--ac)">
+              <div style="font-size:18px;font-weight:800;color:var(--ac);line-height:1">Free</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px;font-weight:500">to get started</div>
+            </td>
+            <td style="text-align:center;padding:18px 24px">
+              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$15–30</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
+            </td>
+            <td style="text-align:center;padding:18px 24px">
+              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$16–20</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Legend -->
+      <div style="display:flex;gap:20px;justify-content:flex-end;padding:14px 24px;border-top:1px solid var(--bd);background:var(--sf);border-radius:0 0 20px 20px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#dcfce7;font-size:10px">✓</span> Included
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fee2e2;font-size:9px;color:#ef4444">✕</span> Not available
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fef9c3;font-size:10px;color:#ca8a04">~</span> Partial / add-on
+        </div>
+      </div>
+    </div>
+
+    <!-- Security & tech stack -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:8px">
+      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
+        <div class="sec-tag" style="margin-bottom:16px">Security</div>
+        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Enterprise-grade security, zero config</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> bcrypt password hashing (12 rounds)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Optional OTP email verification per login</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Role-based access control (6 levels)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Session-based auth with 7-day persistence</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Workspace isolation — data never crosses tenants</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> HTTPS enforced via Railway + Let's Encrypt</div>
+        </div>
+      </div>
+      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
+        <div class="sec-tag" style="margin-bottom:16px">Technology</div>
+        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Modern stack, no dependencies to manage</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Python Flask backend — fast and lightweight</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> PostgreSQL database via pg8000 (pure Python)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> React 18 frontend — no build step, instant load</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Anthropic Claude AI integration</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Web Push API for real-time desktop notifications</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Hosted on Railway — auto-deploy, zero downtime</div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- CTA -->
 <section class="cta-section">
-  <div class="wrap cta-in">
-    <div class="cta-tag">🚀 Ready to ship faster?</div>
-    <h2>One platform.<br/>Every tool your team <span class="grad">needs.</span></h2>
-    <p>Kanban boards, AI standup, code review, 2FA security — set up in 2 minutes, no credit card, no vendor lock-in.</p>
-    <div class="cta-actions">
-      <a href="/?action=register" class="btn btn-white btn-lg">Start Free — No Card Needed →</a>
-      <a href="#features" class="btn btn-outline-white btn-lg">See All Features</a>
-    </div>
-    <div class="cta-trust">
-      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever</div>
-      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>TOTP 2FA built-in</div>
-      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Bring your own AI key</div>
-      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>PostgreSQL backed</div>
+  <div class="wrap">
+    <div class="cta-box">
+      <h2>Ready to ship faster, together?</h2>
+      <p>Create your free workspace in under 2 minutes. No credit card required.</p>
+      <div class="cta-actions">
+        <a href="/?action=register" class="btn btn-primary btn-xl">🚀 Create Your Workspace</a>
+        <a href="/?action=login" class="btn btn-outline btn-xl">Sign In →</a>
+      </div>
+      <div class="trust-row">
+        <div class="trust-item"><span>✓</span> Free to start</div>
+        <div class="trust-item"><span>✓</span> No credit card</div>
+        <div class="trust-item"><span>✓</span> Multi-tenant</div>
+        <div class="trust-item"><span>✓</span> Hosted on Railway</div>
+        <div class="trust-item"><span>✓</span> bcrypt security</div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- FOOTER -->
+<section id="contact" style="padding:90px 0;background:var(--bg);border-top:1px solid var(--bd)">
+  <div class="wrap">
+
+    <!-- Header -->
+    <div class="centered" style="margin-bottom:56px">
+      <div class="sec-tag">Get in touch</div>
+      <h2 class="sec-title" style="margin-top:12px">We'd love to hear from you</h2>
+      <p class="sec-sub">Have a question, want a demo, or need help getting started? Reach out — we respond within 24 hours.</p>
+    </div>
+
+    <!-- Main contact panel -->
+    <div style="background:var(--sf);border:1px solid var(--bd);border-radius:24px;overflow:hidden;display:grid;grid-template-columns:1fr 1.4fr">
+
+      <!-- Left — info panel -->
+      <div style="background:linear-gradient(160deg,#0f172a 0%,#1e3a5f 100%);padding:48px 40px;display:flex;flex-direction:column;gap:32px">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(37,99,235,.4);display:flex;align-items:center;justify-content:center">
+              <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+            </div>
+            <span style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-.02em">VEWIT</span>
+          </div>
+          <h3 style="font-size:22px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:10px">Let's build something great together</h3>
+          <p style="font-size:13px;color:#94a3b8;line-height:1.7">Whether you're a startup or an enterprise team, we're here to help you get more done with less friction.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:20px">
+
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌐</div>
+            <div>
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Website</div>
+              <a href="https://www.vewit.in" style="font-size:14px;color:#60a5fa;font-weight:600;text-decoration:none">www.vewit.in</a>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏰</div>
+            <div>
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Business hours</div>
+              <div style="font-size:14px;color:#cbd5e1;font-weight:500">Mon–Sat · 9 AM – 6 PM IST</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- What we can help with -->
+        <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:24px">
+          <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">We can help with</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Workspace setup &amp; onboarding</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Team migration from other tools</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Custom feature requests</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Enterprise &amp; team pricing</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Technical support &amp; bug reports</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right — direct email CTA -->
+      <div style="padding:52px 44px;background:var(--sf);display:flex;flex-direction:column;justify-content:center;gap:32px">
+
+        <div>
+          <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);padding:5px 14px;border-radius:100px;margin-bottom:18px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e"></span>
+            <span style="font-size:11px;font-weight:700;color:#2563eb;letter-spacing:.06em;text-transform:uppercase">We respond within 24 hours</span>
+          </div>
+          <h3 style="font-size:26px;font-weight:800;color:var(--tx);letter-spacing:-.03em;line-height:1.2;margin-bottom:12px">Reach us directly<br/>by email</h3>
+          <p style="font-size:14px;color:var(--tx3);line-height:1.7">No forms, no bots. Write to us directly and a real person will reply — usually within a few hours.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <a href="mailto:ceo@vewit.in?subject=Enquiry about VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#2563eb';this.style.background='rgba(37,99,235,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✉️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">General enquiries &amp; CEO</div>
+              <div style="font-size:15px;font-weight:700;color:#2563eb">ceo@vewit.in</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Partnerships · Demo · Enterprise</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+
+          <a href="mailto:support@vewit.in?subject=Support Request — VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#7c3aed';this.style.background='rgba(124,58,237,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🛠️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Technical support</div>
+              <div style="font-size:15px;font-weight:700;color:#7c3aed">support@vewit.in</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Bugs · Feature requests · Help</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:16px 18px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px">
+          <span style="font-size:18px;flex-shrink:0;margin-top:1px">💡</span>
+          <p style="margin:0;font-size:12px;color:var(--tx2);line-height:1.65"><strong style="color:var(--tx)">Pro tip:</strong> Include your workspace name, team size and what you need — it helps us reply faster.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+
 <footer>
   <div class="wrap">
-    <div class="footer-grid">
+    <div class="footer-top">
       <div class="footer-brand">
-        <a href="/" class="logo" style="margin-bottom:12px;display:inline-flex;">
-          <div class="logo-mark" style="width:28px;height:28px;border-radius:7px;"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.96rem;color:#fff;">VEWIT</span>
-        </a>
-        <p>AI-powered team collaboration for modern engineering teams. Kanban, sprints, AI tools, 2FA — all in one place.</p>
+        <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>VEWIT</a>
+        <p>The all-in-one project management platform for engineering teams. AI-powered, multi-tenant, fully featured.</p>
       </div>
-      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#ai">AI Tools</a></li><li><a href="#security">Security</a></li><li><a href="#roles">Role Matrix</a></li></ul></div>
-      <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Get Started</a></li><li><a href="/?action=login">Sign In</a></li><li><a href="#faq">FAQ</a></li><li><a href="#how">How it works</a></li></ul></div>
-      <div class="footer-col"><h4>Features</h4><ul><li><a href="#features">Kanban Board</a></li><li><a href="#ai">AI Standup</a></li><li><a href="#ai">Code Review Bot</a></li><li><a href="#security">TOTP 2FA</a></li></ul></div>
+      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#about">About VEWIT</a></li><li><a href="#how">How it works</a></li></ul></div>
+      <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li><li><a href="#contact">Contact Us</a></li></ul></div>
+      <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-copy">© 2025 VEWIT. All rights reserved. · <a href="https://www.vewit.in" style="color:rgba(96,165,250,.6)">vewit.in</a></div>
-      <div class="footer-badges"><span class="fb">Free to start</span><span class="fb">TOTP 2FA</span><span class="fb">AI-powered</span><span class="fb">PostgreSQL</span></div>
+      <div class="footer-copy">© 2026 VEWIT — AI-Powered Team Collaboration</div>
+      <div class="footer-badges"><div class="fb">v4.0</div><div class="fb">PostgreSQL</div><div class="fb">AI-Powered</div><div class="fb">bcrypt</div></div>
     </div>
   </div>
 </footer>
 
 <script>
-document.querySelectorAll('a[href^="#"]').forEach(a=>{
-  a.addEventListener('click',e=>{const t=document.querySelector(a.getAttribute('href'));if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth',block:'start'});}});
-});
-window.addEventListener('scroll',()=>{
-  const n=document.getElementById('nav');
-  n.style.background=window.scrollY>50?'rgba(255,255,255,.97)':'rgba(255,255,255,.85)';
-  n.style.boxShadow=window.scrollY>50?'0 2px 20px rgba(0,0,0,.08)':'none';
-});
-const obs=new IntersectionObserver(entries=>{
+// Scroll animations
+const observer=new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='translateY(0)';}});
-},{threshold:0.08});
-document.querySelectorAll('.ai-card,.ben,.sec-card,.int-card,.quote-card,.faq-item,.step-card,.stat-card').forEach(el=>{
-  el.style.opacity='0';el.style.transform='translateY(20px)';
-  el.style.transition='opacity .5s ease, transform .5s ease';
-  obs.observe(el);
+},{threshold:.08,rootMargin:'0px 0px -20px 0px'});
+document.querySelectorAll('.bc,.mod-card,.step').forEach((el,i)=>{
+  el.style.opacity='0';el.style.transform='translateY(16px)';
+  el.style.transition=`opacity .45s ${i*.045}s ease,transform .45s ${i*.045}s ease`;
+  observer.observe(el);
 });
+
+// Nav scroll
+const nav=document.getElementById('nav');
+window.addEventListener('scroll',()=>{
+  nav.style.background=window.scrollY>30?'rgba(255,255,255,0.97)':'rgba(255,255,255,0.88)';
+},{passive:true});
+
 </script>
 </body>
-</html>
-
-"""
+</html>"""
 
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -5640,7 +4226,7 @@ window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){e
 'use strict';
 function waitForLibs(cb, attempts){
   attempts = attempts||0;
-  if(typeof React!=='undefined' && typeof ReactDOM!=='undefined' && typeof htm!=='undefined' && typeof Recharts!=='undefined'){
+  if(typeof React!=='undefined' && typeof ReactDOM!=='undefined' && typeof htm!=='undefined'){
     cb(); return;
   }
   if(attempts > 150){ // 15 seconds timeout
@@ -5694,127 +4280,6 @@ function PB({p}){
 function Prog({pct,color}){
   return html`<div class="prog"><div class="progf" style=${{width:Math.min(100,Math.max(0,pct||0))+'%',background:color||'var(--ac)'}}></div></div>`;
 }
-
-/* ─── Shared hooks & utilities ─────────────────────────────────────────────── */
-
-// usePagedApi — generic paginated data fetcher
-function usePagedApi(url, deps=[]){
-  const [items,setItems]=useState([]);
-  const [total,setTotal]=useState(0);
-  const [loading,setLoading]=useState(false);
-  const [page,setPage]=useState(1);
-  const load=useCallback(async(p=1)=>{
-    if(!url)return;
-    setLoading(true);
-    try{
-      const sep=url.includes('?')?'&':'?';
-      const r=await api.get(url+sep+'page='+p);
-      if(r?.items){setItems(p===1?r.items:[...items,...r.items]);setTotal(r.total||0);}
-      else if(Array.isArray(r)){setItems(r);setTotal(r.length);}
-    }catch(e){}
-    setLoading(false);
-  },[url]);
-  useEffect(()=>{setPage(1);load(1);},[url,...deps]);
-  const loadMore=()=>{const next=page+1;setPage(next);load(next);};
-  const hasMore=items.length<total;
-  return {items,total,loading,load:()=>load(1),loadMore,hasMore};
-}
-
-// useDebouncedValue — debounce a frequently changing value
-function useDebouncedValue(value, delay=300){
-  const [dv,setDv]=useState(value);
-  useEffect(()=>{const t=setTimeout(()=>setDv(value),delay);return()=>clearTimeout(t);},[value,delay]);
-  return dv;
-}
-
-// safeJSON — safely parse JSON with a default
-function safeJSON(str, def=[]){
-  try{return JSON.parse(str||JSON.stringify(def));}catch{return def;}
-}
-
-// fmtMins — format minutes as "2h 15m"
-function fmtMins(m){
-  if(!m||m===0)return '0m';
-  const h=Math.floor(m/60);const min=m%60;
-  return h>0?(min>0?h+'h '+min+'m':h+'h'):min+'m';
-}
-
-// fmtDate — human-friendly relative date
-function fmtDate(dateStr){
-  if(!dateStr)return '';
-  const d=new Date(dateStr);const now=new Date();
-  const diff=Math.floor((now-d)/86400000);
-  if(diff===0)return 'Today';if(diff===1)return 'Yesterday';
-  if(diff<7)return diff+'d ago';
-  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-}
-
-// Priority colors — single source of truth used across all components
-const PRIO_COLOR={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
-const PRIO_BG   ={critical:'rgba(239,68,68,.1)',high:'rgba(249,115,22,.1)',medium:'rgba(234,179,8,.1)',low:'rgba(34,197,94,.1)'};
-const STAGE_COLOR={backlog:'#64748b',planning:'#8b5cf6',inprogress:'#0ea5e9',review:'#f59e0b',testing:'#06b6d4',completed:'#22c55e',blocked:'#ef4444'};
-const STAGE_BG   ={backlog:'rgba(100,116,139,.1)',planning:'rgba(139,92,246,.1)',inprogress:'rgba(14,165,233,.1)',review:'rgba(245,158,11,.1)',testing:'rgba(6,182,212,.1)',completed:'rgba(34,197,94,.1)',blocked:'rgba(239,68,68,.1)'};
-
-// PriorityBadge — reusable priority pill
-function PriorityBadge({priority,size=10}){
-  if(!priority)return null;
-  return html`<span style=${{fontSize:size,padding:'1px 6px',borderRadius:3,fontWeight:700,
-    background:PRIO_BG[priority]||'rgba(100,116,139,.1)',
-    color:PRIO_COLOR[priority]||'#64748b'}}>${priority}</span>`;
-}
-
-// StageBadge — reusable stage pill
-function StageBadge({stage,size=10}){
-  if(!stage)return null;
-  const lbl={backlog:'Backlog',planning:'Planning',inprogress:'In Progress',review:'Review',testing:'Testing',completed:'Done',blocked:'Blocked'};
-  return html`<span style=${{fontSize:size,padding:'1px 6px',borderRadius:3,fontWeight:700,
-    background:STAGE_BG[stage]||'rgba(100,116,139,.1)',
-    color:STAGE_COLOR[stage]||'#64748b'}}>${lbl[stage]||stage}</span>`;
-}
-
-// EmptyState — reusable empty state component
-function EmptyState({icon='📭',title,sub,action,actionLabel}){
-  return html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'48px 24px',color:'var(--tx3)',textAlign:'center',gap:10}}>
-    <div style=${{fontSize:40}}>${icon}</div>
-    <div style=${{fontSize:15,fontWeight:600,color:'var(--tx2)'}}>${title}</div>
-    ${sub?html`<div style=${{fontSize:13,maxWidth:280,lineHeight:1.6}}>${sub}</div>`:null}
-    ${action?html`<button class="btn bp" style=${{fontSize:13,marginTop:6}} onClick=${action}>${actionLabel||'Get started'}</button>`:null}
-  </div>`;
-}
-
-// LoadingSpinner — reusable loader
-function LoadingSpinner({size=20,message=''}){
-  return html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,padding:32,color:'var(--tx3)'}}>
-    <div style=${{width:size,height:size,border:'2px solid var(--bd)',borderTop:'2px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite'}}></div>
-    ${message?html`<div style=${{fontSize:12}}>${message}</div>`:null}
-  </div>`;
-}
-
-// TaskCard — reusable task card for Kanban + list views
-function TaskCard({task,users,projects,onClick,compact=false}){
-  const u=safe(users||[]).find(x=>x.id===task.assignee);
-  const p=safe(projects||[]).find(x=>x.id===task.project);
-  return html`<div onClick=${onClick}
-    style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,
-      padding:compact?'7px 10px':'10px 12px',cursor:'pointer',transition:'all .12s',
-      borderLeft:'2px solid '+(STAGE_COLOR[task.stage]||'#64748b')}}
-    onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.boxShadow='0 2px 12px rgba(37,99,235,.08)';}}
-    onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.boxShadow='none';}}>
-    ${p&&!compact?html`<div style=${{fontSize:10,color:p.color||'var(--ac)',fontWeight:600,marginBottom:3}}>${p.name}</div>`:null}
-    <div style=${{fontSize:compact?12:13,fontWeight:600,color:'var(--tx)',lineHeight:1.35,marginBottom:5}}>${task.title}</div>
-    <div style=${{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
-      <${StageBadge} stage=${task.stage}/>
-      <${PriorityBadge} priority=${task.priority}/>
-      ${task.due?html`<span style=${{fontSize:10,color:task.due<new Date().toISOString().slice(0,10)&&task.stage!=='completed'?'#ef4444':'var(--tx3)'}}>📅 ${task.due.slice(5)}</span>`:null}
-      ${u?html`<span style=${{marginLeft:'auto',width:20,height:20,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}} title=${u.name}>${u.name.slice(0,2).toUpperCase()}</span>`:null}
-    </div>
-    ${task.pct>0&&!compact?html`<div style=${{height:2,background:'var(--sf2)',borderRadius:1,marginTop:6}}>
-      <div style=${{height:2,width:task.pct+'%',background:task.pct===100?'#22c55e':'var(--ac)',borderRadius:1,transition:'width .3s'}}></div>
-    </div>`:null}
-  </div>`;
-}
-
-
 class ErrorBoundary extends React.Component{
   constructor(p){super(p);this.state={err:null,info:null};}
   static getDerivedStateFromError(e){return{err:e};}
@@ -5855,9 +4320,6 @@ function AuthScreen({onLogin}){
   const [otpStep,setOtpStep]=useState(false);
   const [otpEmail,setOtpEmail]=useState('');
   const [otpCode,setOtpCode]=useState('');
-  const [totpLoginStep,setTotpLoginStep]=useState(false);
-  const [totpLoginCode,setTotpLoginCode]=useState('');
-  const totpLoginRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
   const cvRef=useRef(null);
@@ -6021,7 +4483,6 @@ function AuthScreen({onLogin}){
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
       if(r.error)setErr(r.error);
-      else if(r.totp_required){setTotpLoginStep(true);setErr('');}
       else if(r.otp_required){setOtpEmail(r.email);setOtpStep(true);setOtpResendCd(60);}
       else onLogin(r);
     } else {
@@ -6039,26 +4500,6 @@ function AuthScreen({onLogin}){
     const r=await api.post('/api/auth/verify-otp',{email:otpEmail,code:otpCode});
     if(r.error){setErr(r.error);setOtpCode('');}else onLogin(r);
     setBusy(false);
-  };
-
-  const submitTotpLogin=async()=>{
-    const code=totpLoginCode.replace(/\D/g,'');
-    if(code.length!==6){setErr('Enter the 6-digit code from your authenticator app.');return;}
-    setErr('');setBusy(true);
-    const r=await api.post('/api/auth/totp-login',{code});
-    setBusy(false);
-    if(r.error){setErr(r.error);setTotpLoginCode('');totpLoginRefs[0].current?.focus();}
-    else{setTotpLoginStep(false);onLogin(r);}
-  };
-  const handleTotpLoginDigit=(i,val)=>{
-    const digits=totpLoginCode.split('');digits[i]=val.replace(/\D/g,'').slice(-1);
-    const nc=digits.join('');setTotpLoginCode(nc);
-    if(val&&i<5)totpLoginRefs[i+1].current?.focus();
-    if(nc.length===6&&digits.every(d=>d))setTimeout(submitTotpLogin,80);
-  };
-  const handleTotpLoginKey=(i,e)=>{
-    if(e.key==='Backspace'&&!totpLoginCode[i]&&i>0)totpLoginRefs[i-1].current?.focus();
-    if(e.key==='Enter'&&totpLoginCode.length===6)submitTotpLogin();
   };
   const resendOtp=async()=>{
     if(otpResendCd>0)return;setErr('');
@@ -6124,34 +4565,6 @@ function AuthScreen({onLogin}){
       flex:1,minHeight:'100vh',background:'#ffffff', display:'flex',alignItems:'center',justifyContent:'center', padding:'40px 36px',overflowY:'auto', borderLeft:'1px solid #f1f5f9', }}>
       <div style=${{width:'100%',maxWidth:400}}>
         ${child}
-      </div>
-    </div>`;
-
-  if(totpLoginStep) return html`
-    <div style=${{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:20}}>
-      <div style=${{width:'min(420px,100%)',background:'var(--sf)',borderRadius:16,padding:'32px 28px',border:'1px solid var(--bd)',boxShadow:'0 8px 40px rgba(0,0,0,.08)'}}>
-        <div style=${{textAlign:'center',marginBottom:24}}>
-          <div style=${{fontSize:36,marginBottom:8}}>🔐</div>
-          <div style=${{fontSize:18,fontWeight:700,color:'var(--tx)',marginBottom:6}}>Two-Factor Authentication</div>
-          <div style=${{fontSize:13,color:'var(--tx3)',lineHeight:1.6}}>Enter the 6-digit code from your authenticator app (Google Authenticator, Authy, 1Password)</div>
-        </div>
-        ${err?html`<div style=${{padding:'10px 14px',background:'rgba(185,28,28,.07)',border:'1px solid rgba(185,28,28,.2)',borderRadius:8,color:'#b91c1c',fontSize:13,marginBottom:16,textAlign:'center'}}>${err}</div>`:null}
-        <div style=${{display:'flex',gap:8,justifyContent:'center',marginBottom:20}}>
-          ${[0,1,2,3,4,5].map(i=>html`
-            <input key=${i} ref=${totpLoginRefs[i]} type="text" inputMode="numeric"
-              maxLength="1" value=${totpLoginCode[i]||''}
-              onInput=${e=>handleTotpLoginDigit(i,e.target.value)}
-              onKeyDown=${e=>handleTotpLoginKey(i,e)}
-              style=${{width:44,height:52,textAlign:'center',fontSize:24,fontWeight:700,fontFamily:'monospace',
-                border:'2px solid '+(totpLoginCode[i]?'var(--ac)':'var(--bd)'),
-                borderRadius:10,background:'var(--sf2)',color:'var(--tx)',outline:'none',transition:'border-color .15s'}}/>`)}
-        </div>
-        <button class="btn bp" style=${{width:'100%',padding:'11px',fontSize:15,marginBottom:10,borderRadius:10}} onClick=${submitTotpLogin} disabled=${busy||totpLoginCode.replace(/\D/g,'').length<6}>
-          ${busy?html`<span class="spin"></span>`:null} ${busy?'Verifying…':'Verify →'}
-        </button>
-        <button style=${{width:'100%',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:13,padding:8}} onClick=${()=>{setTotpLoginStep(false);setTotpLoginCode('');setErr('');}}>
-          ← Back to login
-        </button>
       </div>
     </div>`;
 
@@ -6287,7 +4700,267 @@ function AuthScreen({onLogin}){
         </p>
       `)}
     </div>`;
-}/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
+}
+
+/* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
+function SidebarCallsList({cu,onJoin,currentRoomId}){
+  const [calls,setCalls]=useState([]);
+  useEffect(()=>{
+    const load=()=>api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);});
+    load();
+    const id=setInterval(load,5000);
+    return()=>clearInterval(id);
+  },[]);
+  const joinable=calls.filter(c=>{
+    const parts=JSON.parse(c.participants||'[]');
+    return !parts.includes(cu.id) && c.id!==currentRoomId;
+  });
+  if(!joinable.length)return html`
+    <div style=${{textAlign:'center',padding:'14px 8px'}}>
+      <div style=${{fontSize:22,marginBottom:5}}>📞</div>
+      <p style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>No active meetings.<br/>Start one to connect with your team.</p>
+    </div>`;
+  return html`<div style=${{display:'flex',flexDirection:'column',gap:5}}>
+    ${joinable.map(c=>{
+      const parts=JSON.parse(c.participants||'[]');
+      return html`<div key=${c.id} style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:10,padding:'9px 10px'}}>
+        <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
+          <div style=${{width:7,height:7,borderRadius:'50%',background:'var(--gn)',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
+          <div style=${{flex:1,minWidth:0}}>
+            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${c.name}</div>
+            <div style=${{fontSize:9,color:'var(--tx3)'}}>${parts.length} participant${parts.length!==1?'s':''}</div>
+          </div>
+        </div>
+        <button style=${{width:'100%',height:28,borderRadius:7,border:'none',background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}
+          onClick=${()=>onJoin(c.id,c.name)}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Join Instant Meet
+        </button>
+      </div>`;
+    })}
+  </div>`;
+}
+
+/* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
+function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams,teamCtx,setTeamCtx,activeTeam}){
+  const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
+  const [search,setSearch]=useState('');
+  const [dashboard,setDashboard]=useState(null); // loaded team dashboard data
+  const [loadingDash,setLoadingDash]=useState(false);
+
+  useEffect(()=>{
+    if(!selectedTeam){setDashboard(null);return;}
+    setLoadingDash(true);
+    api.get('/api/teams/'+selectedTeam+'/dashboard').then(d=>{
+      setDashboard(d&&!d.error?d:null);
+      setLoadingDash(false);
+    }).catch(()=>setLoadingDash(false));
+  },[selectedTeam]);
+
+  const filtered=safe(teams).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
+
+  /* ── Team drill-down dashboard ── */
+  if(selectedTeam){
+    const team=teams.find(t=>t.id===selectedTeam);
+    if(!team)return null;
+    const memberIds=JSON.parse(team.member_ids||'[]');
+    const lead=umap[team.lead_id];
+    const members=memberIds.map(id=>umap[id]).filter(Boolean);
+    const sum=dashboard&&dashboard.summary;
+    const memberStats=dashboard&&dashboard.member_stats||[];
+    const teamProjects=dashboard&&dashboard.projects||[];
+
+    return html`
+      <div style=${{width:310,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden'}}>
+                <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+          <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18,padding:'2px 6px',borderRadius:6,lineHeight:1}} title="Back">←</button>
+          <div style=${{flex:1,minWidth:0}}>
+            <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
+            ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:
+              html`<div style=${{fontSize:10,color:'var(--tx3)'}}>${members.length} members</div>`}
+          </div>
+          ${teamCtx===team.id?html`
+            <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
+              style=${{fontSize:10,padding:'4px 8px',borderRadius:7,border:'1px solid var(--ac)',background:'var(--ac)',color:'var(--ac-tx)',cursor:'pointer',fontWeight:700,flexShrink:0,whiteSpace:'nowrap'}}>
+              ✓ Active
+            </button>`:html`
+            <button onClick=${()=>setTeamCtx&&setTeamCtx(team.id)}
+              style=${{fontSize:10,padding:'4px 8px',borderRadius:7,border:'1px solid var(--ac)',background:'transparent',color:'var(--ac)',cursor:'pointer',fontWeight:700,flexShrink:0,whiteSpace:'nowrap'}}>
+              Switch →
+            </button>`}
+          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
+        </div>
+                <div style=${{display:'flex',gap:6,padding:'8px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('projects');onClose();}}
+            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
+            📁 Projects
+          </button>
+          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('tasks');onClose();}}
+            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
+            ☑ Tasks
+          </button>
+          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('productivity');onClose();}}
+            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
+            📊 Stats
+          </button>
+        </div>
+
+        <div style=${{flex:1,overflowY:'auto'}}>
+          ${loadingDash?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)',fontSize:12}}>Loading...</div>`:null}
+
+          ${!loadingDash&&sum?html`
+                    <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',borderBottom:'1px solid var(--bd)'}}>
+            ${[
+              {l:'Projects',v:sum.total_projects,c:'var(--ac)'}, {l:'Tasks',v:sum.total_tasks,c:'var(--tx)'}, {l:'Done',v:sum.completed,c:'var(--gn)'}, {l:'In Prog',v:sum.in_progress,c:'var(--cy)'}, {l:'Blocked',v:sum.blocked,c:'var(--rd)'}, {l:'Pending',v:sum.pending,c:'var(--am)'}, ].map((s,i)=>html`
+              <div key=${i} style=${{textAlign:'center',padding:'10px 4px',borderRight:i%3<2?'1px solid var(--bd)':'none',borderBottom:i<3?'1px solid var(--bd)':'none'}}>
+                <div style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.v}</div>
+                <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:.4}}>${s.l}</div>
+              </div>`)}
+          </div>
+
+                    <div style=${{padding:'10px 12px',borderBottom:'1px solid var(--bd)'}}>
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>👥 Member Workload</div>
+            ${memberStats.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No tasks assigned yet</div>`:null}
+            ${memberStats.map(m=>html`
+              <div key=${m.id} style=${{display:'flex',alignItems:'center',gap:8,marginBottom:8,padding:'7px 8px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)'}}>
+                <${Av} u=${m} size=${28}/>
+                <div style=${{flex:1,minWidth:0}}>
+                  <div style=${{fontSize:11,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${m.name}</div>
+                  <div style=${{fontSize:9,color:'var(--tx3)'}}>${m.role}</div>
+                </div>
+                <div style=${{display:'flex',gap:5,fontSize:10,fontFamily:'monospace'}}>
+                  <span style=${{color:'var(--gn)',fontWeight:700}} title="Completed">${m.completed}✓</span>
+                  <span style=${{color:'var(--cy)'}} title="In Progress">${m.in_progress}⟳</span>
+                  ${m.blocked>0?html`<span style=${{color:'var(--rd)',fontWeight:700}} title="Blocked">${m.blocked}✗</span>`:null}
+                  ${m.overdue>0?html`<span style=${{color:'var(--am)',fontWeight:700}} title="Overdue">${m.overdue}!</span>`:null}
+                </div>
+              </div>`)}
+          </div>
+
+                    <div style=${{padding:'10px 12px'}}>
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>📁 Projects (${teamProjects.length})</div>
+            ${teamProjects.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No projects yet</div>`:null}
+            ${teamProjects.map(p=>{
+              const pt=safe(tasks).filter(t=>t.project===p.id);
+              const done=pt.filter(t=>t.stage==='completed').length;
+              const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
+              return html`
+                <div key=${p.id} style=${{padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',marginBottom:6,background:'var(--sf2)',cursor:'pointer',borderLeft:'3px solid '+p.color,transition:'background .1s'}}
+                  onClick=${()=>{onSetView('projects');onClose();}}
+                  onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.06)'}
+                  onMouseLeave=${e=>e.currentTarget.style.background='var(--sf2)'}>
+                  <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
+                  <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                    <div style=${{flex:1,height:3,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+                      <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
+                    </div>
+                    <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)'}}>${pc}%</span>
+                  </div>
+                  <div style=${{display:'flex',gap:8,fontSize:10}}>
+                    <span style=${{color:'var(--tx3)'}}>${pt.length} tasks</span>
+                    <span style=${{color:'var(--gn)'}}>${done} done</span>
+                    <span style=${{color:'var(--am)'}}>${pt.length-done} open</span>
+                  </div>
+                </div>`;
+            })}
+          </div>`:null}
+
+          ${!loadingDash&&!sum?html`<div style=${{textAlign:'center',padding:'40px 12px',color:'var(--tx3)',fontSize:12}}>
+            <div style=${{fontSize:28,marginBottom:8}}>📊</div>
+            No task data found for this team yet.<br/>Assign tasks to team members to see stats here.
+          </div>`:null}
+        </div>
+      </div>`;
+  }
+
+  /* ── Team list cards ── */
+  return html`
+    <div style=${{width:240,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
+      <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+        <div>
+          <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>👥 Teams</span>
+          ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',marginTop:2}}>Viewing: <b>${activeTeam.name}</b></div>`:html`<div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>All workspace data</div>`}
+        </div>
+        <div style=${{display:'flex',gap:5,alignItems:'center'}}>
+          ${activeTeam?html`<button onClick=${()=>setTeamCtx&&setTeamCtx('')} style=${{fontSize:10,padding:'3px 8px',borderRadius:6,border:'1px solid var(--bd)',background:'transparent',color:'var(--tx3)',cursor:'pointer',whiteSpace:'nowrap'}}>× All</button>`:null}
+          ${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`
+            <button title="Manage Teams" onClick=${()=>{onSetView('team');}}
+              style=${{fontSize:10,padding:'3px 8px',borderRadius:6,border:'1px solid var(--ac)',background:'transparent',color:'var(--ac)',cursor:'pointer',whiteSpace:'nowrap',fontWeight:600}}>
+              ⚙ Manage
+            </button>`:null}
+          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
+        </div>
+      </div>
+      <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <input class="inp" placeholder="Search teams..." value=${search}
+          style=${{height:26,fontSize:11,width:'100%'}}
+          onInput=${e=>setSearch(e.target.value)}/>
+      </div>
+      <div style=${{flex:1,overflowY:'auto',padding:'6px'}}>
+        ${filtered.length===0?html`
+          <div style=${{textAlign:'center',padding:'24px 8px',color:'var(--tx3)',fontSize:12}}>
+            ${safe(teams).length===0?html`<div><div style=${{fontSize:28,marginBottom:6}}>🏷</div>No teams yet.${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`<br/>Click <b>⚙ Manage</b> above to create teams.`:html`<br/>Ask your Admin to create teams.`}</div>`:'No teams match your search.'}
+          </div>`:null}
+        ${filtered.map(team=>{
+          const memberIds=JSON.parse(team.member_ids||'[]');
+          const lead=umap[team.lead_id];
+          const members=memberIds.map(id=>umap[id]).filter(Boolean);
+          const teamTasks=safe(tasks).filter(t=>{
+            const byTeam=t.team_id===team.id;
+            const byMember=t.assignee&&memberIds.includes(t.assignee);
+            return byTeam||byMember;
+          });
+          const done=teamTasks.filter(t=>t.stage==='completed').length;
+          const blocked=teamTasks.filter(t=>t.stage==='blocked').length;
+          const teamProjs=new Set(teamTasks.map(t=>t.project).filter(Boolean)).size;
+          return html`
+            <div key=${team.id}
+              style=${{padding:'10px 12px',borderRadius:10,border:'2px solid '+(teamCtx===team.id?'var(--ac)':'var(--bd)'),marginBottom:7,background:teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
+              onClick=${()=>{
+                onSelectTeam(team.id);
+                setTeamCtx&&setTeamCtx(team.id);
+              }}
+              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)77';}}
+              onMouseLeave=${e=>{e.currentTarget.style.background=teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)';e.currentTarget.style.borderColor=teamCtx===team.id?'var(--ac)':'var(--bd)';}}>
+              <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:7}}>
+                <div style=${{width:9,height:9,borderRadius:2,background:teamCtx===team.id?'var(--ac)':'var(--tx3)',flexShrink:0}}></div>
+                <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
+                ${teamCtx===team.id?html`
+                  <span style=${{fontSize:9,color:'var(--ac)',fontWeight:700,background:'rgba(170,255,0,.12)',padding:'2px 6px',borderRadius:4,flexShrink:0}}>ACTIVE</span>`:null}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+              ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
+                            <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginBottom:7}}>
+                ${[['Tasks',teamTasks.length,'var(--tx)'],['Done',done,'var(--gn)'],['Proj',teamProjs,'var(--ac)']].map(([l,v,c])=>html`
+                  <div key=${l} style=${{textAlign:'center',padding:'4px 2px',background:'var(--sf)',borderRadius:5,border:'1px solid var(--bd)'}}>
+                    <div style=${{fontSize:13,fontWeight:700,color:c,fontFamily:'monospace',lineHeight:1}}>${v}</div>
+                    <div style=${{fontSize:8,color:'var(--tx3)',marginTop:1,textTransform:'uppercase'}}>${l}</div>
+                  </div>`)}
+              </div>
+              ${blocked>0?html`<div style=${{fontSize:10,color:'var(--rd)',fontWeight:600,marginBottom:6}}>⚠ ${blocked} blocked task${blocked!==1?'s':''}</div>`:null}
+                            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div style=${{display:'flex'}}>
+                  ${members.slice(0,5).map((m,i)=>html`
+                    <div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-5:0,border:'1.5px solid var(--sf2)',borderRadius:'50%',zIndex:5-i}}>
+                      <${Av} u=${m} size=${20}/>
+                    </div>`)}
+                  ${members.length>5?html`<span style=${{fontSize:9,color:'var(--tx3)',marginLeft:5,alignSelf:'center'}}>+${members.length-5}</span>`:null}
+                </div>
+                <span style=${{fontSize:9,color:'var(--tx3)'}}>${members.length} member${members.length!==1?'s':''}</span>
+              </div>
+            </div>`;
+        })}
+      </div>
+    </div>`;
+}
+
+/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true,onlineUsers=new Set()}){
   const inCall=false; // Google Meet handles calls externally
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
@@ -6295,51 +4968,18 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const baseView=(view||'dashboard').split(':')[0];
 
   const NAV_ICONS={
-    dashboard:    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>', projects:     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>', tasks:        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>', messages:     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>', tickets:      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>', timeline:     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>', productivity: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>', reminders:    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', team:         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', dm:           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
-    docs:         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
-    timereport:   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-    productivity: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
-  };
-  // Grouped sidebar sections
-  const NAV_GROUPS=[
-    {key:'main', label:null, items:[
-      {id:'dashboard',label:'Dashboard'},
-    ]},
-    {key:'work', label:'Work', items:[
-      {id:'projects',label:'Projects'},
-      {id:'tasks',label:'Kanban Board'},
-      {id:'timeline',label:'Timeline'},
-      {id:'reminders',label:'Reminders'},
-    ]},
-    {key:'comms', label:'Communication', items:[
-      {id:'messages',label:'Channels'},
-      ...(wsDmEnabled||isAdminManager?[{id:'dm',label:'Direct Messages'}]:[]),
-      {id:'tickets',label:'Tickets'},
-    ]},
-    {key:'ai', label:'AI', items:[
-      {id:'docs',label:'Documentation & Diagrams'},
-    ]},
-    ...(isAdminManager?[{key:'admin',label:'Administration',items:[
-      {id:'team',label:'Team Management'},
-      {id:'timereport',label:'Time Report'},
-      {id:'productivity',label:'Dev Productivity'},
-    ]}]:[]),
-  ];
-  // Collapsed group state — persisted
-  const [collapsedGroups,setCollapsedGroups]=useState(()=>{
-    try{return JSON.parse(localStorage.getItem('vw_nav_collapsed')||'{}');}catch{return {};}
-  });
-  const toggleGroup=(key)=>{
-    setCollapsedGroups(prev=>{
-      const n={...prev,[key]:!prev[key]};
-      try{localStorage.setItem('vw_nav_collapsed',JSON.stringify(n));}catch{}
-      return n;
-    });
-  };
+    dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
+  const adminNav=[
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, ];
+  const devNav=[
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
+  const navItems=(isAdminManager?adminNav:devNav).filter(it=>
+    it.id!=='dm'||(wsDmEnabled||isAdminManager)
+  );
 
   const themeIcon=dark
-    ?'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
-    :'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    ?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+    :html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 
   const W=col?64:200; // collapsed=64px, expanded=200px
 
@@ -6364,37 +5004,26 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
         </div>`:null}
       </div>
 
-            <nav style=${{flex:1,overflowY:'auto',padding:'6px 6px 4px',display:'flex',flexDirection:'column',gap:0}}>
-        ${NAV_GROUPS.map(grp=>html`
-          <div key=${grp.key} style=${{marginBottom:2}}>
-            ${!col&&grp.label?html`
-              <button onClick=${()=>toggleGroup(grp.key)}
-                style=${{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',padding:'5px 8px',background:'none',border:'none',cursor:'pointer',color:'rgba(100,116,139,0.7)',fontSize:10,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>
-                ${grp.label}
-                <span style=${{fontSize:9,opacity:.6,transition:'transform .15s',transform:collapsedGroups[grp.key]?'rotate(-90deg)':'rotate(0)'}}>▾</span>
-              </button>`:null}
-            ${(!collapsedGroups[grp.key]||col)?grp.items.map(it=>html`
-              <button key=${it.id}
-                title=${col?it.label:''}
-                onClick=${()=>setView(it.id)}
-                style=${{
-                  display:'flex',alignItems:'center',gap:col?0:9,width:'100%',
-                  padding:col?'9px 0':'7px 8px',
-                  borderRadius:8,border:'none',cursor:'pointer',
-                  background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent',
-                  color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.7)',
-                  fontSize:12,fontWeight:baseView===it.id?700:400,
-                  transition:'all .1s',textAlign:'left',
-                  borderLeft:baseView===it.id&&!col?'2px solid #3b82f6':'2px solid transparent',
-                  justifyContent:col?'center':'flex-start',position:'relative',
-                  marginBottom:1
-                }}
-                onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.12)';e.currentTarget.style.color='#93c5fd';}}}
-                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}>\n                <span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}} dangerouslySetInnerHTML=${{__html:NAV_ICONS[it.id]||''}}></span>
-                ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
-                ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{minWidth:16,height:16,borderRadius:8,background:'#06b6d4',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
-              </button>`):null}
-          </div>`)}
+            <nav style=${{flex:1,overflowY:'auto',padding:'8px 6px',display:'flex',flexDirection:'column',gap:2}}>
+        ${navItems.map(it=>html`
+          <button key=${it.id}
+            title=${col?it.label:''}
+            onClick=${()=>setView(it.id)}
+            style=${{
+              display:'flex',alignItems:'center', gap:col?0:10, width:'100%', padding:col?'10px 0':'9px 10px', borderRadius:9,border:'none',cursor:'pointer', background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent', color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)', fontSize:12,fontWeight:baseView===it.id?700:500, transition:'all .12s',textAlign:'left', borderLeft:baseView===it.id&&!col?'2px solid var(--ac)':'2px solid transparent', justifyContent:col?'center':'flex-start', position:'relative'
+            }}
+            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
+            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}>
+            <span style=${{flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center',opacity:.85}}>${NAV_ICONS[it.id]||null}</span>
+            ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
+            ${it.id==='notifs'&&unread>0?html`<span style=${{
+              position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--rd)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
+            }}>${unread>9?'9+':unread}</span>`:null}
+            ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{
+              position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--cy)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
+            }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
+          </button>`)}
+
       </nav>
 
             <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
@@ -6403,7 +5032,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
           style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(203,213,225,0.65)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
           onMouseEnter=${e=>{e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}
           onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.65)';}}>
-          <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}} dangerouslySetInnerHTML=${{__html:themeIcon}}></span>
+          <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}}>${themeIcon}</span>
           ${!col?html`<span style=${{fontSize:12}}>${dark?'Light Mode':'Dark Mode'}</span>`:null}
         </button>
         ${(cu&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead'))?html`
@@ -6657,7 +5286,7 @@ const TYPE_BG={task:'rgba(29,78,216,0.10)',story:'rgba(21,128,61,0.10)',bug:'rgb
 const TYPE_BORDER={task:'rgba(29,78,216,0.2)',story:'rgba(21,128,61,0.2)',bug:'rgba(185,28,28,0.2)',epic:'rgba(109,40,217,0.2)',spike:'rgba(180,83,9,0.2)'};
 
 function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSetReminder,teams,activeTeam}){
-    const [title,setTitle]=useState((task&&task.title)||'');
+  const [title,setTitle]=useState((task&&task.title)||'');
   const [desc,setDesc]=useState((task&&task.description)||'');
   const [pid,setPid]=useState((task&&task.project)||defaultPid||(projects[0]&&projects[0].id)||'');
   const [teamId,setTeamId]=useState((task&&task.team_id)||((!task&&activeTeam)?activeTeam.id:'')||'');
@@ -6691,7 +5320,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [loadingSubtasks,setLoadingSubtasks]=useState(false);
   // Jira fields
   const [storyPoints,setStoryPoints]=useState((task&&task.story_points)||0);
-  const [recurring,setRecurring]=useState((task&&task.recurring)||'');
   const [taskType,setTaskType]=useState((task&&task.task_type)||'task');
   const [taskLabels,setTaskLabels]=useState(()=>{const r=task&&task.labels;if(!r)return[];if(Array.isArray(r))return r;try{return JSON.parse(r)||[];}catch{return [];}});
   const [newLabel,setNewLabel]=useState('');
@@ -6749,7 +5377,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     if(isEdit&&canUpdateStage&&!canEditTask){
       payload={stage,pct};
     } else {
-      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId,story_points:storyPoints,task_type:taskType,labels:taskLabels,sprint,recurring};
+      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId,story_points:storyPoints,task_type:taskType,labels:taskLabels,sprint};
     }
     if(task&&task.id)payload.id=task.id;
     const result=await onSave(payload);
@@ -6805,9 +5433,9 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
         </div>
         ${isEdit?html`
           <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:14,width:'fit-content',flexWrap:'wrap'}}>
-            ${['details','subtasks','comments','files','time','deps'].map(t=>html`
+            ${['details','subtasks','comments','files'].map(t=>html`
               <button key=${t} class=${'tb'+(tab===t?' act':'')} onClick=${()=>setTab(t)} style=${{fontSize:11}}>
-                ${t==='details'?'Details':t==='subtasks'?html`Subtasks${subtasks.length>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${subtasks.filter(s=>s.done).length}/${subtasks.length}</span>`:''}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):t==='time'?'⏱ Time':t==='deps'?'🔗 Deps':'Files'}
+                ${t==='details'?'Details':t==='subtasks'?html`Subtasks${subtasks.length>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${subtasks.filter(s=>s.done).length}/${subtasks.length}</span>`:''}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
               </button>`)}
           </div>`:null}
 
@@ -6928,8 +5556,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
               <button class="btn bg" onClick=${onClose}>${isEdit&&!canEditTask&&!canUpdateStage?'Close':'Cancel'}</button>
               ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
               ${(!isEdit||canEditTask||canUpdateStage)?html`<button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>`:null}
-              ${!isEdit?html`<button class="btn bg" style=${{fontSize:12}} onClick=${()=>setShowTemplates(true)}>📋 Templates</button>`:null}
-                          </div>
+            </div>
           </div>`:null}
 
         ${tab==='comments'?html`
@@ -6974,15 +5601,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                 <label class="lbl">Story Points</label>
                 <select class="sel" value=${storyPoints} onChange=${e=>setStoryPoints(parseInt(e.target.value))} disabled=${!canEditTask}>
                   ${[0,1,2,3,5,8,13,21].map(p=>html`<option key=${p} value=${p}>${p===0?'—':p+' pt'+(p>1?'s':'')}</option>`)}
-                </select>
-              </div>
-              <div style=${{flex:1,minWidth:140}}>
-                <label class="lbl">Recurring</label>
-                <select class="sel" value=${recurring} onChange=${async e=>{setRecurring(e.target.value);if(isEdit)await api.put(`/api/tasks/${task.id}/recurring`,{pattern:e.target.value});}} disabled=${!canEditTask}>
-                  <option value="">Not recurring</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
                 </select>
               </div>
             </div>
@@ -7036,8 +5654,6 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
             </div>
           </div>`:null}
         ${tab==='files'&&isEdit?html`<${FileAttachments} taskId=${task.id} readOnly=${cu&&cu.role==='Viewer'}/>`:null}
-        ${tab==='time'&&isEdit?html`<${TimeTracker} taskId=${task.id} cu=${cu}/>`:null}
-        ${tab==='deps'&&isEdit?html`<${TaskDepsPanel} taskId=${task.id} allTasks=${[]}/>`:null}
       </div>
     </div>`;
 }
@@ -7883,8 +6499,6 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 
 /* ─── Dashboard ───────────────────────────────────────────────────────────── */
 function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
-  const [hideOnboarding,setHideOnboarding]=useState(()=>{try{return localStorage.getItem('vw_onboarding_done')==='1';}catch{return false;}});
-  const dismissOnboarding=()=>{try{localStorage.setItem('vw_onboarding_done','1');}catch{}setHideOnboarding(true);};
   const t=safe(tasks);const p=safe(projects);const u=safe(users);
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const [teamDropOpen,setTeamDropOpen]=useState(false);
@@ -7916,10 +6530,9 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     {name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)',priKey:'critical'}, {name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)',priKey:'high'}, {name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)',priKey:'medium'}, {name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)',priKey:'low'}
   ];
   const stats=[
-    {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>',nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',nav:'tickets:assignee:me'}, ];
+    {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'}, ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
-      ${!hideOnboarding?html`<${OnboardingChecklist} cu=${cu} projects=${projects} users=${users} tasks=${tasks} setView=${onNav} onDismiss=${dismissOnboarding}/>`:null}
       <div style=${{padding:'10px 14px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:10}}>
         <${Av} u=${cu} size=${32}/>
         <div style=${{flex:1,minWidth:0}}>
@@ -7983,10 +6596,10 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
         ${stats.map((s,i)=>html`
           <div key=${i} onClick=${()=>onNav(s.nav)}
             style=${{background:'var(--sf)',borderRadius:14,padding:'12px 14px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'all .16s',border:'1px solid var(--bd2)'}}
-            onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color||'var(--ac)';e.currentTarget.style.transform='translateY(-2px)';}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color;e.currentTarget.style.transform='translateY(-2px)';}}
             onMouseLeave=${e=>{e.currentTarget.style.borderColor='';e.currentTarget.style.transform='';}}>
-            <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:s.color||'var(--ac)',borderRadius:'16px 16px 0 0'}}></div>
-            <div style=${{width:26,height:26,borderRadius:7,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color||'var(--ac)',marginBottom:8}} dangerouslySetInnerHTML=${{__html:s.icon}}></div>
+            <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:s.color,borderRadius:'16px 16px 0 0'}}></div>
+            <div style=${{width:26,height:26,borderRadius:7,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color,marginBottom:8}}>${s.icon}</div>
             <div style=${{fontSize:24,fontWeight:700,color:'var(--tx)',lineHeight:1,fontFamily:"'Space Grotesk',sans-serif",letterSpacing:-1}}>${s.val}</div>
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:5,fontWeight:500}}>${s.label}</div>
           </div>`)}
@@ -7994,19 +6607,23 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
+          <${RC.ResponsiveContainer} width="100%" height=${120}>
+            <${RC.PieChart}>
+              <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4} cursor="pointer"
+                onClick=${(data)=>{if(data&&data.priKey)onNav('tasks:priority:'+data.priKey);}}>
+                ${priChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
+              <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,color:'var(--tx)',fontSize:12}}/>
+            <//>
+          <//>
           ${priChart.map((item,i)=>html`
-              <div key=${i} onClick=${()=>onNav('tasks:priority:'+item.priKey)}
-                style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6,cursor:'pointer'}}
-                onMouseEnter=${e=>e.currentTarget.style.opacity='.75'}
-                onMouseLeave=${e=>e.currentTarget.style.opacity='1'}>
-                <div style=${{width:7,height:7,borderRadius:2,background:item.color||'var(--ac)',flexShrink:0}}></div>
-                <span style=${{fontSize:11,color:'var(--tx2)',width:50,flexShrink:0}}>${item.name}</span>
-                <div style=${{flex:1,height:7,background:'var(--bd)',borderRadius:3,overflow:'hidden'}}>
-                  <div style=${{height:'100%',width:(item.value/Math.max(...priChart.map(x=>x.value),1)*100)+'%',background:item.color||'var(--ac)',borderRadius:3,transition:'width .3s'}}></div>
-                </div>
-                <span style=${{fontSize:11,fontFamily:'monospace',fontWeight:700,color:'var(--tx)',width:18,textAlign:'right',flexShrink:0}}>${item.value}</span>
-              </div>`)}
-
+            <div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<3?'1px solid var(--bd)':'none',cursor:'pointer'}}
+              onClick=${()=>onNav('tasks:priority:'+item.priKey)}>
+              <div style=${{display:'flex',alignItems:'center',gap:7}}>
+                <div style=${{width:7,height:7,borderRadius:2,background:item.color}}></div>
+                <span style=${{fontSize:12,color:'var(--tx2)'}}>${item.name}</span>
+              </div>
+              <span style=${{fontSize:12,color:'var(--tx)',fontFamily:'monospace',fontWeight:700}}>${item.value}</span>
+            </div>`)}
           <p style=${{fontSize:10,color:'var(--tx3)',marginTop:6,textAlign:'center'}}>Click to filter by priority</p>
         </div>
         <div class="card" style=${{display:'flex',flexDirection:'column'}}>
@@ -8021,12 +6638,12 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
             return html`<div key=${proj.id} style=${{marginBottom:11}}>
               <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
                 <div style=${{display:'flex',alignItems:'center',gap:6}}>
-                  <div style=${{width:7,height:7,borderRadius:2,background:proj.color||'var(--ac)'}}></div>
+                  <div style=${{width:7,height:7,borderRadius:2,background:proj.color}}></div>
                   <span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${proj.name}</span>
                 </div>
                 <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace'}}>${pc}%</span>
               </div>
-              <${Prog} pct=${pc} color=${proj.color||'var(--ac)'}/>
+              <${Prog} pct=${pc} color=${proj.color}/>
             </div>`;
           })}
           </div>
@@ -8385,32 +7002,18 @@ function ProductivityView({cu,tasks,projects,users}){
           <div style=${{padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
             <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
               <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:14}}>Task Distribution per Developer</h3>
-              ${(()=>{
-                const maxVal=Math.max(1,...chartData.map(d=>(d.Completed||0)+(d['In Progress']||0)+(d.Blocked||0)));
-                const pctW=(v)=>Math.round((v/maxVal)*100);
-                return html`<div style=${{display:'flex',flexDirection:'column',gap:6,padding:'4px 0'}}>
-                  <div style=${{display:'flex',gap:12,fontSize:10,color:'var(--tx3)',marginBottom:4,paddingLeft:64}}>
-                    <span style=${{display:'flex',alignItems:'center',gap:4}}><span style=${{width:8,height:8,borderRadius:2,background:'var(--gn)',display:'inline-block'}}></span>Completed</span>
-                    <span style=${{display:'flex',alignItems:'center',gap:4}}><span style=${{width:8,height:8,borderRadius:2,background:'var(--cy)',display:'inline-block'}}></span>In Progress</span>
-                    <span style=${{display:'flex',alignItems:'center',gap:4}}><span style=${{width:8,height:8,borderRadius:2,background:'var(--rd)',display:'inline-block'}}></span>Blocked</span>
-                  </div>
-                  ${chartData.map((d,i)=>{
-                    const total=(d.Completed||0)+(d['In Progress']||0)+(d.Blocked||0);
-                    const cPct=pctW(d.Completed||0);
-                    const pPct=pctW(d['In Progress']||0);
-                    const bPct=pctW(d.Blocked||0);
-                    return html`<div key=${i} style=${{display:'flex',alignItems:'center',gap:8}}>
-                      <span style=${{width:56,fontSize:10,color:'var(--tx2)',textAlign:'right',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${d.name}</span>
-                      <div style=${{flex:1,display:'flex',height:14,borderRadius:4,overflow:'hidden',background:'var(--bd)'}}>
-                        ${cPct>0?html`<div style=${{width:cPct+'%',background:'var(--gn)',transition:'width .3s'}}></div>`:null}
-                        ${pPct>0?html`<div style=${{width:pPct+'%',background:'var(--cy)',transition:'width .3s'}}></div>`:null}
-                        ${bPct>0?html`<div style=${{width:bPct+'%',background:'var(--rd)',transition:'width .3s'}}></div>`:null}
-                      </div>
-                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',width:20,flexShrink:0}}>${total}</span>
-                    </div>`;
-                  })}
-                </div>`;
-              })()}
+              <${RC.ResponsiveContainer} width="100%" height=${Math.max(200,filtered.length*28)}>
+                <${RC.BarChart} data=${chartData} layout="vertical" barSize=${14} margin=${{top:0,right:30,bottom:0,left:60}}>
+                  <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" horizontal=${false}/>
+                  <${RC.XAxis} type="number" tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
+                  <${RC.YAxis} type="category" dataKey="name" tick=${{fill:'var(--tx2)',fontSize:11}} axisLine=${false} tickLine=${false} width=${55}/>
+                  <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--tx)',fontSize:11}}/>
+                  <${RC.Legend} iconSize=${8} wrapperStyle=${{fontSize:10,color:'var(--tx2)',paddingTop:8}}/>
+                  <${RC.Bar} dataKey="Completed" stackId="a" fill="var(--gn)" radius=${[0,0,0,0]}/>
+                  <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
+                  <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[0,4,4,0]}/>
+                <//>
+              <//>
               <p style=${{fontSize:10,color:'var(--tx3)',marginTop:8,textAlign:'center'}}>All ${filtered.length} developers shown — horizontal bars scale with task count</p>
             </div>
           </div>`:null}
@@ -8482,46 +7085,7 @@ function ProductivityView({cu,tasks,projects,users}){
 function renderMd(text){
   return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
 }
-
-/* ─── Message Reactions Component ───────────────────────────────────────── */
-function MsgReactions({msgId,msgType,cu,users}){
-  const [reactions,setReactions]=useState({});
-  const [showPicker,setShowPicker]=useState(false);
-  const EMOJIS=['👍','❤️','😂','🎉','🚀','👀','✅','🔥'];
-  const load=async()=>{const r=await api.get(`/api/reactions/${msgType}/${msgId}`);if(r&&!r.error)setReactions(r);};
-  useEffect(()=>{load();},[msgId]);
-  const toggle=async(emoji)=>{
-    await api.post(`/api/reactions/${msgType}/${msgId}`,{emoji});
-    setShowPicker(false);load();
-  };
-  const uMap={};safe(users||[]).forEach(u=>uMap[u.id]=u);
-  const total=Object.values(reactions).reduce((s,arr)=>s+arr.length,0);
-  return html`<div style=${{display:'flex',gap:4,flexWrap:'wrap',alignItems:'center',marginTop:2}}>
-    ${Object.entries(reactions).map(([emoji,uids])=>html`
-      <button key=${emoji} onClick=${()=>toggle(emoji)} title=${uids.map(id=>uMap[id]?.name||id).join(', ')}
-        style=${{display:'flex',alignItems:'center',gap:3,padding:'1px 7px',borderRadius:99,border:'1px solid var(--bd)',background:uids.includes(cu?.id)?'rgba(37,99,235,0.12)':'var(--sf2)',cursor:'pointer',fontSize:12,fontWeight:600,color:'var(--tx)'}}>
-        ${emoji} <span style=${{fontSize:11,color:'var(--tx3)'}}>${uids.length}</span>
-      </button>`)}
-    <div style=${{position:'relative'}}>
-      <button onClick=${()=>setShowPicker(p=>!p)}
-        style=${{padding:'1px 6px',borderRadius:99,border:'1px solid var(--bd)',background:'transparent',cursor:'pointer',fontSize:12,color:'var(--tx3)',opacity:.6}}>
-        +
-      </button>
-      ${showPicker?html`
-        <div style=${{position:'absolute',bottom:'100%',left:0,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:6,display:'flex',gap:4,zIndex:100,boxShadow:'0 4px 16px rgba(0,0,0,.15)'}}>
-          ${EMOJIS.map(e=>html`
-            <button key=${e} onClick=${()=>toggle(e)}
-              style=${{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 4px',borderRadius:6}}>
-              ${e}
-            </button>`)}
-        </div>`:null}
-    </div>
-  </div>`;
-}
-
 function MessagesView({projects,users,cu,tasks}){
-  const [showPinned,setShowPinned]=useState(false);
-  const [hovMsg,setHovMsg]=useState(null);
   const [allProjects,setAllProjects]=useState(safe(projects));
   const [lastMsgTs,setLastMsgTs]=useState({});
   const [stableOrder,setStableOrder]=useState(null); // null = not yet fetched
@@ -8850,13 +7414,7 @@ function MessagesView({projects,users,cu,tasks}){
                 ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
                 <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
                   ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
-                  <div style=${{position:'relative'}} onMouseEnter=${()=>setHovMsg(m.id)} onMouseLeave=${()=>setHovMsg(null)}>
-                    <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5, background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)', border:isMe?'none':'1px solid var(--bd)', borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
-                    ${hovMsg===m.id&&cu&&['Admin','Manager','TeamLead'].includes(cu.role)?html`
-                      <button onClick=${async()=>{await api.post('/api/messages/'+m.id+'/pin',{});}} title="Pin message"
-                        style=${{position:'absolute',top:-8,right:isMe?'auto':-8,left:isMe?-8:'auto',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:6,padding:'2px 5px',fontSize:11,cursor:'pointer',color:'var(--tx3)',zIndex:10}}>📌</button>`:null}
-                  </div>
-                  <${MsgReactions} msgId=${m.id} msgType="channel" cu=${cu} users=${users}/>
+                  <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5, background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)', border:isMe?'none':'1px solid var(--bd)', borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
                   <span class="mono-10">${timeStr}</span>
                 </div>
               </div>`;
@@ -8868,12 +7426,10 @@ function MessagesView({projects,users,cu,tasks}){
         </div>`:null}
       </div>
 
-            <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0,alignItems:'flex-end'}}>
-        <${MentionInput} value=${txt} onChange=${setTxt} users=${users} cu=${cu}
-          placeholder=${'Message in #'+((sp&&sp.name)||'… (@mention)')}
-          onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}
-          style=${{height:36,fontSize:13}}/>
-        <button class="btn bp" style=${{padding:'8px 14px',fontSize:12,flexShrink:0}} onClick=${send}>➤</button>
+            <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
+        <input class="inp" style=${{flex:1}} placeholder=${'Message in #'+((sp&&sp.name)||'...')} value=${txt}
+          onInput=${e=>setTxt(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}/>
+        <button class="btn bp" style=${{padding:'8px 14px',fontSize:12}} onClick=${send}>➤</button>
       </div>
     </div>
   </div>`;
@@ -8978,7 +7534,6 @@ function DirectMessages({cu,users,dmUnread,onDmRead,dmEnabled=true,initialUserId
             <div style=${{width:28,flexShrink:0}}>${!isMe&&(i===0||msgs[i-1].sender!==m.sender)?html`<${Av} u=${toUser} size=${28}/>`:null}</div>
             <div style=${{display:'flex',flexDirection:'column',gap:2,alignItems:isMe?'flex-end':'flex-start',maxWidth:'68%'}}>
               <div style=${{padding:'9px 13px',borderRadius:14,fontSize:13,lineHeight:1.55,wordBreak:'break-word',background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)',border:isMe?'none':'1px solid var(--bd)',borderBottomRightRadius:isMe?3:14,borderBottomLeftRadius:isMe?14:3}}>${m.content}</div>
-              <${MsgReactions} msgId=${m.id} msgType="dm" cu=${cu} users=${[cu,toUser].filter(Boolean)}/>
               ${showT?html`<span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',margin:'0 2px'}}>${ago(m.ts)}</span>`:null}
             </div>
           </div>`;})}
@@ -8994,7 +7549,7 @@ function DirectMessages({cu,users,dmUnread,onDmRead,dmEnabled=true,initialUserId
 /* ─── NotifsView ──────────────────────────────────────────────────────────── */
 function NotifsView({notifs,reload,onNavigate}){
   const NT={
-    task_assigned:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>',c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>',c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>',c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',c:'#f59e0b',nav:'tasks',label:'View Tasks'}, call:{icon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',c:'#22c55e',nav:'dashboard',label:'Join Instant Meet'}, };
+    task_assigned:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,c:'var(--ac)',nav:'tasks',label:'View Tasks'}, status_change:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,c:'var(--cy)',nav:'tasks',label:'View Tasks'}, comment:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,c:'var(--pu)',nav:'tasks',label:'View Tasks'}, deadline:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'var(--am)',nav:'tasks',label:'View Tasks'}, dm:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="12" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>`,c:'#06b6d4',nav:'dm',label:'Open Messages'}, project_added:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`,c:'#10b981',nav:'projects',label:'View Projects'}, reminder:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,c:'#f59e0b',nav:'tasks',label:'View Tasks'}, call:{icon:html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`,c:'#22c55e',nav:'dashboard',label:'Join Instant Meet'}, };
   const unread=safe(notifs).filter(n=>!n.read).length;
   const handleClick=async(n)=>{
     if(!n.read) await api.put('/api/notifications/'+n.id+'/read',{});
@@ -9021,7 +7576,7 @@ function NotifsView({notifs,reload,onNavigate}){
       ${safe(notifs).map(n=>{const T=NT[n.type]||NT.comment;return html`
         <div key=${n.id} onClick=${()=>handleClick(n)}
           style=${{display:'flex',gap:12,padding:'12px 15px',background:n.read?'var(--sf)':'rgba(99,102,241,.07)',border:'1px solid '+(n.read?'var(--bd)':'rgba(99,102,241,.22)'),borderRadius:12,cursor:'pointer',alignItems:'center',transition:'all .15s'}}>
-          <div style=${{width:36,height:36,borderRadius:10,background:T.c+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}} dangerouslySetInnerHTML=${{__html:T.icon}}></div>
+          <div style=${{width:36,height:36,borderRadius:10,background:T.c+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>${T.icon}</div>
           <div style=${{flex:1}}>
             <p style=${{fontSize:13,color:'var(--tx)',fontWeight:n.read?400:600,marginBottom:3}}>${n.content}</p>
             <div style=${{display:'flex',gap:10,alignItems:'center'}}>
@@ -9624,16 +8179,7 @@ function WorkspaceSettings({cu,onReload}){
   const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);const [otpEnabled,setOtpEnabled]=useState(false);
   const [dmEnabled,setDmEnabled]=useState(true);
   const PERM_DEFAULTS={
-    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false}, 'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Start Instant Meet Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
-    'Post Announcements':       {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false},
-    'Generate AI Standup':      {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false},
-    'AI Standup All Members':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'AI Code Review':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
-    'AI Risk Analysis':         {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'View Time Report All':     {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Build Intake Forms':       {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
-    'Setup 2FA':                {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
-    'Enforce 2FA Workspace':    {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, };
+    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false}, 'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Start Instant Meet Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, };
   const storedPerms=()=>{try{return JSON.parse(localStorage.getItem('pf_perms')||'null');}catch{return null;}};
   const [perms,setPerms]=useState(()=>storedPerms()||PERM_DEFAULTS);
   const togglePerm=(label,role)=>{
@@ -9870,29 +8416,6 @@ function WorkspaceSettings({cu,onReload}){
         </div>
       </div>
 
-      <${TOTPSetupPanel} cu=${cu}/>
-
-
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:16}}>
-        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:10}}>🏷 White Label</div>
-        <div style=${{display:'grid',gap:8}}>
-          <div style=${{display:'flex',flexDirection:'column',gap:4}}>
-            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)'}}>Custom Platform Name</label>
-            <input class="inp" id="wl_name" placeholder="e.g. MyTeam Hub" style=${{height:34,fontSize:13}}/>
-          </div>
-          <div style=${{display:'flex',flexDirection:'column',gap:4}}>
-            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)'}}>Logo URL</label>
-            <input class="inp" id="wl_logo" placeholder="https://..." style=${{height:34,fontSize:13}}/>
-          </div>
-          <button class="btn bg" style=${{fontSize:12,width:'fit-content'}} onClick=${async()=>{
-            const name=document.getElementById('wl_name')?.value||'';
-            const logo=document.getElementById('wl_logo')?.value||'';
-            await api.put('/api/workspace/white-label',{name,logo});
-            alert('White label settings saved!');
-          }}>Save White Label</button>
-        </div>
-      </div>
-
       <div style=${{display:'flex',gap:10,justifyContent:'flex-end'}}>
         <button class="btn bp" onClick=${save} disabled=${saving}>
           ${saving?html`<span class="spin"></span>`:saved?'✓ Saved!':'Save Settings'}
@@ -9902,614 +8425,6 @@ function WorkspaceSettings({cu,onReload}){
   </div>`;
 }
 
-
-/* ─── Calendar View ──────────────────────────────────────────────────────── */
-/* ─── Kanban Board View ──────────────────────────────────────────────────── */
-/* ─── Docs / Wiki View ───────────────────────────────────────────────────── */
-function DocsView({projects,cu}){
-  const [tab,setTab]=useState('docs');
-  const [docs,setDocs]=useState([]);const [sel,setSel]=useState(null);const [editing,setEditing]=useState(false);
-  const [form,setForm]=useState({title:'',content:'',project:'',type:'general'});
-  const [busy,setBusy]=useState(true);const [search,setSearch]=useState('');
-  const [diagrams,setDiagrams]=useState(()=>{try{return JSON.parse(localStorage.getItem('vw_diag')||'[]');}catch{return [];}});
-  const [selD,setSelD]=useState(null);const [editD,setEditD]=useState(false);
-  const [diagForm,setDiagForm]=useState({title:'',content:'',type:'architecture'});
-
-  const load=useCallback(async()=>{setBusy(true);const d=await api.get('/api/docs');setDocs(Array.isArray(d)?d:[]);setBusy(false);},[]);
-  useEffect(()=>{load();},[load]);
-
-  const saveDoc=async()=>{
-    if(!form.title.trim())return;
-    if(sel)await api.put('/api/docs/'+sel.id,form); else await api.post('/api/docs',form);
-    setEditing(false);setSel(null);setForm({title:'',content:'',project:'',type:'general'});load();
-  };
-  const delDoc=async id=>{if(!window.confirm('Delete?'))return;await api.del('/api/docs/'+id);setSel(null);load();};
-
-  const saveDiag=()=>{
-    if(!diagForm.title.trim())return;
-    const list=selD?diagrams.map(d=>d.id===selD.id?{...d,...diagForm}:d):[...diagrams,{...diagForm,id:'d'+Date.now(),created:new Date().toISOString()}];
-    setDiagrams(list);try{localStorage.setItem('vw_diag',JSON.stringify(list));}catch{}
-    setEditD(false);setSelD(null);setDiagForm({title:'',content:'',type:'architecture'});
-  };
-  const delDiag=id=>{if(!window.confirm('Delete?'))return;const l=diagrams.filter(d=>d.id!==id);setDiagrams(l);try{localStorage.setItem('vw_diag',JSON.stringify(l));}catch{}if(selD&&selD.id===id)setSelD(null);};
-
-  const DTYPE={architecture:'🏗 Architecture',flow:'🔀 Flow Diagram',er:'🗄 ER Diagram',sequence:'📋 Sequence',infra:'☁️ Infrastructure',api:'⚡ API Design'};
-  const DOCTYPE={general:'📄 General',technical:'🔧 Technical',process:'📋 Process',api:'⚡ API',meeting:'📝 Meeting Notes'};
-  const fDocs=docs.filter(d=>!search||d.title.toLowerCase().includes(search.toLowerCase()));
-  const fDiags=diagrams.filter(d=>!search||d.title.toLowerCase().includes(search.toLowerCase()));
-
-  const Sidebar=({items,sel,onSel,empty,getLabel})=>html`
-    <div style=${{width:220,borderRight:'1px solid var(--bd)',overflowY:'auto',padding:'6px',flexShrink:0}}>
-      ${items.length===0?html`<div style=${{textAlign:'center',padding:'20px 8px',color:'var(--tx3)',fontSize:12}}>${empty}</div>`:null}
-      ${items.map(it=>html`
-        <button key=${it.id} onClick=${()=>onSel(it)}
-          style=${{width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',textAlign:'left',fontSize:12,marginBottom:2,
-            background:sel&&sel.id===it.id?'var(--ac3)':'transparent',color:sel&&sel.id===it.id?'var(--ac)':'var(--tx2)',display:'flex',flexDirection:'column',gap:2}}>
-          <span style=${{fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${it.title}</span>
-          <span style=${{fontSize:10,color:'var(--tx3)'}}>${getLabel(it)}</span>
-        </button>`)}
-    </div>`;
-
-  return html`<div class="fi" style=${{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-    <div style=${{flexShrink:0,padding:'10px 18px',borderBottom:'1px solid var(--bd)',display:'flex',gap:10,alignItems:'center'}}>
-      <div style=${{display:'flex',background:'var(--sf2)',borderRadius:8,padding:2,gap:1}}>
-        ${['docs','diagrams'].map(t=>html`
-          <button key=${t} class=${'tb'+(tab===t?' act':'')} style=${{fontSize:12,padding:'5px 14px'}} onClick=${()=>setTab(t)}>
-            ${t==='docs'?'📄 Documentation':'🏗 Architecture Diagrams'}
-          </button>`)}
-      </div>
-      <input class="inp" placeholder="Search..." value=${search} onInput=${e=>setSearch(e.target.value)} style=${{height:28,fontSize:12,flex:1,maxWidth:220}}/>
-      <button class="btn bp" style=${{fontSize:12}} onClick=${()=>{
-        if(tab==='docs'){setSel(null);setForm({title:'',content:'',project:'',type:'general'});setEditing(true);}
-        else{setSelD(null);setDiagForm({title:'',content:'',type:'architecture'});setEditD(true);}
-      }}>+ New ${tab==='docs'?'Doc':'Diagram'}</button>
-    </div>
-
-    ${tab==='docs'?html`<div style=${{flex:1,display:'flex',overflow:'hidden'}}>
-      <${Sidebar} items=${fDocs} sel=${sel} onSel=${d=>{setSel(d);setEditing(false);}} empty="No documents yet." getLabel=${d=>(DOCTYPE[d.type]||'📄')+' · '+new Date(d.created||Date.now()).toLocaleDateString()}/>
-      <div style=${{flex:1,overflowY:'auto',padding:'16px 20px'}}>
-        ${busy?html`<div style=${{textAlign:'center',paddingTop:40}}><div class="spin" style=${{margin:'0 auto'}}></div></div>`:null}
-        ${!sel&&!editing&&!busy?html`<div style=${{textAlign:'center',paddingTop:60,color:'var(--tx3)',fontSize:13}}>
-          <div style=${{fontSize:36,marginBottom:10}}>📄</div><p>Select a document or create a new one</p>
-        </div>`:null}
-        ${sel&&!editing?html`<div>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
-            <div>
-              <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:4}}>${DOCTYPE[sel.type]||'DOC'}</div>
-              <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',margin:0}}>${sel.title}</h2>
-            </div>
-            <div style=${{display:'flex',gap:6}}>
-              <button class="btn bg" style=${{fontSize:12}} onClick=${()=>{setForm({title:sel.title,content:sel.content||'',project:sel.project||'',type:sel.type||'general'});setEditing(true);}}>✏️ Edit</button>
-              <button class="btn brd" style=${{fontSize:12,color:'var(--rd)'}} onClick=${()=>delDoc(sel.id)}>🗑</button>
-            </div>
-          </div>
-          <div style=${{fontSize:14,color:'var(--tx2)',lineHeight:1.8,whiteSpace:'pre-wrap',background:'var(--sf)',borderRadius:10,padding:'16px 20px',border:'1px solid var(--bd)'}}>${sel.content||'No content.'}</div>
-        </div>`:null}
-        ${editing?html`<div style=${{display:'flex',flexDirection:'column',gap:12}}>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <h3 style=${{margin:0,fontSize:15,fontWeight:700}}>${sel?'Edit Document':'New Document'}</h3>
-            <button class="btn bg" onClick=${()=>setEditing(false)}>✕</button>
-          </div>
-          <div><label class="lbl">Title</label><input class="inp" value=${form.title} onInput=${e=>setForm(p=>({...p,title:e.target.value}))} placeholder="Document title"/></div>
-          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-            <div><label class="lbl">Type</label>
-              <select class="inp" value=${form.type} onChange=${e=>setForm(p=>({...p,type:e.target.value}))}>
-                ${Object.entries(DOCTYPE).map(([v,l])=>html`<option key=${v} value=${v}>${l}</option>`)}
-              </select></div>
-            <div><label class="lbl">Project</label>
-              <select class="inp" value=${form.project} onChange=${e=>setForm(p=>({...p,project:e.target.value}))}>
-                <option value="">— None —</option>
-                ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
-              </select></div>
-          </div>
-          <div><label class="lbl">Content</label>
-            <textarea class="inp" rows="14" style=${{resize:'vertical',fontFamily:'monospace',fontSize:13,lineHeight:1.6}}
-              value=${form.content} onInput=${e=>setForm(p=>({...p,content:e.target.value}))} placeholder="Write documentation here..."></textarea></div>
-          <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
-            <button class="btn bg" onClick=${()=>setEditing(false)}>Cancel</button>
-            <button class="btn bp" onClick=${saveDoc} disabled=${!form.title.trim()}>Save</button>
-          </div>
-        </div>`:null}
-      </div>
-    </div>`:null}
-
-    ${tab==='diagrams'?html`<div style=${{flex:1,display:'flex',overflow:'hidden'}}>
-      <${Sidebar} items=${fDiags} sel=${selD} onSel=${d=>{setSelD(d);setEditD(false);}} empty="No diagrams yet." getLabel=${d=>DTYPE[d.type]||'🏗'}/>
-      <div style=${{flex:1,overflowY:'auto',padding:'16px 20px'}}>
-        ${!selD&&!editD?html`<div style=${{textAlign:'center',paddingTop:60,color:'var(--tx3)',fontSize:13}}>
-          <div style=${{fontSize:40,marginBottom:10}}>🏗</div>
-          <p style=${{fontWeight:600,color:'var(--tx2)',marginBottom:6}}>Architecture Diagrams</p>
-          <p>Document system architecture, flows, ER diagrams,<br/>API designs, and infrastructure maps.</p>
-        </div>`:null}
-        ${selD&&!editD?html`<div>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-            <div>
-              <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>${DTYPE[selD.type]||'DIAGRAM'}</div>
-              <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',margin:0}}>${selD.title}</h2>
-            </div>
-            <div style=${{display:'flex',gap:6}}>
-              <button class="btn bg" style=${{fontSize:12}} onClick=${()=>{setDiagForm({title:selD.title,content:selD.content||'',type:selD.type||'architecture'});setEditD(true);}}>✏️ Edit</button>
-              <button class="btn brd" style=${{fontSize:12,color:'var(--rd)'}} onClick=${()=>delDiag(selD.id)}>🗑</button>
-            </div>
-          </div>
-          <pre style=${{fontFamily:'monospace',fontSize:13,color:'var(--tx2)',lineHeight:1.7,margin:0,whiteSpace:'pre-wrap',wordBreak:'break-word',background:'var(--sf)',borderRadius:10,padding:'16px 20px',border:'1px solid var(--bd)'}}>${selD.content||'No content.'}</pre>
-        </div>`:null}
-        ${editD?html`<div style=${{display:'flex',flexDirection:'column',gap:12}}>
-          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <h3 style=${{margin:0,fontSize:15,fontWeight:700}}>${selD?'Edit Diagram':'New Diagram'}</h3>
-            <button class="btn bg" onClick=${()=>setEditD(false)}>✕</button>
-          </div>
-          <div><label class="lbl">Title</label><input class="inp" value=${diagForm.title} onInput=${e=>setDiagForm(p=>({...p,title:e.target.value}))} placeholder="e.g. System Architecture"/></div>
-          <div><label class="lbl">Type</label>
-            <select class="inp" value=${diagForm.type} onChange=${e=>setDiagForm(p=>({...p,type:e.target.value}))}>
-              ${Object.entries(DTYPE).map(([v,l])=>html`<option key=${v} value=${v}>${l}</option>`)}
-            </select></div>
-          <div><label class="lbl">Diagram Content (Mermaid / ASCII / PlantUML / text)</label>
-            <textarea class="inp" rows="16" style=${{resize:'vertical',fontFamily:'monospace',fontSize:12,lineHeight:1.6}}
-              value=${diagForm.content} onInput=${e=>setDiagForm(p=>({...p,content:e.target.value}))}
-              placeholder="graph TD&#10;  A[User] --> B[API Gateway]&#10;  B --> C[Auth Service]&#10;  B --> D[Task Service]&#10;  D --> E[(PostgreSQL)]"></textarea></div>
-          <div style=${{padding:'9px 13px',background:'rgba(29,78,216,0.06)',borderRadius:9,border:'1px solid rgba(29,78,216,0.15)',fontSize:12,color:'var(--tx2)'}}>
-            💡 Use Mermaid syntax, ASCII art, or plain text. All formats supported.
-          </div>
-          <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
-            <button class="btn bg" onClick=${()=>setEditD(false)}>Cancel</button>
-            <button class="btn bp" onClick=${saveDiag} disabled=${!diagForm.title.trim()}>Save</button>
-          </div>
-        </div>`:null}
-      </div>
-    </div>`:null}
-  </div>`;
-}
-
-
-function TimeTracker({taskId,cu}){
-  const [logs,setLogs]=useState([]);
-  const [form,setForm]=useState({minutes:'',description:'',logged_date:new Date().toISOString().slice(0,10)});
-  const [running,setRunning]=useState(false);
-  const [elapsed,setElapsed]=useState(0);
-  const [startTime,setStartTime]=useState(null);
-  const load=async()=>{const r=await api.get(`/api/time-logs?task_id=${taskId}`);setLogs(r||[]);};
-  useEffect(()=>{load();},[taskId]);
-  useEffect(()=>{
-    if(!running)return;
-    const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startTime)/1000)),1000);
-    return()=>clearInterval(id);
-  },[running,startTime]);
-  const startTimer=()=>{setStartTime(Date.now());setRunning(true);setElapsed(0);};
-  const stopTimer=async()=>{
-    const mins=Math.max(1,Math.round(elapsed/60));
-    setRunning(false);
-    await api.post('/api/time-logs',{task_id:taskId,minutes:mins,description:'Timer session',logged_date:form.logged_date});
-    load();
-  };
-  const addManual=async()=>{
-    if(!form.minutes)return;
-    await api.post('/api/time-logs',{task_id:taskId,...form,minutes:+form.minutes});
-    setForm({minutes:'',description:'',logged_date:new Date().toISOString().slice(0,10)});
-    load();
-  };
-  const total=logs.reduce((s,l)=>s+l.minutes,0);
-  const fmt=m=>`${Math.floor(m/60)}h ${m%60}m`;
-  return html`<div style=${{marginTop:12}}>
-    <div style=${{fontWeight:700,fontSize:12,color:'var(--tx2)',marginBottom:8}}>TIME TRACKING</div>
-    <div style=${{display:'flex',gap:8,marginBottom:10,alignItems:'center'}}>
-      ${running?html`
-        <span style=${{fontSize:16,fontWeight:700,color:'var(--ac)',fontFamily:'monospace'}}>${String(Math.floor(elapsed/3600)).padStart(2,'0')}:${String(Math.floor((elapsed%3600)/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}</span>
-        <button class="btn br" style=${{fontSize:12}} onClick=${stopTimer}>⏹ Stop & Log</button>`:
-      html`<button class="btn bp" style=${{fontSize:12}} onClick=${startTimer}>▶ Start Timer</button>`}
-      <span style=${{fontSize:12,color:'var(--tx3)',marginLeft:'auto'}}>Total: <b>${fmt(total)}</b></span>
-    </div>
-    <div style=${{display:'flex',gap:6,marginBottom:10}}>
-      <input class="inp" type="number" placeholder="Minutes" value=${form.minutes} onInput=${e=>setForm({...form,minutes:e.target.value})} style=${{width:80,height:30,fontSize:12}}/>
-      <input class="inp" placeholder="What did you work on?" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{flex:1,height:30,fontSize:12}}/>
-      <button class="btn bg" style=${{fontSize:12,height:30,padding:'0 10px'}} onClick=${addManual}>Log</button>
-    </div>
-    ${logs.slice(0,5).map(l=>html`
-      <div key=${l.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderBottom:'1px solid var(--bd)',fontSize:12}}>
-        <span style=${{color:'var(--ac)',fontWeight:600,minWidth:48}}>${fmt(l.minutes)}</span>
-        <span style=${{flex:1,color:'var(--tx2)'}}>${l.description||'—'}</span>
-        <span style=${{color:'var(--tx3)'}}>${(l.logged_date||'').slice(5)}</span>
-        <button style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:13}} onClick=${async()=>{await api.del(`/api/time-logs/${l.id}`);load();}}>✕</button>
-      </div>`)}
-  </div>`;
-}
-
-/* ─── Task Dependencies Panel ────────────────────────────────────────────── */
-function TaskDepsPanel({taskId,allTasks}){
-  const [deps,setDeps]=useState([]);
-  const [selDep,setSelDep]=useState('');
-  const load=async()=>{const r=await api.get(`/api/tasks/${taskId}/dependencies`);setDeps(r||[]);};
-  useEffect(()=>{load();},[taskId]);
-  const add=async()=>{if(!selDep)return;await api.post(`/api/tasks/${taskId}/dependencies`,{dep_id:selDep});setSelDep('');load();};
-  const rem=async(depId)=>{await api.del(`/api/tasks/${taskId}/dependencies/${depId}`);load();};
-  const available=safe(allTasks).filter(t=>t.id!==taskId&&!deps.find(d=>d.id===t.id));
-  return html`<div style=${{marginTop:12}}>
-    <div style=${{fontWeight:700,fontSize:12,color:'var(--tx2)',marginBottom:8}}>DEPENDENCIES (BLOCKED BY)</div>
-    ${deps.map(d=>html`
-      <div key=${d.id} style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-        <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:'var(--sf2)',color:'var(--tx3)',fontFamily:'monospace'}}>${d.id}</span>
-        <span style=${{flex:1,fontSize:12,color:d.stage==='completed'?'#15803d':'var(--tx)'}}>${d.title}</span>
-        <span style=${{fontSize:10,color:d.stage==='completed'?'#15803d':'#d97706',fontWeight:600}}>${d.stage==='completed'?'✓ Done':'Pending'}</span>
-        <button style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)'}} onClick=${()=>rem(d.id)}>✕</button>
-      </div>`)}
-    <div style=${{display:'flex',gap:6,marginTop:6}}>
-      <select class="inp" style=${{flex:1,height:28,fontSize:12}} value=${selDep} onChange=${e=>setSelDep(e.target.value)}>
-        <option value="">Add dependency…</option>
-        ${available.map(t=>html`<option value=${t.id}>${t.id} – ${t.title}</option>`)}
-      </select>
-      <button class="btn bg" style=${{fontSize:12,height:28,padding:'0 10px'}} onClick=${add}>Add</button>
-    </div>
-  </div>`;
-}
-
-/* ─── Integrations Dashboard View ────────────────────────────────────────── */
-/* ─── Referral Panel (for settings) ─────────────────────────────────────── */
-/* ─── Announcements Banner + View ───────────────────────────────────────── */
-/* ─── AI Standup View ────────────────────────────────────────────────────── */
-/* ─── AI Code Review View ────────────────────────────────────────────────── */
-/* ─── AI Risk View ───────────────────────────────────────────────────────── */
-/* ─── Time Report View ───────────────────────────────────────────────────── */
-function TimeReportView({cu,users}){
-  const [logs,setLogs]=useState([]);
-  const [period,setPeriod]=useState('week');
-  const [userFilter,setUserFilter]=useState('');
-  const [loading,setLoading]=useState(false);
-  const canSeeAll=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
-  const load=async()=>{
-    setLoading(true);
-    const params=new URLSearchParams({period});
-    if(userFilter)params.append('user_id',userFilter);
-    const r=await api.get('/api/reports/time?'+params);
-    setLogs(r||[]);setLoading(false);
-  };
-  useEffect(()=>{load();},[period,userFilter]);
-  // Group by user
-  const byUser={};
-  logs.forEach(l=>{
-    const key=l.user_name||l.user_id;
-    if(!byUser[key])byUser[key]={name:key,total:0,logs:[]};
-    byUser[key].total+=l.minutes||0;
-    byUser[key].logs.push(l);
-  });
-  const totalMins=logs.reduce((s,l)=>s+(l.minutes||0),0);
-  const fmt=m=>`${Math.floor(m/60)}h ${m%60}m`;
-  const exportCSV=()=>{
-    const rows=[['Date','User','Task','Project','Minutes','Description'],...logs.map(l=>[l.logged_date,l.user_name,l.task_title,l.project_name,l.minutes,l.description])];
-    const csv=rows.map(r=>r.join(',')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download=`time-report-${period}.csv`;a.click();
-  };
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
-    <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:20,flexWrap:'wrap'}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>⏱️ Time Report</h2>
-      <div style=${{display:'flex',gap:6,marginLeft:'auto',alignItems:'center',flexWrap:'wrap'}}>
-        <select class="inp" style=${{height:32,fontSize:12,width:120}} value=${period} onChange=${e=>setPeriod(e.target.value)}>
-          <option value="week">Last 7 days</option>
-          <option value="month">This month</option>
-          <option value="quarter">Last 90 days</option>
-        </select>
-        ${canSeeAll?html`
-          <select class="inp" style=${{height:32,fontSize:12,width:150}} value=${userFilter} onChange=${e=>setUserFilter(e.target.value)}>
-            <option value="">All members</option>
-            ${safe(users).map(u=>html`<option value=${u.id}>${u.name}</option>`)}
-          </select>`:null}
-        <button class="btn bg" style=${{fontSize:12,height:32,padding:'0 12px'}} onClick=${exportCSV}>Export CSV</button>
-      </div>
-    </div>
-    <!-- Summary cards -->
-    <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20}}>
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',textAlign:'center'}}>
-        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)'}}>${fmt(totalMins)}</div>
-        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Total time logged</div>
-      </div>
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',textAlign:'center'}}>
-        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)'}}>${Object.keys(byUser).length}</div>
-        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Active members</div>
-      </div>
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',textAlign:'center'}}>
-        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)'}}>${logs.length}</div>
-        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Log entries</div>
-      </div>
-    </div>
-    <!-- By user breakdown -->
-    ${Object.values(byUser).sort((a,b)=>b.total-a.total).map(u=>html`
-      <div key=${u.name} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,marginBottom:12,overflow:'hidden'}}>
-        <div style=${{padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--sf2)',borderBottom:'1px solid var(--bd)'}}>
-          <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>${u.name}</div>
-          <div style=${{fontWeight:700,fontSize:14,color:'var(--ac)'}}>${fmt(u.total)}</div>
-        </div>
-        ${u.logs.slice(0,5).map(l=>html`
-          <div style=${{display:'flex',gap:12,padding:'8px 16px',borderBottom:'1px solid var(--bd)',fontSize:12}}>
-            <span style=${{color:'var(--tx3)',minWidth:80}}>${(l.logged_date||'').slice(5)}</span>
-            <span style=${{color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${l.task_title||'—'}</span>
-            <span style=${{color:'var(--tx3)',minWidth:60}}>${l.project_name||'—'}</span>
-            <span style=${{fontWeight:600,color:'var(--ac)',minWidth:50,textAlign:'right'}}>${fmt(l.minutes||0)}</span>
-          </div>`)}
-        ${u.logs.length>5?html`<div style=${{padding:'6px 16px',fontSize:11,color:'var(--tx3)'}}>+${u.logs.length-5} more entries</div>`:null}
-      </div>`)}
-    ${!loading&&!logs.length?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)'}}><div style=${{fontSize:36,marginBottom:10}}>⏱️</div><div>No time logs for this period</div></div>`:null}
-    ${loading?html`<div style=${{textAlign:'center',padding:40}}><span class="spin"></span></div>`:null}
-  </div>`;
-}
-
-/* ─── Forms & Intake View ────────────────────────────────────────────────── */
-/* ─── TOTP 2FA Setup Panel (in settings) ────────────────────────────────── */
-function TOTPSetupPanel({cu}){
-  const [status,setStatus]=useState(null);
-  const [setup,setSetup]=useState(null);
-  const [code,setCode]=useState('');
-  const [loading,setLoading]=useState(false);
-  const [msg,setMsg]=useState('');
-  const [copied,setCopied]=useState(false);
-  const codeRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
-
-  const load=async()=>{const r=await api.get('/api/totp/status');setStatus(r?.enabled);};
-  useEffect(()=>{load();},[]);
-
-  const startSetup=async()=>{
-    setLoading(true);setMsg('');
-    const r=await api.post('/api/totp/setup',{});
-    setLoading(false);
-    if(r?.error)setMsg(r.error);
-    else{setSetup(r);setCode('');}
-  };
-
-  const handleDigit=(i,val)=>{
-    const digits=code.split('');
-    digits[i]=val.replace(/\D/g,'').slice(-1);
-    const nc=digits.join('');
-    setCode(nc);
-    if(val&&i<5)codeRefs[i+1].current?.focus();
-    if(nc.length===6&&digits.every(d=>d))setTimeout(verify,80);
-  };
-
-  const handleKey=(i,e)=>{
-    if(e.key==='Backspace'&&!code[i]&&i>0)codeRefs[i-1].current?.focus();
-    if(e.key==='Enter'&&code.length===6)verify();
-  };
-
-  const handlePaste=(e)=>{
-    const p=e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
-    if(p.length===6){setCode(p);setTimeout(verify,120);}
-    e.preventDefault();
-  };
-
-  const verify=async()=>{
-    const c=code.replace(/\D/g,'');
-    if(c.length!==6)return;
-    setLoading(true);setMsg('');
-    const r=await api.post('/api/totp/verify',{code:c});
-    setLoading(false);
-    if(r?.ok){setMsg('✅ 2FA enabled successfully!');setSetup(null);setCode('');load();}
-    else{setMsg(r?.error||'Invalid code — check your authenticator app and try again');setCode('');codeRefs[0].current?.focus();}
-  };
-
-  const disable=async()=>{
-    if(!confirm('Disable 2FA? Your account will only be protected by your password.'))return;
-    await api.post('/api/totp/disable',{});setStatus(false);setMsg('2FA has been disabled.');
-  };
-
-  const copySecret=()=>{
-    navigator.clipboard?.writeText(setup.secret||'');
-    setCopied(true);setTimeout(()=>setCopied(false),2000);
-  };
-
-  // QR code via Google Charts API (free, no auth, works offline-friendly)
-  const qrUrl=setup?.uri?`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(setup.uri)}`:'';
-
-  return html`<div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'18px 20px',marginBottom:16}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-      <div>
-        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',display:'flex',alignItems:'center',gap:7}}>
-          <span style=${{fontSize:18}}>🔑</span> Two-Factor Authentication
-        </div>
-        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:3}}>Protect your account with Google Authenticator, Authy, or 1Password</div>
-      </div>
-      <span style=${{fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:99,
-        background:status?'rgba(21,128,61,0.12)':'rgba(100,116,139,0.1)',
-        color:status?'#15803d':'#64748b',border:'1px solid '+(status?'rgba(21,128,61,0.25)':'rgba(100,116,139,0.2)')}}>
-        ${status===null?'Checking…':status?'✓ Enabled':'Disabled'}
-      </span>
-    </div>
-
-    ${msg?html`<div style=${{fontSize:12,padding:'9px 13px',borderRadius:8,marginBottom:12,
-      background:msg.startsWith('✅')||msg.includes('disabled')?'rgba(21,128,61,0.08)':'rgba(185,28,28,0.07)',
-      color:msg.startsWith('✅')||msg.includes('disabled')?'#15803d':'#b91c1c',
-      border:'1px solid '+(msg.startsWith('✅')||msg.includes('disabled')?'rgba(21,128,61,0.2)':'rgba(185,28,28,0.2)')
-    }}>${msg}</div>`:null}
-
-    ${!status&&!setup?html`
-      <div style=${{display:'flex',gap:10,alignItems:'center'}}>
-        <button class="btn bp" style=${{fontSize:13,padding:'8px 18px'}} onClick=${startSetup} disabled=${loading}>
-          ${loading?html`<span class="spin"></span>`:null} ${loading?'Generating…':'Set Up Authenticator App'}
-        </button>
-        <span style=${{fontSize:11,color:'var(--tx3)'}}>Works with Google Authenticator, Authy, 1Password</span>
-      </div>`:null}
-
-    ${setup?html`
-      <div style=${{display:'flex',gap:24,flexWrap:'wrap'}}>
-        <!-- QR Code -->
-        <div style=${{flexShrink:0}}>
-          <div style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',marginBottom:8}}>Step 1 — Scan QR code</div>
-          <div style=${{width:164,height:164,border:'1px solid var(--bd)',borderRadius:10,overflow:'hidden',background:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <img src=${qrUrl} width="160" height="160" alt="QR code" style=${{display:'block'}}
-              onError=${e=>{e.target.style.display='none';e.target.nextSibling.style.display='flex';}}/>
-            <div style=${{display:'none',flexDirection:'column',alignItems:'center',padding:12,textAlign:'center'}}>
-              <div style=${{fontSize:11,color:'var(--tx3)',marginBottom:6}}>QR unavailable</div>
-              <div style=${{fontSize:10,color:'var(--tx3)'}}>Use manual key below</div>
-            </div>
-          </div>
-          <div style=${{marginTop:8}}>
-            <div style=${{fontSize:10,color:'var(--tx3)',marginBottom:4}}>Or enter key manually:</div>
-            <div style=${{display:'flex',gap:4,alignItems:'center'}}>
-              <div style=${{fontSize:11,fontFamily:'monospace',background:'var(--sf2)',padding:'5px 8px',borderRadius:6,border:'1px solid var(--bd)',flex:1,overflow:'hidden',textOverflow:'ellipsis',wordBreak:'break-all',color:'var(--tx)',letterSpacing:'.04em'}}>${(setup.secret||'').match(/.{1,4}/g)?.join(' ')}</div>
-              <button class="btn bg" style=${{fontSize:10,padding:'5px 8px',flexShrink:0}} onClick=${copySecret}>${copied?'✓':'Copy'}</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Verify code -->
-        <div style=${{flex:1,minWidth:220}}>
-          <div style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',marginBottom:8}}>Step 2 — Enter the 6-digit code</div>
-          <div style=${{fontSize:11,color:'var(--tx3)',marginBottom:12,lineHeight:1.5}}>Open your authenticator app, find VEWIT, and enter the 6-digit code shown.</div>
-          <div style=${{display:'flex',gap:6,marginBottom:14}}>
-            ${[0,1,2,3,4,5].map(i=>html`
-              <input key=${i} ref=${codeRefs[i]} type="text" inputMode="numeric"
-                maxLength="1" value=${code[i]||''}
-                onInput=${e=>handleDigit(i,e.target.value)}
-                onKeyDown=${e=>handleKey(i,e)}
-                onPaste=${i===0?handlePaste:undefined}
-                style=${{width:40,height:48,textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',
-                  border:'2px solid '+(code[i]?'var(--ac)':'var(--bd)'),borderRadius:9,background:'var(--sf2)',color:'var(--tx)',
-                  outline:'none',transition:'border-color .15s'}}/>`)}
-          </div>
-          <div style=${{display:'flex',gap:8}}>
-            <button class="btn bp" style=${{fontSize:13,padding:'9px 20px'}} onClick=${verify} disabled=${loading||code.replace(/\D/g,'').length<6}>
-              ${loading?html`<span class="spin"></span>`:null} ${loading?'Verifying…':'Verify & Enable 2FA'}
-            </button>
-            <button class="btn bg" style=${{fontSize:12}} onClick=${()=>{setSetup(null);setCode('');}}>Cancel</button>
-          </div>
-          <div style=${{marginTop:14,padding:'10px 12px',background:'rgba(217,119,6,0.06)',border:'1px solid rgba(217,119,6,0.2)',borderRadius:8}}>
-            <div style=${{fontSize:11,fontWeight:700,color:'#b45309',marginBottom:5}}>⚠️ Save your backup codes</div>
-            <div style=${{fontSize:11,color:'var(--tx3)',lineHeight:1.6,fontFamily:'monospace',wordBreak:'break-all'}}>
-              ${(setup.backup_codes||[]).join(' · ')}
-            </div>
-            <div style=${{fontSize:10,color:'var(--tx3)',marginTop:4}}>Store these somewhere safe. Each code can only be used once if you lose your phone.</div>
-          </div>
-        </div>
-      </div>`:null}
-
-    ${status?html`
-      <div style=${{display:'flex',alignItems:'center',gap:12}}>
-        <div style=${{fontSize:13,color:'var(--tx2)'}}>Your account is protected with 2FA.</div>
-        <button class="btn br" style=${{fontSize:12,marginLeft:'auto'}} onClick=${disable}>Disable 2FA</button>
-      </div>`:null}
-  </div>`;
-}
-
-/* ─── Goals & OKRs (re-enabled with role gating) ────────────────────────── */
-
-
-
-/* ─── Onboarding Checklist ───────────────────────────────────────────────── */
-function OnboardingChecklist({cu,projects,users,tasks,setView,onDismiss}){
-  const [wsData,setWsData]=useState(null);
-  const [totpOn,setTotpOn]=useState(false);
-  const [fetched,setFetched]=useState(false);
-  useEffect(()=>{
-    Promise.all([
-      api.get('/api/workspace'),
-      api.get('/api/totp/status')
-    ]).then(([ws,totp])=>{
-      setWsData(ws);
-      setTotpOn(totp?.enabled||false);
-      setFetched(true);
-    }).catch(()=>setFetched(true));
-  },[]);
-  if(!fetched) return null; // don't flash while loading
-  const hasAiKey=wsData&&wsData.ai_api_key&&wsData.ai_api_key.length>0;
-  const hasTasks=tasks&&tasks.length>0;
-  const steps=[
-    {id:'project',label:'Create your first project',done:projects&&projects.length>0,action:()=>setView('projects'),btn:'Create Project'},
-    {id:'task',label:'Add your first task',done:hasTasks,action:()=>setView('tasks'),btn:'Go to Board'},
-    {id:'invite',label:'Invite a team member',done:users&&users.length>1,action:()=>setView('team'),btn:'Invite Team'},
-    {id:'aikey',label:'Add your Anthropic AI key',done:!!hasAiKey,action:()=>setView('settings'),btn:'Open Settings'},
-    {id:'2fa',label:'Enable 2FA for your account',done:totpOn,action:()=>setView('settings'),btn:'Setup 2FA'},
-  ];
-  const done=steps.filter(s=>s.done).length;
-  const pct=Math.round((done/steps.length)*100);
-  // Auto-dismiss when all done
-  useEffect(()=>{if(fetched&&done===steps.length){onDismiss&&onDismiss();}},[fetched,done]);
-  if(done===steps.length) return null;
-  return html`
-    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 18px',marginBottom:14}}>
-      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-        <div style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>🚀 Get started with VEWIT</div>
-        <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <span style=${{fontSize:11,color:'var(--tx3)'}}>${done}/${steps.length} done</span>
-          <button onClick=${onDismiss} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14,padding:'0 4px'}}>✕</button>
-        </div>
-      </div>
-      <div style=${{height:4,background:'var(--sf2)',borderRadius:99,marginBottom:12}}>
-        <div style=${{height:4,width:pct+'%',background:'var(--ac)',borderRadius:99,transition:'width .4s'}}></div>
-      </div>
-      <div style=${{display:'flex',flexDirection:'column',gap:7}}>
-        ${steps.map(s=>html`
-          <div key=${s.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'7px 10px',borderRadius:8,background:s.done?'rgba(21,128,61,0.06)':'var(--sf2)',border:'1px solid '+(s.done?'rgba(21,128,61,0.2)':'var(--bd)')}}>
-            <div style=${{width:18,height:18,borderRadius:'50%',border:'2px solid '+(s.done?'#15803d':'var(--tx3)'),background:s.done?'#15803d':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              ${s.done?html`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>`:null}
-            </div>
-            <span style=${{flex:1,fontSize:12,fontWeight:500,color:s.done?'var(--tx3)':'var(--tx)',textDecoration:s.done?'line-through':'none'}}>${s.label}</span>
-            ${!s.done?html`<button class="btn bp" style=${{fontSize:11,padding:'3px 10px',height:24}} onClick=${s.action}>${s.btn}</button>`:null}
-          </div>`)}
-      </div>
-    </div>`;
-}
-
-
-
-/* ─── @Mentions autocomplete ─────────────────────────────────────────────── */
-function MentionInput({value,onChange,onKeyDown,users,placeholder,style,cu}){
-  const [show,setShow]=useState(false);
-  const [query,setQuery]=useState('');
-  const [filtered,setFiltered]=useState([]);
-  const [selIdx,setSelIdx]=useState(0);
-  const ref=useRef(null);
-
-  const handleInput=e=>{
-    const v=e.target.value;
-    onChange(v);
-    const at=v.lastIndexOf('@');
-    if(at>=0&&(at===0||v[at-1]===' ')){
-      const q=v.slice(at+1);
-      if(!q.includes(' ')){
-        const f=safe(users||[]).filter(u=>u.name.toLowerCase().includes(q.toLowerCase())&&u.id!==cu?.id);
-        setFiltered(f.slice(0,6));setQuery(q);setSelIdx(0);
-        setShow(f.length>0);return;
-      }
-    }
-    setShow(false);
-  };
-
-  const pick=(u)=>{
-    const v=value;
-    const at=v.lastIndexOf('@');
-    const newVal=v.slice(0,at)+'@'+u.name+' ';
-    onChange(newVal);setShow(false);
-    ref.current?.focus();
-  };
-
-  const handleKey=e=>{
-    if(show){
-      if(e.key==='ArrowDown'){e.preventDefault();setSelIdx(i=>Math.min(i+1,filtered.length-1));}
-      else if(e.key==='ArrowUp'){e.preventDefault();setSelIdx(i=>Math.max(i-1,0));}
-      else if(e.key==='Enter'&&filtered[selIdx]){e.preventDefault();pick(filtered[selIdx]);return;}
-      else if(e.key==='Escape'){setShow(false);}
-    }
-    onKeyDown&&onKeyDown(e);
-  };
-
-  return html`<div style=${{position:'relative',flex:1}}>
-    <input ref=${ref} class="inp" value=${value} placeholder=${placeholder||'Message… (@ to mention)'}
-      onInput=${handleInput} onKeyDown=${handleKey} style=${style||{}}/>
-    ${show?html`
-      <div style=${{position:'absolute',bottom:'100%',left:0,right:0,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.18)',zIndex:200,overflow:'hidden',marginBottom:4}}>
-        ${filtered.map((u,i)=>html`
-          <div key=${u.id} onMouseDown=${()=>pick(u)}
-            style=${{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',cursor:'pointer',background:i===selIdx?'var(--ac3)':'transparent'}}>
-            <div style=${{width:24,height:24,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>${u.name.slice(0,2).toUpperCase()}</div>
-            <div>
-              <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>${u.name}</div>
-              <div style=${{fontSize:10,color:'var(--tx3)'}}>${u.role}</div>
-            </div>
-          </div>`)}
-      </div>`:null}
-  </div>`;
-}
-
-/* ─── Pinned Messages Panel ──────────────────────────────────────────────── */
-/* ─── Task Templates Panel ───────────────────────────────────────────────── */
 /* ─── AIAssistant floating panel ──────────────────────────────────────────── */
 function AIAssistant({cu,projects,tasks,users}){
   const [open,setOpen]=useState(false);const [msgs,setMsgs]=useState([]);const [input,setInput]=useState('');const [busy,setBusy]=useState(false);const ref=useRef(null);const iref=useRef(null);
@@ -11158,10 +9073,12 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
+function HuddleCall(){return null;}
+
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','docs','settings','team','productivity','timereport','notifs'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -11177,7 +9094,7 @@ function App(){
   useEffect(()=>{
     try{
       const p=window.location.pathname.replace(/^\//, '').split('/')[0].trim();
-      const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Kanban Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity',announcements:'Announcements',standup:'AI Standup',codereview:'Code Review',risk:'Risk Predictor',timereport:'Time Report',forms:'Forms & Intake'};
+      const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity'};
       if(p&&VIEW_T[p]) document.title='VEWIT — '+VIEW_T[p]+' | AI-Powered Team Collaboration';
       else document.title='VEWIT — AI-Powered Team Collaboration Platform';
     }catch(e){}
@@ -11193,12 +9110,10 @@ function App(){
   });
   // Keep browser URL in sync with current view
   const VIEW_TITLES={
-    dashboard:'Dashboard',projects:'Projects',tasks:'Kanban Board',
+    dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',
     messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
     timeline:'Timeline Tracker',reminders:'Reminders',
-    settings:'Settings',team:'Team Management',
-    productivity:'Dev Productivity',docs:'Documentation & Diagrams',
-    timereport:'Time Report',notifs:'Notifications',
+    settings:'Settings',team:'Team Management',productivity:'Dev Productivity'
   };
   const _setView=useCallback((v)=>{
     setView(v);
@@ -11253,7 +9168,6 @@ function App(){
   const [dmUnread,setDmUnread]=useState([]);
   const [globalSearch,setGlobalSearch]=useState('');
   const [showGlobalSearch,setShowGlobalSearch]=useState(false);
-  const [searchFilters,setSearchFilters]=useState({type:'all',assignee:'',priority:''});
   const [searchSubtasks,setSearchSubtasks]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
   const [onlineUsers,setOnlineUsers]=useState(new Set());
 
@@ -11267,9 +9181,9 @@ function App(){
     // Fire immediately on mount
     fetchPresence(); // fetch current online users right away (don't wait for beat)
     beat();          // then beat + fetch again
-    const beatId=setInterval(beat,30000); // Heartbeat every 30s
+    const beatId=setInterval(beat,15000);
     window.addEventListener('focus',()=>{beat();});
-    const presId=setInterval(fetchPresence,20000); // Presence check every 20s
+    const presId=setInterval(fetchPresence,8000);
     return()=>{clearInterval(beatId);clearInterval(presId);};
   },[cu]);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
@@ -11319,17 +9233,13 @@ function App(){
     if(!cu)return;
     const tCtx=overrideTeamCtx!==undefined?overrideTeamCtx:teamCtx;
     try{
-      const projUrl=tCtx?'/api/projects?team_id='+tCtx+'&limit=200':'/api/projects?limit=200';
-      const taskUrl=tCtx?'/api/tasks?team_id='+tCtx+'&limit=500':'/api/tasks?limit=500';
-      const ticketUrl=tCtx?'/api/tickets?team_id='+tCtx+'&limit=100':'/api/tickets?limit=100';
+      const projUrl=tCtx?'/api/projects?team_id='+tCtx:'/api/projects';
+      const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw,ticketsRaw]=await Promise.all([
-        api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'),api.get(ticketUrl), ]);
+        api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'),api.get('/api/tickets'), ]);
       const teams=Array.isArray(teamsRaw)?teamsRaw:[];
-      const ticketItems=ticketsRaw?.items||ticketsRaw||[];
-      const tickets=Array.isArray(ticketItems)?ticketItems:[];
-      const projectItems=projects?.items||projects||[];
-      const taskItems=tasks?.items||tasks||[];
-      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projectItems)?projectItems:[],tasks:Array.isArray(taskItems)?taskItems:[],notifs:Array.isArray(notifs)?notifs:[],teams,tickets});
+      const tickets=Array.isArray(ticketsRaw)?ticketsRaw:[];
+      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams,tickets});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
       if(ws&&ws.name)setWsName(ws.name);
       if(ws)setWsDmEnabled(ws.dm_enabled!==0);
@@ -11338,15 +9248,7 @@ function App(){
     }catch(e){console.error(e);}
   },[cu]);
 
-  useEffect(()=>{
-    // Must bypass browser cache — a stale cached response could show a logged-out
-    // user as authenticated (the 5s max-age on /api/* endpoints was the root cause)
-    fetch('/api/auth/me',{credentials:'include',cache:'no-store'})
-      .then(r=>r.ok?r.json():Promise.reject())
-      .then(u=>{if(u&&!u.error)setCu(u);})
-      .catch(()=>{})
-      .finally(()=>setLoading(false));
-  },[]);
+  useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
   // Expose search opener for topbar button
   useEffect(()=>{window._pfOpenSearch=()=>{setShowGlobalSearch(v=>!v);setGlobalSearch('');setSearchSubtasks([]);};},[]);
   // Expose DM target setter for notification click handlers
@@ -11380,40 +9282,22 @@ function App(){
     prevTeamCtxRef.current=teamCtx;
     setTeamLoading(true);
     setView('dashboard'); // always go to dashboard on team switch
-    setData(prev=>({...prev,projects:[],tasks:[],tickets:[]}));
+    setData(prev=>({...prev,projects:[],tasks:[]}));
     load(teamCtx).finally(()=>setTeamLoading(false));
   },[teamCtx,cu]);
   useEffect(()=>{
     if(!cu)return;
-    // Lightweight poll every 15s — only fetch counts, not full data
-    // Full reload triggered by explicit user actions or team switch
     const id=setInterval(async()=>{
-      try{
-        const r=await api.get('/api/poll');
-        if(r&&!r.error){
-          // Update DM unread counts from poll
-          if(Array.isArray(r.dm_unread)) setDmUnread(r.dm_unread);
-          // If there are new notifications, refresh notifications only
-          if(r.notif_count>0){
-            const notifs=await api.get('/api/notifications');
-            if(Array.isArray(notifs)) setData(prev=>({...prev,notifs}));
-          }
-        }
-      }catch(e){}
-    },15000);
-    // Full data refresh every 5 minutes (in case of external changes)
-    const fullId=setInterval(async()=>{
       try{
         const projUrl=teamCtx?'/api/projects?team_id='+teamCtx:'/api/projects';
         const taskUrl=teamCtx?'/api/tasks?team_id='+teamCtx:'/api/tasks';
-        const [pr,tk]=await Promise.all([api.get(projUrl),api.get(taskUrl)]);
-        const pi=pr?.items||pr||[]; const ti=tk?.items||tk||[];
-        if(Array.isArray(pi)&&Array.isArray(ti)){
-          setData(prev=>({...prev,projects:pi,tasks:ti}));
+        const [projects,tasks]=await Promise.all([api.get(projUrl),api.get(taskUrl)]);
+        if(Array.isArray(projects)&&Array.isArray(tasks)){
+          setData(prev=>({...prev,projects,tasks}));
         }
       }catch(e){}
-    },300000); // 5 min
-    return()=>{clearInterval(id);clearInterval(fullId);};
+    },30000);
+    return()=>clearInterval(id);
   },[cu,teamCtx]);
   useEffect(()=>{
     document.body.className=dark?'dm':'';
@@ -11521,17 +9405,10 @@ function App(){
   },[]);
   const logout=async()=>{
     if(window._pfPushUnsubscribe) await window._pfPushUnsubscribe().catch(()=>{});
-    try{
-      await fetch('/api/auth/logout',{
-        method:'POST',credentials:'include',
-        headers:{'Content-Type':'application/json','Cache-Control':'no-store'},
-        body:JSON.stringify({})
-      });
-    }catch(e){}
+    try{ await api.post('/api/auth/logout',{}); }catch(e){}
     setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);
-    try{localStorage.removeItem('pf_team_ctx');}catch(e){}
-    // replace() removes the app from history — back button can't return to authenticated state
-    window.location.replace('/?action=login&ts='+Date.now());
+    // Redirect to login immediately — clears all state and shows auth page
+    window.location.href='/?action=login';
   };
 
   useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
@@ -11595,7 +9472,6 @@ function App(){
   },[cu,addToast]);
 
   const isDevRole=cu&&cu.role!=='Admin'&&cu.role!=='Manager';
-  const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const [devNoTeam,setDevNoTeam]=useState(false);
   useEffect(()=>{
     if(!isDevRole||!cu||safe(data.teams).length===0)return;
@@ -11653,8 +9529,7 @@ function App(){
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support & bug tickets'}, docs:{title:'Documentation & Diagrams',sub:'Docs, architecture & technical diagrams'}, timereport:{title:'Time Report',sub:'Hours logged by member and project'},
-  };
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Task Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, };
 
   const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
@@ -11709,24 +9584,22 @@ function App(){
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${_setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
-            ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>setReminderTask(t)} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId} onClearInitial=${()=>setInitialProjectId(null)}/>`:null}
-            ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>setReminderTask(t)} teams=${data.teams} activeTeam=${activeTeam}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
+            ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId} onClearInitial=${()=>setInitialProjectId(null)}/>`:null}
+            ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
               initialAssignee=${taskFilterType==='assignee'?taskFilterValue:null}
             />`:null}
             ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks} key=${'msgs-'+(teamCtx||'all')}/>`:null}
             ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} dmEnabled=${wsDmEnabled} initialUserId=${dmTargetUser} onClearInitial=${()=>setDmTargetUser(null)} onlineUsers=${onlineUsers}/>`:null}
-            ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>setReminderTask(t)} onReload=${load}/>`:null}
-            ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${_setView}/>`:null}
+            ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
+            ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam} initialAssignee=${ticketFilterType==='assignee'?ticketFilterValue:null} initialStatus=${ticketFilterType==='status'?ticketFilterValue:null}/>`:null}
-            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{_setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
-            ${baseView==='docs'?html`<${DocsView} projects=${scopedProjects} cu=${cu}/>`:null}
-            ${baseView==='team'&&isAdminManager?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
-            ${baseView==='settings'&&isAdminManager?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
-            ${baseView==='timereport'&&isAdminManager?html`<${TimeReportView} cu=${cu} users=${scopedUsers}/>`:null}
-            ${baseView==='productivity'&&isAdminManager?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
+            ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
+            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
+            ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             </div>
           <//>
         </div>
@@ -11742,30 +9615,11 @@ function App(){
           <div style=${{display:'flex',alignItems:'center',gap:10,padding:'14px 18px',borderBottom:'1px solid var(--bd)'}}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input autoFocus class="inp" style=${{border:'none',background:'transparent',fontSize:16,flex:1,height:28,outline:'none',color:'var(--tx)'}}
-              placeholder="Search tasks, tickets, projects… (Ctrl+K)"
+              placeholder="Search by ID (T-xxx, tkt-xxx) or name... (Ctrl+K)"
               value=${globalSearch}
               onInput=${e=>setGlobalSearch(e.target.value)}
               onKeyDown=${e=>{if(e.key==='Escape')setShowGlobalSearch(false);}}/>
             <span style=${{fontSize:10,color:'var(--tx3)',background:'var(--sf2)',padding:'2px 6px',borderRadius:5,border:'1px solid var(--bd)'}}>ESC</span>
-          </div>
-          <!-- Filter chips -->
-          <div style=${{display:'flex',gap:6,padding:'8px 14px',borderBottom:'1px solid var(--bd)',flexWrap:'wrap',alignItems:'center'}}>
-            <span style=${{fontSize:10,fontWeight:600,color:'var(--tx3)'}}>Type:</span>
-            ${['all','task','ticket','project'].map(t=>html`
-              <button key=${t} onClick=${()=>setSearchFilters(f=>({...f,type:t}))}
-                style=${{fontSize:11,padding:'2px 9px',borderRadius:99,border:'1px solid var(--bd)',cursor:'pointer',
-                  background:searchFilters.type===t?'var(--ac)':'transparent',
-                  color:searchFilters.type===t?'#fff':'var(--tx3)',fontWeight:searchFilters.type===t?700:400,transition:'all .12s'}}>
-                ${t}
-              </button>`)}
-            <span style=${{fontSize:10,fontWeight:600,color:'var(--tx3)',marginLeft:6}}>Priority:</span>
-            ${['','critical','high','medium','low'].map(p=>html`
-              <button key=${p||'any'} onClick=${()=>setSearchFilters(f=>({...f,priority:p}))}
-                style=${{fontSize:11,padding:'2px 9px',borderRadius:99,border:'1px solid var(--bd)',cursor:'pointer',
-                  background:searchFilters.priority===p?'var(--ac)':'transparent',
-                  color:searchFilters.priority===p?'#fff':'var(--tx3)',fontWeight:searchFilters.priority===p?700:400,transition:'all .12s'}}>
-                ${p||'any'}
-              </button>`)}
           </div>
           <!-- Results -->
           <div style=${{maxHeight:400,overflowY:'auto'}}>
@@ -11784,9 +9638,8 @@ function App(){
   </div>
 `;
               const results=[];
-              const sf=searchFilters||{type:'all',priority:''};
               // Search tasks by ID or title
-              if(sf.type==='all'||sf.type==='task') safe(data.tasks).forEach(t=>{
+              safe(data.tasks).forEach(t=>{
                 if(!t||!t.id||!t.title)return;
                 const tid=(t.id||'').toLowerCase();
                 const ttl=(t.title||'').toLowerCase();
@@ -11796,7 +9649,7 @@ function App(){
                 }
               });
               // Search tickets by ID, title, or description
-              if(sf.type==='all'||sf.type==='ticket') safe(data.tickets||[]).forEach(t=>{
+              safe(data.tickets||[]).forEach(t=>{
                 const tStr=(t.id+' '+(t.title||'')+' '+(t.description||'')).toLowerCase();
                 if(tStr.includes(q)){
                   const tColors={bug:'#b91c1c',feature:'#1d4ed8',improvement:'#0e7490',task:'#15803d',question:'#6d28d9'};
@@ -11807,7 +9660,7 @@ function App(){
               // Search subtasks by title
               // (subtasks fetched lazily — skip for global search)
               // Search projects
-              if(sf.type==='all'||sf.type==='project') safe(data.projects).forEach(p=>{
+              safe(data.projects).forEach(p=>{
                 if(!p||!p.id||!p.name)return;
                 if(p.id.toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q)){
                   results.push({type:'project',id:p.id,title:p.name,sub:'Project',color:p.color||'#1d4ed8',bg:'rgba(29,78,216,0.06)',item:p,nav:'projects'});
@@ -11818,9 +9671,8 @@ function App(){
                 if(!s||!s.id)return;
                 results.push({type:'subtask',id:s.id.slice(0,12),title:s.title||'',sub:'↳ '+(s.task_title||'Task'),color:'#475569',bg:'rgba(71,85,105,0.10)',item:s,nav:'tasks'});
               });
-              const filteredResults=sf.priority?results.filter(r=>!r.item?.priority||r.item.priority===sf.priority):results;
-              if(!filteredResults.length)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>No results for "${q}"</div>`;
-              return filteredResults.slice(0,15).map((r,i)=>html`
+              if(!results.length)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>No results for "${q}"</div>`;
+              return results.slice(0,15).map((r,i)=>html`
                 <div key=${i}
                   onClick=${()=>{
                     setShowGlobalSearch(false);
@@ -11925,7 +9777,7 @@ def download_js():
                 with open(path,"wb") as f: f.write(r.read())
             print(" ✓")
         except Exception as e:
-            print(f" ✗ ({e}) — will use CDN fallback"); all_ok=False
+            print(f" ✗ ({e})"); all_ok=False
     return all_ok
 
 def open_browser(port):
