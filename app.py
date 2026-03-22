@@ -6287,11 +6287,7 @@ function AuthScreen({onLogin}){
         </p>
       `)}
     </div>`;
-}
-
-/* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
-/* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
-/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
+}/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true,onlineUsers=new Set()}){
   const inCall=false; // Google Meet handles calls externally
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
@@ -9884,7 +9880,6 @@ function WorkspaceSettings({cu,onReload}){
 
       <${TOTPSetupPanel} cu=${cu}/>
 
-      <${ReferralPanel}/>
 
       <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:16}}>
         <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:10}}>🏷 White Label</div>
@@ -11719,7 +11714,6 @@ function App(){
           onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
         />
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-          <${AnnouncementBanner} cu=${cu}/>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
             ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${_setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
