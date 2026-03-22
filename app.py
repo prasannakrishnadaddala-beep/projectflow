@@ -8282,7 +8282,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
                   slices.map(({item,dash,gap,rot},i)=>html`
                     <circle key=${i} cx="60" cy="60" r="42" fill="none"
                       stroke=${item.item.color} strokeWidth="14"
-                      strokeDasharray="${dash} ${gap}"
+                      strokeDasharray=${dash+" "+gap}
                       strokeDashoffset=${circ*0.25}
                       transform=${"rotate("+rot+" 60 60)"}
                       style=${{cursor:'pointer',transition:'opacity .15s'}}
@@ -8684,6 +8684,7 @@ function ProductivityView({cu,tasks,projects,users}){
               <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:14}}>Task Distribution per Developer</h3>
               ${(()=>{
                 const maxVal=Math.max(1,...chartData.map(d=>(d.Completed||0)+(d['In Progress']||0)+(d.Blocked||0)));
+                const pctW=(v)=>Math.round((v/maxVal)*100);
                 return html`<div style=${{display:'flex',flexDirection:'column',gap:6,padding:'4px 0'}}>
                   <div style=${{display:'flex',gap:12,fontSize:10,color:'var(--tx3)',marginBottom:4,paddingLeft:64}}>
                     <span style=${{display:'flex',alignItems:'center',gap:4}}><span style=${{width:8,height:8,borderRadius:2,background:'var(--gn)',display:'inline-block'}}></span>Completed</span>
@@ -8692,13 +8693,15 @@ function ProductivityView({cu,tasks,projects,users}){
                   </div>
                   ${chartData.map((d,i)=>{
                     const total=(d.Completed||0)+(d['In Progress']||0)+(d.Blocked||0);
-                    const w=pct=>Math.round((pct/maxVal)*100)+'%';
+                    const cPct=pctW(d.Completed||0);
+                    const pPct=pctW(d['In Progress']||0);
+                    const bPct=pctW(d.Blocked||0);
                     return html`<div key=${i} style=${{display:'flex',alignItems:'center',gap:8}}>
                       <span style=${{width:56,fontSize:10,color:'var(--tx2)',textAlign:'right',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${d.name}</span>
                       <div style=${{flex:1,display:'flex',height:14,borderRadius:4,overflow:'hidden',background:'var(--bd)'}}>
-                        ${(d.Completed||0)>0?html`<div style=${{width:${w(d.Completed||0)},background:'var(--gn)',transition:'width .3s'}}></div>`:null}
-                        ${(d['In Progress']||0)>0?html`<div style=${{width:${w(d['In Progress']||0)},background:'var(--cy)',transition:'width .3s'}}></div>`:null}
-                        ${(d.Blocked||0)>0?html`<div style=${{width:${w(d.Blocked||0)},background:'var(--rd)',transition:'width .3s'}}></div>`:null}
+                        ${cPct>0?html`<div style=${{width:cPct+'%',background:'var(--gn)',transition:'width .3s'}}></div>`:null}
+                        ${pPct>0?html`<div style=${{width:pPct+'%',background:'var(--cy)',transition:'width .3s'}}></div>`:null}
+                        ${bPct>0?html`<div style=${{width:bPct+'%',background:'var(--rd)',transition:'width .3s'}}></div>`:null}
                       </div>
                       <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',width:20,flexShrink:0}}>${total}</span>
                     </div>`;
