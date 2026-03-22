@@ -3228,51 +3228,79 @@ def get_form_submissions(fid):
         rows = db.execute("SELECT * FROM intake_submissions WHERE form_id=? AND workspace_id=? ORDER BY created DESC",(fid,wid())).fetchall()
         return jsonify([dict(r) for r in rows])
 
-# ── TOTP 2FA ────────────────────────────────────────────────────────────────────────────
+# ── TOTP 2FA — Pure Python (no pyotp needed) ──────────────────────────────────────────
+import hmac as _hmac, hashlib as _hashlib, struct as _struct, base64 as _base64
+
+def _totp_generate(secret_b32, window=0):
+    """Pure-Python TOTP — RFC 6238 / RFC 4226. No external deps."""
+    import time as _t
+    try:
+        key = _base64.b32decode(secret_b32.upper() + '=' * ((8 - len(secret_b32) % 8) % 8))
+    except Exception:
+        return None
+    t = int(_t.time()) // 30 + window
+    msg = _struct.pack('>Q', t)
+    h = _hmac.new(key, msg, _hashlib.sha1).digest()
+    offset = h[-1] & 0x0f
+    code = _struct.unpack('>I', h[offset:offset+4])[0] & 0x7fffffff
+    return str(code % 1000000).zfill(6)
+
+def _totp_verify(secret_b32, code):
+    """Verify with ±1 window tolerance."""
+    code = str(code).strip()
+    for w in [-1, 0, 1]:
+        if _totp_generate(secret_b32, w) == code:
+            return True
+    return False
+
+def _b32_secret():
+    raw = secrets.token_bytes(20)
+    return _base64.b32encode(raw).decode().rstrip('=')
+
 @app.route("/api/totp/setup", methods=["POST"])
 @login_required
 def totp_setup():
-    try:
-        import pyotp
-        with get_db() as db:
-            existing = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
-            if existing and existing["enabled"]: return jsonify({"error":"2FA already enabled"}),400
-            secret = pyotp.random_base32()
-            user = db.execute("SELECT email FROM users WHERE id=?",(session["user_id"],)).fetchone()
-            totp = pyotp.TOTP(secret)
-            uri = totp.provisioning_uri(user["email"], issuer_name="VEWIT")
-            backup_codes = [secrets.token_hex(4).upper() for _ in range(8)]
-            tid = f"totp{int(__import__('time').time()*1000)}"
-            if existing:
-                db.execute("UPDATE totp_secrets SET secret=?,backup_codes=? WHERE user_id=?",(secret,json.dumps(backup_codes),session["user_id"]))
-            else:
-                db.execute("INSERT INTO totp_secrets VALUES (?,?,?,?,?,?)",(tid,session["user_id"],secret,0,json.dumps(backup_codes),ts()))
-            return jsonify({"ok":True,"secret":secret,"uri":uri,"backup_codes":backup_codes})
-    except ImportError:
-        return jsonify({"error":"Run: pip install pyotp"}),500
+    with get_db() as db:
+        existing = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
+        if existing and existing["enabled"]: return jsonify({"error":"2FA already enabled"}),400
+        secret = _b32_secret()
+        user = db.execute("SELECT email,name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        email = user["email"] if user else "user"
+        uri = f"otpauth://totp/VEWIT:{email}?secret={secret}&issuer=VEWIT&algorithm=SHA1&digits=6&period=30"
+        backup_codes = [secrets.token_hex(4).upper() for _ in range(8)]
+        tid = f"totp{int(__import__('time').time()*1000)}"
+        if existing:
+            db.execute("UPDATE totp_secrets SET secret=?,backup_codes=?,enabled=0 WHERE user_id=?",
+                      (secret,json.dumps(backup_codes),session["user_id"]))
+        else:
+            db.execute("INSERT INTO totp_secrets VALUES (?,?,?,?,?,?)",
+                      (tid,session["user_id"],secret,0,json.dumps(backup_codes),ts()))
+        return jsonify({"ok":True,"secret":secret,"uri":uri,"backup_codes":backup_codes})
 
 @app.route("/api/totp/verify", methods=["POST"])
 @login_required
 def totp_verify():
     d = request.json or {}
     code = d.get("code","").strip()
-    try:
-        import pyotp
-        with get_db() as db:
-            rec = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
-            if not rec: return jsonify({"error":"2FA not set up"}),400
-            totp = pyotp.TOTP(rec["secret"])
-            if totp.verify(code, valid_window=1):
-                db.execute("UPDATE totp_secrets SET enabled=1 WHERE user_id=?",(session["user_id"],))
-                return jsonify({"ok":True,"message":"2FA enabled"})
-            backup = json.loads(rec["backup_codes"] or "[]")
-            if code.upper() in backup:
-                backup.remove(code.upper())
-                db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),session["user_id"]))
-                return jsonify({"ok":True,"message":"Backup code used","remaining":len(backup)})
-            return jsonify({"error":"Invalid code"}),400
-    except ImportError:
-        return jsonify({"error":"pyotp not installed"}),500
+    with get_db() as db:
+        rec = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
+        if not rec: return jsonify({"error":"2FA not set up"}),400
+        if _totp_verify(rec["secret"], code):
+            db.execute("UPDATE totp_secrets SET enabled=1 WHERE user_id=?",(session["user_id"],))
+            return jsonify({"ok":True,"message":"2FA enabled successfully"})
+        backup = json.loads(rec["backup_codes"] or "[]")
+        if code.upper() in backup:
+            backup.remove(code.upper())
+            db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),session["user_id"]))
+            return jsonify({"ok":True,"message":"Backup code used","remaining":len(backup)})
+        return jsonify({"error":"Invalid code — please try again"}),400
+
+@app.route("/api/totp/disable", methods=["POST"])
+@login_required
+def totp_disable():
+    with get_db() as db:
+        db.execute("UPDATE totp_secrets SET enabled=0 WHERE user_id=?",(session["user_id"],))
+        return jsonify({"ok":True})
 
 @app.route("/api/totp/disable", methods=["POST"])
 @login_required
@@ -4103,7 +4131,9 @@ nav{position:fixed;top:0;left:0;right:0;z-index:300;height:58px;display:flex;ali
 .btn-outline-white:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);}
 
 /* ── HERO ──────────────────────────────────────── */
-.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 32px 60px;position:relative;overflow:hidden;background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(37,99,235,.06) 0%,transparent 70%);}
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 32px 60px;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 90% 70% at 60% -5%,rgba(37,99,235,.07) 0%,transparent 65%),radial-gradient(ellipse 50% 40% at 10% 80%,rgba(124,58,237,.04) 0%,transparent 60%);pointer-events:none;}
+.hero::after{content:'';position:absolute;top:15%;right:5%;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.04) 0%,transparent 70%);pointer-events:none;}
 .hero-inner{max-width:1200px;margin:0 auto;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;}
 .hero-left{}
 .hero-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.18);padding:5px 14px 5px 7px;border-radius:100px;font-size:.72rem;font-weight:700;color:var(--ac);margin-bottom:22px;letter-spacing:.04em;text-transform:uppercase;}
@@ -4161,14 +4191,15 @@ nav{position:fixed;top:0;left:0;right:0;z-index:300;height:58px;display:flex;ali
 .t-hi{color:var(--ac);font-weight:600;}
 
 /* ── STATS ──────────────────────────────────────── */
-.stats{padding:64px 0;background:#fff;}
-.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--sf3);border-radius:14px;overflow:hidden;border:1px solid var(--sf3);}
-.stat-card{background:#fff;text-align:center;padding:28px 16px;}
-.stat-n{font-size:2.1rem;font-weight:900;color:var(--ac);letter-spacing:-.04em;line-height:1;}
-.stat-l{font-size:.8rem;color:var(--tx3);font-weight:500;margin-top:5px;}
+.stats{padding:56px 0;background:var(--sf);}
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+.stat-card{background:#fff;text-align:center;padding:24px 16px;border-radius:14px;border:1px solid var(--sf3);transition:transform .2s,box-shadow .2s;}
+.stat-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(37,99,235,.08);}
+.stat-n{font-size:2.2rem;font-weight:900;color:var(--ac);letter-spacing:-.04em;line-height:1;}
+.stat-l{font-size:.8rem;color:var(--tx3);font-weight:500;margin-top:6px;}
 
 /* ── SECTIONS ────────────────────────────────────── */
-section{padding:88px 0;}
+section{padding:88px 0;position:relative;}
 .wrap{max-width:1200px;margin:0 auto;padding:0 32px;}
 .sec-tag{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;background:var(--ac3);padding:3px 12px;border-radius:100px;border:1px solid var(--ac4);}
 .sec-title{font-size:clamp(1.7rem,2.8vw,2.3rem);font-weight:800;max-width:560px;margin-bottom:10px;color:var(--tx);}
@@ -4179,7 +4210,9 @@ section{padding:88px 0;}
 .ai-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 .ai-card{border-radius:16px;padding:28px;border:1.5px solid var(--sf3);background:#fff;transition:all .2s;position:relative;overflow:hidden;}
 .ai-card:hover{border-color:var(--ac4);box-shadow:0 12px 40px rgba(37,99,235,.08);transform:translateY(-3px);}
-.ai-card.featured{border-color:var(--ac4);background:linear-gradient(135deg,rgba(37,99,235,.03),#fff 70%);}
+.ai-card.featured{border-color:var(--ac4);background:linear-gradient(135deg,rgba(37,99,235,.04),rgba(124,58,237,.02) 50%,#fff 80%);}
+.ai-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(37,99,235,.0),transparent);border-radius:16px 16px 0 0;transition:background .3s;}
+.ai-card:hover::before{background:linear-gradient(90deg,transparent,rgba(37,99,235,.25),transparent);}
 .ai-card.span2{grid-column:span 2;}
 .ai-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:20px;}
 .ai-icon.blue{background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.14);}
@@ -4202,7 +4235,9 @@ section{padding:88px 0;}
 /* ── FEATURE BENTO ──────────────────────────────── */
 .bento{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 .ben{background:#fff;border:1.5px solid var(--sf3);border-radius:16px;padding:26px;transition:all .2s;cursor:default;}
-.ben:hover{border-color:rgba(37,99,235,.2);box-shadow:0 8px 32px rgba(37,99,235,.06);transform:translateY(-2px);}
+.ben:hover{border-color:rgba(37,99,235,.18);box-shadow:0 12px 40px rgba(37,99,235,.07);transform:translateY(-3px);}
+.ben::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:transparent;border-radius:16px 16px 0 0;transition:background .3s;}
+.ben:hover::before{background:linear-gradient(90deg,transparent,rgba(37,99,235,.2),transparent);}
 .ben.wide{grid-column:span 2;}
 .ben-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;background:var(--sf2);border:1px solid var(--sf3);}
 .ben h3{font-size:.95rem;font-weight:700;margin-bottom:7px;color:var(--tx);}
@@ -4318,7 +4353,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
       <li><a href="#security">Security</a></li>
       <li><a href="#roles">Roles</a></li>
       <li><a href="#how">How it works</a></li>
-      <li><a href="/about">About</a></li>
+      <li><a href="#faq">About</a></li>
     </ul>
     <div class="nav-cta">
       <a href="/?action=login" class="btn btn-ghost">Sign In</a>
@@ -4333,13 +4368,13 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
     <div class="hero-left">
       <div class="hero-badge">
         <div class="hero-badge-dot"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
-        v5.0 — Now with AI Standup, Code Review &amp; Risk Predictor
+        v5.0 — AI Standup · Code Review · Risk Predictor · 2FA
       </div>
-      <h1>The workspace your<br/>team <em>actually loves.</em></h1>
-      <p class="hero-sub">Kanban boards, sprint planning, AI-powered standup generation, code review, risk prediction, intake forms, 2FA security, time tracking — all in one unified platform built for modern engineering teams.</p>
+      <h1>Ship faster.<br/>Stay <em>in sync.</em></h1>
+      <p class="hero-sub">Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, 2FA, time tracking — one platform built for engineering teams that move fast.</p>
       <div class="hero-actions">
         <a href="/?action=register" class="btn btn-solid btn-lg">Start Free — No Card Needed →</a>
-        <a href="/about" class="btn btn-ghost btn-lg">See All Features</a>
+        <a href="/#features" class="btn btn-ghost btn-lg">See All Features</a>
       </div>
       <div class="hero-trust">
         <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever plan</div>
@@ -4349,6 +4384,9 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
       </div>
     </div>
     <div class="hero-right">
+      <div style="text-align:center;margin-bottom:12px;">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--tx4);background:var(--sf2);padding:4px 12px;border-radius:99px;border:1px solid var(--sf3);">Live preview</span>
+      </div>
       <div class="app-window">
         <div class="win-bar">
           <div class="wdot" style="background:#ff5f57"></div>
@@ -4404,6 +4442,13 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
         <div class="ai-bubble-head"><div class="ai-dot"></div>AI Standup Generated</div>
         <p>✅ Merged auth PR<br/>🔨 Starting payment gateway<br/>🚧 Waiting on design review</p>
       </div>
+      <div style="position:absolute;top:-14px;left:-24px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:9px 13px;box-shadow:0 4px 20px rgba(0,0,0,.08);font-size:11px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></span>
+          <span style="font-weight:700;color:#b45309;">Risk Alert</span>
+        </div>
+        <div style="color:#64748b;">Payment sprint — HIGH risk<br/>3 tasks overdue</div>
+      </div>
     </div>
   </div>
 </section>
@@ -4442,11 +4487,11 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 <div class="stats">
   <div class="wrap">
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-n">30+</div><div class="stat-l">Platform features</div></div>
-      <div class="stat-card"><div class="stat-n">6</div><div class="stat-l">Role levels with RBAC</div></div>
-      <div class="stat-card"><div class="stat-n">3</div><div class="stat-l">AI-powered tools</div></div>
-      <div class="stat-card"><div class="stat-n">100%</div><div class="stat-l">Open API access</div></div>
-      <div class="stat-card"><div class="stat-n">Free</div><div class="stat-l">Forever, no card needed</div></div>
+      <div class="stat-card"><div class="stat-n">35+</div><div class="stat-l">Platform features</div></div>
+      <div class="stat-card"><div class="stat-n">6</div><div class="stat-l">Role levels + RBAC</div></div>
+      <div class="stat-card"><div class="stat-n">4</div><div class="stat-l">AI-powered tools</div></div>
+      <div class="stat-card"><div class="stat-n">Zero</div><div class="stat-l">Dependencies required</div></div>
+      <div class="stat-card"><div class="stat-n">Free</div><div class="stat-l">No credit card needed</div></div>
     </div>
   </div>
 </div>
@@ -4457,7 +4502,7 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
     <div class="centered">
       <div class="sec-tag">AI-Powered Tools</div>
       <h2 class="sec-title">Your team's AI co-pilot</h2>
-      <p class="sec-sub">Three powerful AI tools built directly into your workflow — use your own Anthropic API key, zero vendor lock-in.</p>
+      <p class="sec-sub">Four powerful AI tools built into your workflow — use your own Anthropic API key, zero vendor lock-in, no extra subscription.</p>
     </div>
     <div class="ai-grid">
       <div class="ai-card featured span2">
@@ -4826,12 +4871,12 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 <!-- CTA -->
 <section class="cta-section">
   <div class="wrap cta-inner">
-    <div class="cta-tag">Ready to ship faster?</div>
-    <h2>One platform. Every tool.<br/>Your whole team.</h2>
-    <p>Join teams already using VEWIT to manage projects, run AI standups, review code, and ship without the chaos.</p>
+    <div class="cta-tag">🚀 Ready to ship faster?</div>
+    <h2>One platform.<br/>Every tool your team needs.</h2>
+    <p>Kanban boards, AI standup, code review, 2FA security — set up in 2 minutes, no credit card, no vendor lock-in.</p>
     <div class="cta-actions">
       <a href="/?action=register" class="btn btn-solid btn-lg" style="background:#fff;color:#1d4ed8;box-shadow:0 4px 20px rgba(0,0,0,.15);">Start Free — No Card Needed →</a>
-      <a href="/about" class="btn btn-outline-white btn-lg">Explore All Features</a>
+      <a href="/#ai" class="btn btn-outline-white btn-lg">Explore All Features</a>
     </div>
     <div class="cta-trust">
       <div class="cta-t"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever plan</div>
@@ -6093,13 +6138,54 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
 
   const NAV_ICONS={
     dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
-  const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'goals', label:'Goals & OKRs'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'risk', label:'Risk Predictor'}, {id:'timereport', label:'Time Report'}, {id:'forms', label:'Forms & Intake'}, ];
-  const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'goals', label:'Goals & OKRs'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'codereview', label:'Code Review'}, {id:'timereport', label:'Time Report'}, ];
-  const navItems=(isAdminManager?adminNav:devNav).filter(it=>
-    it.id!=='dm'||(wsDmEnabled||isAdminManager)
-  );
+  // Grouped sidebar sections
+  const NAV_GROUPS=[
+    {key:'main', label:null, items:[
+      {id:'dashboard',label:'Dashboard'},
+    ]},
+    {key:'work', label:'Work', items:[
+      {id:'projects',label:'Projects'},
+      {id:'tasks',label:'Kanban Board'},
+      {id:'calendar',label:'Calendar'},
+      {id:'timeline',label:'Timeline'},
+      {id:'sprints',label:'Sprints'},
+      {id:'reminders',label:'Reminders'},
+    ]},
+    {key:'comms', label:'Communication', items:[
+      {id:'messages',label:'Channels'},
+      ...(wsDmEnabled||isAdminManager?[{id:'dm',label:'Direct Messages'}]:[]),
+      {id:'tickets',label:'Tickets'},
+      {id:'announcements',label:'Announcements'},
+    ]},
+    {key:'ai', label:'AI Tools', items:[
+      {id:'standup',label:'AI Standup'},
+      {id:'codereview',label:'Code Review'},
+      ...(isAdminManager?[{id:'risk',label:'Risk Predictor'}]:[]),
+    ]},
+    {key:'knowledge', label:'Knowledge', items:[
+      {id:'docs',label:'Docs & Wiki'},
+      {id:'goals',label:'Goals & OKRs'},
+      {id:'forms',label:'Forms & Intake'},
+    ]},
+    {key:'analytics', label:'Analytics', items:[
+      {id:'timereport',label:'Time Report'},
+      ...(isAdminManager?[{id:'productivity',label:'Dev Productivity'}]:[]),
+    ]},
+    ...(isAdminManager?[{key:'admin',label:'Administration',items:[
+      {id:'team',label:'Team Management'},
+    ]}]:[]),
+  ];
+  // Collapsed group state — persisted
+  const [collapsedGroups,setCollapsedGroups]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem('vw_nav_collapsed')||'{}');}catch{return {};}
+  });
+  const toggleGroup=(key)=>{
+    setCollapsedGroups(prev=>{
+      const n={...prev,[key]:!prev[key]};
+      try{localStorage.setItem('vw_nav_collapsed',JSON.stringify(n));}catch{}
+      return n;
+    });
+  };
 
   const themeIcon=dark
     ?html`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
@@ -6128,26 +6214,37 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
         </div>`:null}
       </div>
 
-            <nav style=${{flex:1,overflowY:'auto',padding:'8px 6px',display:'flex',flexDirection:'column',gap:2}}>
-        ${navItems.map(it=>html`
-          <button key=${it.id}
-            title=${col?it.label:''}
-            onClick=${()=>setView(it.id)}
-            style=${{
-              display:'flex',alignItems:'center', gap:col?0:10, width:'100%', padding:col?'10px 0':'9px 10px', borderRadius:9,border:'none',cursor:'pointer', background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent', color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)', fontSize:12,fontWeight:baseView===it.id?700:500, transition:'all .12s',textAlign:'left', borderLeft:baseView===it.id&&!col?'2px solid var(--ac)':'2px solid transparent', justifyContent:col?'center':'flex-start', position:'relative'
-            }}
-            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
-            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}>
-            <span style=${{flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center',opacity:.85}}>${NAV_ICONS[it.id]||null}</span>
-            ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
-            ${it.id==='notifs'&&unread>0?html`<span style=${{
-              position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--rd)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
-            }}>${unread>9?'9+':unread}</span>`:null}
-            ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{
-              position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--cy)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
-            }}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
-          </button>`)}
-
+            <nav style=${{flex:1,overflowY:'auto',padding:'6px 6px 4px',display:'flex',flexDirection:'column',gap:0}}>
+        ${NAV_GROUPS.map(grp=>html`
+          <div key=${grp.key} style=${{marginBottom:2}}>
+            ${!col&&grp.label?html`
+              <button onClick=${()=>toggleGroup(grp.key)}
+                style=${{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',padding:'5px 8px',background:'none',border:'none',cursor:'pointer',color:'rgba(100,116,139,0.7)',fontSize:10,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>
+                ${grp.label}
+                <span style=${{fontSize:9,opacity:.6,transition:'transform .15s',transform:collapsedGroups[grp.key]?'rotate(-90deg)':'rotate(0)'}}>▾</span>
+              </button>`:null}
+            ${(!collapsedGroups[grp.key]||col)?grp.items.map(it=>html`
+              <button key=${it.id}
+                title=${col?it.label:''}
+                onClick=${()=>setView(it.id)}
+                style=${{
+                  display:'flex',alignItems:'center',gap:col?0:9,width:'100%',
+                  padding:col?'9px 0':'7px 8px',
+                  borderRadius:8,border:'none',cursor:'pointer',
+                  background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent',
+                  color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.7)',
+                  fontSize:12,fontWeight:baseView===it.id?700:400,
+                  transition:'all .1s',textAlign:'left',
+                  borderLeft:baseView===it.id&&!col?'2px solid #3b82f6':'2px solid transparent',
+                  justifyContent:col?'center':'flex-start',position:'relative',
+                  marginBottom:1
+                }}
+                onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.12)';e.currentTarget.style.color='#93c5fd';}}}
+                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}>\n                <span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}}>${NAV_ICONS[it.id]||null}</span>
+                ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
+                ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{minWidth:16,height:16,borderRadius:8,background:'#06b6d4',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
+              </button>`):null}
+          </div>`)}
       </nav>
 
             <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
@@ -7674,7 +7771,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'}, ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
-      ${!hideOnboarding?html`<${OnboardingChecklist} cu=${cu} projects=${projects} users=${users} setView=${onNav} onDismiss=${dismissOnboarding}/>`:null}
+      ${!hideOnboarding?html`<${OnboardingChecklist} cu=${cu} projects=${projects} users=${users} tasks=${tasks} setView=${onNav} onDismiss=${dismissOnboarding}/>`:null}
       <div style=${{padding:'10px 14px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:10}}>
         <${Av} u=${cu} size=${32}/>
         <div style=${{flex:1,minWidth:0}}>
@@ -11162,45 +11259,150 @@ function TOTPSetupPanel({cu}){
   const [code,setCode]=useState('');
   const [loading,setLoading]=useState(false);
   const [msg,setMsg]=useState('');
+  const [copied,setCopied]=useState(false);
+  const codeRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+
   const load=async()=>{const r=await api.get('/api/totp/status');setStatus(r?.enabled);};
   useEffect(()=>{load();},[]);
+
   const startSetup=async()=>{
-    setLoading(true);const r=await api.post('/api/totp/setup',{});setLoading(false);
-    if(r?.error)setMsg(r.error);else setSetup(r);
+    setLoading(true);setMsg('');
+    const r=await api.post('/api/totp/setup',{});
+    setLoading(false);
+    if(r?.error)setMsg(r.error);
+    else{setSetup(r);setCode('');}
   };
+
+  const handleDigit=(i,val)=>{
+    const digits=code.split('');
+    digits[i]=val.replace(/\D/g,'').slice(-1);
+    const nc=digits.join('');
+    setCode(nc);
+    if(val&&i<5)codeRefs[i+1].current?.focus();
+    if(nc.length===6&&digits.every(d=>d))setTimeout(verify,80);
+  };
+
+  const handleKey=(i,e)=>{
+    if(e.key==='Backspace'&&!code[i]&&i>0)codeRefs[i-1].current?.focus();
+    if(e.key==='Enter'&&code.length===6)verify();
+  };
+
+  const handlePaste=(e)=>{
+    const p=e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+    if(p.length===6){setCode(p);setTimeout(verify,120);}
+    e.preventDefault();
+  };
+
   const verify=async()=>{
-    setLoading(true);const r=await api.post('/api/totp/verify',{code});setLoading(false);
-    if(r?.ok){setMsg('2FA enabled!');setSetup(null);load();}else setMsg(r?.error||'Invalid code');
+    const c=code.replace(/\D/g,'');
+    if(c.length!==6)return;
+    setLoading(true);setMsg('');
+    const r=await api.post('/api/totp/verify',{code:c});
+    setLoading(false);
+    if(r?.ok){setMsg('✅ 2FA enabled successfully!');setSetup(null);setCode('');load();}
+    else{setMsg(r?.error||'Invalid code — check your authenticator app and try again');setCode('');codeRefs[0].current?.focus();}
   };
+
   const disable=async()=>{
-    if(!confirm('Disable 2FA?'))return;
-    await api.post('/api/totp/disable',{});setStatus(false);setMsg('2FA disabled');
+    if(!confirm('Disable 2FA? Your account will only be protected by your password.'))return;
+    await api.post('/api/totp/disable',{});setStatus(false);setMsg('2FA has been disabled.');
   };
-  return html`<div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:16}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+
+  const copySecret=()=>{
+    navigator.clipboard?.writeText(setup.secret||'');
+    setCopied(true);setTimeout(()=>setCopied(false),2000);
+  };
+
+  // QR code via Google Charts API (free, no auth, works offline-friendly)
+  const qrUrl=setup?.uri?`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(setup.uri)}`:'';
+
+  return html`<div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'18px 20px',marginBottom:16}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
       <div>
-        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>🔑 Two-Factor Authentication</div>
-        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Add an extra layer of security using an authenticator app</div>
-      </div>
-      <span style=${{fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:99,background:status?'rgba(21,128,61,0.15)':'rgba(100,116,139,0.15)',color:status?'#15803d':'#64748b'}}>${status===null?'…':status?'Enabled':'Disabled'}</span>
-    </div>
-    ${msg?html`<div style=${{fontSize:12,padding:'6px 10px',borderRadius:6,background:msg.includes('!')?'rgba(21,128,61,0.1)':'rgba(185,28,28,0.08)',color:msg.includes('!')?'#15803d':'#b91c1c',marginBottom:10}}>${msg}</div>`:null}
-    ${!status&&!setup?html`<button class="btn bg" style=${{fontSize:12}} onClick=${startSetup} disabled=${loading}>${loading?'…':'Set Up Authenticator'}</button>`:null}
-    ${setup?html`
-      <div style=${{marginTop:8}}>
-        <div style=${{fontSize:12,color:'var(--tx2)',marginBottom:10}}>1. Scan this QR code with Google Authenticator, Authy, or 1Password:</div>
-        ${setup.qr?html`<img src=${'data:image/png;base64,'+setup.qr} style=${{width:160,height:160,border:'1px solid var(--bd)',borderRadius:8,display:'block',marginBottom:10}}/>`:null}
-        <div style=${{fontSize:11,fontFamily:'monospace',background:'var(--sf2)',padding:'5px 10px',borderRadius:6,marginBottom:10}}>Manual key: ${setup.secret}</div>
-        <div style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>2. Enter the 6-digit code from your app:</div>
-        <div style=${{display:'flex',gap:8}}>
-          <input class="inp" value=${code} onInput=${e=>setCode(e.target.value)} placeholder="000000" maxLength="6" style=${{width:120,height:34,fontSize:16,fontFamily:'monospace',letterSpacing:'.2em',textAlign:'center'}}
-            onKeyDown=${e=>{if(e.key==='Enter')verify();}}/>
-          <button class="btn bp" style=${{fontSize:13}} onClick=${verify} disabled=${loading||code.length<6}>${loading?'…':'Verify'}</button>
-          <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setSetup(null)}>Cancel</button>
+        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',display:'flex',alignItems:'center',gap:7}}>
+          <span style=${{fontSize:18}}>🔑</span> Two-Factor Authentication
         </div>
-        <div style=${{marginTop:12,fontSize:11,color:'var(--tx3)'}}>Backup codes (save these): ${(setup.backup_codes||[]).join(' · ')}</div>
+        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:3}}>Protect your account with Google Authenticator, Authy, or 1Password</div>
+      </div>
+      <span style=${{fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:99,
+        background:status?'rgba(21,128,61,0.12)':'rgba(100,116,139,0.1)',
+        color:status?'#15803d':'#64748b',border:'1px solid '+(status?'rgba(21,128,61,0.25)':'rgba(100,116,139,0.2)')}}>
+        ${status===null?'Checking…':status?'✓ Enabled':'Disabled'}
+      </span>
+    </div>
+
+    ${msg?html`<div style=${{fontSize:12,padding:'9px 13px',borderRadius:8,marginBottom:12,
+      background:msg.startsWith('✅')||msg.includes('disabled')?'rgba(21,128,61,0.08)':'rgba(185,28,28,0.07)',
+      color:msg.startsWith('✅')||msg.includes('disabled')?'#15803d':'#b91c1c',
+      border:'1px solid '+(msg.startsWith('✅')||msg.includes('disabled')?'rgba(21,128,61,0.2)':'rgba(185,28,28,0.2)')
+    }}>${msg}</div>`:null}
+
+    ${!status&&!setup?html`
+      <div style=${{display:'flex',gap:10,alignItems:'center'}}>
+        <button class="btn bp" style=${{fontSize:13,padding:'8px 18px'}} onClick=${startSetup} disabled=${loading}>
+          ${loading?html`<span class="spin"></span>`:null} ${loading?'Generating…':'Set Up Authenticator App'}
+        </button>
+        <span style=${{fontSize:11,color:'var(--tx3)'}}>Works with Google Authenticator, Authy, 1Password</span>
       </div>`:null}
-    ${status?html`<button class="btn br" style=${{fontSize:12}} onClick=${disable}>Disable 2FA</button>`:null}
+
+    ${setup?html`
+      <div style=${{display:'flex',gap:24,flexWrap:'wrap'}}>
+        <!-- QR Code -->
+        <div style=${{flexShrink:0}}>
+          <div style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',marginBottom:8}}>Step 1 — Scan QR code</div>
+          <div style=${{width:164,height:164,border:'1px solid var(--bd)',borderRadius:10,overflow:'hidden',background:'#fff',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <img src=${qrUrl} width="160" height="160" alt="QR code" style=${{display:'block'}}
+              onError=${e=>{e.target.style.display='none';e.target.nextSibling.style.display='flex';}}/>
+            <div style=${{display:'none',flexDirection:'column',alignItems:'center',padding:12,textAlign:'center'}}>
+              <div style=${{fontSize:11,color:'var(--tx3)',marginBottom:6}}>QR unavailable</div>
+              <div style=${{fontSize:10,color:'var(--tx3)'}}>Use manual key below</div>
+            </div>
+          </div>
+          <div style=${{marginTop:8}}>
+            <div style=${{fontSize:10,color:'var(--tx3)',marginBottom:4}}>Or enter key manually:</div>
+            <div style=${{display:'flex',gap:4,alignItems:'center'}}>
+              <div style=${{fontSize:11,fontFamily:'monospace',background:'var(--sf2)',padding:'5px 8px',borderRadius:6,border:'1px solid var(--bd)',flex:1,overflow:'hidden',textOverflow:'ellipsis',wordBreak:'break-all',color:'var(--tx)',letterSpacing:'.04em'}}>${(setup.secret||'').match(/.{1,4}/g)?.join(' ')}</div>
+              <button class="btn bg" style=${{fontSize:10,padding:'5px 8px',flexShrink:0}} onClick=${copySecret}>${copied?'✓':'Copy'}</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Verify code -->
+        <div style=${{flex:1,minWidth:220}}>
+          <div style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',marginBottom:8}}>Step 2 — Enter the 6-digit code</div>
+          <div style=${{fontSize:11,color:'var(--tx3)',marginBottom:12,lineHeight:1.5}}>Open your authenticator app, find VEWIT, and enter the 6-digit code shown.</div>
+          <div style=${{display:'flex',gap:6,marginBottom:14}}>
+            ${[0,1,2,3,4,5].map(i=>html`
+              <input key=${i} ref=${codeRefs[i]} type="text" inputMode="numeric"
+                maxLength="1" value=${code[i]||''}
+                onInput=${e=>handleDigit(i,e.target.value)}
+                onKeyDown=${e=>handleKey(i,e)}
+                onPaste=${i===0?handlePaste:undefined}
+                style=${{width:40,height:48,textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',
+                  border:'2px solid '+(code[i]?'var(--ac)':'var(--bd)'),borderRadius:9,background:'var(--sf2)',color:'var(--tx)',
+                  outline:'none',transition:'border-color .15s'}}/>`)}
+          </div>
+          <div style=${{display:'flex',gap:8}}>
+            <button class="btn bp" style=${{fontSize:13,padding:'9px 20px'}} onClick=${verify} disabled=${loading||code.replace(/\D/g,'').length<6}>
+              ${loading?html`<span class="spin"></span>`:null} ${loading?'Verifying…':'Verify & Enable 2FA'}
+            </button>
+            <button class="btn bg" style=${{fontSize:12}} onClick=${()=>{setSetup(null);setCode('');}}>Cancel</button>
+          </div>
+          <div style=${{marginTop:14,padding:'10px 12px',background:'rgba(217,119,6,0.06)',border:'1px solid rgba(217,119,6,0.2)',borderRadius:8}}>
+            <div style=${{fontSize:11,fontWeight:700,color:'#b45309',marginBottom:5}}>⚠️ Save your backup codes</div>
+            <div style=${{fontSize:11,color:'var(--tx3)',lineHeight:1.6,fontFamily:'monospace',wordBreak:'break-all'}}>
+              ${(setup.backup_codes||[]).join(' · ')}
+            </div>
+            <div style=${{fontSize:10,color:'var(--tx3)',marginTop:4}}>Store these somewhere safe. Each code can only be used once if you lose your phone.</div>
+          </div>
+        </div>
+      </div>`:null}
+
+    ${status?html`
+      <div style=${{display:'flex',alignItems:'center',gap:12}}>
+        <div style=${{fontSize:13,color:'var(--tx2)'}}>Your account is protected with 2FA.</div>
+        <button class="btn br" style=${{fontSize:12,marginLeft:'auto'}} onClick=${disable}>Disable 2FA</button>
+      </div>`:null}
   </div>`;
 }
 
@@ -11209,13 +11411,21 @@ function TOTPSetupPanel({cu}){
 
 
 /* ─── Onboarding Checklist ───────────────────────────────────────────────── */
-function OnboardingChecklist({cu,projects,users,setView,onDismiss}){
+function OnboardingChecklist({cu,projects,users,tasks,setView,onDismiss}){
+  const [wsData,setWsData]=useState(null);
+  const [totpOn,setTotpOn]=useState(false);
+  useEffect(()=>{
+    api.get('/api/workspace').then(d=>setWsData(d));
+    api.get('/api/totp/status').then(d=>setTotpOn(d?.enabled||false));
+  },[]);
+  const hasAiKey=wsData&&wsData.ai_api_key&&wsData.ai_api_key.length>0;
+  const hasTasks=tasks&&tasks.length>0;
   const steps=[
     {id:'project',label:'Create your first project',done:projects&&projects.length>0,action:()=>setView('projects'),btn:'Create Project'},
-    {id:'task',label:'Add a task to the board',done:projects&&projects.length>0,action:()=>setView('tasks'),btn:'Go to Board'},
+    {id:'task',label:'Add your first task',done:hasTasks,action:()=>setView('tasks'),btn:'Go to Board'},
     {id:'invite',label:'Invite a team member',done:users&&users.length>1,action:()=>setView('team'),btn:'Invite Team'},
-    {id:'aikey',label:'Add your Anthropic AI key',done:false,action:()=>setView('settings'),btn:'Open Settings'},
-    {id:'2fa',label:'Enable 2FA for your account',done:false,action:()=>setView('settings'),btn:'Setup 2FA'},
+    {id:'aikey',label:'Add your Anthropic AI key',done:!!hasAiKey,action:()=>setView('settings'),btn:'Open Settings'},
+    {id:'2fa',label:'Enable 2FA for your account',done:totpOn,action:()=>setView('settings'),btn:'Setup 2FA'},
   ];
   const done=steps.filter(s=>s.done).length;
   const pct=Math.round((done/steps.length)*100);
