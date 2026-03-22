@@ -3470,13 +3470,6 @@ def totp_disable():
         db.execute("UPDATE totp_secrets SET enabled=0 WHERE user_id=?",(session["user_id"],))
         return jsonify({"ok":True})
 
-@app.route("/api/totp/disable", methods=["POST"])
-@login_required
-def totp_disable():
-    with get_db() as db:
-        db.execute("UPDATE totp_secrets SET enabled=0 WHERE user_id=?",(session["user_id"],))
-        return jsonify({"ok":True})
-
 @app.route("/api/totp/status", methods=["GET"])
 @login_required
 def totp_status():
