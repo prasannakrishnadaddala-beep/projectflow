@@ -523,7 +523,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, email TEXT,
                 password TEXT, role TEXT, avatar TEXT, color TEXT, created TEXT,
-                two_fa_enabled INTEGER DEFAULT 0);
+                two_fa_enabled INTEGER DEFAULT 0, totp_secret TEXT DEFAULT '',
+                totp_verified INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, description TEXT,
                 owner TEXT, members TEXT DEFAULT '[]', start_date TEXT,
@@ -590,6 +591,8 @@ def init_db():
             "ALTER TABLE users ADD COLUMN avatar_data TEXT",
             "ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN two_fa_enabled INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN totp_secret TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN totp_verified INTEGER DEFAULT 0",
             "ALTER TABLE tasks ADD COLUMN parent_id TEXT DEFAULT ''",
             "ALTER TABLE tasks ADD COLUMN story_points INTEGER DEFAULT 0",
             "ALTER TABLE tasks ADD COLUMN sprint TEXT DEFAULT ''",
@@ -715,6 +718,13 @@ def login():
                 db.execute("UPDATE users SET password=? WHERE id=?",(new_hash, u["id"]))
             except Exception: pass
         ws = db.execute("SELECT * FROM workspaces WHERE id=?",(u["workspace_id"],)).fetchone()
+        # ── Check TOTP first (Google Authenticator) ───────────────────────────
+        totp_active = u.get("totp_verified") and u.get("totp_secret")
+        if totp_active:
+            result = dict(u)
+            result.pop("password", None); result.pop("totp_secret", None); result.pop("avatar_data", None)
+            return jsonify({"totp_required": True, "user_id": u["id"], "name": u["name"]}), 200
+        # ── Fall back to email OTP ────────────────────────────────────────────
         otp_enabled = ws and ws.get("otp_enabled", 0)
         user_2fa = u.get("two_fa_enabled", 0)
         should_send_otp = otp_enabled or user_2fa
@@ -742,7 +752,9 @@ def login():
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
         except Exception: pass
-        return jsonify(dict(u))
+        result = dict(u)
+        result.pop("totp_secret", None)
+        return jsonify(result)
 
 @app.route("/api/auth/verify-otp",methods=["POST"])
 def verify_otp():
@@ -827,10 +839,162 @@ def get_2fa_status():
     with get_db() as db:
         caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
         if caller and caller["role"] == "Admin":
-            rows = db.execute("SELECT id, name, email, role, two_fa_enabled FROM users WHERE workspace_id=? ORDER BY name", (wid(),)).fetchall()
+            rows = db.execute(
+                "SELECT id, name, email, role, color, two_fa_enabled, totp_secret, totp_verified FROM users WHERE workspace_id=? ORDER BY name",
+                (wid(),)).fetchall()
         else:
-            rows = db.execute("SELECT id, name, email, role, two_fa_enabled FROM users WHERE id=?", (session["user_id"],)).fetchall()
-        return jsonify([dict(r) for r in rows])
+            rows = db.execute(
+                "SELECT id, name, email, role, color, two_fa_enabled, totp_secret, totp_verified FROM users WHERE id=?",
+                (session["user_id"],)).fetchall()
+        result = []
+        for r in rows:
+            d2 = dict(r)
+            d2["totp_configured"] = bool(d2.get("totp_secret") and d2.get("totp_verified"))
+            d2.pop("totp_secret", None)  # never expose secret over API
+            result.append(d2)
+        return jsonify(result)
+
+# ── TOTP / Google Authenticator ───────────────────────────────────────────────
+def _totp_generate_secret():
+    """Generate a random base32 TOTP secret."""
+    import base64
+    raw = secrets.token_bytes(20)
+    return base64.b32encode(raw).decode().rstrip('=')
+
+def _totp_hotp(key_b32, counter):
+    """HOTP: HMAC-based OTP (RFC 4226)."""
+    import hmac, hashlib, struct
+    # Pad base32 to multiple of 8
+    pad = (8 - len(key_b32) % 8) % 8
+    key = base64.b32decode(key_b32 + '=' * pad, casefold=True)
+    msg = struct.pack('>Q', counter)
+    h = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = h[-1] & 0x0f
+    code = (struct.unpack('>I', h[offset:offset+4])[0] & 0x7fffffff) % 1000000
+    return f"{code:06d}"
+
+import base64 as _b64_mod, struct as _struct_mod
+
+def _totp_verify(secret, token, window=1):
+    """Verify TOTP token with ±window steps (30s each)."""
+    import time as _t
+    counter = int(_t.time()) // 30
+    for delta in range(-window, window + 1):
+        expected = _totp_hotp(secret, counter + delta)
+        if expected == token.strip():
+            return True
+    return False
+
+def _totp_qr_url(secret, email, issuer="VEWIT"):
+    """Generate otpauth:// URL for QR code rendering."""
+    import urllib.parse
+    pad = (8 - len(secret) % 8) % 8
+    secret_padded = secret + '=' * pad
+    params = urllib.parse.urlencode({"secret": secret_padded, "issuer": issuer})
+    return f"otpauth://totp/{urllib.parse.quote(issuer)}:{urllib.parse.quote(email)}?{params}"
+
+def _totp_qr_base64(secret, email, issuer="VEWIT"):
+    """Generate a base64-encoded PNG QR code for the TOTP secret.
+    Uses only stdlib + segno (pure-python) if available, else returns SVG fallback."""
+    otpauth_url = _totp_qr_url(secret, email, issuer)
+    try:
+        import segno
+        import io
+        qr = segno.make_qr(otpauth_url, error='M')
+        buf = io.BytesIO()
+        qr.save(buf, kind='png', scale=6, border=2)
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        pass
+    try:
+        import qrcode, io
+        img = qrcode.make(otpauth_url)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        pass
+    # SVG fallback – minimal placeholder (client renders the URL instead)
+    return None
+
+@app.route("/api/auth/totp/setup", methods=["POST"])
+@login_required
+def totp_setup():
+    """Begin TOTP setup: generate a secret and return QR code for the current user."""
+    with get_db() as db:
+        u = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        if not u:
+            return jsonify({"error": "User not found"}), 404
+        # Generate a fresh secret (overwrite unverified ones, keep verified)
+        if u.get("totp_verified"):
+            return jsonify({"error": "TOTP already configured. Reset it first."}), 400
+        secret = _totp_generate_secret()
+        db.execute("UPDATE users SET totp_secret=?, totp_verified=0 WHERE id=?", (secret, u["id"]))
+        qr = _totp_qr_base64(secret, u["email"])
+        otpauth = _totp_qr_url(secret, u["email"])
+        return jsonify({
+            "secret": secret,
+            "otpauth": otpauth,
+            "qr_image": qr,
+            "email": u["email"]
+        })
+
+@app.route("/api/auth/totp/verify-setup", methods=["POST"])
+@login_required
+def totp_verify_setup():
+    """Confirm TOTP setup by verifying the first token from the authenticator app."""
+    d = request.json or {}
+    token = d.get("token", "").strip().replace(" ", "")
+    with get_db() as db:
+        u = db.execute("SELECT * FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        if not u or not u.get("totp_secret"):
+            return jsonify({"error": "No TOTP setup in progress. Call /setup first."}), 400
+        if not _totp_verify(u["totp_secret"], token):
+            return jsonify({"error": "Invalid code. Check your authenticator app and try again."}), 401
+        db.execute("UPDATE users SET totp_verified=1, two_fa_enabled=1 WHERE id=?", (u["id"],))
+        return jsonify({"ok": True, "message": "Google Authenticator configured successfully!"})
+
+@app.route("/api/auth/totp/verify", methods=["POST"])
+def totp_verify_login():
+    """Verify TOTP token during login flow."""
+    d = request.json or {}
+    user_id = d.get("user_id")
+    token = d.get("token", "").strip().replace(" ", "")
+    if not user_id or not token:
+        return jsonify({"error": "user_id and token required"}), 400
+    with get_db() as db:
+        u = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        if not u:
+            return jsonify({"error": "User not found"}), 404
+        if not u.get("totp_secret") or not u.get("totp_verified"):
+            return jsonify({"error": "TOTP not configured for this user"}), 400
+        if not _totp_verify(u["totp_secret"], token):
+            return jsonify({"error": "Invalid authenticator code. Try again."}), 401
+        session.permanent = True
+        session["user_id"] = u["id"]
+        session["workspace_id"] = u["workspace_id"]
+        try:
+            db.execute("UPDATE users SET last_active=? WHERE id=?", (datetime.utcnow().isoformat(), u["id"]))
+        except Exception: pass
+        result = dict(u)
+        result.pop("password", None)
+        result.pop("totp_secret", None)
+        result.pop("avatar_data", None)
+        return jsonify(result)
+
+@app.route("/api/auth/totp/reset", methods=["POST"])
+@login_required
+def totp_reset():
+    """Admin resets TOTP for a user (or user resets their own)."""
+    d = request.json or {}
+    target_id = d.get("user_id", session["user_id"])
+    with get_db() as db:
+        caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        if target_id != session["user_id"] and (not caller or caller["role"] not in ("Admin", "Manager")):
+            return jsonify({"error": "Only admins can reset TOTP for other users"}), 403
+        db.execute("UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE id=? AND workspace_id=?",
+                   (target_id, wid()))
+        return jsonify({"ok": True, "message": "TOTP reset. User can now set up a new authenticator."})
 
 @app.route("/api/auth/logout",methods=["POST"])
 def logout(): session.clear(); return jsonify({"ok":True})
@@ -1025,8 +1189,11 @@ def get_users():
             u = dict(r)
             u.pop('avatar_data', None)
             u.pop('password', None)
+            # Add computed totp_configured field, never expose raw secret
+            u['totp_configured'] = bool(u.get('totp_verified') and u.get('totp_secret'))
+            u.pop('totp_secret', None)
             if not can_see_passwords:
-                u.pop('plain_password', None)  # only Admin/Manager can see passwords
+                u.pop('plain_password', None)
             users.append(u)
         return jsonify(users)
 
@@ -2168,103 +2335,261 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
 @app.route("/api/ai/generate-docs",methods=["POST"])
 @login_required
 def ai_generate_docs():
-    """Generate project documentation or architecture diagram using AI."""
+    """Generate documentation from user description + workspace data."""
     d = request.json or {}
-    doc_type = d.get("type", "documentation")  # 'documentation' or 'architecture'
+    doc_type = d.get("type", "documentation")
     project_id = d.get("project_id", "")
-    extra_context = d.get("context", "")
+    user_description = d.get("context", "").strip()
+    tech_stack = d.get("tech_stack", "").strip()
+    audience = d.get("audience", "technical")
 
     with get_db() as db:
         ws = db.execute("SELECT * FROM workspaces WHERE id=?", (wid(),)).fetchone()
         api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
         if not api_key:
-            return jsonify({"error": "NO_KEY", "message": "Configure your Anthropic API key in Settings."}), 400
+            return jsonify({"error": "NO_KEY", "message": "Configure your Anthropic API key in Settings → AI Assistant."}), 400
 
         if project_id:
             projects = db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?", (project_id, wid())).fetchall()
-            tasks = db.execute("SELECT t.*, u.name as assignee_name FROM tasks t LEFT JOIN users u ON t.assignee=u.id WHERE t.project=? AND t.workspace_id=?", (project_id, wid())).fetchall()
+            tasks = db.execute(
+                "SELECT t.*, u.name as assignee_name FROM tasks t LEFT JOIN users u ON t.assignee=u.id "
+                "WHERE t.project=? AND t.workspace_id=?", (project_id, wid())).fetchall()
         else:
             projects = db.execute("SELECT * FROM projects WHERE workspace_id=?", (wid(),)).fetchall()
-            tasks = db.execute("SELECT t.*, u.name as assignee_name FROM tasks t LEFT JOIN users u ON t.assignee=u.id WHERE t.workspace_id=?", (wid(),)).fetchall()
+            tasks = db.execute(
+                "SELECT t.*, u.name as assignee_name FROM tasks t LEFT JOIN users u ON t.assignee=u.id "
+                "WHERE t.workspace_id=?", (wid(),)).fetchall()
 
-        users = db.execute("SELECT id,name,role FROM users WHERE workspace_id=?", (wid(),)).fetchall()
+        users_db = db.execute("SELECT id,name,role,email FROM users WHERE workspace_id=?", (wid(),)).fetchall()
         teams = db.execute("SELECT * FROM teams WHERE workspace_id=?", (wid(),)).fetchall()
+        tickets = db.execute("SELECT id,title,type,status,priority FROM tickets WHERE workspace_id=? LIMIT 20", (wid(),)).fetchall()
 
-    proj_ctx = "\n".join([f"## {p['name']}\n- ID: {p['id']}\n- Description: {p['description'] or 'N/A'}\n- Target: {p['target_date'] or 'N/A'}\n- Progress: {p['progress']}%" for p in projects])
-    task_ctx = "\n".join([f"- [{t['id']}] {t['title']} | Stage: {t['stage']} | Priority: {t['priority']} | Assignee: {t.get('assignee_name','Unassigned')} | Progress: {t['pct']}%" for t in tasks])
-    user_ctx = "\n".join([f"- {u['name']} ({u['role']})" for u in users])
-    team_ctx = "\n".join([f"- {t['name']}" for t in teams]) or "No teams"
+    # Build rich workspace context
+    proj_ctx = "\n".join([
+        f"### {p['name']}\n- ID: {p['id']}\n- Description: {p['description'] or 'N/A'}"
+        f"\n- Target date: {p['target_date'] or 'N/A'}\n- Progress: {p['progress'] or 0}%"
+        for p in projects]) or "No projects yet"
+
+    by_stage = {}
+    for t in tasks:
+        by_stage.setdefault(t['stage'], []).append(t)
+    task_ctx = "\n".join([
+        f"**{stage.upper()}** ({len(ts)} tasks): " + ", ".join([f"{t['title']} [{t['priority']}]" for t in ts[:5]])
+        + ("..." if len(ts)>5 else "")
+        for stage, ts in by_stage.items()])[:3000] or "No tasks"
+
+    user_ctx = "\n".join([f"- {u['name']} ({u['role']})" for u in users_db])
+    team_ctx = "\n".join([f"- {t['name']}" for t in teams]) or "No sub-teams"
+    ticket_ctx = "\n".join([f"- [{t['id']}] {t['title']} | {t['type']} | {t['status']} | {t['priority']}" for t in tickets]) or "No tickets"
+
+    workspace_data = f"""
+WORKSPACE NAME: {ws['name'] if ws else 'Unknown'}
+TOTAL PROJECTS: {len(projects)}
+TOTAL TASKS: {len(tasks)}
+TEAM MEMBERS ({len(users_db)}):
+{user_ctx}
+SUB-TEAMS: {team_ctx}
+
+PROJECTS:
+{proj_ctx}
+
+TASKS BY STAGE:
+{task_ctx}
+
+OPEN TICKETS (sample):
+{ticket_ctx}
+"""
+
+    user_desc_block = f"""
+USER DESCRIPTION:
+{user_description if user_description else '(Not provided — use workspace data above)'}
+
+TECH STACK: {tech_stack if tech_stack else 'Not specified'}
+TARGET AUDIENCE: {audience}
+"""
+
+    audience_note = {
+        "technical": "Write for software engineers and architects. Include technical details, code examples, data models, and API references where appropriate.",
+        "business": "Write for business stakeholders. Avoid jargon. Focus on value, goals, timelines, risks, and business outcomes. Use plain language.",
+        "both": "Write for both technical and business audiences. Use clear sections — business summary first, technical details later."
+    }.get(audience, "")
 
     if doc_type == "architecture":
-        prompt = f"""You are a technical documentation expert. Based on the following project data from VEWIT, generate a comprehensive architecture diagram using Mermaid.js syntax.
+        prompt = f"""You are a senior software architect. Generate a comprehensive architecture documentation with Mermaid.js diagrams.
+{user_desc_block}
+{workspace_data}
 
-WORKSPACE: {ws['name'] if ws else 'Unknown'}
-PROJECTS:
-{proj_ctx or 'No projects'}
-TASKS:
-{task_ctx[:2000] or 'No tasks'}
-TEAMS:
-{team_ctx}
-MEMBERS:
-{user_ctx}
+{audience_note}
 
-{('Additional context: ' + extra_context) if extra_context else ''}
+Generate the following:
 
-Generate a Mermaid diagram that shows:
-1. The project structure and relationships
-2. Team assignments and workflow stages
-3. Key task flows and dependencies
+## 1. System Architecture Diagram
+```mermaid
+flowchart TD
+  (show the main system components, services, databases, and how they connect)
+```
 
-Start with the diagram type (flowchart LR, graph TD, etc.) and wrap it in triple backticks with 'mermaid' language tag.
-After the diagram, provide a brief explanation of the architecture.
-Keep the diagram clean and not too complex — focus on the most important relationships."""
-    else:
-        prompt = f"""You are a technical documentation expert. Based on the following project data from VEWIT, generate professional project documentation in Markdown format.
+## 2. Data Flow Diagram  
+```mermaid
+sequenceDiagram
+  (show key user interactions and data flows between components)
+```
 
-WORKSPACE: {ws['name'] if ws else 'Unknown'}
-PROJECTS:
-{proj_ctx or 'No projects'}
-TASKS (summary):
-{task_ctx[:3000] or 'No tasks'}
-TEAM:
-{user_ctx}
+## 3. Component Overview
+Describe each major component in 2-3 sentences.
 
-{('Additional context: ' + extra_context) if extra_context else ''}
+## 4. Technology Stack
+List all technologies with their role in the system.
 
-Generate comprehensive documentation including:
-1. **Executive Summary** — project overview and goals
-2. **Project Scope** — what's included and excluded
-3. **Team Structure** — roles and responsibilities
-4. **Current Status** — progress per project with key metrics
-5. **Task Breakdown** — organized by stage/priority
-6. **Timeline** — key milestones and deadlines
-7. **Risks & Blockers** — any blocked or overdue tasks
-8. **Next Steps** — recommended immediate actions
+## 5. Deployment Architecture
+Describe how the system is deployed (cloud, containers, etc.).
 
-Format with proper Markdown headings, tables where appropriate, and clear sections. Be professional and concise."""
+Be specific based on the description provided. If tech stack is mentioned, use it in the diagrams."""
+
+    elif doc_type == "technical":
+        prompt = f"""You are a senior technical writer. Generate a detailed technical specification document.
+{user_desc_block}
+{workspace_data}
+
+{audience_note}
+
+Generate a complete Technical Specification including:
+
+# Technical Specification
+
+## 1. Overview & Purpose
+## 2. System Architecture
+## 3. Technology Stack
+| Layer | Technology | Purpose |
+(create a table)
+## 4. Data Models
+Describe key entities and their relationships with field-level details.
+## 5. API Design
+List key API endpoints with method, path, purpose, request/response schema.
+## 6. Authentication & Security
+## 7. Performance Requirements
+## 8. Integration Points
+## 9. Error Handling Strategy
+## 10. Testing Strategy
+## 11. Deployment & DevOps
+
+Be comprehensive and specific. Use tables, code blocks, and diagrams where appropriate."""
+
+    elif doc_type == "api":
+        prompt = f"""You are an API documentation expert. Generate complete API reference documentation.
+{user_desc_block}
+{workspace_data}
+
+Generate comprehensive API Documentation including:
+
+# API Reference
+
+## Authentication
+How to authenticate — JWT, API keys, OAuth, etc.
+
+## Base URL & Versioning
+
+## Endpoints
+For each major resource area (based on the project description), document:
+### Resource Name
+#### GET /resource
+- **Description**: What it returns
+- **Auth required**: Yes/No
+- **Query params**: List with type and description
+- **Response**: JSON schema with example
+#### POST /resource
+(repeat for all CRUD operations)
+
+## Error Codes
+| Code | Message | Description |
+(table of all error codes)
+
+## Rate Limiting
+## Webhooks (if applicable)
+## SDK Examples
+Show code examples in Python and JavaScript.
+
+Base the endpoints on the actual project description and workspace task data."""
+
+    else:  # documentation
+        prompt = f"""You are a professional technical writer. Generate comprehensive project documentation.
+{user_desc_block}
+{workspace_data}
+
+{audience_note}
+
+Generate a complete Project Documentation including:
+
+# Project Documentation
+
+## Executive Summary
+2-3 paragraphs covering what the project is, its primary goals, and current status.
+
+## Project Overview
+- **Vision**: 
+- **Problem Statement**:
+- **Solution**:
+- **Key Stakeholders**:
+
+## Scope & Features
+### In Scope
+### Out of Scope
+### Key Features (table with feature, status, priority)
+
+## Team Structure
+| Name | Role | Responsibilities |
+(table from workspace member data)
+
+## Current Status
+Summary of progress with a status table per project.
+
+## Task Breakdown
+Organized by stage — Completed, In Progress, In Review, Blocked, Backlog.
+
+## Timeline & Milestones
+| Milestone | Target Date | Status |
+
+## Risks & Blockers
+| Risk | Impact | Mitigation |
+
+## Technical Architecture
+Brief description of the tech stack and architecture.
+
+## Next Steps & Recommendations
+Prioritized list of immediate actions.
+
+---
+*Generated by VEWIT AI · {datetime.now().strftime('%B %d, %Y')}*"""
 
     try:
         req_data = json.dumps({
             "model": "claude-sonnet-4-5",
-            "max_tokens": 3000,
+            "max_tokens": 4000,
             "messages": [{"role": "user", "content": prompt}]
         }).encode()
         req = urllib.request.Request(
             "https://api.anthropic.com/v1/messages",
             data=req_data, method="POST",
             headers={"Content-Type": "application/json", "x-api-key": api_key, "anthropic-version": "2023-06-01"})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read().decode())
-            content = result["content"][0]["text"]
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            result_json = json.loads(resp.read().decode())
+            content = result_json["content"][0]["text"]
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         if e.code == 401:
-            return jsonify({"error": "INVALID_KEY", "message": "Invalid API key."}), 400
-        return jsonify({"error": "API_ERROR", "message": f"API error: {body[:200]}"}), 500
+            return jsonify({"error": "INVALID_KEY", "message": "Invalid API key. Check your key in Settings."}), 400
+        return jsonify({"error": "API_ERROR", "message": f"API error {e.code}: {body[:300]}"}), 500
     except Exception as e:
         return jsonify({"error": "NETWORK_ERROR", "message": str(e)}), 500
 
-    return jsonify({"content": content, "type": doc_type, "projects": [p["name"] for p in projects]})
+    return jsonify({
+        "content": content,
+        "type": doc_type,
+        "projects": [p["name"] for p in projects],
+        "task_count": len(tasks)
+    })
+
+
 
 
 @app.route("/api/export/csv")
@@ -4436,6 +4761,11 @@ function AuthScreen({onLogin}){
   const [otpCode,setOtpCode]=useState('');
   const [otpResendCd,setOtpResendCd]=useState(0);
   const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+  // TOTP / Google Authenticator state
+  const [totpStep,setTotpStep]=useState(false);
+  const [totpUserId,setTotpUserId]=useState('');
+  const [totpUserName,setTotpUserName]=useState('');
+  const [totpToken,setTotpToken]=useState('');
   const cvRef=useRef(null);
 
   useEffect(()=>{
@@ -4597,6 +4927,7 @@ function AuthScreen({onLogin}){
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
       if(r.error)setErr(r.error);
+      else if(r.totp_required){setTotpUserId(r.user_id);setTotpUserName(r.name);setTotpStep(true);setTotpToken('');}
       else if(r.otp_required){setOtpEmail(r.email);setOtpStep(true);setOtpResendCd(60);}
       else onLogin(r);
     } else {
@@ -4606,6 +4937,14 @@ function AuthScreen({onLogin}){
       const r=await api.post('/api/auth/register',{mode:regMode,workspace_name:wsName,invite_code:inviteCode,name,email,password:pw,role});
       if(r.error)setErr(r.error);else onLogin(r);
     }
+    setBusy(false);
+  };
+  const submitTotp=async()=>{
+    const tok=totpToken.replace(/\s/g,'');
+    if(tok.length!==6){setErr('Enter the 6-digit code from your authenticator app.');return;}
+    setErr('');setBusy(true);
+    const r=await api.post('/api/auth/totp/verify',{user_id:totpUserId,token:tok});
+    if(r.error){setErr(r.error);setTotpToken('');}else onLogin(r);
     setBusy(false);
   };
   const submitOtp=async()=>{
@@ -4682,6 +5021,68 @@ function AuthScreen({onLogin}){
       </div>
     </div>`;
 
+  if(totpStep) return html`
+    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
+      ${leftPanel}
+      ${rightPanel(html`
+        <div style=${{marginBottom:24}}>
+          <div style=${{width:56,height:56,borderRadius:16,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:18,boxShadow:'0 6px 20px rgba(29,78,216,0.3)'}}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1" fill="white"/></svg>
+          </div>
+          <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,color:'#0f172a',marginBottom:8,letterSpacing:'-.3px'}}>Authenticator Code</h2>
+          <p style=${{fontSize:13,color:'#64748b',marginBottom:4,lineHeight:1.6}}>Hi <b style=${{color:'#1d4ed8'}}>${totpUserName}</b>, open your Google Authenticator app and enter the 6-digit code for <b>VEWIT</b>.</p>
+        </div>
+
+        <div style=${{background:'linear-gradient(135deg,#f0f9ff,#eff6ff)',border:'1px solid #bfdbfe',borderRadius:14,padding:'14px 16px',marginBottom:20,display:'flex',gap:12,alignItems:'center'}}>
+          <div style=${{fontSize:28}}>📱</div>
+          <div style=${{fontSize:12,color:'#1e40af',lineHeight:1.5}}>
+            Open <b>Google Authenticator</b>, <b>Authy</b>, or any TOTP app and find the <b>VEWIT</b> entry.
+          </div>
+        </div>
+
+        <div style=${{marginBottom:20}}>
+          <label style=${{display:'block',fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:.8,marginBottom:8}}>6-Digit Code</label>
+          <input
+            value=${totpToken}
+            onInput=${e=>setTotpToken(e.target.value.replace(/\D/g,'').slice(0,6))}
+            onKeyDown=${e=>e.key==='Enter'&&submitTotp()}
+            placeholder="000 000"
+            maxLength=6
+            autoFocus
+            style=${{
+              width:'100%',height:60,borderRadius:14,textAlign:'center',
+              fontSize:28,fontWeight:700,fontFamily:'monospace',letterSpacing:8,
+              outline:'none',boxSizing:'border-box',
+              background:totpToken.length===6?'#eff6ff':'#f8fafc',
+              border:'2px solid '+(totpToken.length===6?'#2563eb':'#e2e8f0'),
+              color:'#0f172a',transition:'all .15s',
+              boxShadow:totpToken.length===6?'0 0 0 4px rgba(37,99,235,0.12)':'none'
+            }}/>
+        </div>
+
+        ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca',marginBottom:14}}>${err}</div>`:null}
+
+        <button onClick=${submitTotp} disabled=${busy||totpToken.length!==6}
+          style=${{
+            width:'100%',height:50,borderRadius:12,border:'none',fontFamily:'inherit',
+            background:totpToken.length===6?'linear-gradient(135deg,#1d4ed8,#2563eb)':'#e2e8f0',
+            color:totpToken.length===6?'#fff':'#94a3b8',
+            fontSize:15,fontWeight:700,cursor:totpToken.length===6?'pointer':'default',
+            transition:'all .18s',marginBottom:16,
+            boxShadow:totpToken.length===6?'0 6px 20px rgba(29,78,216,0.35)':'none'
+          }}>
+          ${busy?'Verifying...':'Verify & Sign In →'}
+        </button>
+
+        <div style=${{textAlign:'center'}}>
+          <button onClick=${()=>{setTotpStep(false);setTotpToken('');setErr('');}}
+            style=${{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:12,fontFamily:'inherit',textDecoration:'underline'}}>
+            ← Back to login
+          </button>
+        </div>
+      `)}
+    </div>`;
+
   if(otpStep) return html`
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
@@ -4692,10 +5093,18 @@ function AuthScreen({onLogin}){
           <p style=${{fontSize:13.5,color:'#64748b',marginBottom:3}}>6-digit code sent to</p>
           <p style=${{fontSize:14,fontWeight:700,color:'#2563eb'}}>${otpEmail}</p>
         </div>
-        <div style=${{display:'flex',gap:8,marginBottom:20}} onPaste=${handleOtpPaste}>
+        <div style=${{display:'flex',gap:10,marginBottom:20,width:'100%'}} onPaste=${handleOtpPaste}>
           ${[0,1,2,3,4,5].map(i=>html`
             <input key=${i} ref=${otpRefs[i]}
-              style=${{flex:1,height:54,borderRadius:10,textAlign:'center',fontSize:20,fontWeight:700,fontFamily:'monospace',outline:'none',boxSizing:'border-box',transition:'all .15s', background:otpCode[i]?'#eff6ff':'#f8fafc', border:'1.5px solid '+(otpCode[i]?'#3b82f6':'#e2e8f0'), color:'#0f172a',boxShadow:otpCode[i]?'0 0 0 3px rgba(59,130,246,0.1)':'none'}}
+              style=${{
+                width:0,flex:'1 1 0',minWidth:0,height:56,borderRadius:12,textAlign:'center',
+                fontSize:22,fontWeight:700,fontFamily:'monospace',outline:'none',
+                boxSizing:'border-box',transition:'all .15s',
+                background:otpCode[i]?'#eff6ff':'#f8fafc',
+                border:'2px solid '+(otpCode[i]?'#2563eb':'#e2e8f0'),
+                color:'#0f172a',
+                boxShadow:otpCode[i]?'0 0 0 4px rgba(37,99,235,0.12)':'none'
+              }}
               maxLength=1 value=${otpCode[i]||''}
               onInput=${e=>handleOtpInput(i,e.target.value)}
               onKeyDown=${e=>handleOtpKey(i,e)}
@@ -7770,6 +8179,13 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
   const [editPw,setEditPw]=useState(false);
   const [newPw,setNewPw]=useState('');
   const [saving,setSaving]=useState(false);
+  const [showTotpSetup,setShowTotpSetup]=useState(false);
+  const [totpData,setTotpData]=useState(null);
+  const [totpVerifyToken,setTotpVerifyToken]=useState('');
+  const [totpVerifying,setTotpVerifying]=useState(false);
+  const [totpMsg,setTotpMsg]=useState('');
+  const [twoFaLoading,setTwoFaLoading]=useState(false);
+
   const resetPw=async()=>{
     if(!newPw.trim())return;
     setSaving(true);
@@ -7777,24 +8193,70 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
     setSaving(false);setEditPw(false);setNewPw('');
     reload&&reload();
   };
+
+  const startTotpSetup=async()=>{
+    setTotpMsg('');
+    // Only self can setup own TOTP; admin can reset others but not setup for them
+    if(u.id!==cu.id){alert('Users must set up their own Authenticator. Use Reset to clear it.');return;}
+    const r=await api.post('/api/auth/totp/setup',{});
+    if(r.error){setTotpMsg(r.error);return;}
+    setTotpData(r);setShowTotpSetup(true);setTotpVerifyToken('');
+  };
+
+  const confirmTotpSetup=async()=>{
+    if(totpVerifyToken.replace(/\s/g,'').length!==6){setTotpMsg('Enter the 6-digit code from your app.');return;}
+    setTotpVerifying(true);setTotpMsg('');
+    const r=await api.post('/api/auth/totp/verify-setup',{token:totpVerifyToken.replace(/\s/g,'')});
+    setTotpVerifying(false);
+    if(r.error){setTotpMsg(r.error);return;}
+    setTotpMsg('✓ Google Authenticator configured!');
+    setShowTotpSetup(false);setTotpData(null);
+    setTimeout(()=>{setTotpMsg('');reload&&reload();},1500);
+  };
+
+  const resetTotp=async()=>{
+    if(!window.confirm('Reset 2FA for '+u.name+'? They will need to set up Authenticator again.'))return;
+    setTwoFaLoading(true);
+    const r=await api.post('/api/auth/totp/reset',{user_id:u.id});
+    setTwoFaLoading(false);
+    if(r.error){alert(r.error);return;}
+    setTotpMsg('✓ 2FA reset');
+    setTimeout(()=>{setTotpMsg('');reload&&reload();},1200);
+  };
+
+  const toggleEmailOtp=async()=>{
+    setTwoFaLoading(true);
+    const r=await api.post('/api/auth/toggle-2fa',{user_id:u.id,enabled:!u.two_fa_enabled});
+    setTwoFaLoading(false);
+    if(r.error){alert(r.error);}
+    else reload&&reload();
+  };
+
+  const totpConfigured=u.totp_configured||(!!(u.totp_verified));
+  const isSelf=u.id===cu.id;
+  const isAdminOrSelf=cu.role==='Admin'||cu.role==='Manager'||isSelf;
+
   return html`
-    <tr style=${{borderBottom:i<total-1?'1px solid var(--bd)':'none'}}>
-      <td style=${{padding:'11px 15px'}}>
+    <tr style=${{borderBottom:i<total-1?'1px solid var(--bd)':'none',verticalAlign:'top'}}>
+      <td style=${{padding:'12px 14px'}}>
         <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <${Av} u=${u} size=${32}/>
+          <${Av} u=${u} size=${34}/>
           <div>
             <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>
               ${u.name}
-              ${u.id===cu.id?html`<span style=${{fontSize:9,color:'var(--ac)',background:'rgba(99,102,241,.14)',padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>YOU</span>`:null}
+              ${isSelf?html`<span style=${{fontSize:9,color:'var(--ac)',background:'var(--ac3)',padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>YOU</span>`:null}
             </div>
             <div style=${{fontSize:10,color:ROLE_COLORS[u.role]||'var(--tx3)',marginTop:2}}>${u.role}</div>
           </div>
         </div>
       </td>
-      <td style=${{padding:'11px 15px'}}>
+
+      <td style=${{padding:'12px 14px'}}>
         <span style=${{fontSize:12,color:'var(--tx2)',fontFamily:'monospace'}}>${u.email}</span>
       </td>
-            <td style=${{padding:'11px 15px',minWidth:180}}>
+
+      <!-- Password reset column -->
+      <td style=${{padding:'12px 14px',minWidth:160}}>
         ${editPw?html`
           <div style=${{display:'flex',gap:5,alignItems:'center'}}>
             <input class="inp" type="text" placeholder="New password" value=${newPw}
@@ -7806,36 +8268,121 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
             </button>
             <button class="btn bg" style=${{padding:'4px 8px',fontSize:11,flexShrink:0}} onClick=${()=>{setEditPw(false);setNewPw('');}}>✕</button>
           </div>`:html`
-          <div style=${{display:'flex',alignItems:'center',gap:6}}>
+          <div style=${{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
             ${u.plain_password?html`
-              <span style=${{
-                fontFamily:'monospace',fontSize:12, color:showPw?'var(--tx2)':'transparent', background:showPw?'transparent':'var(--bd)', borderRadius:4,padding:'2px 6px', letterSpacing:showPw?'.5px':'.1px', userSelect:showPw?'text':'none', transition:'all .15s', minWidth:70,display:'inline-block'
-              }}>${showPw?u.plain_password:'••••••••'}</span>
-              <button title=${showPw?'Hide password':'Show password'}
-                style=${{background:'none',border:'none',cursor:'pointer',padding:'2px 4px',color:'var(--tx3)',fontSize:12,transition:'color .1s'}}
-                onClick=${()=>setShowPw(v=>!v)}
-                onMouseEnter=${e=>e.currentTarget.style.color='var(--tx)'}
-                onMouseLeave=${e=>e.currentTarget.style.color='var(--tx3)'}>
+              <span style=${{fontFamily:'monospace',fontSize:12,color:showPw?'var(--tx2)':'transparent',background:showPw?'transparent':'var(--bd)',borderRadius:4,padding:'2px 6px',letterSpacing:showPw?'.5px':'.1px',userSelect:showPw?'text':'none',transition:'all .15s',minWidth:70,display:'inline-block'}}>
+                ${showPw?u.plain_password:'••••••••'}
+              </span>
+              <button title=${showPw?'Hide':'Show'} style=${{background:'none',border:'none',cursor:'pointer',padding:'2px 4px',color:'var(--tx3)',fontSize:12}} onClick=${()=>setShowPw(v=>!v)}>
                 ${showPw?'🙈':'👁'}
-              </button>`:html`
-              <span style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>not recorded</span>`}
-            <button title="Reset password"
-              style=${{background:'none',border:'none',cursor:'pointer',padding:'2px 5px',color:'var(--tx3)',fontSize:11,borderRadius:5,transition:'all .1s',flexShrink:0}}
-              onClick=${()=>setEditPw(true)}
-              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='var(--ac)';}}
-              onMouseLeave=${e=>{e.currentTarget.style.background='none';e.currentTarget.style.color='var(--tx3)';}}>
-              ✏️ Reset
-            </button>
+              </button>`:html`<span style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>—</span>`}
+            <button title="Reset password" class="btn bg" style=${{padding:'3px 9px',fontSize:10}} onClick=${()=>setEditPw(true)}>✏️ Reset</button>
           </div>`}
       </td>
-      <td style=${{padding:'11px 15px'}}>
+
+      <!-- 2FA / Authenticator column -->
+      <td style=${{padding:'12px 14px',minWidth:220}}>
+        <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+
+          <!-- Status badges -->
+          <div style=${{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+            ${totpConfigured?html`
+              <span style=${{fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:100,background:'rgba(74,222,128,0.15)',color:'#4ade80',border:'1px solid rgba(74,222,128,0.3)'}}>🔒 TOTP ON</span>`:html`
+              <span style=${{fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:100,background:'rgba(255,255,255,0.05)',color:'var(--tx3)',border:'1px solid var(--bd)'}}>TOTP OFF</span>`}
+            ${u.two_fa_enabled&&!totpConfigured?html`
+              <span style=${{fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:100,background:'rgba(59,130,246,0.12)',color:'#60a5fa',border:'1px solid rgba(59,130,246,0.3)'}}>📧 EMAIL 2FA</span>`:null}
+          </div>
+
+          <!-- Action buttons -->
+          <div style=${{display:'flex',gap:5,flexWrap:'wrap'}}>
+            ${isSelf&&!totpConfigured?html`
+              <button class="btn bg" style=${{padding:'3px 9px',fontSize:10,color:'#4ade80',borderColor:'rgba(74,222,128,0.3)'}}
+                onClick=${startTotpSetup}>
+                📱 Setup Authenticator
+              </button>`:null}
+            ${totpConfigured&&isAdminOrSelf?html`
+              <button class="btn brd" style=${{padding:'3px 9px',fontSize:10}}
+                onClick=${resetTotp} disabled=${twoFaLoading}>
+                ${twoFaLoading?'…':'↺ Reset 2FA'}
+              </button>`:null}
+            ${!totpConfigured&&(cu.role==='Admin'||cu.role==='Manager')?html`
+              <button class=${'btn bg'} style=${{padding:'3px 9px',fontSize:10,color:u.two_fa_enabled?'var(--rd)':'var(--cy)',borderColor:u.two_fa_enabled?'rgba(255,68,68,0.3)':'rgba(34,211,238,0.3)'}}
+                onClick=${toggleEmailOtp} disabled=${twoFaLoading}>
+                ${twoFaLoading?'…':u.two_fa_enabled?'Disable Email 2FA':'Enable Email 2FA'}
+              </button>`:null}
+          </div>
+
+          ${totpMsg?html`<div style=${{fontSize:10,color:totpMsg.startsWith('✓')?'var(--gn)':'var(--rd)',fontWeight:600}}>${totpMsg}</div>`:null}
+        </div>
+
+        <!-- TOTP Setup modal inline -->
+        ${showTotpSetup&&totpData?html`
+          <div class="ov" onClick=${e=>e.target===e.currentTarget&&setShowTotpSetup(false)}>
+            <div class="mo fi" style=${{maxWidth:480}}>
+              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+                <div>
+                  <h2 style=${{fontSize:17,fontWeight:800,color:'var(--tx)',margin:0,display:'flex',alignItems:'center',gap:8}}>
+                    <span style=${{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:18}}>📱</span>
+                    Setup Google Authenticator
+                  </h2>
+                  <p style=${{fontSize:11,color:'var(--tx3)',marginTop:4}}>Scan the QR code with your authenticator app</p>
+                </div>
+                <button class="btn bg" style=${{padding:'6px 10px'}} onClick=${()=>setShowTotpSetup(false)}>✕</button>
+              </div>
+
+              <div style=${{display:'grid',gridTemplateColumns:totpData.qr_image?'auto 1fr':'1fr',gap:20,marginBottom:20,alignItems:'start'}}>
+                ${totpData.qr_image?html`
+                  <div style=${{textAlign:'center'}}>
+                    <div style=${{background:'white',padding:12,borderRadius:12,border:'1px solid var(--bd)',display:'inline-block',boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
+                      <img src=${totpData.qr_image} style=${{width:160,height:160,display:'block'}} alt="QR Code"/>
+                    </div>
+                    <div style=${{fontSize:9,color:'var(--tx3)',marginTop:6}}>Scan with Google Authenticator</div>
+                  </div>`:null}
+                <div>
+                  <div style=${{marginBottom:12}}>
+                    <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:6}}>Manual Entry</div>
+                    <div style=${{fontFamily:'monospace',fontSize:12,background:'var(--sf2)',padding:'10px 12px',borderRadius:9,border:'1px solid var(--bd)',letterSpacing:3,wordBreak:'break-all',color:'var(--tx)',userSelect:'all'}}>
+                      ${totpData.secret}
+                    </div>
+                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:4}}>Copy this key if you can't scan the QR code</div>
+                  </div>
+                  <div style=${{padding:'10px 12px',background:'rgba(29,78,216,0.06)',borderRadius:9,border:'1px solid rgba(29,78,216,0.15)',fontSize:11,color:'var(--tx2)',lineHeight:1.6}}>
+                    <b>Steps:</b><br/>
+                    1. Open <b>Google Authenticator</b> or <b>Authy</b><br/>
+                    2. Tap <b>+</b> → Scan QR code (or enter key manually)<br/>
+                    3. Enter the 6-digit code below to confirm
+                  </div>
+                </div>
+              </div>
+
+              <div style=${{marginBottom:14}}>
+                <label class="lbl">Enter Code from App to Confirm</label>
+                <input class="inp" type="text" inputMode="numeric" pattern="[0-9]*"
+                  value=${totpVerifyToken}
+                  onInput=${e=>setTotpVerifyToken(e.target.value.replace(/\D/g,'').slice(0,6))}
+                  onKeyDown=${e=>e.key==='Enter'&&confirmTotpSetup()}
+                  placeholder="000000"
+                  style=${{textAlign:'center',fontSize:22,fontWeight:700,fontFamily:'monospace',letterSpacing:6}}/>
+              </div>
+              ${totpMsg?html`<div style=${{padding:'8px 12px',background:totpMsg.startsWith('✓')?'rgba(74,222,128,0.1)':'rgba(239,68,68,0.08)',border:'1px solid '+(totpMsg.startsWith('✓')?'rgba(74,222,128,0.3)':'rgba(239,68,68,0.2)'),borderRadius:8,fontSize:12,color:totpMsg.startsWith('✓')?'#4ade80':'var(--rd)',marginBottom:12}}>${totpMsg}</div>`:null}
+              <div style=${{display:'flex',gap:9,justifyContent:'flex-end'}}>
+                <button class="btn bg" onClick=${()=>setShowTotpSetup(false)}>Cancel</button>
+                <button class="btn bp" onClick=${confirmTotpSetup} disabled=${totpVerifying||totpVerifyToken.replace(/\s/g,'').length!==6}>
+                  ${totpVerifying?html`<span class="spin"></span>`:null} Confirm & Enable
+                </button>
+              </div>
+            </div>
+          </div>`:null}
+      </td>
+
+      <td style=${{padding:'12px 14px'}}>
         <select class="sel" style=${{width:130,padding:'6px 28px 6px 10px'}} value=${u.role}
           onChange=${e=>api.put('/api/users/'+u.id,{role:e.target.value}).then(()=>reload&&reload())}
           disabled=${u.id===cu.id&&cu.role==='Admin'}>
           ${ROLES.map(r=>html`<option key=${r}>${r}</option>`)}
         </select>
       </td>
-      <td style=${{padding:'11px 15px'}}>
+      <td style=${{padding:'12px 14px'}}>
         ${u.id!==cu.id?html`<button class="btn brd" style=${{padding:'5px 11px',fontSize:12}}
           onClick=${()=>window.confirm('Remove '+u.name+'?')&&api.del('/api/users/'+u.id).then(()=>reload&&reload())}>🗑</button>`:null}
       </td>
@@ -7901,7 +8448,7 @@ function TeamView({users,cu,reload}){
       <div class="card" style=${{padding:0,overflow:'auto'}}>
         <table style=${{width:'100%',borderCollapse:'collapse'}}>
           <thead><tr style=${{borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
-            ${['Member','Email','Password','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
+            ${['Member','Email','Password','2FA / Authenticator','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
           </tr></thead>
           <tbody>
             ${filteredMembers.length===0?html`<tr><td colspan="5" style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:12}}>No members match your search.</td></tr>`:null}
@@ -8680,24 +9227,35 @@ function WorkspaceSettings({cu,onReload}){
 function AiDocsView({cu,projects,tasks,users}){
   const [docType,setDocType]=useState('documentation');
   const [projectId,setProjectId]=useState('');
-  const [extraCtx,setExtraCtx]=useState('');
+  const [description,setDescription]=useState('');
+  const [techStack,setTechStack]=useState('');
+  const [audience,setAudience]=useState('technical');
   const [generating,setGenerating]=useState(false);
   const [result,setResult]=useState(null);
   const [err,setErr]=useState('');
   const [copied,setCopied]=useState(false);
   const [mermaidSrc,setMermaidSrc]=useState('');
+  const [history,setHistory]=useState([]);
   const outputRef=useRef(null);
 
   const generate=async()=>{
+    if(!description.trim()&&!projectId){setErr('Please describe your project or select a project.');return;}
     setGenerating(true);setErr('');setResult(null);setMermaidSrc('');
-    const r=await api.post('/api/ai/generate-docs',{type:docType,project_id:projectId,context:extraCtx});
+    const r=await api.post('/api/ai/generate-docs',{
+      type:docType,
+      project_id:projectId,
+      context:description.trim(),
+      tech_stack:techStack.trim(),
+      audience
+    });
     setGenerating(false);
     if(r.error){setErr(r.message||r.error);return;}
     setResult(r.content);
-    if(docType==='architecture'){
-      const m=r.content.match(/```mermaid\s*([\s\S]*?)```/);
-      if(m)setMermaidSrc(m[1].trim());
-    }
+    const diagrams=[];
+    const mermaidRegex=/```mermaid\s*([\s\S]*?)```/g;
+    let m;while((m=mermaidRegex.exec(r.content))!==null)diagrams.push(m[1].trim());
+    if(diagrams.length>0)setMermaidSrc(diagrams[0]);
+    setHistory(h=>[{type:docType,title:(safe(projects).find(p=>p.id===projectId)||{name:'All Projects'}).name,ts:new Date().toLocaleTimeString(),content:r.content},...h].slice(0,8));
     setTimeout(()=>{if(outputRef.current)outputRef.current.scrollIntoView({behavior:'smooth'});},100);
   };
 
@@ -8709,140 +9267,283 @@ function AiDocsView({cu,projects,tasks,users}){
 
   const downloadContent=()=>{
     if(!result)return;
+    const ext=docType==='architecture'?'architecture':docType==='technical'?'technical-spec':'documentation';
     const blob=new Blob([result],{type:'text/markdown'});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
-    a.download=docType==='architecture'?'architecture.md':'documentation.md';
-    a.click();
+    a.download=ext+'.md';a.click();
   };
 
-  // Simple markdown renderer for the output
   const renderMarkdown=(md)=>{
     if(!md)return '';
-    return md
-      .replace(/^### (.+)$/gm,'<h3 style="font-size:14px;font-weight:700;color:var(--tx);margin:16px 0 6px">$1</h3>')
-      .replace(/^## (.+)$/gm,'<h2 style="font-size:16px;font-weight:800;color:var(--tx);margin:20px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bd)">$1</h2>')
-      .replace(/^# (.+)$/gm,'<h1 style="font-size:20px;font-weight:800;color:var(--tx);margin:0 0 16px">$1</h1>')
+    let html2=md
+      .replace(/^#### (.+)$/gm,'<h4 style="font-size:13px;font-weight:700;color:var(--tx);margin:12px 0 4px">$1</h4>')
+      .replace(/^### (.+)$/gm,'<h3 style="font-size:14px;font-weight:700;color:var(--tx);margin:18px 0 6px;display:flex;align-items:center;gap:6px">$1</h3>')
+      .replace(/^## (.+)$/gm,'<h2 style="font-size:17px;font-weight:800;color:var(--tx);margin:24px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--ac3)">$1</h2>')
+      .replace(/^# (.+)$/gm,'<h1 style="font-size:22px;font-weight:800;color:var(--tx);margin:0 0 18px;letter-spacing:-.3px">$1</h1>')
       .replace(/\*\*(.+?)\*\*/g,'<strong style="color:var(--tx);font-weight:700">$1</strong>')
-      .replace(/`([^`]+)`/g,'<code style="font-family:monospace;font-size:11px;background:var(--sf2);padding:2px 6px;border-radius:4px;color:var(--ac)">$1</code>')
-      .replace(/^- (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:3px 0;padding-left:4px">$1</li>')
-      .replace(/(<li[^>]*>.*<\/li>\n?)+/g,'<ul style="margin:6px 0 10px 16px;padding:0">$&</ul>')
+      .replace(/\*(.+?)\*/g,'<em style="color:var(--tx2)">$1</em>')
+      .replace(/`([^`]+)`/g,'<code style="font-family:monospace;font-size:11px;background:var(--sf2);padding:2px 7px;border-radius:5px;color:var(--ac);border:1px solid var(--bd)">$1</code>')
+      .replace(/```[\w]*\n([\s\S]*?)```/g,'<pre style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:monospace;font-size:12px;color:var(--tx2);margin:10px 0;line-height:1.6">$1</pre>')
+      .replace(/^\|(.+)\|$/gm,(row)=>{
+        const cells=row.split('|').filter(c=>c.trim()!=='');
+        const isHeader=cells.some(c=>c.includes('---'));
+        if(isHeader)return '';
+        const tag=cells.map(c=>`<td style="padding:8px 12px;border:1px solid var(--bd);font-size:12px">${c.trim()}</td>`).join('');
+        return '<tr>'+tag+'</tr>';
+      })
+      .replace(/(<tr>.*<\/tr>\n?)+/g,'<table style="width:100%;border-collapse:collapse;margin:10px 0;border-radius:8px;overflow:hidden">$&</table>')
+      .replace(/^- \[x\] (.+)$/gm,'<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="color:var(--gn);font-size:14px">✅</span><span style="font-size:13px;color:var(--tx2);text-decoration:line-through">$1</span></div>')
+      .replace(/^- \[ \] (.+)$/gm,'<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="color:var(--tx3);font-size:14px">☐</span><span style="font-size:13px;color:var(--tx2)">$1</span></div>')
+      .replace(/^- (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:4px 0;line-height:1.5;padding-left:4px">$1</li>')
+      .replace(/^(\d+)\. (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:4px 0;line-height:1.5;padding-left:4px"><b style="color:var(--ac);margin-right:4px">$1.</b>$2</li>')
+      .replace(/(<li[^>]*>[\s\S]*?<\/li>\n?)+/g,'<ul style="margin:8px 0 12px 20px;padding:0;list-style:disc">$&</ul>')
+      .replace(/^> (.+)$/gm,'<blockquote style="border-left:3px solid var(--ac);margin:12px 0;padding:10px 16px;background:var(--ac4);border-radius:0 8px 8px 0;font-style:italic;color:var(--tx2);font-size:13px">$1</blockquote>')
       .replace(/\n\n/g,'<br/><br/>')
       .replace(/\n/g,'<br/>');
+    return html2;
   };
 
   const DOC_TYPES=[
-    {id:'documentation',icon:'📄',label:'Project Documentation',desc:'Full markdown docs — scope, status, team, tasks, risks'},
-    {id:'architecture',icon:'🏗️',label:'Architecture Diagram',desc:'Mermaid.js diagram of your project structure & flows'},
+    {id:'documentation',icon:'📋',label:'Project Documentation',desc:'Executive summary, scope, team structure, task status, risks & next steps',color:'#2563eb'},
+    {id:'architecture',icon:'🏗️',label:'Architecture Diagram',desc:'Mermaid.js system diagram showing components, flows & dependencies',color:'#7c3aed'},
+    {id:'technical',icon:'⚙️',label:'Technical Specification',desc:'API design, data models, tech stack details, integration points',color:'#059669'},
+    {id:'api',icon:'🔌',label:'API Documentation',desc:'Endpoint reference, request/response schemas, authentication, examples',color:'#b45309'},
+  ];
+
+  const AUDIENCE_OPTS=[
+    {id:'technical',label:'Technical Team',icon:'👨‍💻'},
+    {id:'business',label:'Business / Stakeholders',icon:'💼'},
+    {id:'both',label:'Mixed Audience',icon:'🤝'},
   ];
 
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',background:'var(--bg)'}}>
-      <div style=${{maxWidth:860,margin:'0 auto',padding:'24px 28px'}}>
+      <div style=${{maxWidth:920,margin:'0 auto',padding:'24px 28px'}}>
 
         <!-- Header -->
-        <div style=${{marginBottom:28}}>
-          <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:8}}>
-            <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 16px rgba(29,78,216,0.3)'}}>🤖</div>
+        <div style=${{marginBottom:24,display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+          <div style=${{display:'flex',alignItems:'center',gap:14}}>
+            <div style=${{width:52,height:52,borderRadius:16,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,boxShadow:'0 6px 20px rgba(29,78,216,0.3)',flexShrink:0}}>🤖</div>
             <div>
-              <h1 style=${{fontSize:20,fontWeight:800,color:'var(--tx)',letterSpacing:'-.4px',margin:0}}>AI Documentation</h1>
-              <p style=${{fontSize:12,color:'var(--tx3)',margin:0}}>Generate professional docs & architecture diagrams from your project data</p>
+              <h1 style=${{fontSize:22,fontWeight:800,color:'var(--tx)',letterSpacing:'-.5px',margin:0}}>AI Documentation Studio</h1>
+              <p style=${{fontSize:12,color:'var(--tx3)',margin:'3px 0 0',lineHeight:1.5}}>Describe your project in plain English — AI generates professional docs, diagrams & specs</p>
+            </div>
+          </div>
+          ${history.length>0?html`
+            <div style=${{display:'flex',gap:6,alignItems:'center'}}>
+              <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:600}}>HISTORY:</span>
+              ${history.slice(0,4).map((h,i)=>html`
+                <button key=${i} class="btn bg" style=${{padding:'3px 9px',fontSize:10}} onClick=${()=>setResult(h.content)} title=${h.title}>
+                  ${h.type==='architecture'?'🏗️':h.type==='technical'?'⚙️':h.type==='api'?'🔌':'📋'} ${h.title.slice(0,14)}
+                </button>`)}
+            </div>`:null}
+        </div>
+
+        <div style=${{display:'grid',gridTemplateColumns:'1fr 320px',gap:18,alignItems:'start'}}>
+
+          <!-- Left: Config -->
+          <div style=${{display:'flex',flexDirection:'column',gap:14}}>
+
+            <!-- Doc type grid -->
+            <div class="card" style=${{padding:16}}>
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:12}}>Output Type</div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                ${DOC_TYPES.map(t=>html`
+                  <div key=${t.id} onClick=${()=>setDocType(t.id)}
+                    style=${{
+                      padding:'12px 14px',borderRadius:11,cursor:'pointer',transition:'all .15s',
+                      border:'2px solid '+(docType===t.id?t.color:'var(--bd)'),
+                      background:docType===t.id?t.color+'14':'var(--sf2)',
+                      position:'relative',overflow:'hidden'
+                    }}>
+                    ${docType===t.id?html`<div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:t.color,borderRadius:'11px 11px 0 0'}}></div>`:null}
+                    <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                      <span style=${{fontSize:16}}>${t.icon}</span>
+                      <span style=${{fontSize:12,fontWeight:700,color:docType===t.id?t.color:'var(--tx)'}}>${t.label}</span>
+                    </div>
+                    <div style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>${t.desc}</div>
+                  </div>`)}
+              </div>
+            </div>
+
+            <!-- Description input — the key field -->
+            <div class="card" style=${{padding:16}}>
+              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <label class="lbl" style=${{margin:0}}>📝 Describe Your Project</label>
+                <span style=${{fontSize:10,color:'var(--ac)',background:'var(--ac3)',padding:'2px 8px',borderRadius:100,fontWeight:600}}>Key Field</span>
+              </div>
+              <textarea class="inp" rows=5 placeholder="Describe your project in detail. Example:
+'This is a multi-tenant SaaS platform for project management. The backend uses Python/Flask with PostgreSQL. Frontend is React. We have REST APIs for tasks, users, projects. The system supports role-based access — Admin, Manager, Developer, Tester. Authentication uses JWT + 2FA. Deployed on Railway with Docker.'"
+                value=${description}
+                onInput=${e=>setDescription(e.target.value)}
+                style=${{resize:'vertical',minHeight:120,lineHeight:1.6,fontSize:13}}
+              ></textarea>
+              <div style=${{fontSize:10,color:'var(--tx3)',marginTop:6,lineHeight:1.5}}>
+                💡 The more detail you provide, the richer the output. Include tech stack, purpose, team structure, key features.
+              </div>
+            </div>
+
+            <!-- Tech stack + Project filter -->
+            <div class="card" style=${{padding:16}}>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                <div>
+                  <label class="lbl">⚡ Tech Stack <span style=${{fontWeight:400,textTransform:'none',fontSize:9}}>(optional)</span></label>
+                  <input class="inp" placeholder="e.g. Python, React, PostgreSQL, Docker, AWS..."
+                    value=${techStack} onInput=${e=>setTechStack(e.target.value)}/>
+                </div>
+                <div>
+                  <label class="lbl">📁 Project Filter</label>
+                  <select class="sel" value=${projectId} onChange=${e=>setProjectId(e.target.value)}>
+                    <option value="">— All workspace projects —</option>
+                    ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+                  </select>
+                </div>
+              </div>
+
+              <div style=${{marginTop:12}}>
+                <label class="lbl">👥 Target Audience</label>
+                <div style=${{display:'flex',gap:8}}>
+                  ${AUDIENCE_OPTS.map(a=>html`
+                    <div key=${a.id} onClick=${()=>setAudience(a.id)}
+                      style=${{
+                        flex:1,padding:'8px 10px',borderRadius:9,cursor:'pointer',textAlign:'center',transition:'all .14s',
+                        border:'1.5px solid '+(audience===a.id?'var(--ac)':'var(--bd)'),
+                        background:audience===a.id?'var(--ac3)':'var(--sf2)'
+                      }}>
+                      <div style=${{fontSize:14,marginBottom:2}}>${a.icon}</div>
+                      <div style=${{fontSize:10,fontWeight:600,color:audience===a.id?'var(--ac)':'var(--tx3)'}}>${a.label}</div>
+                    </div>`)}
+                </div>
+              </div>
+            </div>
+
+            ${err?html`<div style=${{padding:'12px 16px',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:12,fontSize:13,color:'#f87171',display:'flex',gap:10,alignItems:'center'}}>
+              <span style=${{fontSize:18}}>⚠️</span><span>${err}</span>
+            </div>`:null}
+
+            <button class="btn bp" onClick=${generate} disabled=${generating}
+              style=${{padding:'13px 20px',fontSize:14,fontWeight:700,width:'100%',justifyContent:'center',borderRadius:12,
+                boxShadow:generating?'none':'0 6px 20px rgba(29,78,216,0.3)'}}>
+              ${generating?html`<span class="spin" style=${{marginRight:8}}></span>`:
+                html`<span style=${{marginRight:8}}>${DOC_TYPES.find(d=>d.id===docType)?.icon}</span>`}
+              ${generating?'Generating — please wait...':'Generate with AI'}
+            </button>
+          </div>
+
+          <!-- Right: Tips + Quick prompts -->
+          <div style=${{display:'flex',flexDirection:'column',gap:12}}>
+            <div class="card" style=${{padding:14}}>
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:10}}>💡 Quick Prompts</div>
+              ${[
+                {label:'SaaS Platform',text:'Multi-tenant SaaS project management platform with REST APIs, role-based access control, real-time notifications, and PostgreSQL database. Built with Python Flask backend and React frontend.'},
+                {label:'Mobile App',text:'Cross-platform mobile app for team collaboration. Features include real-time chat, task management, file sharing, and push notifications. Uses React Native with Node.js backend.'},
+                {label:'Microservices',text:'Microservices architecture with API gateway, auth service, user service, notification service, and data processing pipeline. Uses Docker, Kubernetes, and event-driven messaging.'},
+                {label:'Data Platform',text:'Analytics and reporting platform with ETL pipelines, data warehouse, ML model serving, and interactive dashboards. Python, Spark, PostgreSQL, and React.'},
+              ].map((q,i)=>html`
+                <button key=${i} class="btn bg" style=${{width:'100%',justifyContent:'flex-start',marginBottom:5,fontSize:11,padding:'7px 10px',textAlign:'left'}}
+                  onClick=${()=>setDescription(q.text)}>
+                  <span style=${{fontWeight:700,color:'var(--ac)',marginRight:4}}>${q.label}</span>
+                  <span style=${{color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${q.text.slice(0,35)}…</span>
+                </button>`)}
+            </div>
+
+            <div class="card" style=${{padding:14}}>
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:10}}>📊 Workspace Context</div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                ${[
+                  {label:'Projects',val:safe(projects).length,color:'var(--ac)'},
+                  {label:'Tasks',val:safe(tasks).length,color:'var(--cy)'},
+                  {label:'Members',val:safe(users).length,color:'var(--gn)'},
+                  {label:'Active',val:safe(tasks).filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length,color:'var(--am)'},
+                ].map((s,i)=>html`
+                  <div key=${i} style=${{background:'var(--sf2)',borderRadius:8,padding:'8px 10px',border:'1px solid var(--bd)'}}>
+                    <div style=${{fontSize:18,fontWeight:800,color:s.color,lineHeight:1}}>${s.val}</div>
+                    <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:.5}}>${s.label}</div>
+                  </div>`)}
+              </div>
+              <div style=${{marginTop:10,padding:'8px 10px',background:'var(--ac4)',borderRadius:8,border:'1px solid var(--ac3)',fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>
+                AI will automatically include this workspace data alongside your description.
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Config card -->
-        <div class="card" style=${{marginBottom:20}}>
-          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:14}}>⚙️ Configure</h3>
-
-          <!-- Doc type selector -->
-          <div style=${{marginBottom:16}}>
-            <label class="lbl">Output Type</label>
-            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              ${DOC_TYPES.map(t=>html`
-                <div key=${t.id} onClick=${()=>setDocType(t.id)}
-                  style=${{
-                    padding:'12px 14px',borderRadius:11,cursor:'pointer',transition:'all .15s',
-                    border:'2px solid '+(docType===t.id?'var(--ac)':'var(--bd)'),
-                    background:docType===t.id?'var(--ac4)':'var(--sf2)',
-                  }}>
-                  <div style=${{fontSize:18,marginBottom:5}}>${t.icon}</div>
-                  <div style=${{fontSize:12,fontWeight:700,color:docType===t.id?'var(--ac)':'var(--tx)',marginBottom:3}}>${t.label}</div>
-                  <div style=${{fontSize:11,color:'var(--tx3)',lineHeight:1.4}}>${t.desc}</div>
+        <!-- Loading state -->
+        ${generating?html`
+          <div class="card fi" style=${{marginTop:18,textAlign:'center',padding:'48px 20px'}}>
+            <div style=${{width:60,height:60,border:'3px solid var(--bd)',borderTop:'3px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite',margin:'0 auto 20px'}}></div>
+            <div style=${{fontSize:16,fontWeight:800,color:'var(--tx)',marginBottom:8}}>AI is crafting your documentation...</div>
+            <div style=${{fontSize:12,color:'var(--tx3)',maxWidth:360,margin:'0 auto',lineHeight:1.7}}>
+              Analyzing your description, workspace data, projects and tasks to generate comprehensive output. Usually takes 15–45 seconds.
+            </div>
+            <div style=${{marginTop:20,display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+              ${['Reading project data','Analyzing tasks','Building structure','Writing content','Formatting output'].map((s,i)=>html`
+                <div key=${i} style=${{fontSize:10,padding:'4px 12px',borderRadius:100,background:'var(--ac3)',color:'var(--ac)',fontWeight:600,animation:'pulse 1.4s ease-in-out '+(i*.3)+'s infinite'}}>
+                  ${s}
                 </div>`)}
             </div>
-          </div>
+          </div>`:null}
 
-          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
-            <div>
-              <label class="lbl">Project (optional — all if blank)</label>
-              <select class="sel" value=${projectId} onChange=${e=>setProjectId(e.target.value)}>
-                <option value="">— All projects —</option>
-                ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
-              </select>
-            </div>
-            <div>
-              <label class="lbl">Extra context (optional)</label>
-              <input class="inp" placeholder="e.g. focus on backend architecture..." value=${extraCtx}
-                onInput=${e=>setExtraCtx(e.target.value)}/>
-            </div>
-          </div>
-
-          ${err?html`<div style=${{padding:'9px 13px',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:9,fontSize:12,color:'#f87171',marginBottom:12}}>${err}</div>`:null}
-
-          <button class="btn bp" onClick=${generate} disabled=${generating} style=${{width:'100%',justifyContent:'center',padding:'11px'}}>
-            ${generating?html`<span class="spin" style=${{marginRight:8}}></span>`:html`<span style=${{marginRight:6}}>${docType==='architecture'?'🏗️':'📄'}</span>`}
-            ${generating?'Generating...':docType==='architecture'?'Generate Architecture Diagram':'Generate Documentation'}
-          </button>
-        </div>
-
-        <!-- Result -->
-        ${result?html`
-          <div ref=${outputRef}>
-            <!-- Action bar -->
-            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:8}}>
-                <span style=${{color:'var(--ac)'}}>✓</span>
-                ${docType==='architecture'?'Architecture Diagram':'Documentation'} generated
-              </div>
-              <div style=${{display:'flex',gap:8}}>
-                <button class="btn bg" style=${{fontSize:12}} onClick=${copyContent}>${copied?'✓ Copied':'📋 Copy'}</button>
-                <button class="btn bg" style=${{fontSize:12}} onClick=${downloadContent}>⬇ Download .md</button>
-                <button class="btn brd" style=${{fontSize:12}} onClick=${()=>{setResult(null);setMermaidSrc('');}}>✕ Clear</button>
-              </div>
-            </div>
-
-            <!-- Mermaid diagram live render -->
-            ${mermaidSrc?html`
-              <div class="card" style=${{marginBottom:16}}>
-                <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:12}}>🏗️ Architecture Diagram</div>
-                <div style=${{background:'var(--sf2)',borderRadius:10,padding:'16px',border:'1px solid var(--bd)',overflowX:'auto'}}>
-                  <pre style=${{fontFamily:'monospace',fontSize:12,color:'var(--tx2)',margin:0,whiteSpace:'pre-wrap',lineHeight:1.6}}>${mermaidSrc}</pre>
+        <!-- Result output -->
+        ${result&&!generating?html`
+          <div ref=${outputRef} style=${{marginTop:18}}>
+            <!-- Toolbar -->
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
+              <div style=${{display:'flex',alignItems:'center',gap:10}}>
+                <div style=${{width:32,height:32,borderRadius:9,background:'rgba(74,222,128,0.15)',border:'1px solid rgba(74,222,128,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>✅</div>
+                <div>
+                  <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>${DOC_TYPES.find(d=>d.id===docType)?.label||'Output'} Generated</div>
+                  <div style=${{fontSize:10,color:'var(--tx3)'}}>Powered by Claude · ${new Date().toLocaleTimeString()}</div>
                 </div>
-                <div style=${{marginTop:10,padding:'8px 12px',background:'rgba(29,78,216,0.06)',borderRadius:8,border:'1px solid rgba(29,78,216,0.15)',fontSize:11,color:'var(--tx3)'}}>
-                  💡 Copy this code to <b style=${{color:'var(--tx2)'}}>mermaid.live</b> or any Mermaid-compatible tool to render the interactive diagram.
+              </div>
+              <div style=${{display:'flex',gap:7}}>
+                <button class="btn bg" style=${{fontSize:11}} onClick=${copyContent}>${copied?'✓ Copied!':'📋 Copy'}</button>
+                <button class="btn bg" style=${{fontSize:11}} onClick=${downloadContent}>⬇ .md</button>
+                <button class="btn bg" style=${{fontSize:11}} onClick=${()=>{setDescription('');setResult(null);setMermaidSrc('');}}>+ New</button>
+                <button class="btn brd" style=${{fontSize:11}} onClick=${()=>{setResult(null);setMermaidSrc('');}}>✕</button>
+              </div>
+            </div>
+
+            <!-- Mermaid diagram -->
+            ${mermaidSrc?html`
+              <div class="card" style=${{marginBottom:14,overflow:'hidden'}}>
+                <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                  <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:8}}>
+                    <span style=${{width:28,height:28,borderRadius:8,background:'rgba(124,58,237,0.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>🏗️</span>
+                    Mermaid Diagram Code
+                  </div>
+                  <a href="https://mermaid.live" target="_blank" rel="noopener"
+                    style=${{fontSize:10,color:'var(--ac)',fontWeight:700,textDecoration:'none',padding:'3px 10px',border:'1px solid var(--ac3)',borderRadius:100,background:'var(--ac4)'}}>
+                    Open in mermaid.live ↗
+                  </a>
+                </div>
+                <div style=${{background:'var(--sf2)',borderRadius:10,padding:'16px',border:'1px solid var(--bd)',overflowX:'auto',position:'relative'}}>
+                  <pre style=${{fontFamily:'monospace',fontSize:12,color:'var(--tx2)',margin:0,whiteSpace:'pre-wrap',lineHeight:1.7}}>${mermaidSrc}</pre>
+                </div>
+                <div style=${{marginTop:10,padding:'8px 12px',background:'rgba(124,58,237,0.06)',borderRadius:8,border:'1px solid rgba(124,58,237,0.15)',fontSize:11,color:'var(--tx3)',display:'flex',alignItems:'center',gap:8}}>
+                  <span style=${{fontSize:14}}>💡</span>
+                  Copy the code above and paste it at <b style=${{color:'var(--tx2)'}}>mermaid.live</b> to render and export the interactive diagram as SVG or PNG.
                 </div>
               </div>`:null}
 
-            <!-- Full markdown content -->
+            <!-- Full markdown output -->
             <div class="card">
-              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:14}}>📄 Full Output</div>
-              <div style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.7}}
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:18,display:'flex',alignItems:'center',gap:8}}>
+                <span>${DOC_TYPES.find(d=>d.id===docType)?.icon}</span>
+                Full Output · Markdown
+              </div>
+              <div style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.8,maxWidth:760}}
                 dangerouslySetInnerHTML=${{__html:renderMarkdown(result)}}>
               </div>
             </div>
           </div>`:null}
 
-        ${generating?html`
-          <div class="card" style=${{textAlign:'center',padding:'40px 20px'}}>
-            <div style=${{width:48,height:48,border:'3px solid var(--bd)',borderTop:'3px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite',margin:'0 auto 16px'}}></div>
-            <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)',marginBottom:6}}>AI is analyzing your workspace...</div>
-            <div style=${{fontSize:12,color:'var(--tx3)'}}>This usually takes 10–30 seconds depending on project size</div>
-          </div>`:null}
-
       </div>
     </div>`;
 }
+
+
 
 /* ─── AIAssistant floating panel ──────────────────────────────────────────── */
 function AIAssistant({cu,projects,tasks,users}){
