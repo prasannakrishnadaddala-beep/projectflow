@@ -8264,15 +8264,37 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
-          ${(typeof RC!=='undefined'&&RC&&RC.ResponsiveContainer)?html`
-          <${RC.ResponsiveContainer} width="100%" height=${120}>
-            <${RC.PieChart}>
-              <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4} cursor="pointer"
-                onClick=${(data)=>{if(data&&data.priKey)onNav('tasks:priority:'+data.priKey);}}>
-                ${priChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
-              <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,color:'var(--tx)',fontSize:12}}/>
-            <//>
-          <//>`:html`<div style=${{padding:'20px 0',textAlign:'center',color:'var(--tx3)',fontSize:12}}>Loading chart…</div>`}
+          ${(()=>{
+            const total=priChart.reduce((a,x)=>a+x.value,0)||1;
+            let offset=0;
+            const r=42,cx=60,cy=60,circ=2*Math.PI*r;
+            const slices=priChart.map((item,i)=>{
+              const pct=item.value/total;
+              const dash=pct*circ;
+              const gap=circ-dash;
+              const rot=offset*360;
+              offset+=pct;
+              return {item,dash,gap,rot};
+            });
+            return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',padding:'8px 0'}}>
+              <svg width="120" height="120" viewBox="0 0 120 120" style=${{cursor:'pointer'}}>
+                ${total===0?html`<circle cx="60" cy="60" r="42" fill="none" stroke="var(--bd)" strokeWidth="14"/>`:
+                  slices.map(({item,dash,gap,rot},i)=>html`
+                    <circle key=${i} cx="60" cy="60" r="42" fill="none"
+                      stroke=${item.item.color} strokeWidth="14"
+                      strokeDasharray="${dash} ${gap}"
+                      strokeDashoffset=${circ*0.25}
+                      transform=${"rotate("+rot+" 60 60)"}
+                      style=${{cursor:'pointer',transition:'opacity .15s'}}
+                      onClick=${()=>onNav('tasks:priority:'+item.item.priKey)}
+                      onMouseEnter=${e=>e.target.setAttribute('opacity','0.75')}
+                      onMouseLeave=${e=>e.target.setAttribute('opacity','1')}
+                    />`)}
+                <text x="60" y="56" textAnchor="middle" style=${{fontSize:18,fontWeight:700,fill:'var(--tx)',fontFamily:'monospace'}}>${total}</text>
+                <text x="60" y="70" textAnchor="middle" style=${{fontSize:9,fill:'var(--tx3)'}}>tasks</text>
+              </svg>
+            </div>`;
+          })()}
           ${priChart.map((item,i)=>html`
             <div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<3?'1px solid var(--bd)':'none',cursor:'pointer'}}
               onClick=${()=>onNav('tasks:priority:'+item.priKey)}>
@@ -8660,19 +8682,29 @@ function ProductivityView({cu,tasks,projects,users}){
           <div style=${{padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
             <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
               <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:14}}>Task Distribution per Developer</h3>
-              ${(typeof RC!=='undefined'&&RC&&RC.ResponsiveContainer)?html`
-              <${RC.ResponsiveContainer} width="100%" height=${Math.max(200,filtered.length*28)}>
-                <${RC.BarChart} data=${chartData} layout="vertical" barSize=${14} margin=${{top:0,right:30,bottom:0,left:60}}>
-                  <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" horizontal=${false}/>
-                  <${RC.XAxis} type="number" tick=${{fill:'var(--tx3)',fontSize:10}} axisLine=${false} tickLine=${false} allowDecimals=${false}/>
-                  <${RC.YAxis} type="category" dataKey="name" tick=${{fill:'var(--tx2)',fontSize:11}} axisLine=${false} tickLine=${false} width=${55}/>
-                  <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--tx)',fontSize:11}}/>
-                  <${RC.Legend} iconSize=${8} wrapperStyle=${{fontSize:10,color:'var(--tx2)',paddingTop:8}}/>
-                  <${RC.Bar} dataKey="Completed" stackId="a" fill="var(--gn)" radius=${[0,0,0,0]}/>
-                  <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
-                  <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[0,4,4,0]}/>
-                <//>
-              <//>`:html`<div style=${{padding:'24px 0',textAlign:'center',color:'var(--tx3)',fontSize:12}}>Loading chart…</div>`}
+              ${(()=>{
+                const maxVal=Math.max(1,...chartData.map(d=>(d.Completed||0)+(d['In Progress']||0)+(d.Blocked||0)));
+                return html`<div style=${{display:'flex',flexDirection:'column',gap:6,padding:'4px 0'}}>
+                  <div style=${{display:'flex',gap:12,fontSize:10,color:'var(--tx3)',marginBottom:4,paddingLeft:64}}>
+                    <span style=${{display:'flex',alignItems:'center',gap:4}}><span style=${{width:8,height:8,borderRadius:2,background:'var(--gn)',display:'inline-block'}}></span>Completed</span>
+                    <span style=${{display:'flex',alignItems:'center',gap:4}}><span style=${{width:8,height:8,borderRadius:2,background:'var(--cy)',display:'inline-block'}}></span>In Progress</span>
+                    <span style=${{display:'flex',alignItems:'center',gap:4}}><span style=${{width:8,height:8,borderRadius:2,background:'var(--rd)',display:'inline-block'}}></span>Blocked</span>
+                  </div>
+                  ${chartData.map((d,i)=>{
+                    const total=(d.Completed||0)+(d['In Progress']||0)+(d.Blocked||0);
+                    const w=pct=>Math.round((pct/maxVal)*100)+'%';
+                    return html`<div key=${i} style=${{display:'flex',alignItems:'center',gap:8}}>
+                      <span style=${{width:56,fontSize:10,color:'var(--tx2)',textAlign:'right',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${d.name}</span>
+                      <div style=${{flex:1,display:'flex',height:14,borderRadius:4,overflow:'hidden',background:'var(--bd)'}}>
+                        ${(d.Completed||0)>0?html`<div style=${{width:${w(d.Completed||0)},background:'var(--gn)',transition:'width .3s'}}></div>`:null}
+                        ${(d['In Progress']||0)>0?html`<div style=${{width:${w(d['In Progress']||0)},background:'var(--cy)',transition:'width .3s'}}></div>`:null}
+                        ${(d.Blocked||0)>0?html`<div style=${{width:${w(d.Blocked||0)},background:'var(--rd)',transition:'width .3s'}}></div>`:null}
+                      </div>
+                      <span style=${{fontSize:10,color:'var(--tx3)',fontFamily:'monospace',width:20,flexShrink:0}}>${total}</span>
+                    </div>`;
+                  })}
+                </div>`;
+              })()}
               <p style=${{fontSize:10,color:'var(--tx3)',marginTop:8,textAlign:'center'}}>All ${filtered.length} developers shown — horizontal bars scale with task count</p>
             </div>
           </div>`:null}
