@@ -159,8 +159,12 @@ CORS(app, supports_credentials=True)
 @app.after_request
 def add_headers(response):
     """Add performance and security headers to every response."""
-    # Cache API responses briefly to reduce duplicate requests
-    if request.path.startswith('/api/'):
+    # Auth endpoints must NEVER be cached — prevents post-logout access via stale cache
+    if request.path.startswith('/api/auth/') or request.path in ('/api/auth/me',):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    elif request.path.startswith('/api/'):
         if request.method == 'GET':
             # Short cache for list endpoints — 5s prevents stampede on navigation
             response.headers['Cache-Control'] = 'private, max-age=5'
@@ -1091,18 +1095,33 @@ def resend_otp():
 @app.route("/api/auth/logout",methods=["POST"])
 def logout():
     session.clear()
-    session["_logged_out"] = True  # prevents /api/auth/me from auto-logging back in
+    # Do NOT re-set _logged_out here — session is fully cleared.
+    # The cleared cookie + no-store cache headers are the authoritative gate.
     response = jsonify({"ok": True})
-    # Expire the session cookie immediately in the browser
-    response.set_cookie("session", "", expires=0, httponly=True, samesite="Lax")
+    # Expire the session cookie immediately in the browser (Flask default cookie name is "session")
+    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
+    response.set_cookie(
+        cookie_name, "",
+        expires=0,
+        httponly=True,
+        samesite="Lax",
+        secure=app.config.get("SESSION_COOKIE_SECURE", False),
+        path="/"
+    )
     return response
 
 @app.route("/signout")
 @app.route("/sign-out")
 def signout_redirect():
-    """GET /signout — clear session and redirect to login page."""
+    """GET /signout — clear session, expire cookie, and redirect to login page."""
     session.clear()
-    return '<html><head><meta http-equiv="refresh" content="0;url=/?action=login"/></head><body>Signing out...</body></html>'
+    response = app.make_response(
+        '<html><head><meta http-equiv="refresh" content="0;url=/?action=login"/></head>'
+        '<body>Signing out...</body></html>'
+    )
+    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
+    response.set_cookie(cookie_name, "", expires=0, httponly=True, samesite="Lax", path="/")
+    return response
 
 
 @app.route("/api/auth/register",methods=["POST"])
@@ -1193,9 +1212,10 @@ def meet_notify():
 
 @app.route("/api/auth/me")
 def me():
-    # Respect explicit logout — don't auto-restore session
-    if session.get("_logged_out"): return jsonify({"error":"Logged out"}),401
-    if "user_id" not in session: return jsonify({"error":"Not logged in"}),401
+    # Session is fully cleared on logout — if user_id is absent, they are logged out.
+    # The _logged_out flag is no longer needed since we clear the cookie on logout.
+    if "user_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     with get_db() as db:
         u=db.execute("SELECT * FROM users WHERE id=?",(session["user_id"],)).fetchone()
         if not u: session.clear(); return jsonify({"error":"Not found"}),404
@@ -5631,7 +5651,7 @@ window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){e
 'use strict';
 function waitForLibs(cb, attempts){
   attempts = attempts||0;
-  if(typeof React!=='undefined' && typeof ReactDOM!=='undefined' && typeof htm!=='undefined'){
+  if(typeof React!=='undefined' && typeof ReactDOM!=='undefined' && typeof htm!=='undefined' && typeof Recharts!=='undefined'){
     cb(); return;
   }
   if(attempts > 150){ // 15 seconds timeout
@@ -8255,6 +8275,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
+          ${RC&&RC.ResponsiveContainer?html`
           <${RC.ResponsiveContainer} width="100%" height=${120}>
             <${RC.PieChart}>
               <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4} cursor="pointer"
@@ -8262,8 +8283,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
                 ${priChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
               <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,color:'var(--tx)',fontSize:12}}/>
             <//>
-          <//>
-          ${priChart.map((item,i)=>html`
+          <//>`:html`<div style=${{textAlign:'center',padding:'24px 0',color:'var(--tx3)',fontSize:12}}>Chart loading…</div>`}          ${priChart.map((item,i)=>html`
             <div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<3?'1px solid var(--bd)':'none',cursor:'pointer'}}
               onClick=${()=>onNav('tasks:priority:'+item.priKey)}>
               <div style=${{display:'flex',alignItems:'center',gap:7}}>
@@ -8650,6 +8670,7 @@ function ProductivityView({cu,tasks,projects,users}){
           <div style=${{padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
             <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
               <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:14}}>Task Distribution per Developer</h3>
+              ${RC&&RC.ResponsiveContainer?html`
               <${RC.ResponsiveContainer} width="100%" height=${Math.max(200,filtered.length*28)}>
                 <${RC.BarChart} data=${chartData} layout="vertical" barSize=${14} margin=${{top:0,right:30,bottom:0,left:60}}>
                   <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" horizontal=${false}/>
@@ -8661,7 +8682,7 @@ function ProductivityView({cu,tasks,projects,users}){
                   <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
                   <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[0,4,4,0]}/>
                 <//>
-              <//>
+              <//>`:html`<div style=${{textAlign:'center',padding:'24px 0',color:'var(--tx3)',fontSize:12}}>Chart loading…</div>`}
               <p style=${{fontSize:10,color:'var(--tx3)',marginTop:8,textAlign:'center'}}>All ${filtered.length} developers shown — horizontal bars scale with task count</p>
             </div>
           </div>`:null}
@@ -12871,7 +12892,13 @@ function App(){
     }catch(e){console.error(e);}
   },[cu]);
 
-  useEffect(()=>{api.get('/api/auth/me').then(u=>{if(u&&!u.error)setCu(u);setLoading(false);}).catch(()=>setLoading(false));},[]);
+  useEffect(()=>{
+    // Must bypass cache — a stale /api/auth/me response could show a logged-out user as authenticated
+    fetch('/api/auth/me',{credentials:'include',cache:'no-store'})
+      .then(r=>r.json())
+      .then(u=>{if(u&&!u.error)setCu(u);setLoading(false);})
+      .catch(()=>setLoading(false));
+  },[]);
   // Expose search opener for topbar button
   useEffect(()=>{window._pfOpenSearch=()=>{setShowGlobalSearch(v=>!v);setGlobalSearch('');setSearchSubtasks([]);};},[]);
   // Expose DM target setter for notification click handlers
@@ -13046,10 +13073,19 @@ function App(){
   },[]);
   const logout=async()=>{
     if(window._pfPushUnsubscribe) await window._pfPushUnsubscribe().catch(()=>{});
-    try{ await api.post('/api/auth/logout',{}); }catch(e){}
+    try{
+      await fetch('/api/auth/logout',{
+        method:'POST',credentials:'include',
+        headers:{'Content-Type':'application/json','Cache-Control':'no-store'},
+        body:JSON.stringify({})
+      });
+    }catch(e){}
+    // Clear all local state
     setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);
-    // Redirect to login immediately — clears all state and shows auth page
-    window.location.href='/?action=login&ts='+Date.now();
+    // Clear any cached team context
+    try{localStorage.removeItem('pf_team_ctx');}catch(e){}
+    // Hard redirect — replaceState ensures back-button can't return to app
+    window.location.replace('/?action=login&ts='+Date.now());
   };
 
   useEffect(()=>{if(cu)requestNotifPermission();},[cu]);
