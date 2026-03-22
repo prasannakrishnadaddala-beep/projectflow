@@ -712,39 +712,17 @@ def login():
         if not u: return jsonify({"error":"Invalid email or password"}),401
         if not verify_pw(password, u["password"]):
             return jsonify({"error":"Invalid email or password"}),401
+        # Upgrade legacy sha256 hash to bcrypt
         if not (u["password"].startswith("$2b$") or u["password"].startswith("$2a$")):
             try:
                 new_hash = hash_pw(password)
                 db.execute("UPDATE users SET password=? WHERE id=?",(new_hash, u["id"]))
             except Exception: pass
-        ws = db.execute("SELECT * FROM workspaces WHERE id=?",(u["workspace_id"],)).fetchone()
-        # ── Check TOTP first (Google Authenticator) ───────────────────────────
+        # ── Google Authenticator (TOTP) — only 2FA method ────────────────────
         totp_active = u.get("totp_verified") and u.get("totp_secret")
         if totp_active:
-            result = dict(u)
-            result.pop("password", None); result.pop("totp_secret", None); result.pop("avatar_data", None)
             return jsonify({"totp_required": True, "user_id": u["id"], "name": u["name"]}), 200
-        # ── Fall back to email OTP ────────────────────────────────────────────
-        otp_enabled = ws and ws.get("otp_enabled", 0)
-        user_2fa = u.get("two_fa_enabled", 0)
-        should_send_otp = otp_enabled or user_2fa
-        if should_send_otp:
-            smtp_ok = ws and ws.get("smtp_username") and ws.get("smtp_password")
-            resend_ok = bool(os.environ.get("RESEND_API_KEY"))
-            if smtp_ok or resend_ok:
-                import time as _time
-                code = generate_otp()
-                with _otp_lock:
-                    _otp_store[email] = {
-                        "code": code,
-                        "expires": _time.time() + 600,  # 10 minutes
-                        "user_id": u["id"],
-                        "workspace_id": u["workspace_id"],
-                        "name": u["name"]
-                    }
-                sent = send_otp_email(email, code, u["name"])
-                if sent:
-                    return jsonify({"otp_required": True, "email": email, "name": u["name"]}), 200
+        # ── No 2FA configured — direct login ─────────────────────────────────
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
@@ -754,81 +732,36 @@ def login():
         except Exception: pass
         result = dict(u)
         result.pop("totp_secret", None)
+        result.pop("password", None)
+        result.pop("avatar_data", None)
         return jsonify(result)
 
+# ── Email OTP routes kept as stubs (for backward compat) but not used in login
 @app.route("/api/auth/verify-otp",methods=["POST"])
 def verify_otp():
-    d=request.json or {}
-    email=d.get("email","").strip().lower()
-    code=d.get("code","").strip()
-    import time as _time
-    with _otp_lock:
-        entry = _otp_store.get(email)
-        if not entry:
-            return jsonify({"error":"OTP expired or not found. Please log in again."}),400
-        if _time.time() > entry["expires"]:
-            del _otp_store[email]
-            return jsonify({"error":"OTP has expired. Please log in again."}),400
-        if entry["code"] != code:
-            return jsonify({"error":"Invalid OTP code. Please try again."}),401
-        del _otp_store[email]
-    with get_db() as db:
-        u=db.execute("SELECT * FROM users WHERE id=?",(entry["user_id"],)).fetchone()
-        if not u: return jsonify({"error":"User not found"}),404
-        session.permanent=True
-        session["user_id"]=u["id"]
-        session["workspace_id"]=u["workspace_id"]
-        try:
-            db.execute("UPDATE users SET last_active=? WHERE id=?",
-                       (datetime.utcnow().isoformat(), u["id"]))
-        except Exception: pass
-        return jsonify(dict(u))
+    return jsonify({"error":"Email OTP is disabled. Use Google Authenticator."}),410
 
 @app.route("/api/auth/resend-otp",methods=["POST"])
 def resend_otp():
-    d=request.json or {}
-    email=d.get("email","").strip().lower()
-    import time as _time
-    with _otp_lock:
-        entry = _otp_store.get(email)
-        if not entry:
-            return jsonify({"error":"Session expired. Please log in again."}),400
-        last_sent = entry.get("last_sent", 0)
-        if _time.time() - last_sent < 60:
-            wait = int(60 - (_time.time() - last_sent))
-            return jsonify({"error":f"Please wait {wait}s before resending."}),429
-        code = generate_otp()
-        entry["code"] = code
-        entry["expires"] = _time.time() + 600
-        entry["last_sent"] = _time.time()
-    sent = send_otp_email(email, code, entry["name"])
-    if sent:
-        return jsonify({"ok": True, "message": "New OTP sent to your email."})
-    return jsonify({"error":"Failed to send email. Check SMTP settings."}),500
+    return jsonify({"error":"Email OTP is disabled. Use Google Authenticator."}),410
 
 @app.route("/api/auth/toggle-2fa",methods=["POST"])
 @login_required
 def toggle_user_2fa():
-    """Toggle 2FA for the current user (self) or for a target user (admin only)."""
+    """Toggle email 2FA flag (legacy — TOTP is the primary 2FA method now)."""
     d = request.json or {}
     target_id = d.get("user_id", session["user_id"])
     enabled = bool(d.get("enabled", False))
     with get_db() as db:
         caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
-        if target_id != session["user_id"] and (not caller or caller["role"] != "Admin"):
+        if target_id != session["user_id"] and (not caller or caller["role"] not in ("Admin","Manager")):
             return jsonify({"error": "Only admins can change 2FA for other users"}), 403
-        # Check SMTP is configured before enabling
-        if enabled:
-            ws = db.execute("SELECT smtp_username, smtp_password, otp_enabled FROM workspaces WHERE id=?", (wid(),)).fetchone()
-            resend_ok = bool(os.environ.get("RESEND_API_KEY"))
-            smtp_ok = ws and ws["smtp_username"] and ws["smtp_password"]
-            if not resend_ok and not smtp_ok:
-                return jsonify({"error": "Email not configured. Set up SMTP or Resend API key in Settings first."}), 400
         db.execute("UPDATE users SET two_fa_enabled=? WHERE id=? AND workspace_id=?",
                    (1 if enabled else 0, target_id, wid()))
         u = db.execute("SELECT * FROM users WHERE id=?", (target_id,)).fetchone()
         result = dict(u) if u else {}
         result.pop("password", None)
+        result.pop("totp_secret", None)
         result.pop("avatar_data", None)
         return jsonify(result)
 
@@ -2681,6 +2614,30 @@ def health():
         return jsonify({"status":"ok"}), 200
     except Exception as e:
         return jsonify({"status":"error","detail":str(e)}), 500
+
+@app.route("/api/auth/emergency-reset-2fa", methods=["POST"])
+def emergency_reset_2fa():
+    """Emergency endpoint to disable ALL 2FA workspace-wide.
+    Requires the workspace invite code as proof of ownership.
+    Use this if you're locked out."""
+    d = request.json or {}
+    invite_code = d.get("invite_code","").strip().upper()
+    email = d.get("email","").strip().lower()
+    if not invite_code or not email:
+        return jsonify({"error":"invite_code and email required"}),400
+    with get_db() as db:
+        ws = db.execute("SELECT * FROM workspaces WHERE invite_code=?", (invite_code,)).fetchone()
+        if not ws:
+            return jsonify({"error":"Invalid invite code"}),403
+        u = db.execute("SELECT id FROM users WHERE email=? AND workspace_id=?", (email, ws["id"])).fetchone()
+        if not u:
+            return jsonify({"error":"Email not found in this workspace"}),404
+        # Reset all 2FA for the workspace
+        db.execute("UPDATE workspaces SET otp_enabled=0 WHERE id=?", (ws["id"],))
+        db.execute("UPDATE users SET two_fa_enabled=0, totp_secret='', totp_verified=0 WHERE workspace_id=?", (ws["id"],))
+        return jsonify({"ok":True,"message":"All 2FA reset. You can now log in with email + password."})
+
+
 
 @app.route("/js/<path:fn>")
 def serve_js(fn):
@@ -4756,11 +4713,8 @@ function AuthScreen({onLogin}){
   const [showPw,setShowPw]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
-  const [otpStep,setOtpStep]=useState(false);
-  const [otpEmail,setOtpEmail]=useState('');
-  const [otpCode,setOtpCode]=useState('');
-  const [otpResendCd,setOtpResendCd]=useState(0);
-  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+  const [otpCode,setOtpCode]=useState(''); // kept for ref cleanup only
+  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()]; // kept to avoid ref errors
   // TOTP / Google Authenticator state
   const [totpStep,setTotpStep]=useState(false);
   const [totpUserId,setTotpUserId]=useState('');
@@ -4769,13 +4723,8 @@ function AuthScreen({onLogin}){
   const cvRef=useRef(null);
 
   useEffect(()=>{
-    if(otpResendCd<=0)return;
-    const t=setTimeout(()=>setOtpResendCd(c=>c-1),1000);
-    return()=>clearTimeout(t);
-  },[otpResendCd]);
-  useEffect(()=>{
-    if(otpStep&&otpRefs[0].current)otpRefs[0].current.focus();
-  },[otpStep]);
+    if(totpStep)setTotpToken('');
+  },[totpStep]);
 
   useEffect(()=>{
     const cv=cvRef.current;if(!cv)return;
@@ -4928,7 +4877,6 @@ function AuthScreen({onLogin}){
       const r=await api.post('/api/auth/login',{email,password:pw});
       if(r.error)setErr(r.error);
       else if(r.totp_required){setTotpUserId(r.user_id);setTotpUserName(r.name);setTotpStep(true);setTotpToken('');}
-      else if(r.otp_required){setOtpEmail(r.email);setOtpStep(true);setOtpResendCd(60);}
       else onLogin(r);
     } else {
       if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
@@ -4947,31 +4895,7 @@ function AuthScreen({onLogin}){
     if(r.error){setErr(r.error);setTotpToken('');}else onLogin(r);
     setBusy(false);
   };
-  const submitOtp=async()=>{
-    if(otpCode.length!==6){setErr('Enter the 6-digit code.');return;}
-    setErr('');setBusy(true);
-    const r=await api.post('/api/auth/verify-otp',{email:otpEmail,code:otpCode});
-    if(r.error){setErr(r.error);setOtpCode('');}else onLogin(r);
-    setBusy(false);
-  };
-  const resendOtp=async()=>{
-    if(otpResendCd>0)return;setErr('');
-    const r=await api.post('/api/auth/resend-otp',{email:otpEmail});
-    if(r.error)setErr(r.error);else{setOtpResendCd(60);setOtpCode('');}
-  };
-  const handleOtpInput=(i,val)=>{
-    const d=otpCode.split('');d[i]=val.slice(-1);const nc=d.join('');setOtpCode(nc);
-    if(val&&i<5&&otpRefs[i+1].current)otpRefs[i+1].current.focus();
-    if(nc.length===6&&d.every(x=>x))setTimeout(submitOtp,80);
-  };
-  const handleOtpKey=(i,e)=>{
-    if(e.key==='Backspace'&&!otpCode[i]&&i>0)otpRefs[i-1].current.focus();
-    if(e.key==='Enter')submitOtp();
-  };
-  const handleOtpPaste=(e)=>{
-    const p=e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
-    if(p.length===6){setOtpCode(p);setTimeout(submitOtp,80);}
-  };
+  // OTP handlers removed — Google Authenticator is the only 2FA method
 
   const inp={
     width:'100%',padding:'12px 15px',borderRadius:10,fontSize:14,outline:'none', background:'#f8fafc',border:'1.5px solid #e2e8f0',color:'#0f172a', fontFamily:'inherit',transition:'border-color .18s,box-shadow .18s',boxSizing:'border-box', };
@@ -5077,55 +5001,6 @@ function AuthScreen({onLogin}){
         <div style=${{textAlign:'center'}}>
           <button onClick=${()=>{setTotpStep(false);setTotpToken('');setErr('');}}
             style=${{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:12,fontFamily:'inherit',textDecoration:'underline'}}>
-            ← Back to login
-          </button>
-        </div>
-      `)}
-    </div>`;
-
-  if(otpStep) return html`
-    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
-      ${leftPanel}
-      ${rightPanel(html`
-        <div style=${{marginBottom:28}}>
-          <div style=${{width:52,height:52,borderRadius:14,background:'#eff6ff',border:'1.5px solid #bfdbfe',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:16,fontSize:24}}>🔐</div>
-          <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:'#0f172a',marginBottom:6}}>Verify your identity</h2>
-          <p style=${{fontSize:13.5,color:'#64748b',marginBottom:3}}>6-digit code sent to</p>
-          <p style=${{fontSize:14,fontWeight:700,color:'#2563eb'}}>${otpEmail}</p>
-        </div>
-        <div style=${{display:'flex',gap:10,marginBottom:20,width:'100%'}} onPaste=${handleOtpPaste}>
-          ${[0,1,2,3,4,5].map(i=>html`
-            <input key=${i} ref=${otpRefs[i]}
-              style=${{
-                width:0,flex:'1 1 0',minWidth:0,height:56,borderRadius:12,textAlign:'center',
-                fontSize:22,fontWeight:700,fontFamily:'monospace',outline:'none',
-                boxSizing:'border-box',transition:'all .15s',
-                background:otpCode[i]?'#eff6ff':'#f8fafc',
-                border:'2px solid '+(otpCode[i]?'#2563eb':'#e2e8f0'),
-                color:'#0f172a',
-                boxShadow:otpCode[i]?'0 0 0 4px rgba(37,99,235,0.12)':'none'
-              }}
-              maxLength=1 value=${otpCode[i]||''}
-              onInput=${e=>handleOtpInput(i,e.target.value)}
-              onKeyDown=${e=>handleOtpKey(i,e)}
-              onFocus=${e=>e.target.select()}
-            />`)}
-        </div>
-        ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca',marginBottom:14}}>${err}</div>`:null}
-        <button onClick=${submitOtp} disabled=${busy||otpCode.length!==6}
-          style=${{width:'100%',height:46,borderRadius:10,border:'none',fontFamily:'inherit', background:otpCode.length===6?'#2563eb':'#e2e8f0', color:otpCode.length===6?'#fff':'#94a3b8', fontSize:14,fontWeight:700,cursor:otpCode.length===6?'pointer':'default', transition:'all .18s',marginBottom:14, boxShadow:otpCode.length===6?'0 4px 14px rgba(37,99,235,0.3)':'none'}}>
-          ${busy?'Verifying...':'Verify & Sign In →'}
-        </button>
-        <div style=${{display:'flex',justifyContent:'center',gap:8,marginBottom:8}}>
-          <span style=${{fontSize:12.5,color:'#94a3b8'}}>Didn't receive it?</span>
-          <button onClick=${resendOtp} disabled=${otpResendCd>0}
-            style=${{background:'none',border:'none',cursor:otpResendCd>0?'default':'pointer',color:otpResendCd>0?'#cbd5e1':'#2563eb',fontSize:12.5,fontWeight:600,padding:0}}>
-            ${otpResendCd>0?`Resend in ${otpResendCd}s`:'Resend code'}
-          </button>
-        </div>
-        <div style=${{textAlign:'center'}}>
-          <button onClick=${()=>{setOtpStep(false);setOtpCode('');setErr('');}}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:12,fontFamily:'inherit'}}>
             ← Back to login
           </button>
         </div>
@@ -5486,38 +5361,99 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 /* ─── PersonalTwoFAToggle — shown in profile panel for all users ─────────── */
 function PersonalTwoFAToggle({cu,setCu}){
-  const [enabled,setEnabled]=useState(()=>!!(cu&&cu.two_fa_enabled));
-  const [saving,setSaving]=useState(false);
+  const [configured,setConfigured]=useState(()=>!!(cu&&cu.totp_configured));
+  const [showSetup,setShowSetup]=useState(false);
+  const [totpData,setTotpData]=useState(null);
+  const [verifyToken,setVerifyToken]=useState('');
+  const [verifying,setVerifying]=useState(false);
+  const [resetting,setResetting]=useState(false);
   const [msg,setMsg]=useState('');
 
-  const toggle=async()=>{
-    setSaving(true);setMsg('');
-    const r=await api.post('/api/auth/toggle-2fa',{enabled:!enabled});
-    setSaving(false);
+  const startSetup=async()=>{
+    setMsg('');
+    const r=await api.post('/api/auth/totp/setup',{});
     if(r.error){setMsg(r.error);return;}
-    const newVal=!!r.two_fa_enabled;
-    setEnabled(newVal);
-    setCu&&setCu(prev=>({...prev,two_fa_enabled:newVal?1:0}));
-    setMsg(newVal?'✓ 2FA enabled for your account':'2FA disabled');
+    setTotpData(r);setShowSetup(true);setVerifyToken('');
+  };
+
+  const confirmSetup=async()=>{
+    const tok=verifyToken.replace(/\s/g,'');
+    if(tok.length!==6){setMsg('Enter the 6-digit code from your app.');return;}
+    setVerifying(true);setMsg('');
+    const r=await api.post('/api/auth/totp/verify-setup',{token:tok});
+    setVerifying(false);
+    if(r.error){setMsg(r.error);return;}
+    setConfigured(true);setShowSetup(false);setTotpData(null);
+    setCu&&setCu(prev=>({...prev,totp_configured:true,totp_verified:1}));
+    setMsg('✓ Google Authenticator enabled!');
     setTimeout(()=>setMsg(''),3000);
   };
 
+  const resetTotp=async()=>{
+    if(!window.confirm('Remove Google Authenticator? You can re-enable it anytime.'))return;
+    setResetting(true);
+    const r=await api.post('/api/auth/totp/reset',{});
+    setResetting(false);
+    if(r.error){setMsg(r.error);return;}
+    setConfigured(false);
+    setCu&&setCu(prev=>({...prev,totp_configured:false,totp_verified:0}));
+    setMsg('2FA removed');setTimeout(()=>setMsg(''),2000);
+  };
+
   return html`
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-      <div style=${{flex:1}}>
-        <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
-          🔐 Two-Factor Auth
-          ${enabled?html`<span style=${{fontSize:9,padding:'1px 6px',borderRadius:4,background:'rgba(74,222,128,0.15)',color:'#4ade80',fontFamily:'monospace',fontWeight:700}}>ON</span>`:null}
+    <div>
+      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:msg||showSetup?10:0}}>
+        <div style=${{flex:1}}>
+          <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>
+            🔐 Authenticator App
+            ${configured?html`<span style=${{fontSize:9,padding:'2px 7px',borderRadius:100,background:'rgba(74,222,128,0.15)',color:'#4ade80',fontWeight:700}}>ACTIVE</span>`:null}
+          </div>
+          <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>
+            ${configured?'Google Authenticator protects your account':'Not set up — add extra security'}
+          </div>
         </div>
-        <div style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.4}}>
-          ${enabled?'Email code required at login':'Add extra login security'}
-        </div>
-        ${msg?html`<div style=${{fontSize:10,color:msg.startsWith('✓')?'var(--gn)':'var(--rd)',marginTop:3}}>${msg}</div>`:null}
+        ${!configured?html`
+          <button class="btn bp" style=${{padding:'5px 12px',fontSize:10,flexShrink:0,borderRadius:8}}
+            onClick=${startSetup}>
+            📱 Setup
+          </button>`:html`
+          <button class="btn brd" style=${{padding:'5px 10px',fontSize:10,flexShrink:0,borderRadius:8}}
+            onClick=${resetTotp} disabled=${resetting}>
+            ${resetting?'…':'Remove'}
+          </button>`}
       </div>
-      <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:3,flexShrink:0}}>
-        ${saving?html`<span class="spin" style=${{width:18,height:18,borderWidth:2}}></span>`:
-          html`<${ToggleSwitch} checked=${enabled} onChange=${toggle} acColor="#4ade80"/>`}
-      </div>
+
+      ${msg?html`<div style=${{fontSize:10,color:msg.startsWith('✓')?'#4ade80':'var(--rd)',fontWeight:600,padding:'4px 0'}}>${msg}</div>`:null}
+
+      ${showSetup&&totpData?html`
+        <div style=${{marginTop:8,padding:12,background:'var(--sf2)',borderRadius:10,border:'1px solid var(--bd)'}}>
+          <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
+            <span style=${{fontSize:14}}>📱</span> Scan QR Code
+          </div>
+          ${totpData.qr_image?html`
+            <div style=${{textAlign:'center',marginBottom:10}}>
+              <img src=${totpData.qr_image} style=${{width:140,height:140,background:'white',padding:8,borderRadius:8,border:'1px solid var(--bd)'}} alt="QR"/>
+            </div>`:null}
+          <div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Manual key:</div>
+          <div style=${{fontFamily:'monospace',fontSize:10,background:'var(--bg)',padding:'6px 8px',borderRadius:6,border:'1px solid var(--bd)',wordBreak:'break-all',color:'var(--tx2)',marginBottom:10,userSelect:'all',letterSpacing:2}}>
+            ${totpData.secret}
+          </div>
+          <div style=${{fontSize:10,color:'var(--tx3)',marginBottom:8}}>Enter the 6-digit code from your app:</div>
+          <input class="inp" type="text" inputMode="numeric" pattern="[0-9]*"
+            value=${verifyToken}
+            onInput=${e=>setVerifyToken(e.target.value.replace(/\D/g,'').slice(0,6))}
+            onKeyDown=${e=>e.key==='Enter'&&confirmSetup()}
+            placeholder="000000"
+            style=${{textAlign:'center',fontSize:18,fontWeight:700,fontFamily:'monospace',letterSpacing:6,marginBottom:8}}/>
+          ${msg&&!msg.startsWith('✓')?html`<div style=${{fontSize:10,color:'var(--rd)',marginBottom:6}}>${msg}</div>`:null}
+          <div style=${{display:'flex',gap:7}}>
+            <button class="btn bg" style=${{flex:1,justifyContent:'center',fontSize:11}} onClick=${()=>{setShowSetup(false);setTotpData(null);setMsg('');}}>Cancel</button>
+            <button class="btn bp" style=${{flex:1,justifyContent:'center',fontSize:11}}
+              onClick=${confirmSetup} disabled=${verifying||verifyToken.replace(/\s/g,'').length!==6}>
+              ${verifying?html`<span class="spin"></span>`:'Confirm'}
+            </button>
+          </div>
+        </div>`:null}
     </div>`;
 }
 
@@ -8911,11 +8847,11 @@ function ToggleSwitch({checked,onChange,acColor}){
 }
 
 /* ─── TwoFASettingsCard ───────────────────────────────────────────────────── */
-function TwoFASettingsCard({otpEnabled,setOtpEnabled,smtpUsername,cu}){
+function TwoFASettingsCard({cu}){
   const [userTfaList,setUserTfaList]=useState([]);
   const [loadingTfa,setLoadingTfa]=useState(false);
   const [togglingId,setTogglingId]=useState(null);
-  const isAdmin=cu&&cu.role==='Admin';
+  const isAdmin=cu&&(cu.role==='Admin'||cu.role==='Manager');
 
   useEffect(()=>{
     if(!isAdmin)return;
@@ -8926,88 +8862,69 @@ function TwoFASettingsCard({otpEnabled,setOtpEnabled,smtpUsername,cu}){
     }).catch(()=>setLoadingTfa(false));
   },[isAdmin]);
 
-  const toggleUserTfa=async(userId,currentVal)=>{
+  const resetUserTotp=async(userId,userName)=>{
+    if(!window.confirm('Reset Google Authenticator for '+userName+'? They will need to set it up again.'))return;
     setTogglingId(userId);
-    const r=await api.post('/api/auth/toggle-2fa',{user_id:userId,enabled:!currentVal});
+    const r=await api.post('/api/auth/totp/reset',{user_id:userId});
     if(r.error){alert(r.error);}
-    else{setUserTfaList(prev=>prev.map(u=>u.id===userId?{...u,two_fa_enabled:r.two_fa_enabled}:u));}
+    else{setUserTfaList(prev=>prev.map(u=>u.id===userId?{...u,totp_configured:false,totp_verified:0}:u));}
     setTogglingId(null);
   };
 
-  const emailOk=smtpUsername||!!window.__resendConfigured;
-
   return html`
     <div class="card" style=${{marginBottom:16}}>
-      <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16,marginBottom:16}}>
-        <div style=${{flex:1}}>
-          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🔐 Two-Factor Authentication (2FA)</h3>
-          <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>
-            ${isAdmin?'Force 2FA for all workspace members (workspace-wide), or enable it per-user below.':'Enable 2FA for your own account. A 6-digit code will be emailed on every login.'}
-          </p>
-          ${isAdmin?html`
-            <div style=${{padding:'9px 13px',background:otpEnabled?'rgba(29,78,216,0.08)':'rgba(255,255,255,0.02)',borderRadius:9,
-              border:otpEnabled?'1px solid rgba(29,78,216,0.25)':'1px solid var(--bd)',fontSize:12,color:'var(--tx2)',marginBottom:8}}>
-              <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:otpEnabled?4:0}}>
-                <span>${otpEnabled?'🔒':'🔓'}</span>
-                <span style=${{fontWeight:700,color:otpEnabled?'#60a5fa':'var(--tx2)'}}>
-                  Workspace-wide OTP: ${otpEnabled?'ENFORCED for all users':'OFF (per-user settings apply)'}
-                </span>
-              </div>
-              ${otpEnabled?html`<div class="tx3-11">📧 All users get a 6-digit email code on every login · Overrides per-user settings</div>`:null}
-            </div>`:null}
-          ${!emailOk?html`<div style=${{padding:'7px 12px',background:'rgba(239,68,68,0.07)',borderRadius:8,border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:'#f87171',marginBottom:8}}>
-            ⚠️ Email not configured. Set up SMTP or Resend API in Settings before enabling 2FA.
-          </div>`:null}
-        </div>
-        ${isAdmin?html`
-          <div style=${{flexShrink:0,paddingTop:4,display:'flex',flexDirection:'column',alignItems:'center',gap:5}}>
-            <${ToggleSwitch} checked=${otpEnabled} onChange=${()=>setOtpEnabled(!otpEnabled)} acColor="#2563eb"/>
-            <span style=${{fontSize:10,fontWeight:600,color:otpEnabled?'#60a5fa':'var(--tx3)'}}>${otpEnabled?'Enforced':'Off'}</span>
-          </div>`:null}
+      <div style=${{marginBottom:14}}>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4,display:'flex',alignItems:'center',gap:8}}>
+          <span style=${{width:30,height:30,borderRadius:9,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:15}}>🔐</span>
+          Two-Factor Authentication (Google Authenticator)
+        </h3>
+        <p style=${{fontSize:12,color:'var(--tx2)',lineHeight:1.6,marginBottom:0}}>Users set up Google Authenticator from their profile menu (top-right avatar). Once configured, every login requires a 6-digit code from the app.</p>
       </div>
-
+      <div style=${{padding:'10px 14px',background:'rgba(29,78,216,0.06)',borderRadius:10,border:'1px solid rgba(29,78,216,0.15)',marginBottom:14,display:'flex',gap:12,alignItems:'flex-start'}}>
+        <span style=${{fontSize:20,flexShrink:0}}>📱</span>
+        <div style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.6}}>          <b>How to enable:</b> Profile avatar → "Setup Authenticator" → scan QR code → confirm code. Works with Google Authenticator, Authy, 1Password, Bitwarden. No email required.
+        </div>
+      </div>
       ${isAdmin?html`
-        <div>
-          <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
-            Per-User 2FA
-            <span style=${{fontSize:10,fontWeight:400,color:'var(--tx3)',textTransform:'none',letterSpacing:0,fontStyle:'italic'}}>
-              — individual override when workspace OTP is off
-            </span>
-          </div>
-          ${loadingTfa?html`<div style=${{textAlign:'center',padding:'16px 0',color:'var(--tx3)',fontSize:12}}><span class="spin"></span></div>`:null}
-          ${!loadingTfa&&userTfaList.length>0?html`
-            <div style=${{borderRadius:10,border:'1px solid var(--bd)',overflow:'hidden'}}>
-              ${userTfaList.map((u,i)=>html`
-                <div key=${u.id} style=${{
-                  display:'flex',alignItems:'center',gap:12,padding:'10px 14px',
+        <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:10}}>User Status</div>
+        ${loadingTfa?html`<div style=${{padding:'12px',textAlign:'center',color:'var(--tx3)'}}><span class="spin"></span></div>`:null}
+        ${!loadingTfa&&userTfaList.length>0?html`
+          <div style=${{borderRadius:10,border:'1px solid var(--bd)',overflow:'hidden'}}>
+            ${userTfaList.map((u,i)=>{
+              const configured=u.totp_configured||u.totp_verified;
+              return html`
+                <div key=${u.id} style=${{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',
                   background:i%2===0?'transparent':'rgba(255,255,255,0.02)',
                   borderBottom:i<userTfaList.length-1?'1px solid var(--bd)':'none',
-                  opacity:togglingId===u.id?.6:1,transition:'opacity .2s'
-                }}>
-                  <div style=${{width:30,height:30,borderRadius:'50%',background:u.color||'#2563eb',
+                  opacity:togglingId===u.id?.6:1,transition:'opacity .2s'}}>
+                  <div style=${{width:32,height:32,borderRadius:'50%',background:u.color||'#2563eb',
                     display:'flex',alignItems:'center',justifyContent:'center',
-                    fontSize:11,fontWeight:700,color:'#fff',flexShrink:0}}>
+                    fontSize:12,fontWeight:700,color:'#fff',flexShrink:0}}>
                     ${(u.name||'?').slice(0,2).toUpperCase()}
                   </div>
                   <div style=${{flex:1,minWidth:0}}>
-                    <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                      ${u.name} ${u.id===cu.id?html`<span style=${{fontSize:9,color:'var(--ac)',background:'var(--ac3)',padding:'1px 5px',borderRadius:3,fontFamily:'monospace'}}>YOU</span>`:null}
+                    <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>
+                      ${u.name} ${u.id===cu.id?html`<span style=${{fontSize:9,color:'var(--ac)',background:'var(--ac3)',padding:'1px 5px',borderRadius:3}}>YOU</span>`:null}
                     </div>
                     <div style=${{fontSize:10,color:'var(--tx3)'}}>${u.email}</div>
                   </div>
-                  <div style=${{fontSize:10,padding:'2px 8px',borderRadius:100,fontWeight:600,
-                    background:u.two_fa_enabled?'rgba(34,197,94,0.1)':'rgba(255,255,255,0.05)',
-                    color:u.two_fa_enabled?'#4ade80':'var(--tx3)',
-                    border:'1px solid '+(u.two_fa_enabled?'rgba(74,222,128,0.3)':'var(--bd)')}}>
-                    ${u.two_fa_enabled?'2FA ON':'2FA OFF'}
+                  <div style=${{fontSize:10,padding:'3px 10px',borderRadius:100,fontWeight:700,
+                    background:configured?'rgba(74,222,128,0.1)':'rgba(255,255,255,0.04)',
+                    color:configured?'#4ade80':'var(--tx3)',
+                    border:'1px solid '+(configured?'rgba(74,222,128,0.3)':'var(--bd)')}}>
+                    ${configured?'🔒 Active':'⭕ Not set up'}
                   </div>
-                  <${ToggleSwitch}
-                    checked=${!!u.two_fa_enabled}
-                    onChange=${()=>toggleUserTfa(u.id,!!u.two_fa_enabled)}
-                    acColor="#4ade80"/>
-                </div>`)}
-            </div>`:null}
-        </div>`:null}
+                  ${configured?html`
+                    <button class="btn brd" style=${{padding:'3px 10px',fontSize:10,flexShrink:0}}
+                      onClick=${()=>resetUserTotp(u.id,u.name)} disabled=${togglingId===u.id}>
+                      ${togglingId===u.id?'…':'↺ Reset'}
+                    </button>`:null}
+                </div>`;
+            })}
+          </div>`:null}`:html`
+        <div style=${{padding:'10px 14px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',fontSize:12,color:'var(--tx3)',textAlign:'center'}}>
+          Set up your own Google Authenticator from the <b style=${{color:'var(--tx2)'}}>profile avatar menu</b> → top-right corner.
+        </div>`}
     </div>`;
 }
 
@@ -9190,7 +9107,7 @@ function WorkspaceSettings({cu,onReload}){
         </div>
       </div>
 
-      <${TwoFASettingsCard} otpEnabled=${otpEnabled} setOtpEnabled=${setOtpEnabled} smtpUsername=${smtpUsername} cu=${cu}/>
+      <${TwoFASettingsCard} cu=${cu}/>
 
             <div class="card" style=${{marginBottom:0}}>
         <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16}}>
