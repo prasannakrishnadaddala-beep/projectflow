@@ -6290,263 +6290,7 @@ function AuthScreen({onLogin}){
 }
 
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
-function SidebarCallsList({cu,onJoin,currentRoomId}){
-  const [calls,setCalls]=useState([]);
-  useEffect(()=>{
-    const load=()=>api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);});
-    load();
-    const id=setInterval(load,5000);
-    return()=>clearInterval(id);
-  },[]);
-  const joinable=calls.filter(c=>{
-    const parts=JSON.parse(c.participants||'[]');
-    return !parts.includes(cu.id) && c.id!==currentRoomId;
-  });
-  if(!joinable.length)return html`
-    <div style=${{textAlign:'center',padding:'14px 8px'}}>
-      <div style=${{fontSize:22,marginBottom:5}}>📞</div>
-      <p style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>No active meetings.<br/>Start one to connect with your team.</p>
-    </div>`;
-  return html`<div style=${{display:'flex',flexDirection:'column',gap:5}}>
-    ${joinable.map(c=>{
-      const parts=JSON.parse(c.participants||'[]');
-      return html`<div key=${c.id} style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:10,padding:'9px 10px'}}>
-        <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
-          <div style=${{width:7,height:7,borderRadius:'50%',background:'var(--gn)',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
-          <div style=${{flex:1,minWidth:0}}>
-            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${c.name}</div>
-            <div style=${{fontSize:9,color:'var(--tx3)'}}>${parts.length} participant${parts.length!==1?'s':''}</div>
-          </div>
-        </div>
-        <button style=${{width:'100%',height:28,borderRadius:7,border:'none',background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}
-          onClick=${()=>onJoin(c.id,c.name)}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          Join Instant Meet
-        </button>
-      </div>`;
-    })}
-  </div>`;
-}
-
 /* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
-function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams,teamCtx,setTeamCtx,activeTeam}){
-  const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
-  const [search,setSearch]=useState('');
-  const [dashboard,setDashboard]=useState(null); // loaded team dashboard data
-  const [loadingDash,setLoadingDash]=useState(false);
-
-  useEffect(()=>{
-    if(!selectedTeam){setDashboard(null);return;}
-    setLoadingDash(true);
-    api.get('/api/teams/'+selectedTeam+'/dashboard').then(d=>{
-      setDashboard(d&&!d.error?d:null);
-      setLoadingDash(false);
-    }).catch(()=>setLoadingDash(false));
-  },[selectedTeam]);
-
-  const filtered=safe(teams).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
-
-  /* ── Team drill-down dashboard ── */
-  if(selectedTeam){
-    const team=teams.find(t=>t.id===selectedTeam);
-    if(!team)return null;
-    const memberIds=JSON.parse(team.member_ids||'[]');
-    const lead=umap[team.lead_id];
-    const members=memberIds.map(id=>umap[id]).filter(Boolean);
-    const sum=dashboard&&dashboard.summary;
-    const memberStats=dashboard&&dashboard.member_stats||[];
-    const teamProjects=dashboard&&dashboard.projects||[];
-
-    return html`
-      <div style=${{width:310,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0,overflow:'hidden'}}>
-                <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          <button onClick=${()=>onSelectTeam(null)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18,padding:'2px 6px',borderRadius:6,lineHeight:1}} title="Back">←</button>
-          <div style=${{flex:1,minWidth:0}}>
-            <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</div>
-            ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)'}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:
-              html`<div style=${{fontSize:10,color:'var(--tx3)'}}>${members.length} members</div>`}
-          </div>
-          ${teamCtx===team.id?html`
-            <button onClick=${()=>setTeamCtx&&setTeamCtx('')}
-              style=${{fontSize:10,padding:'4px 8px',borderRadius:7,border:'1px solid var(--ac)',background:'var(--ac)',color:'var(--ac-tx)',cursor:'pointer',fontWeight:700,flexShrink:0,whiteSpace:'nowrap'}}>
-              ✓ Active
-            </button>`:html`
-            <button onClick=${()=>setTeamCtx&&setTeamCtx(team.id)}
-              style=${{fontSize:10,padding:'4px 8px',borderRadius:7,border:'1px solid var(--ac)',background:'transparent',color:'var(--ac)',cursor:'pointer',fontWeight:700,flexShrink:0,whiteSpace:'nowrap'}}>
-              Switch →
-            </button>`}
-          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
-        </div>
-                <div style=${{display:'flex',gap:6,padding:'8px 12px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('projects');onClose();}}
-            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
-            📁 Projects
-          </button>
-          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('tasks');onClose();}}
-            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
-            ☑ Tasks
-          </button>
-          <button onClick=${()=>{setTeamCtx&&setTeamCtx(team.id);onSetView('productivity');onClose();}}
-            style=${{flex:1,padding:'6px 8px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx2)',cursor:'pointer',fontSize:11,fontWeight:600,transition:'all .12s'}}
-            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';}}>
-            📊 Stats
-          </button>
-        </div>
-
-        <div style=${{flex:1,overflowY:'auto'}}>
-          ${loadingDash?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)',fontSize:12}}>Loading...</div>`:null}
-
-          ${!loadingDash&&sum?html`
-                    <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',borderBottom:'1px solid var(--bd)'}}>
-            ${[
-              {l:'Projects',v:sum.total_projects,c:'var(--ac)'}, {l:'Tasks',v:sum.total_tasks,c:'var(--tx)'}, {l:'Done',v:sum.completed,c:'var(--gn)'}, {l:'In Prog',v:sum.in_progress,c:'var(--cy)'}, {l:'Blocked',v:sum.blocked,c:'var(--rd)'}, {l:'Pending',v:sum.pending,c:'var(--am)'}, ].map((s,i)=>html`
-              <div key=${i} style=${{textAlign:'center',padding:'10px 4px',borderRight:i%3<2?'1px solid var(--bd)':'none',borderBottom:i<3?'1px solid var(--bd)':'none'}}>
-                <div style=${{fontSize:18,fontWeight:800,color:s.c,fontFamily:'monospace',lineHeight:1}}>${s.v}</div>
-                <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:.4}}>${s.l}</div>
-              </div>`)}
-          </div>
-
-                    <div style=${{padding:'10px 12px',borderBottom:'1px solid var(--bd)'}}>
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>👥 Member Workload</div>
-            ${memberStats.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No tasks assigned yet</div>`:null}
-            ${memberStats.map(m=>html`
-              <div key=${m.id} style=${{display:'flex',alignItems:'center',gap:8,marginBottom:8,padding:'7px 8px',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)'}}>
-                <${Av} u=${m} size=${28}/>
-                <div style=${{flex:1,minWidth:0}}>
-                  <div style=${{fontSize:11,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${m.name}</div>
-                  <div style=${{fontSize:9,color:'var(--tx3)'}}>${m.role}</div>
-                </div>
-                <div style=${{display:'flex',gap:5,fontSize:10,fontFamily:'monospace'}}>
-                  <span style=${{color:'var(--gn)',fontWeight:700}} title="Completed">${m.completed}✓</span>
-                  <span style=${{color:'var(--cy)'}} title="In Progress">${m.in_progress}⟳</span>
-                  ${m.blocked>0?html`<span style=${{color:'var(--rd)',fontWeight:700}} title="Blocked">${m.blocked}✗</span>`:null}
-                  ${m.overdue>0?html`<span style=${{color:'var(--am)',fontWeight:700}} title="Overdue">${m.overdue}!</span>`:null}
-                </div>
-              </div>`)}
-          </div>
-
-                    <div style=${{padding:'10px 12px'}}>
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:8}}>📁 Projects (${teamProjects.length})</div>
-            ${teamProjects.length===0?html`<div style=${{fontSize:11,color:'var(--tx3)',textAlign:'center',padding:'8px 0'}}>No projects yet</div>`:null}
-            ${teamProjects.map(p=>{
-              const pt=safe(tasks).filter(t=>t.project===p.id);
-              const done=pt.filter(t=>t.stage==='completed').length;
-              const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
-              return html`
-                <div key=${p.id} style=${{padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',marginBottom:6,background:'var(--sf2)',cursor:'pointer',borderLeft:'3px solid '+p.color,transition:'background .1s'}}
-                  onClick=${()=>{onSetView('projects');onClose();}}
-                  onMouseEnter=${e=>e.currentTarget.style.background='rgba(255,255,255,.06)'}
-                  onMouseLeave=${e=>e.currentTarget.style.background='var(--sf2)'}>
-                  <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${p.name}</div>
-                  <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                    <div style=${{flex:1,height:3,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
-                      <div style=${{height:'100%',width:pc+'%',background:p.color,borderRadius:100}}></div>
-                    </div>
-                    <span style=${{fontSize:9,fontFamily:'monospace',color:'var(--tx3)'}}>${pc}%</span>
-                  </div>
-                  <div style=${{display:'flex',gap:8,fontSize:10}}>
-                    <span style=${{color:'var(--tx3)'}}>${pt.length} tasks</span>
-                    <span style=${{color:'var(--gn)'}}>${done} done</span>
-                    <span style=${{color:'var(--am)'}}>${pt.length-done} open</span>
-                  </div>
-                </div>`;
-            })}
-          </div>`:null}
-
-          ${!loadingDash&&!sum?html`<div style=${{textAlign:'center',padding:'40px 12px',color:'var(--tx3)',fontSize:12}}>
-            <div style=${{fontSize:28,marginBottom:8}}>📊</div>
-            No task data found for this team yet.<br/>Assign tasks to team members to see stats here.
-          </div>`:null}
-        </div>
-      </div>`;
-  }
-
-  /* ── Team list cards ── */
-  return html`
-    <div style=${{width:240,background:'var(--sf)',borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',height:'100vh',flexShrink:0}}>
-      <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-        <div>
-          <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em'}}>👥 Teams</span>
-          ${activeTeam?html`<div style=${{fontSize:10,color:'var(--ac)',marginTop:2}}>Viewing: <b>${activeTeam.name}</b></div>`:html`<div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>All workspace data</div>`}
-        </div>
-        <div style=${{display:'flex',gap:5,alignItems:'center'}}>
-          ${activeTeam?html`<button onClick=${()=>setTeamCtx&&setTeamCtx('')} style=${{fontSize:10,padding:'3px 8px',borderRadius:6,border:'1px solid var(--bd)',background:'transparent',color:'var(--tx3)',cursor:'pointer',whiteSpace:'nowrap'}}>× All</button>`:null}
-          ${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`
-            <button title="Manage Teams" onClick=${()=>{onSetView('team');}}
-              style=${{fontSize:10,padding:'3px 8px',borderRadius:6,border:'1px solid var(--ac)',background:'transparent',color:'var(--ac)',cursor:'pointer',whiteSpace:'nowrap',fontWeight:600}}>
-              ⚙ Manage
-            </button>`:null}
-          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'2px 6px'}} title="Close">✕</button>
-        </div>
-      </div>
-      <div style=${{padding:'8px 10px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-        <input class="inp" placeholder="Search teams..." value=${search}
-          style=${{height:26,fontSize:11,width:'100%'}}
-          onInput=${e=>setSearch(e.target.value)}/>
-      </div>
-      <div style=${{flex:1,overflowY:'auto',padding:'6px'}}>
-        ${filtered.length===0?html`
-          <div style=${{textAlign:'center',padding:'24px 8px',color:'var(--tx3)',fontSize:12}}>
-            ${safe(teams).length===0?html`<div><div style=${{fontSize:28,marginBottom:6}}>🏷</div>No teams yet.${cu&&(cu.role==='Admin'||cu.role==='Manager')?html`<br/>Click <b>⚙ Manage</b> above to create teams.`:html`<br/>Ask your Admin to create teams.`}</div>`:'No teams match your search.'}
-          </div>`:null}
-        ${filtered.map(team=>{
-          const memberIds=JSON.parse(team.member_ids||'[]');
-          const lead=umap[team.lead_id];
-          const members=memberIds.map(id=>umap[id]).filter(Boolean);
-          const teamTasks=safe(tasks).filter(t=>{
-            const byTeam=t.team_id===team.id;
-            const byMember=t.assignee&&memberIds.includes(t.assignee);
-            return byTeam||byMember;
-          });
-          const done=teamTasks.filter(t=>t.stage==='completed').length;
-          const blocked=teamTasks.filter(t=>t.stage==='blocked').length;
-          const teamProjs=new Set(teamTasks.map(t=>t.project).filter(Boolean)).size;
-          return html`
-            <div key=${team.id}
-              style=${{padding:'10px 12px',borderRadius:10,border:'2px solid '+(teamCtx===team.id?'var(--ac)':'var(--bd)'),marginBottom:7,background:teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
-              onClick=${()=>{
-                onSelectTeam(team.id);
-                setTeamCtx&&setTeamCtx(team.id);
-              }}
-              onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)77';}}
-              onMouseLeave=${e=>{e.currentTarget.style.background=teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)';e.currentTarget.style.borderColor=teamCtx===team.id?'var(--ac)':'var(--bd)';}}>
-              <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:7}}>
-                <div style=${{width:9,height:9,borderRadius:2,background:teamCtx===team.id?'var(--ac)':'var(--tx3)',flexShrink:0}}></div>
-                <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
-                ${teamCtx===team.id?html`
-                  <span style=${{fontSize:9,color:'var(--ac)',fontWeight:700,background:'rgba(170,255,0,.12)',padding:'2px 6px',borderRadius:4,flexShrink:0}}>ACTIVE</span>`:null}
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </div>
-              ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
-                            <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginBottom:7}}>
-                ${[['Tasks',teamTasks.length,'var(--tx)'],['Done',done,'var(--gn)'],['Proj',teamProjs,'var(--ac)']].map(([l,v,c])=>html`
-                  <div key=${l} style=${{textAlign:'center',padding:'4px 2px',background:'var(--sf)',borderRadius:5,border:'1px solid var(--bd)'}}>
-                    <div style=${{fontSize:13,fontWeight:700,color:c,fontFamily:'monospace',lineHeight:1}}>${v}</div>
-                    <div style=${{fontSize:8,color:'var(--tx3)',marginTop:1,textTransform:'uppercase'}}>${l}</div>
-                  </div>`)}
-              </div>
-              ${blocked>0?html`<div style=${{fontSize:10,color:'var(--rd)',fontWeight:600,marginBottom:6}}>⚠ ${blocked} blocked task${blocked!==1?'s':''}</div>`:null}
-                            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                <div style=${{display:'flex'}}>
-                  ${members.slice(0,5).map((m,i)=>html`
-                    <div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-5:0,border:'1.5px solid var(--sf2)',borderRadius:'50%',zIndex:5-i}}>
-                      <${Av} u=${m} size=${20}/>
-                    </div>`)}
-                  ${members.length>5?html`<span style=${{fontSize:9,color:'var(--tx3)',marginLeft:5,alignSelf:'center'}}>+${members.length-5}</span>`:null}
-                </div>
-                <span style=${{fontSize:9,color:'var(--tx3)'}}>${members.length} member${members.length!==1?'s':''}</span>
-              </div>
-            </div>`;
-        })}
-      </div>
-    </div>`;
-}
-
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true,onlineUsers=new Set()}){
   const inCall=false; // Google Meet handles calls externally
@@ -6555,7 +6299,11 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const baseView=(view||'dashboard').split(':')[0];
 
   const NAV_ICONS={
-    dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
+    dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+    docs:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+    timereport:   html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+    productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  };
   // Grouped sidebar sections
   const NAV_GROUPS=[
     {key:'main', label:null, items:[
@@ -6564,33 +6312,21 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
     {key:'work', label:'Work', items:[
       {id:'projects',label:'Projects'},
       {id:'tasks',label:'Kanban Board'},
-      {id:'calendar',label:'Calendar'},
       {id:'timeline',label:'Timeline'},
-      {id:'sprints',label:'Sprints'},
       {id:'reminders',label:'Reminders'},
     ]},
     {key:'comms', label:'Communication', items:[
       {id:'messages',label:'Channels'},
       ...(wsDmEnabled||isAdminManager?[{id:'dm',label:'Direct Messages'}]:[]),
       {id:'tickets',label:'Tickets'},
-      {id:'announcements',label:'Announcements'},
     ]},
-    {key:'ai', label:'AI Tools', items:[
-      {id:'standup',label:'AI Standup'},
-      {id:'codereview',label:'Code Review'},
-      ...(isAdminManager?[{id:'risk',label:'Risk Predictor'}]:[]),
-    ]},
-    {key:'knowledge', label:'Knowledge', items:[
-      {id:'docs',label:'Docs & Wiki'},
-      {id:'goals',label:'Goals & OKRs'},
-      {id:'forms',label:'Forms & Intake'},
-    ]},
-    {key:'analytics', label:'Analytics', items:[
-      {id:'timereport',label:'Time Report'},
-      ...(isAdminManager?[{id:'productivity',label:'Dev Productivity'}]:[]),
+    {key:'ai', label:'AI', items:[
+      {id:'docs',label:'Documentation & Diagrams'},
     ]},
     ...(isAdminManager?[{key:'admin',label:'Administration',items:[
       {id:'team',label:'Team Management'},
+      {id:'timereport',label:'Time Report'},
+      {id:'productivity',label:'Dev Productivity'},
     ]}]:[]),
   ];
   // Collapsed group state — persisted
@@ -6925,8 +6661,7 @@ const TYPE_BG={task:'rgba(29,78,216,0.10)',story:'rgba(21,128,61,0.10)',bug:'rgb
 const TYPE_BORDER={task:'rgba(29,78,216,0.2)',story:'rgba(21,128,61,0.2)',bug:'rgba(185,28,28,0.2)',epic:'rgba(109,40,217,0.2)',spike:'rgba(180,83,9,0.2)'};
 
 function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSetReminder,teams,activeTeam}){
-  const [showTemplates,setShowTemplates]=useState(false);
-  const [title,setTitle]=useState((task&&task.title)||'');
+    const [title,setTitle]=useState((task&&task.title)||'');
   const [desc,setDesc]=useState((task&&task.description)||'');
   const [pid,setPid]=useState((task&&task.project)||defaultPid||(projects[0]&&projects[0].id)||'');
   const [teamId,setTeamId]=useState((task&&task.team_id)||((!task&&activeTeam)?activeTeam.id:'')||'');
@@ -7198,8 +6933,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
               ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
               ${(!isEdit||canEditTask||canUpdateStage)?html`<button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>`:null}
               ${!isEdit?html`<button class="btn bg" style=${{fontSize:12}} onClick=${()=>setShowTemplates(true)}>📋 Templates</button>`:null}
-              ${showTemplates?html`<${TaskTemplatesPanel} cu=${cu} onClose=${()=>setShowTemplates(false)} onApply=${t=>{setTitle(t.name);setPri(t.priority);setStage(t.stage);setDesc(t.description||'');}}/>`:null}
-            </div>
+                          </div>
           </div>`:null}
 
         ${tab==='comments'?html`
@@ -8264,37 +7998,18 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
-          ${(()=>{
-            const total=priChart.reduce((a,x)=>a+x.value,0)||1;
-            let offset=0;
-            const r=42,cx=60,cy=60,circ=2*Math.PI*r;
-            const slices=priChart.map((item,i)=>{
-              const pct=item.value/total;
-              const dash=pct*circ;
-              const gap=circ-dash;
-              const rot=offset*360;
-              offset+=pct;
-              return {item,dash,gap,rot};
-            });
-            return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',padding:'8px 0'}}>
-              <svg width="120" height="120" viewBox="0 0 120 120" style=${{cursor:'pointer'}}>
-                ${total===0?html`<circle cx="60" cy="60" r="42" fill="none" stroke="var(--bd)" strokeWidth="14"/>`:
-                  slices.map(({item,dash,gap,rot},i)=>html`
-                    <circle key=${i} cx="60" cy="60" r="42" fill="none"
-                      stroke=${item.color||'var(--bd)'} strokeWidth="14"
-                      strokeDasharray=${dash+" "+gap}
-                      strokeDashoffset=${circ*0.25}
-                      transform=${"rotate("+rot+" 60 60)"}
-                      style=${{cursor:'pointer',transition:'opacity .15s'}}
-                      onClick=${()=>onNav('tasks:priority:'+item.priKey)}
-                      onMouseEnter=${e=>e.target.setAttribute('opacity','0.75')}
-                      onMouseLeave=${e=>e.target.setAttribute('opacity','1')}
-                    />`)}
-                <text x="60" y="56" textAnchor="middle" style=${{fontSize:18,fontWeight:700,fill:'var(--tx)',fontFamily:'monospace'}}>${total}</text>
-                <text x="60" y="70" textAnchor="middle" style=${{fontSize:9,fill:'var(--tx3)'}}>tasks</text>
-              </svg>
-            </div>`;
-          })()}
+          ${priChart.map((item,i)=>html`
+              <div key=${i} onClick=${()=>onNav('tasks:priority:'+item.priKey)}
+                style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6,cursor:'pointer'}}
+                onMouseEnter=${e=>e.currentTarget.style.opacity='.75'}
+                onMouseLeave=${e=>e.currentTarget.style.opacity='1'}>
+                <div style=${{width:7,height:7,borderRadius:2,background:item.color||'var(--ac)',flexShrink:0}}></div>
+                <span style=${{fontSize:11,color:'var(--tx2)',width:50,flexShrink:0}}>${item.name}</span>
+                <div style=${{flex:1,height:7,background:'var(--bd)',borderRadius:3,overflow:'hidden'}}>
+                  <div style=${{height:'100%',width:(item.value/Math.max(...priChart.map(x=>x.value),1)*100)+'%',background:item.color||'var(--ac)',borderRadius:3,transition:'width .3s'}}></div>
+                </div>
+                <span style=${{fontSize:11,fontFamily:'monospace',fontWeight:700,color:'var(--tx)',width:18,textAlign:'right',flexShrink:0}}>${item.value}</span>
+              </div>`)}
           ${priChart.map((item,i)=>html`
             <div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<3?'1px solid var(--bd)':'none',cursor:'pointer'}}
               onClick=${()=>onNav('tasks:priority:'+item.priKey)}>
@@ -10202,982 +9917,164 @@ function WorkspaceSettings({cu,onReload}){
 
 
 /* ─── Calendar View ──────────────────────────────────────────────────────── */
-function CalendarView({tasks,projects,cu,users,reload}){
-  const [cur,setCur]=useState(()=>new Date());
-  const [selDate,setSelDate]=useState(null);
-  const [viewMode,setViewMode]=useState('month'); // month|week
-  const [colorBy,setColorBy]=useState('stage');   // stage|priority
-  const [filterAssignee,setFilterAssignee]=useState('');
-  // Add-task form
-  const [showAdd,setShowAdd]=useState(false);
-  const [addTitle,setAddTitle]=useState('');
-  const [addDesc,setAddDesc]=useState('');
-  const [addProject,setAddProject]=useState('');
-  const [addPriority,setAddPriority]=useState('medium');
-  const [addStage,setAddStage]=useState('backlog');
-  const [addAssignee,setAddAssignee]=useState('');
-  const [addDue,setAddDue]=useState('');
-  const [saving,setSaving]=useState(false);
-
-  const year=cur.getFullYear(), month=cur.getMonth();
-  const today=new Date().toISOString().slice(0,10);
-
-  // Filter tasks
-  const visibleTasks=safe(tasks).filter(t=>!filterAssignee||t.assignee===filterAssignee);
-
-  const tasksByDate={};
-  visibleTasks.forEach(t=>{
-    if(!t.due)return;
-    const d=t.due.slice(0,10);
-    if(!tasksByDate[d])tasksByDate[d]=[];
-    tasksByDate[d].push(t);
-  });
-
-  const STAGE_COLOR={backlog:'#64748b',planning:'#8b5cf6',inprogress:'#0ea5e9',review:'#f59e0b',testing:'#06b6d4',completed:'#22c55e',blocked:'#ef4444'};
-  const STAGE_BG  ={backlog:'#64748b18',planning:'#8b5cf618',inprogress:'#0ea5e918',review:'#f59e0b18',testing:'#06b6d418',completed:'#22c55e18',blocked:'#ef444418'};
-  // (uses shared PRIO_COLOR/STAGE_COLOR from globals)
-  const PRIO_BG   ={critical:'#ef444418',high:'#f9731618',medium:'#eab30818',low:'#22c55e18'};
-
-  const getColor=(t)=>colorBy==='priority'?(PRIO_COLOR[t.priority]||'#64748b'):(STAGE_COLOR[t.stage]||'#64748b');
-  const getBg   =(t)=>colorBy==='priority'?(PRIO_BG[t.priority]||'#64748b18'):(STAGE_BG[t.stage]||'#64748b18');
-
-  // Month stats
-  const total=visibleTasks.length;
-  const overdue=visibleTasks.filter(t=>t.due&&t.due<today&&t.stage!=='completed').length;
-  const dueThisWeek=(()=>{
-    const now=new Date(),start=new Date(now);start.setDate(now.getDate()-now.getDay());
-    const end=new Date(start);end.setDate(start.getDate()+6);
-    const s=start.toISOString().slice(0,10),e=end.toISOString().slice(0,10);
-    return visibleTasks.filter(t=>t.due&&t.due>=s&&t.due<=e&&t.stage!=='completed').length;
-  })();
-  const completedThisMonth=visibleTasks.filter(t=>{
-    if(t.stage!=='completed'||!t.due)return false;
-    const d=new Date(t.due);return d.getFullYear()===year&&d.getMonth()===month;
-  }).length;
-
-  // Week view helpers
-  const getWeekDates=()=>{
-    const d=new Date(cur);d.setDate(d.getDate()-d.getDay());
-    return Array.from({length:7},(_,i)=>{const x=new Date(d);x.setDate(d.getDate()+i);return x.toISOString().slice(0,10);});
-  };
-
-  const openAdd=(dateStr)=>{
-    setAddDue(dateStr||selDate||today);
-    setAddTitle('');setAddDesc('');setAddProject('');
-    setAddPriority('medium');setAddStage('backlog');setAddAssignee('');
-    setShowAdd(true);
-  };
-
-  const submitAdd=async()=>{
-    if(!addTitle.trim())return;
-    setSaving(true);
-    await api.post('/api/tasks',{
-      title:addTitle.trim(),description:addDesc,due:addDue,
-      project:addProject,priority:addPriority,stage:addStage,assignee:addAssignee
-    });
-    setSaving(false);setShowAdd(false);setAddTitle('');
-    reload();
-  };
-
-  const selTasks=selDate?(tasksByDate[selDate]||[]):[];
-  const uMap={};safe(users||[]).forEach(u=>uMap[u.id]=u);
-  const pMap={};safe(projects).forEach(p=>pMap[p.id]=p);
-
-  // ── Month grid ──────────────────────────────────────────────────────────────
-  const renderMonthGrid=()=>{
-    const firstDay=new Date(year,month,1).getDay();
-    const daysInMonth=new Date(year,month+1,0).getDate();
-    const prevDays=new Date(year,month,0).getDate();
-    return html`
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',flex:1,borderLeft:'1px solid var(--bd)',borderTop:'1px solid var(--bd)'}}>
-        ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(d=>html`
-          <div key=${d} style=${{padding:'8px 12px',borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',background:'var(--sf2)',fontSize:11,fontWeight:700,color:'var(--tx3)',letterSpacing:'.07em',textTransform:'uppercase'}}>${d}</div>`)}
-        ${Array.from({length:firstDay}).map((_,i)=>{
-          const day=prevDays-firstDay+i+1;
-          return html`<div key=${'p'+i} style=${{minHeight:110,borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',padding:'8px 10px',background:'var(--sf2)',opacity:.45}}>
-            <span style=${{fontSize:13,color:'var(--tx3)'}}>${day}</span>
-          </div>`;
-        })}
-        ${Array.from({length:daysInMonth}).map((_,i)=>{
-          const day=i+1;
-          const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-          const dayT=tasksByDate[dateStr]||[];
-          const isToday=dateStr===today;
-          const isSel=selDate===dateStr;
-          const isWeekend=new Date(dateStr+'T12:00:00').getDay()%6===0;
-          const hasOverdue=dayT.some(t=>t.stage!=='completed'&&dateStr<today);
-          return html`
-            <div key=${day}
-              onClick=${()=>setSelDate(isSel?null:dateStr)}
-              style=${{
-                minHeight:110,borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',
-                padding:'8px 10px',cursor:'pointer',position:'relative',
-                background:isSel?'rgba(37,99,235,0.07)':isWeekend?'var(--sf2)':'var(--bg)',
-                outline:isSel?'2px solid var(--ac)':'none',outlineOffset:'-2px',
-                transition:'background .1s'
-              }}>
-              <!-- Day number -->
-              <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}>
-                <span style=${{
-                  fontSize:13,fontWeight:isToday?800:400,lineHeight:1,
-                  width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',
-                  borderRadius:'50%',
-                  background:isToday?'var(--ac)':'transparent',
-                  color:isToday?'#fff':'var(--tx)'
-                }}>${day}</span>
-                ${hasOverdue?html`<span title="Overdue tasks" style=${{width:6,height:6,borderRadius:'50%',background:'#ef4444',display:'inline-block'}}></span>`:null}
-              </div>
-              <!-- Task pills -->
-              ${dayT.slice(0,3).map(t=>html`
-                <div key=${t.id} title=${t.title}
-                  style=${{
-                    fontSize:11,padding:'2px 7px',borderRadius:3,marginBottom:2,lineHeight:1.5,
-                    background:getBg(t),color:getColor(t),fontWeight:600,
-                    whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',
-                    borderLeft:'2px solid '+getColor(t)
-                  }}>${t.title}</div>`)}
-              ${dayT.length>3?html`<div style=${{fontSize:10,color:'var(--tx3)',fontWeight:600,padding:'1px 7px'}}>+${dayT.length-3} more</div>`:null}
-              <!-- Hover add hint -->
-              ${!dayT.length?html`<div style=${{position:'absolute',bottom:6,right:8,fontSize:11,color:'var(--tx3)',opacity:.3}}>click to view</div>`:null}
-            </div>`;
-        })}
-        ${(()=>{
-          const totalCells=firstDay+daysInMonth;
-          const rem=(7-totalCells%7)%7;
-          return Array.from({length:rem}).map((_,i)=>html`
-            <div key=${'n'+i} style=${{minHeight:110,borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',padding:'8px 10px',background:'var(--sf2)',opacity:.45}}>
-              <span style=${{fontSize:13,color:'var(--tx3)'}}>${i+1}</span>
-            </div>`);
-        })()}
-      </div>`;
-  };
-
-  // ── Week grid ───────────────────────────────────────────────────────────────
-  const renderWeekGrid=()=>{
-    const weekDates=getWeekDates();
-    const HOURS=Array.from({length:24},(_,i)=>i);
-    return html`
-      <div style=${{display:'grid',gridTemplateColumns:'60px repeat(7,1fr)',flex:1,overflowY:'auto',borderLeft:'1px solid var(--bd)',borderTop:'1px solid var(--bd)'}}>
-        <div style=${{borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}></div>
-        ${weekDates.map(d=>{
-          const isToday=d===today;const isSel=selDate===d;
-          const dt=new Date(d+'T12:00:00');
-          return html`<div key=${d} style=${{padding:'8px 4px',borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',textAlign:'center',background:isToday?'rgba(37,99,235,0.05)':isSel?'rgba(37,99,235,0.04)':'var(--sf2)',cursor:'pointer',outline:isSel?'2px solid var(--ac)':'none',outlineOffset:'-2px'}} onClick=${()=>setSelDate(isSel?null:d)}>
-            <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em'}}>${dt.toLocaleDateString('en-US',{weekday:'short'})}</div>
-            <div style=${{fontSize:18,fontWeight:isToday?800:500,color:isToday?'var(--ac)':'var(--tx)',lineHeight:1.2}}>${dt.getDate()}</div>
-            ${(tasksByDate[d]||[]).length?html`<div style=${{fontSize:10,color:'var(--ac)',fontWeight:700}}>${(tasksByDate[d]||[]).length}t</div>`:null}
-          </div>`;
-        })}
-        ${HOURS.map(h=>html`
-          <div key=${'h'+h} style=${{padding:'4px 6px',borderRight:'1px solid var(--bd)',borderBottom:'1px solid rgba(0,0,0,.05)',fontSize:10,color:'var(--tx3)',fontWeight:600,textAlign:'right',lineHeight:'28px',background:'var(--sf2)'}}>${h===0?'12 AM':h<12?h+' AM':h===12?'12 PM':(h-12)+' PM'}</div>
-          ${weekDates.map(d=>html`
-            <div key=${d+'h'+h} style=${{minHeight:28,borderRight:'1px solid var(--bd)',borderBottom:'1px solid rgba(0,0,0,.05)',padding:'2px 4px',background:d===today?'rgba(37,99,235,0.02)':'transparent',cursor:'pointer'}} onClick=${()=>{setSelDate(d);openAdd(d);}}>
-              ${h===9?(tasksByDate[d]||[]).slice(0,1).map(t=>html`
-                <div key=${t.id} style=${{fontSize:10,padding:'2px 5px',borderRadius:3,background:getBg(t),color:getColor(t),fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',borderLeft:'2px solid '+getColor(t)}}>${t.title}</div>`):null}
-            </div>`)}
-        `)}
-      </div>`;
-  };
-
-  // ── Add Task modal ──────────────────────────────────────────────────────────
-  const AddTaskModal=()=>html`
-    <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1200,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(2px)'}}
-      onClick=${e=>{if(e.target===e.currentTarget)setShowAdd(false);}}>
-      <div style=${{background:'var(--sf)',borderRadius:16,width:'min(480px,92vw)',boxShadow:'0 24px 64px rgba(0,0,0,.3)',border:'1px solid var(--bd)',overflow:'hidden'}}>
-        <!-- Modal header -->
-        <div style=${{padding:'18px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div>
-            <div style=${{fontWeight:700,fontSize:16,color:'var(--tx)'}}>New Task</div>
-            <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Due: ${addDue?new Date(addDue+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):''}</div>
-          </div>
-          <button onClick=${()=>setShowAdd(false)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:20,lineHeight:1,padding:'4px 8px',borderRadius:6}}>✕</button>
-        </div>
-        <!-- Form body -->
-        <div style=${{padding:'20px',display:'flex',flexDirection:'column',gap:14}}>
-          <div>
-            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Task Title <span style=${{color:'#ef4444'}}>*</span></label>
-            <input class="inp" autoFocus placeholder="What needs to be done?" value=${addTitle}
-              onInput=${e=>setAddTitle(e.target.value)}
-              onKeyDown=${e=>{if(e.key==='Enter'&&addTitle.trim())submitAdd();}}
-              style=${{width:'100%',height:40,fontSize:14,fontWeight:500}}/>
-          </div>
-          <div>
-            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Description</label>
-            <textarea class="inp" placeholder="Add more details (optional)…" value=${addDesc}
-              onInput=${e=>setAddDesc(e.target.value)}
-              style=${{width:'100%',height:72,fontSize:13,resize:'none',lineHeight:1.5}}></textarea>
-          </div>
-          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-            <div>
-              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Project</label>
-              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addProject} onChange=${e=>setAddProject(e.target.value)}>
-                <option value="">No project</option>
-                ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
-              </select>
-            </div>
-            <div>
-              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Assignee</label>
-              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addAssignee} onChange=${e=>setAddAssignee(e.target.value)}>
-                <option value="">Unassigned</option>
-                ${safe(users||[]).map(u=>html`<option value=${u.id}>${u.name}</option>`)}
-              </select>
-            </div>
-            <div>
-              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Priority</label>
-              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addPriority} onChange=${e=>setAddPriority(e.target.value)}>
-                <option value="low">🟢 Low</option>
-                <option value="medium">🟡 Medium</option>
-                <option value="high">🟠 High</option>
-                <option value="critical">🔴 Critical</option>
-              </select>
-            </div>
-            <div>
-              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Stage</label>
-              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addStage} onChange=${e=>setAddStage(e.target.value)}>
-                <option value="backlog">Backlog</option>
-                <option value="planning">Planning</option>
-                <option value="inprogress">In Progress</option>
-                <option value="review">Review</option>
-                <option value="testing">Testing</option>
-              </select>
-            </div>
-            <div>
-              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Due Date</label>
-              <input class="inp" type="date" value=${addDue} onChange=${e=>setAddDue(e.target.value)} style=${{width:'100%',height:36,fontSize:13}}/>
-            </div>
-          </div>
-        </div>
-        <!-- Footer -->
-        <div style=${{padding:'14px 20px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,justifyContent:'flex-end'}}>
-          <button class="btn bg" style=${{fontSize:13}} onClick=${()=>setShowAdd(false)}>Cancel</button>
-          <button class="btn bp" style=${{fontSize:13,minWidth:100}} onClick=${submitAdd} disabled=${saving||!addTitle.trim()}>
-            ${saving?html`<span class="spin"></span>`:null} ${saving?'Adding…':'Add Task'}
-          </button>
-        </div>
-      </div>
-    </div>`;
-
-  return html`<div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'var(--bg)'}}>
-
-    ${showAdd?html`<${AddTaskModal}/>`:null}
-
-    <!-- ── Top bar ──────────────────────────────────────────────────────── -->
-    <div style=${{display:'flex',alignItems:'center',gap:12,padding:'12px 20px',borderBottom:'1px solid var(--bd)',flexShrink:0,flexWrap:'wrap',gap:8}}>
-      <!-- Nav -->
-      <div style=${{display:'flex',alignItems:'center',gap:6}}>
-        <button onClick=${()=>setCur(new Date(year,month-1,1))} style=${{background:'none',border:'1px solid var(--bd)',borderRadius:7,width:30,height:30,cursor:'pointer',color:'var(--tx)',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
-        <button onClick=${()=>setCur(new Date(year,month+1,1))} style=${{background:'none',border:'1px solid var(--bd)',borderRadius:7,width:30,height:30,cursor:'pointer',color:'var(--tx)',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
-        <h2 style=${{margin:'0 6px',fontSize:17,fontWeight:700,color:'var(--tx)',whiteSpace:'nowrap'}}>${cur.toLocaleString('default',{month:'long',year:'numeric'})}</h2>
-        <button onClick=${()=>{setCur(new Date());setSelDate(today);}} style=${{fontSize:12,padding:'4px 12px',border:'1px solid var(--bd)',borderRadius:7,cursor:'pointer',background:'transparent',color:'var(--tx)',fontWeight:600}}>Today</button>
-      </div>
-
-      <!-- Stats pills -->
-      <div style=${{display:'flex',gap:6,marginLeft:8,flexWrap:'wrap'}}>
-        ${[
-          {label:'Total',val:total,c:'#64748b'},
-          {label:'Due this week',val:dueThisWeek,c:'#f59e0b'},
-          {label:'Overdue',val:overdue,c:'#ef4444'},
-          {label:'Done this month',val:completedThisMonth,c:'#22c55e'},
-        ].map(s=>html`
-          <div key=${s.label} style=${{display:'flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:99,border:'1px solid '+s.c+'44',background:s.c+'11',fontSize:12,fontWeight:600,color:s.c}}>
-            <span style=${{fontWeight:800}}>${s.val}</span> ${s.label}
-          </div>`)}
-      </div>
-
-      <!-- Controls -->
-      <div style=${{display:'flex',gap:6,marginLeft:'auto',alignItems:'center',flexWrap:'wrap'}}>
-        <!-- Assignee filter -->
-        <select class="inp" style=${{height:30,fontSize:12,width:130}} value=${filterAssignee} onChange=${e=>setFilterAssignee(e.target.value)}>
-          <option value="">All members</option>
-          ${safe(users||[]).map(u=>html`<option value=${u.id}>${u.name}</option>`)}
-        </select>
-        <!-- Color by -->
-        <select class="inp" style=${{height:30,fontSize:12,width:120}} value=${colorBy} onChange=${e=>setColorBy(e.target.value)}>
-          <option value="stage">Color by Stage</option>
-          <option value="priority">Color by Priority</option>
-        </select>
-        <!-- View toggle -->
-        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',overflow:'hidden'}}>
-          ${[['month','Month'],['week','Week']].map(([v,l])=>html`
-            <button key=${v} onClick=${()=>setViewMode(v)} style=${{
-              border:'none',cursor:'pointer',fontSize:12,fontWeight:600,padding:'5px 12px',
-              background:viewMode===v?'var(--ac)':'transparent',color:viewMode===v?'#fff':'var(--tx2)',
-              transition:'all .12s'
-            }}>${l}</button>`)}
-        </div>
-        <!-- Add button -->
-        <button class="btn bp" style=${{fontSize:12,padding:'5px 14px',height:30}} onClick=${()=>openAdd(selDate||today)}>+ New Task</button>
-      </div>
-    </div>
-
-    <!-- ── Main area ────────────────────────────────────────────────────── -->
-    <div style=${{display:'flex',flex:1,overflow:'hidden'}}>
-
-      <!-- Calendar grid -->
-      <div style=${{flex:1,overflowY:'auto',display:'flex',flexDirection:'column'}}>
-        ${viewMode==='month'?renderMonthGrid():renderWeekGrid()}
-      </div>
-
-      <!-- ── Side panel ──────────────────────────────────────────────── -->
-      ${selDate?html`
-        <div style=${{width:300,borderLeft:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0,background:'var(--sf)'}}>
-          <!-- Panel header -->
-          <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexShrink:0}}>
-            <div>
-              <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${new Date(selDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
-              <div style=${{fontSize:12,color:'var(--tx3)',marginTop:3}}>
-                ${selTasks.length?selTasks.length+' task'+(selTasks.length!==1?'s':'')+' due':'No tasks due'}
-                ${selTasks.filter(t=>t.stage==='completed').length?html` · <span style=${{color:'#22c55e',fontWeight:600}}>${selTasks.filter(t=>t.stage==='completed').length} done</span>`:null}
-              </div>
-            </div>
-            <!-- Close button -->
-            <button onClick=${()=>setSelDate(null)} title="Close panel"
-              style=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,width:28,height:28,cursor:'pointer',color:'var(--tx2)',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:8}}>✕</button>
-          </div>
-
-          <!-- Progress bar if tasks exist -->
-          ${selTasks.length?html`
-            <div style=${{padding:'8px 16px 0',flexShrink:0}}>
-              <div style=${{display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--tx3)',marginBottom:3}}>
-                <span>Completion</span>
-                <span>${Math.round((selTasks.filter(t=>t.stage==='completed').length/selTasks.length)*100)}%</span>
-              </div>
-              <div style=${{height:3,background:'var(--sf2)',borderRadius:99}}>
-                <div style=${{height:3,borderRadius:99,background:'#22c55e',width:Math.round((selTasks.filter(t=>t.stage==='completed').length/selTasks.length)*100)+'%',transition:'width .3s'}}></div>
-              </div>
-            </div>`:null}
-
-          <!-- Task list -->
-          <div style=${{flex:1,overflowY:'auto',padding:'10px 12px'}}>
-            ${selTasks.length?selTasks.map(t=>{
-              const assignee=uMap[t.assignee];
-              const proj=pMap[t.project];
-              return html`
-                <div key=${t.id} style=${{padding:'10px 12px',borderRadius:10,background:'var(--bg)',border:'1px solid var(--bd)',marginBottom:8,borderLeft:'3px solid '+getColor(t)}}>
-                  <div style=${{display:'flex',alignItems:'flex-start',gap:6,marginBottom:6}}>
-                    <div style=${{flex:1,fontSize:13,fontWeight:600,color:t.stage==='completed'?'var(--tx3)':'var(--tx)',lineHeight:1.3,textDecoration:t.stage==='completed'?'line-through':'none'}}>${t.title}</div>
-                    ${assignee?html`<div title=${assignee.name} style=${{width:22,height:22,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>${assignee.name.slice(0,2).toUpperCase()}</div>`:null}
-                  </div>
-                  ${proj?html`<div style=${{fontSize:10,color:proj.color||'var(--ac)',fontWeight:600,marginBottom:4}}>${proj.name}</div>`:null}
-                  <div style=${{display:'flex',gap:4,flexWrap:'wrap'}}>
-                    <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:getBg(t),color:getColor(t),fontWeight:700}}>${t.stage}</span>
-                    <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:(PRIO_BG[t.priority]||'#eee'),color:(PRIO_COLOR[t.priority]||'#888'),fontWeight:600}}>${t.priority}</span>
-                    ${t.pct>0?html`<span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:'var(--sf2)',color:'var(--tx3)',fontWeight:600}}>${t.pct}%</span>`:null}
-                  </div>
-                </div>`;
-            }):html`
-              <div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'32px 0',color:'var(--tx3)'}}>
-                <div style=${{fontSize:36,marginBottom:10}}>📭</div>
-                <div style=${{fontSize:14,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>No tasks due</div>
-                <div style=${{fontSize:12,textAlign:'center',lineHeight:1.5}}>Click "+ New Task" to schedule something here</div>
-              </div>`}
-          </div>
-
-          <!-- Add task footer -->
-          <div style=${{borderTop:'1px solid var(--bd)',padding:'12px 14px',flexShrink:0}}>
-            <button class="btn bp" style=${{width:'100%',fontSize:13,height:36,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}
-              onClick=${()=>openAdd(selDate)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Task on ${new Date(selDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-            </button>
-          </div>
-        </div>`:null}
-    </div>
-
-    <!-- ── Legend ───────────────────────────────────────────────────────── -->
-    <div style=${{padding:'8px 20px',borderTop:'1px solid var(--bd)',display:'flex',gap:14,flexWrap:'wrap',flexShrink:0,background:'var(--sf)'}}>
-      ${colorBy==='stage'?Object.entries(STAGE_COLOR).map(([s,c])=>html`
-        <div key=${s} style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--tx3)'}}>
-          <div style=${{width:10,height:10,borderRadius:2,background:c}}></div>${s}
-        </div>`):
-      Object.entries(PRIO_COLOR).map(([p,c])=>html`
-        <div key=${p} style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--tx3)'}}>
-          <div style=${{width:10,height:10,borderRadius:'50%',background:c}}></div>${p}
-        </div>`)}
-      <div style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}>
-        <div style=${{width:6,height:6,borderRadius:'50%',background:'#ef4444'}}></div> overdue indicator
-      </div>
-    </div>
-  </div>`;
-}
-
-
 /* ─── Kanban Board View ──────────────────────────────────────────────────── */
-function KanbanView({tasks,projects,users,cu,reload}){
-  const STAGES=['backlog','planning','inprogress','review','testing','completed','blocked'];
-  const STAGE_LABELS={backlog:'Backlog',planning:'Planning',inprogress:'In Progress',review:'Review',testing:'Testing',completed:'Completed',blocked:'Blocked'};
-  const STAGE_COLORS={backlog:'#64748b',planning:'#7c3aed',inprogress:'#0891b2',review:'#d97706',testing:'#0e7490',completed:'#15803d',blocked:'#b91c1c'};
-  const [drag,setDrag]=useState(null);
-  const [filter,setFilter]=useState('');
-  const filtered=safe(tasks).filter(t=>!filter||t.title.toLowerCase().includes(filter.toLowerCase())||(t.assignee&&users.find(u=>u.id===t.assignee)?.name?.toLowerCase().includes(filter.toLowerCase())));
-  const byStage={};STAGES.forEach(s=>byStage[s]=filtered.filter(t=>t.stage===s));
-  const moveTask=async(taskId,newStage)=>{
-    await api.put(`/api/tasks/${taskId}`,{stage:newStage});
-    reload();
-  };
-  const onDrop=async(stage)=>{
-    if(drag&&drag!==stage)await moveTask(drag.taskId,stage);
-    setDrag(null);
-  };
-  const uMap={};safe(users).forEach(u=>uMap[u.id]=u);
-  const pMap={};safe(projects).forEach(p=>pMap[p.id]=p);
-  const PRIO_DOT={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
-  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',padding:'16px 20px 0'}}>
-    <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🗂 Kanban Board</h2>
-      <input class="inp" placeholder="Filter tasks…" value=${filter} onInput=${e=>setFilter(e.target.value)}
-        style=${{width:200,height:32,fontSize:13}}/>
-      <span style=${{fontSize:12,color:'var(--tx3)',marginLeft:'auto'}}>${filtered.length} tasks</span>
-    </div>
-    <div style=${{display:'flex',gap:10,overflowX:'auto',flex:1,paddingBottom:16}}>
-      ${STAGES.map(stage=>html`
-        <div key=${stage}
-          onDragOver=${e=>{e.preventDefault();}}
-          onDrop=${()=>onDrop(stage)}
-          style=${{minWidth:230,maxWidth:260,flex:'0 0 240px',background:'var(--sf2)',borderRadius:10,display:'flex',flexDirection:'column',border:'1px solid var(--bd)',overflow:'hidden'}}>
-          <div style=${{padding:'10px 12px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:6}}>
-            <div style=${{width:8,height:8,borderRadius:'50%',background:STAGE_COLORS[stage]}}></div>
-            <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1}}>${STAGE_LABELS[stage]}</span>
-            <span style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',background:'var(--bg)',borderRadius:99,padding:'1px 7px',border:'1px solid var(--bd)'}}>${byStage[stage].length}</span>
-          </div>
-          <div style=${{flex:1,overflowY:'auto',padding:'8px 8px 4px'}}>
-            ${byStage[stage].map(t=>{
-              const u=uMap[t.assignee];
-              const p=pMap[t.project];
-              return html`
-                <div key=${t.id} draggable=${true}
-                  onDragStart=${()=>setDrag({taskId:t.id,fromStage:stage})}
-                  onDragEnd=${()=>setDrag(null)}
-                  style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'10px 10px 8px',marginBottom:7,cursor:'grab',transition:'box-shadow .12s',userSelect:'none'}}>
-                  ${p?html`<div style=${{fontSize:10,color:p.color||'var(--ac)',fontWeight:600,marginBottom:3}}>${p.name}</div>`:null}
-                  <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',marginBottom:6,lineHeight:1.35}}>${t.title}</div>
-                  <div style=${{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-                    ${t.priority?html`<span style=${{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,color:PRIO_DOT[t.priority]||'#888',fontWeight:600}}><span style=${{width:6,height:6,borderRadius:'50%',background:PRIO_DOT[t.priority]||'#888',display:'inline-block'}}></span>${t.priority}</span>`:null}
-                    ${t.due?html`<span style=${{fontSize:10,color:'var(--tx3)'}}>${t.due.slice(5)}</span>`:null}
-                    ${u?html`<span style=${{fontSize:10,background:'var(--ac)',color:'#fff',borderRadius:99,padding:'1px 6px',marginLeft:'auto'}}>${u.name.slice(0,2).toUpperCase()}</span>`:null}
-                  </div>
-                </div>`;
-            })}
-          </div>
-        </div>`)}
-    </div>
-  </div>`;
-}
-
 /* ─── Docs / Wiki View ───────────────────────────────────────────────────── */
 function DocsView({projects,cu}){
-  const [docs,setDocs]=useState([]);
-  const [sel,setSel]=useState(null);
-  const [editing,setEditing]=useState(false);
-  const [form,setForm]=useState({title:'',content:'',project_id:'',is_public:false});
-  const [loading,setLoading]=useState(true);
-  const [search,setSearch]=useState('');
-  const [aiPanel,setAiPanel]=useState(false);
-  const [aiPrompt,setAiPrompt]=useState('');
-  const [aiDocType,setAiDocType]=useState('general');
-  const [aiProject,setAiProject]=useState('');
-  const [aiGenerating,setAiGenerating]=useState(false);
-  const [aiError,setAiError]=useState('');
-  const [renderMermaid,setRenderMermaid]=useState(false);
+  const [tab,setTab]=useState('docs');
+  const [docs,setDocs]=useState([]);const [sel,setSel]=useState(null);const [editing,setEditing]=useState(false);
+  const [form,setForm]=useState({title:'',content:'',project:'',type:'general'});
+  const [busy,setBusy]=useState(true);const [search,setSearch]=useState('');
+  const [diagrams,setDiagrams]=useState(()=>{try{return JSON.parse(localStorage.getItem('vw_diag')||'[]');}catch{return [];}});
+  const [selD,setSelD]=useState(null);const [editD,setEditD]=useState(false);
+  const [diagForm,setDiagForm]=useState({title:'',content:'',type:'architecture'});
 
-  const load=async()=>{setLoading(true);const r=await api.get('/api/docs');setDocs(r||[]);setLoading(false);};
-  useEffect(()=>{load();},[]);
+  const load=useCallback(async()=>{setBusy(true);const d=await api.get('/api/docs');setDocs(Array.isArray(d)?d:[]);setBusy(false);},[]);
+  useEffect(()=>{load();},[load]);
 
-  // Render Mermaid diagrams after content mounts
-  useEffect(()=>{
-    if(!sel||!renderMermaid)return;
-    const timer=setTimeout(()=>{
-      try{
-        if(window.mermaid){
-          window.mermaid.initialize({startOnLoad:false,theme:'default',securityLevel:'loose'});
-          document.querySelectorAll('.mermaid-src').forEach(async(el)=>{
-            try{
-              const id='mmd'+Math.random().toString(36).slice(2);
-              const {svg}=await window.mermaid.render(id,el.textContent.trim());
-              const wrapper=el.parentElement;
-              if(wrapper){wrapper.innerHTML=svg;wrapper.style.background='var(--sf2)';wrapper.style.padding='16px';wrapper.style.borderRadius='8px';}
-            }catch(e){console.warn('Mermaid render:',e);}
-          });
-        }
-      }catch(e){}
-    },100);
-    return()=>clearTimeout(timer);
-  },[sel,renderMermaid]);
-
-  const save=async()=>{
-    if(sel?.id){await api.put(`/api/docs/${sel.id}`,form);}
-    else{const r=await api.post('/api/docs',form);if(r?.id)setSel({...form,id:r.id,author_name:cu?.name||''});}
-    load();setEditing(false);
+  const saveDoc=async()=>{
+    if(!form.title.trim())return;
+    if(sel)await api.put('/api/docs/'+sel.id,form); else await api.post('/api/docs',form);
+    setEditing(false);setSel(null);setForm({title:'',content:'',project:'',type:'general'});load();
   };
+  const delDoc=async id=>{if(!window.confirm('Delete?'))return;await api.del('/api/docs/'+id);setSel(null);load();};
 
-  const del=async(id)=>{if(!confirm('Delete this doc?'))return;await api.del(`/api/docs/${id}`);setSel(null);load();};
-
-  const generateWithAI=async()=>{
-    if(!aiPrompt.trim())return;
-    setAiGenerating(true);setAiError('');
-    try{
-      const r=await api.post('/api/docs/generate',{prompt:aiPrompt,doc_type:aiDocType,project_id:aiProject});
-      if(r?.error){setAiError(r.message||r.error);}
-      else if(r?.content){
-        setAiPanel(false);
-        setAiPrompt('');
-        setSel({id:r.id,title:r.title,content:r.content,author_name:cu?.name||'AI',updated:new Date().toISOString()});
-        setForm({title:r.title,content:r.content,project_id:aiProject,is_public:false});
-        setRenderMermaid(true);
-        load();
-      }
-    }catch(e){setAiError('Failed to connect to AI service.');}
-    setAiGenerating(false);
+  const saveDiag=()=>{
+    if(!diagForm.title.trim())return;
+    const list=selD?diagrams.map(d=>d.id===selD.id?{...d,...diagForm}:d):[...diagrams,{...diagForm,id:'d'+Date.now(),created:new Date().toISOString()}];
+    setDiagrams(list);try{localStorage.setItem('vw_diag',JSON.stringify(list));}catch{}
+    setEditD(false);setSelD(null);setDiagForm({title:'',content:'',type:'architecture'});
   };
+  const delDiag=id=>{if(!window.confirm('Delete?'))return;const l=diagrams.filter(d=>d.id!==id);setDiagrams(l);try{localStorage.setItem('vw_diag',JSON.stringify(l));}catch{}if(selD&&selD.id===id)setSelD(null);};
 
-  // Render content with Mermaid diagram support
-  const renderContent=(text)=>{
-    const parts=[];
-    const re=/```mermaid\n([\s\S]*?)```/g;
-    let last=0,m,i=0;
-    while((m=re.exec(text))!==null){
-      if(m.index>last)parts.push(html`<span key=${'t'+i} style=${{whiteSpace:'pre-wrap'}}>${text.slice(last,m.index)}</span>`);
-      parts.push(html`<div key=${'d'+i} style=${{margin:'16px 0',border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
-        <div style=${{background:'var(--sf2)',padding:'6px 12px',fontSize:11,fontWeight:700,color:'var(--tx3)',borderBottom:'1px solid var(--bd)'}}>ARCHITECTURE DIAGRAM</div>
-        <div style=${{padding:16,overflowX:'auto'}}><pre class="mermaid-src" style=${{margin:0,fontSize:13,color:'var(--tx)'}}>${m[1]}</pre></div>
-      </div>`);
-      last=m.index+m[0].length;i++;
-    }
-    if(last<text.length)parts.push(html`<span key=${'t'+i} style=${{whiteSpace:'pre-wrap'}}>${text.slice(last)}</span>`);
-    return parts;
-  };
+  const DTYPE={architecture:'🏗 Architecture',flow:'🔀 Flow Diagram',er:'🗄 ER Diagram',sequence:'📋 Sequence',infra:'☁️ Infrastructure',api:'⚡ API Design'};
+  const DOCTYPE={general:'📄 General',technical:'🔧 Technical',process:'📋 Process',api:'⚡ API',meeting:'📝 Meeting Notes'};
+  const fDocs=docs.filter(d=>!search||d.title.toLowerCase().includes(search.toLowerCase()));
+  const fDiags=diagrams.filter(d=>!search||d.title.toLowerCase().includes(search.toLowerCase()));
 
-  const filtered=docs.filter(d=>!search||d.title.toLowerCase().includes(search.toLowerCase()));
-  const DOC_TYPES=[
-    {id:'general',label:'📝 General Doc',desc:'Structured technical document'},
-    {id:'architecture',label:'🏗 Architecture',desc:'System design + diagram'},
-    {id:'api',label:'🔌 API Docs',desc:'Endpoints & examples'},
-    {id:'readme',label:'📦 README',desc:'Project readme file'},
-    {id:'runbook',label:'⚙️ Runbook',desc:'Operational procedures'},
-  ];
+  const Sidebar=({items,sel,onSel,empty,getLabel})=>html`
+    <div style=${{width:220,borderRight:'1px solid var(--bd)',overflowY:'auto',padding:'6px',flexShrink:0}}>
+      ${items.length===0?html`<div style=${{textAlign:'center',padding:'20px 8px',color:'var(--tx3)',fontSize:12}}>${empty}</div>`:null}
+      ${items.map(it=>html`
+        <button key=${it.id} onClick=${()=>onSel(it)}
+          style=${{width:'100%',padding:'8px 10px',borderRadius:8,border:'none',cursor:'pointer',textAlign:'left',fontSize:12,marginBottom:2,
+            background:sel&&sel.id===it.id?'var(--ac3)':'transparent',color:sel&&sel.id===it.id?'var(--ac)':'var(--tx2)',display:'flex',flexDirection:'column',gap:2}}>
+          <span style=${{fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${it.title}</span>
+          <span style=${{fontSize:10,color:'var(--tx3)'}}>${getLabel(it)}</span>
+        </button>`)}
+    </div>`;
 
-  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-    <!-- Top bar -->
-    <div style=${{display:'flex',alignItems:'center',gap:10,padding:'14px 20px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📄 Docs & Wiki</h2>
-      <input class="inp" placeholder="Search docs…" value=${search} onInput=${e=>setSearch(e.target.value)}
-        style=${{width:160,height:30,fontSize:13,marginLeft:'auto'}}/>
-      <button class="btn bg" style=${{fontSize:13,padding:'5px 14px',display:'flex',alignItems:'center',gap:6}}
-        onClick=${()=>{setAiPanel(true);setSel(null);setEditing(false);}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-        AI Generate
-      </button>
-      <button class="btn bp" style=${{fontSize:13,padding:'5px 14px'}}
-        onClick=${()=>{setSel(null);setForm({title:'',content:'',project_id:'',is_public:false});setEditing(true);setAiPanel(false);}}>+ New Doc</button>
-    </div>
-
-    <div style=${{display:'flex',flex:1,overflow:'hidden'}}>
-      <!-- Sidebar list -->
-      <div style=${{width:220,borderRight:'1px solid var(--bd)',overflowY:'auto',padding:'10px 8px',flexShrink:0}}>
-        ${loading?html`<div style=${{textAlign:'center',padding:20,color:'var(--tx3)',fontSize:12}}>Loading…</div>`:null}
-        ${filtered.map(d=>html`
-          <div key=${d.id}
-            onClick=${()=>{setSel(d);setForm({title:d.title,content:d.content||'',project_id:d.project_id||'',is_public:!!d.is_public});setEditing(false);setAiPanel(false);setRenderMermaid(true);}}
-            style=${{padding:'8px 10px',borderRadius:7,cursor:'pointer',marginBottom:3,
-              background:sel?.id===d.id?'rgba(37,99,235,0.1)':'transparent',
-              border:sel?.id===d.id?'1px solid rgba(37,99,235,0.3)':'1px solid transparent'}}>
-            <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>${d.title}</div>
-            <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${(d.updated||'').slice(0,10)}</div>
-          </div>`)}
-        ${!loading&&!filtered.length?html`<div style=${{textAlign:'center',padding:'28px 12px',color:'var(--tx3)',fontSize:12}}>No docs yet.<br/>Use AI Generate or New Doc.</div>`:null}
+  return html`<div class="fi" style=${{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+    <div style=${{flexShrink:0,padding:'10px 18px',borderBottom:'1px solid var(--bd)',display:'flex',gap:10,alignItems:'center'}}>
+      <div style=${{display:'flex',background:'var(--sf2)',borderRadius:8,padding:2,gap:1}}>
+        ${['docs','diagrams'].map(t=>html`
+          <button key=${t} class=${'tb'+(tab===t?' act':'')} style=${{fontSize:12,padding:'5px 14px'}} onClick=${()=>setTab(t)}>
+            ${t==='docs'?'📄 Documentation':'🏗 Architecture Diagrams'}
+          </button>`)}
       </div>
-
-      <!-- Main area -->
-      <div style=${{flex:1,overflowY:'auto',padding:'20px 28px',minWidth:0}}>
-
-        ${/* AI Generator Panel */aiPanel?html`
-          <div style=${{maxWidth:720}}>
-            <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
-              <div style=${{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,rgba(37,99,235,.2),rgba(124,58,237,.2))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>✨</div>
-              <div>
-                <div style=${{fontWeight:700,fontSize:16,color:'var(--tx)'}}>AI Documentation Generator</div>
-                <div style=${{fontSize:12,color:'var(--tx3)'}}>Describe what to document — AI will write it for you, including architecture diagrams</div>
-              </div>
-              <button style=${{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18}} onClick=${()=>setAiPanel(false)}>✕</button>
-            </div>
-
-            <!-- Doc type selector -->
-            <div style=${{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:16}}>
-              ${DOC_TYPES.map(t=>html`
-                <div key=${t.id} onClick=${()=>setAiDocType(t.id)}
-                  style=${{padding:'10px 8px',borderRadius:10,border:aiDocType===t.id?'2px solid var(--ac)':'2px solid var(--bd)',cursor:'pointer',textAlign:'center',background:aiDocType===t.id?'rgba(37,99,235,0.08)':'var(--sf)',transition:'all .12s'}}>
-                  <div style=${{fontSize:16,marginBottom:4}}>${t.label.split(' ')[0]}</div>
-                  <div style=${{fontSize:11,fontWeight:700,color:aiDocType===t.id?'var(--ac)':'var(--tx)'}}>${t.label.slice(2)}</div>
-                  <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${t.desc}</div>
-                </div>`)}
-            </div>
-
-            <div style=${{display:'flex',gap:8,marginBottom:12}}>
-              <select class="inp" style=${{width:180,height:34,fontSize:13}} value=${aiProject} onChange=${e=>setAiProject(e.target.value)}>
-                <option value="">No specific project</option>
-                ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
-              </select>
-            </div>
-
-            <textarea class="inp" value=${aiPrompt} onInput=${e=>setAiPrompt(e.target.value)}
-              placeholder=${
-                aiDocType==='architecture'?'Describe your system: e.g. "A microservices platform with an API gateway, auth service, PostgreSQL database, Redis cache, and React frontend deployed on AWS"':
-                aiDocType==='api'?'Describe your API: e.g. "REST API for a task management system with endpoints for users, projects, tasks and comments"':
-                aiDocType==='readme'?'Describe the project: e.g. "VEWIT — an AI-powered team collaboration platform built with Flask and React"':
-                aiDocType==='runbook'?'Describe the service: e.g. "Python Flask web service deployed on Railway with PostgreSQL database and Redis"':
-                'What do you want to document? e.g. "Our deployment process for the backend API including environment setup, database migrations and health checks"'
-              }
-              style=${{width:'100%',minHeight:120,fontSize:14,lineHeight:1.6,resize:'vertical',marginBottom:12}}></textarea>
-
-            ${aiError?html`<div style=${{padding:'10px 14px',background:'rgba(185,28,28,0.1)',border:'1px solid rgba(185,28,28,0.3)',borderRadius:8,color:'#b91c1c',fontSize:13,marginBottom:12}}>${aiError}</div>`:null}
-
-            <div style=${{display:'flex',gap:8,alignItems:'center'}}>
-              <button class="btn bp" style=${{fontSize:14,padding:'9px 20px',display:'flex',alignItems:'center',gap:8}}
-                onClick=${generateWithAI} disabled=${aiGenerating||!aiPrompt.trim()}>
-                ${aiGenerating?html`<span class="spin"></span>`:html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>`}
-                ${aiGenerating?'Generating…':'Generate Document'}
-              </button>
-              <span style=${{fontSize:12,color:'var(--tx3)'}}>Uses your workspace AI key · Auto-saved on completion</span>
-            </div>
-          </div>`:null}
-
-        ${/* Edit / Create form */editing?html`
-          <div style=${{maxWidth:760}}>
-            <input class="inp" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})}
-              placeholder="Document title…" style=${{width:'100%',fontSize:18,fontWeight:700,marginBottom:12,height:46}}/>
-            <div style=${{display:'flex',gap:10,marginBottom:12}}>
-              <select class="inp" style=${{flex:1,height:34}} value=${form.project_id} onChange=${e=>setForm({...form,project_id:e.target.value})}>
-                <option value="">No project</option>
-                ${projects.map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
-              </select>
-              <label style=${{display:'flex',alignItems:'center',gap:6,fontSize:13,color:'var(--tx2)',cursor:'pointer',padding:'0 10px'}}>
-                <input type="checkbox" checked=${form.is_public} onChange=${e=>setForm({...form,is_public:e.target.checked})}/> Public
-              </label>
-            </div>
-            <textarea class="inp" value=${form.content} onInput=${e=>setForm({...form,content:e.target.value})}
-              placeholder="Write in Markdown. Wrap Mermaid diagrams in \`\`\`mermaid blocks for auto-rendering…"
-              style=${{width:'100%',minHeight:380,fontSize:14,lineHeight:1.7,resize:'vertical',fontFamily:'var(--font-mono,monospace)'}}></textarea>
-            <div style=${{display:'flex',gap:8,marginTop:12}}>
-              <button class="btn bp" onClick=${save}>Save Document</button>
-              <button class="btn bg" onClick=${()=>{setEditing(false);}}>Cancel</button>
-            </div>
-          </div>`:null}
-
-        ${/* Doc viewer */sel&&!editing&&!aiPanel?html`
-          <div style=${{maxWidth:760}}>
-            <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16,gap:12}}>
-              <h1 style=${{fontSize:22,fontWeight:700,color:'var(--tx)',margin:0,lineHeight:1.3}}>${sel.title}</h1>
-              <div style=${{display:'flex',gap:6,flexShrink:0}}>
-                <button class="btn bg" style=${{fontSize:12,padding:'5px 12px'}} onClick=${()=>setEditing(true)}>✏️ Edit</button>
-                <button class="btn br" style=${{fontSize:12,padding:'5px 10px'}} onClick=${()=>del(sel.id)}>🗑</button>
-              </div>
-            </div>
-            <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:24,paddingBottom:16,borderBottom:'1px solid var(--bd)'}}>
-              <span style=${{fontSize:12,color:'var(--tx3)'}}>${sel.author_name||'Unknown'} · Updated ${(sel.updated||'').slice(0,10)}</span>
-              ${sel.is_public?html`<span style=${{fontSize:11,fontWeight:700,padding:'1px 8px',borderRadius:99,background:'rgba(21,128,61,0.15)',color:'#15803d'}}>Public</span>`:null}
-            </div>
-            <div style=${{fontSize:15,color:'var(--tx)',lineHeight:1.8}}>
-              ${renderContent(sel.content||'*(empty document)*')}
-            </div>
-          </div>`:null}
-
-        ${/* Empty state */!sel&&!editing&&!aiPanel?html`
-          <div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx3)',gap:16}}>
-            <div style=${{fontSize:52}}>📄</div>
-            <div style=${{textAlign:'center'}}>
-              <div style=${{fontSize:16,fontWeight:700,color:'var(--tx)',marginBottom:6}}>Docs & Wiki</div>
-              <div style=${{fontSize:13,maxWidth:280,lineHeight:1.6}}>Select a document from the sidebar, or use <b>AI Generate</b> to create architecture docs, API references, runbooks and more.</div>
-            </div>
-            <button class="btn bp" style=${{fontSize:13}} onClick=${()=>setAiPanel(true)}>✨ Try AI Generate</button>
-          </div>`:null}
-      </div>
+      <input class="inp" placeholder="Search..." value=${search} onInput=${e=>setSearch(e.target.value)} style=${{height:28,fontSize:12,flex:1,maxWidth:220}}/>
+      <button class="btn bp" style=${{fontSize:12}} onClick=${()=>{
+        if(tab==='docs'){setSel(null);setForm({title:'',content:'',project:'',type:'general'});setEditing(true);}
+        else{setSelD(null);setDiagForm({title:'',content:'',type:'architecture'});setEditD(true);}
+      }}>+ New ${tab==='docs'?'Doc':'Diagram'}</button>
     </div>
-  </div>`;
-}
-/* ─── Goals / OKRs View ──────────────────────────────────────────────────── */
-function GoalsView({cu,users}){
-  const [goals,setGoals]=useState([]);
-  const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({title:'',description:'',due:'',owner:cu?.id||'',krs:[{title:'',target:100,unit:'%'}]});
-  const [expand,setExpand]=useState({});
-  const load=async()=>{const r=await api.get('/api/goals');setGoals(r||[]);};
-  useEffect(()=>{load();},[]);
-  const addKr=()=>setForm({...form,krs:[...form.krs,{title:'',target:100,unit:'%'}]});
-  const save=async()=>{
-    await api.post('/api/goals',form);setShowAdd(false);
-    setForm({title:'',description:'',due:'',owner:cu?.id||'',krs:[{title:'',target:100,unit:'%'}]});
-    load();
-  };
-  const updateKr=async(gid,kr)=>{await api.put(`/api/goals/${gid}`,{krs:[kr]});load();};
-  const delGoal=async(gid)=>{if(!confirm('Delete goal?'))return;await api.del(`/api/goals/${gid}`);load();};
-  const STATUS_COLOR={active:'#0891b2',completed:'#15803d',paused:'#d97706'};
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🎯 Goals & OKRs</h2>
-      <button class="btn bp" onClick=${()=>setShowAdd(true)}>+ Add Goal</button>
-    </div>
-    ${showAdd?html`
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
-        <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-          <input class="inp" placeholder="Goal title…" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})} style=${{height:36,fontSize:14}}/>
-          <input class="inp" type="date" value=${form.due} onChange=${e=>setForm({...form,due:e.target.value})} style=${{height:36}}/>
-        </div>
-        <textarea class="inp" placeholder="Description…" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{width:'100%',height:60,marginBottom:10,fontSize:13,resize:'none'}}></textarea>
-        <div style=${{marginBottom:8,fontWeight:600,fontSize:12,color:'var(--tx2)'}}>KEY RESULTS</div>
-        ${form.krs.map((kr,i)=>html`
-          <div key=${i} style=${{display:'flex',gap:8,marginBottom:6}}>
-            <input class="inp" placeholder="Key result…" value=${kr.title} onInput=${e=>{const krs=[...form.krs];krs[i]={...krs[i],title:e.target.value};setForm({...form,krs});}} style=${{flex:1,height:32,fontSize:13}}/>
-            <input class="inp" type="number" placeholder="Target" value=${kr.target} onInput=${e=>{const krs=[...form.krs];krs[i]={...krs[i],target:+e.target.value};setForm({...form,krs});}} style=${{width:80,height:32}}/>
-            <input class="inp" placeholder="Unit" value=${kr.unit} onInput=${e=>{const krs=[...form.krs];krs[i]={...krs[i],unit:e.target.value};setForm({...form,krs});}} style=${{width:60,height:32}}/>
-          </div>`)}
-        <div style=${{display:'flex',gap:8,marginTop:8}}>
-          <button class="btn bg" style=${{fontSize:12}} onClick=${addKr}>+ KR</button>
-          <button class="btn bp" style=${{marginLeft:'auto'}} onClick=${save}>Save Goal</button>
-          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
-        </div>
-      </div>`:null}
-    ${goals.map(g=>html`
-      <div key=${g.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,marginBottom:14,overflow:'hidden'}}>
-        <div style=${{padding:'14px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10}} onClick=${()=>setExpand({...expand,[g.id]:!expand[g.id]})}>
-          <div style=${{flex:1}}>
-            <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${g.title}</div>
-            ${g.description?html`<div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${g.description}</div>`:null}
-          </div>
-          <span style=${{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:99,background:(STATUS_COLOR[g.status]||'#888')+'22',color:STATUS_COLOR[g.status]||'#888'}}>${g.status}</span>
-          <div style=${{textAlign:'right',minWidth:60}}>
-            <div style=${{fontSize:18,fontWeight:800,color:'var(--ac)'}}>${g.progress}%</div>
-            <div style=${{fontSize:10,color:'var(--tx3)'}}>${g.due?'Due '+g.due:''}</div>
-          </div>
-          <div style=${{width:24,textAlign:'center',color:'var(--tx3)'}}>${expand[g.id]?'▲':'▼'}</div>
-        </div>
-        <div style=${{height:4,background:'var(--sf2)'}}>
-          <div style=${{height:4,width:g.progress+'%',background:'var(--ac)',transition:'width .5s',borderRadius:2}}></div>
-        </div>
-        ${expand[g.id]?html`
-          <div style=${{padding:'12px 16px'}}>
-            ${(g.krs||[]).map(kr=>html`
-              <div key=${kr.id} style=${{marginBottom:12}}>
-                <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                  <span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${kr.title}</span>
-                  <span style=${{fontSize:12,color:'var(--tx3)'}}>${kr.current}/${kr.target} ${kr.unit}</span>
-                </div>
-                <div style=${{display:'flex',alignItems:'center',gap:8}}>
-                  <div style=${{flex:1,height:6,background:'var(--sf2)',borderRadius:3}}>
-                    <div style=${{height:6,width:Math.min(100,(kr.current/kr.target)*100)+'%',background:'var(--ac)',borderRadius:3,transition:'width .5s'}}></div>
-                  </div>
-                  <input type="number" class="inp" value=${kr.current} style=${{width:70,height:26,fontSize:12,padding:'2px 6px'}}
-                    onChange=${async e=>{await api.put(`/api/goals/${g.id}`,{krs:[{...kr,current:+e.target.value}]});load();}}/>
-                </div>
-              </div>`)}
-            <div style=${{display:'flex',gap:8,marginTop:8}}>
-              <select class="inp" style=${{height:28,fontSize:12}} onChange=${async e=>{await api.put(`/api/goals/${g.id}`,{status:e.target.value});load();}}>
-                ${['active','completed','paused'].map(s=>html`<option value=${s} selected=${g.status===s}>${s}</option>`)}
-              </select>
-              <button class="btn br" style=${{fontSize:11,height:28,padding:'0 10px'}} onClick=${()=>delGoal(g.id)}>Delete</button>
-            </div>
-          </div>`:null}
-      </div>`)}
-  </div>`;
-}
 
-/* ─── Sprints View ───────────────────────────────────────────────────────── */
-function SprintsView({tasks,projects,cu,reload}){
-  const [sprints,setSprints]=useState([]);
-  const [form,setForm]=useState({name:'',goal:'',project_id:'',start_date:'',end_date:''});
-  const [showAdd,setShowAdd]=useState(false);
-  const [expand,setExpand]=useState({});
-  const load=async()=>{const r=await api.get('/api/sprints');setSprints(r||[]);};
-  useEffect(()=>{load();},[]);
-  const save=async()=>{await api.post('/api/sprints',form);setShowAdd(false);setForm({name:'',goal:'',project_id:'',start_date:'',end_date:''});load();};
-  const STATUS_COLOR={planning:'#7c3aed',active:'#0891b2',completed:'#15803d',cancelled:'#b91c1c'};
-  const unassigned=safe(tasks).filter(t=>!t.sprint);
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🏃 Sprints</h2>
-      <button class="btn bp" onClick=${()=>setShowAdd(true)}>+ New Sprint</button>
-    </div>
-    ${showAdd?html`
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
-        <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-          <input class="inp" placeholder="Sprint name (e.g. Sprint 1)…" value=${form.name} onInput=${e=>setForm({...form,name:e.target.value})} style=${{height:36}}/>
-          <select class="inp" style=${{height:36}} value=${form.project_id} onChange=${e=>setForm({...form,project_id:e.target.value})}>
-            <option value="">All projects</option>
-            ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
-          </select>
-          <input class="inp" type="date" placeholder="Start" value=${form.start_date} onChange=${e=>setForm({...form,start_date:e.target.value})} style=${{height:36}}/>
-          <input class="inp" type="date" placeholder="End" value=${form.end_date} onChange=${e=>setForm({...form,end_date:e.target.value})} style=${{height:36}}/>
-        </div>
-        <input class="inp" placeholder="Sprint goal…" value=${form.goal} onInput=${e=>setForm({...form,goal:e.target.value})} style=${{width:'100%',height:36,marginBottom:10}}/>
-        <div style=${{display:'flex',gap:8}}>
-          <button class="btn bp" onClick=${save}>Create Sprint</button>
-          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
-        </div>
-      </div>`:null}
-    ${sprints.map(s=>html`
-      <div key=${s.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,marginBottom:14,overflow:'hidden'}}>
-        <div style=${{padding:'14px 16px',display:'flex',alignItems:'center',gap:10,cursor:'pointer'}} onClick=${()=>setExpand({...expand,[s.id]:!expand[s.id]})}>
-          <div style=${{flex:1}}>
-            <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${s.name}</div>
-            ${s.goal?html`<div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${s.goal}</div>`:null}
-          </div>
-          <span style=${{fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:99,background:(STATUS_COLOR[s.status]||'#888')+'22',color:STATUS_COLOR[s.status]||'#888'}}>${s.status}</span>
-          <div style=${{textAlign:'right',fontSize:12,color:'var(--tx3)'}}>
-            <div>${s.done_points||0}/${s.total_points||0} pts</div>
-            <div>${s.start_date?s.start_date.slice(5):''} – ${s.end_date?s.end_date.slice(5):''}</div>
-          </div>
-          <div style=${{width:24,textAlign:'center',color:'var(--tx3)'}}>${expand[s.id]?'▲':'▼'}</div>
-        </div>
-        ${s.total_points>0?html`<div style=${{height:4,background:'var(--sf2)'}}>
-          <div style=${{height:4,width:Math.round((s.done_points/s.total_points)*100)+'%',background:'#15803d',transition:'width .5s'}}></div>
+    ${tab==='docs'?html`<div style=${{flex:1,display:'flex',overflow:'hidden'}}>
+      <${Sidebar} items=${fDocs} sel=${sel} onSel=${d=>{setSel(d);setEditing(false);}} empty="No documents yet." getLabel=${d=>(DOCTYPE[d.type]||'📄')+' · '+new Date(d.created||Date.now()).toLocaleDateString()}/>
+      <div style=${{flex:1,overflowY:'auto',padding:'16px 20px'}}>
+        ${busy?html`<div style=${{textAlign:'center',paddingTop:40}}><div class="spin" style=${{margin:'0 auto'}}></div></div>`:null}
+        ${!sel&&!editing&&!busy?html`<div style=${{textAlign:'center',paddingTop:60,color:'var(--tx3)',fontSize:13}}>
+          <div style=${{fontSize:36,marginBottom:10}}>📄</div><p>Select a document or create a new one</p>
         </div>`:null}
-        ${expand[s.id]?html`
-          <div style=${{padding:'10px 16px 14px'}}>
-            <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:8}}>TASKS IN SPRINT</div>
-            ${(s.tasks||[]).map(t=>html`
-              <div key=${t.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid var(--bd)'}}>
-                <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${t.id}</span>
-                <span style=${{flex:1,fontSize:13,color:'var(--tx)'}}>${t.title}</span>
-                <span style=${{fontSize:11,color:'var(--tx3)'}}>${t.story_points||0}pts</span>
-                <span style=${{fontSize:10,padding:'2px 6px',borderRadius:4,background:'var(--sf2)',color:'var(--tx3)'}}>${t.stage}</span>
-              </div>`)}
-            <div style=${{display:'flex',gap:8,marginTop:12}}>
-              <select class="inp" style=${{height:28,fontSize:12}} onChange=${async e=>{await api.put(`/api/sprints/${s.id}`,{status:e.target.value});load();}}>
-                ${['planning','active','completed','cancelled'].map(st=>html`<option value=${st} selected=${s.status===st}>${st}</option>`)}
-              </select>
-              <button class="btn br" style=${{fontSize:11,height:28,padding:'0 10px'}} onClick=${async()=>{if(!confirm('Delete sprint?'))return;await api.del(`/api/sprints/${s.id}`);load();}}>Delete</button>
+        ${sel&&!editing?html`<div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+            <div>
+              <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:4}}>${DOCTYPE[sel.type]||'DOC'}</div>
+              <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',margin:0}}>${sel.title}</h2>
             </div>
-          </div>`:null}
-      </div>`)}
-  </div>`;
-}
-
-/* ─── API Keys View ──────────────────────────────────────────────────────── */
-function APIKeysView({cu}){
-  const [keys,setKeys]=useState([]);
-  const [newKey,setNewKey]=useState(null);
-  const [form,setForm]=useState({name:'',scopes:['read']});
-  const [loading,setLoading]=useState(false);
-  const load=async()=>{const r=await api.get('/api/api-keys');setKeys(r||[]);};
-  useEffect(()=>{load();},[]);
-  const create=async()=>{
-    setLoading(true);
-    const r=await api.post('/api/api-keys',form);
-    if(r?.key){setNewKey(r.key);load();}
-    setLoading(false);
-  };
-  const del=async(kid)=>{if(!confirm('Revoke this key?'))return;await api.del(`/api/api-keys/${kid}`);load();};
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:720}}>
-    <h2 style=${{margin:'0 0 6px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔑 API Keys</h2>
-    <p style=${{fontSize:13,color:'var(--tx3)',marginBottom:20}}>Use API keys to access VEWIT data from external tools or scripts.</p>
-    ${newKey?html`
-      <div style=${{background:'rgba(21,128,61,0.08)',border:'1px solid rgba(21,128,61,0.3)',borderRadius:10,padding:16,marginBottom:20}}>
-        <div style=${{fontWeight:700,color:'#15803d',marginBottom:6}}>✅ Key created — copy it now, it won't be shown again</div>
-        <div style=${{fontFamily:'monospace',fontSize:13,wordBreak:'break-all',background:'var(--sf)',padding:10,borderRadius:7,border:'1px solid var(--bd)'}}>${newKey}</div>
-        <button class="btn bg" style=${{marginTop:8,fontSize:12}} onClick=${()=>{navigator.clipboard?.writeText(newKey);alert('Copied!');}}>Copy</button>
-        <button class="btn bg" style=${{marginTop:8,marginLeft:8,fontSize:12}} onClick=${()=>setNewKey(null)}>Close</button>
-      </div>`:null}
-    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:20}}>
-      <div style=${{fontWeight:600,fontSize:14,color:'var(--tx)',marginBottom:10}}>Create new API key</div>
-      <div style=${{display:'flex',gap:8,alignItems:'center'}}>
-        <input class="inp" placeholder="Key name (e.g. CI/CD integration)" value=${form.name}
-          onInput=${e=>setForm({...form,name:e.target.value})} style=${{flex:1,height:34,fontSize:13}}/>
-        <button class="btn bp" onClick=${create} disabled=${loading||!form.name}>${loading?'Creating…':'Create Key'}</button>
-      </div>
-    </div>
-    ${keys.length?html`
-      <div style=${{fontWeight:600,fontSize:13,color:'var(--tx2)',marginBottom:8}}>YOUR KEYS</div>
-      ${keys.map(k=>html`
-        <div key=${k.id} style=${{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,marginBottom:8}}>
-          <div style=${{fontFamily:'monospace',fontSize:13,color:'var(--ac)',fontWeight:700}}>${k.key_prefix}…</div>
-          <div style=${{flex:1}}>
-            <div style=${{fontWeight:600,fontSize:13,color:'var(--tx)'}}>${k.name}</div>
-            <div style=${{fontSize:11,color:'var(--tx3)'}}>Created ${(k.created||'').slice(0,10)}${k.last_used?' · Last used '+(k.last_used||'').slice(0,10):' · Never used'}</div>
+            <div style=${{display:'flex',gap:6}}>
+              <button class="btn bg" style=${{fontSize:12}} onClick=${()=>{setForm({title:sel.title,content:sel.content||'',project:sel.project||'',type:sel.type||'general'});setEditing(true);}}>✏️ Edit</button>
+              <button class="btn brd" style=${{fontSize:12,color:'var(--rd)'}} onClick=${()=>delDoc(sel.id)}>🗑</button>
+            </div>
           </div>
-          <button class="btn br" style=${{fontSize:12}} onClick=${()=>del(k.id)}>Revoke</button>
-        </div>`)}`:
-      html`<div style=${{fontSize:13,color:'var(--tx3)',textAlign:'center',padding:24}}>No API keys yet</div>`}
-  </div>`;
-}
-
-/* ─── Webhooks View ──────────────────────────────────────────────────────── */
-function WebhooksView({cu}){
-  const [hooks,setHooks]=useState([]);
-  const [form,setForm]=useState({name:'',url:'',events:['*']});
-  const [showAdd,setShowAdd]=useState(false);
-  const EVENTS=['task.created','task.updated','task.completed','project.created','ticket.created','comment.added','*'];
-  const load=async()=>{const r=await api.get('/api/webhooks');setHooks(r||[]);};
-  useEffect(()=>{load();},[]);
-  const save=async()=>{await api.post('/api/webhooks',form);setShowAdd(false);setForm({name:'',url:'',events:['*']});load();};
-  const del=async(id)=>{if(!confirm('Delete webhook?'))return;await api.del(`/api/webhooks/${id}`);load();};
-  const toggleEvent=ev=>{const evs=form.events.includes(ev)?form.events.filter(e=>e!==ev):[...form.events,ev];setForm({...form,events:evs});};
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:720}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <div>
-        <h2 style=${{margin:'0 0 4px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔗 Webhooks</h2>
-        <p style=${{margin:0,fontSize:13,color:'var(--tx3)'}}>Get HTTP POST notifications when events happen in VEWIT.</p>
-      </div>
-      <button class="btn bp" onClick=${()=>setShowAdd(true)}>+ Add Webhook</button>
-    </div>
-    ${showAdd?html`
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
-        <div style=${{display:'grid',gridTemplateColumns:'1fr 2fr',gap:10,marginBottom:12}}>
-          <input class="inp" placeholder="Name" value=${form.name} onInput=${e=>setForm({...form,name:e.target.value})} style=${{height:34}}/>
-          <input class="inp" placeholder="https://your-server.com/webhook" value=${form.url} onInput=${e=>setForm({...form,url:e.target.value})} style=${{height:34}}/>
-        </div>
-        <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:6}}>EVENTS</div>
-        <div style=${{display:'flex',flexWrap:'wrap',gap:6,marginBottom:12}}>
-          ${EVENTS.map(ev=>html`
-            <label key=${ev} style=${{display:'flex',alignItems:'center',gap:5,fontSize:12,cursor:'pointer',padding:'4px 8px',borderRadius:6,border:'1px solid var(--bd)',background:form.events.includes(ev)?'rgba(37,99,235,0.1)':'transparent'}}>
-              <input type="checkbox" checked=${form.events.includes(ev)} onChange=${()=>toggleEvent(ev)}/>${ev}
-            </label>`)}
-        </div>
-        <div style=${{display:'flex',gap:8}}>
-          <button class="btn bp" onClick=${save} disabled=${!form.url}>Save</button>
-          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
-        </div>
-      </div>`:null}
-    ${hooks.map(h=>html`
-      <div key=${h.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',marginBottom:10,display:'flex',gap:10,alignItems:'center'}}>
-        <div style=${{width:8,height:8,borderRadius:'50%',background:h.active?'#15803d':'#64748b',flexShrink:0}}></div>
-        <div style=${{flex:1}}>
-          <div style=${{fontWeight:600,fontSize:13,color:'var(--tx)'}}>${h.name||h.url}</div>
-          <div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',marginTop:2}}>${h.url}</div>
-          <div style=${{marginTop:4,display:'flex',gap:4,flexWrap:'wrap'}}>
-            ${(JSON.parse(h.events||'[]')).map(ev=>html`<span key=${ev} style=${{fontSize:10,padding:'1px 6px',background:'var(--sf2)',borderRadius:4,color:'var(--tx3)'}}>${ev}</span>`)}
+          <div style=${{fontSize:14,color:'var(--tx2)',lineHeight:1.8,whiteSpace:'pre-wrap',background:'var(--sf)',borderRadius:10,padding:'16px 20px',border:'1px solid var(--bd)'}}>${sel.content||'No content.'}</div>
+        </div>`:null}
+        ${editing?html`<div style=${{display:'flex',flexDirection:'column',gap:12}}>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <h3 style=${{margin:0,fontSize:15,fontWeight:700}}>${sel?'Edit Document':'New Document'}</h3>
+            <button class="btn bg" onClick=${()=>setEditing(false)}>✕</button>
           </div>
-        </div>
-        <button class="btn br" style=${{fontSize:12}} onClick=${()=>del(h.id)}>Delete</button>
-      </div>`)}
-    ${!hooks.length?html`<div style=${{fontSize:13,color:'var(--tx3)',textAlign:'center',padding:24}}>No webhooks yet</div>`:null}
+          <div><label class="lbl">Title</label><input class="inp" value=${form.title} onInput=${e=>setForm(p=>({...p,title:e.target.value}))} placeholder="Document title"/></div>
+          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <div><label class="lbl">Type</label>
+              <select class="inp" value=${form.type} onChange=${e=>setForm(p=>({...p,type:e.target.value}))}>
+                ${Object.entries(DOCTYPE).map(([v,l])=>html`<option key=${v} value=${v}>${l}</option>`)}
+              </select></div>
+            <div><label class="lbl">Project</label>
+              <select class="inp" value=${form.project} onChange=${e=>setForm(p=>({...p,project:e.target.value}))}>
+                <option value="">— None —</option>
+                ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+              </select></div>
+          </div>
+          <div><label class="lbl">Content</label>
+            <textarea class="inp" rows="14" style=${{resize:'vertical',fontFamily:'monospace',fontSize:13,lineHeight:1.6}}
+              value=${form.content} onInput=${e=>setForm(p=>({...p,content:e.target.value}))} placeholder="Write documentation here..."></textarea></div>
+          <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <button class="btn bg" onClick=${()=>setEditing(false)}>Cancel</button>
+            <button class="btn bp" onClick=${saveDoc} disabled=${!form.title.trim()}>Save</button>
+          </div>
+        </div>`:null}
+      </div>
+    </div>`:null}
+
+    ${tab==='diagrams'?html`<div style=${{flex:1,display:'flex',overflow:'hidden'}}>
+      <${Sidebar} items=${fDiags} sel=${selD} onSel=${d=>{setSelD(d);setEditD(false);}} empty="No diagrams yet." getLabel=${d=>DTYPE[d.type]||'🏗'}/>
+      <div style=${{flex:1,overflowY:'auto',padding:'16px 20px'}}>
+        ${!selD&&!editD?html`<div style=${{textAlign:'center',paddingTop:60,color:'var(--tx3)',fontSize:13}}>
+          <div style=${{fontSize:40,marginBottom:10}}>🏗</div>
+          <p style=${{fontWeight:600,color:'var(--tx2)',marginBottom:6}}>Architecture Diagrams</p>
+          <p>Document system architecture, flows, ER diagrams,<br/>API designs, and infrastructure maps.</p>
+        </div>`:null}
+        ${selD&&!editD?html`<div>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <div>
+              <div style=${{fontSize:9,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>${DTYPE[selD.type]||'DIAGRAM'}</div>
+              <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)',margin:0}}>${selD.title}</h2>
+            </div>
+            <div style=${{display:'flex',gap:6}}>
+              <button class="btn bg" style=${{fontSize:12}} onClick=${()=>{setDiagForm({title:selD.title,content:selD.content||'',type:selD.type||'architecture'});setEditD(true);}}>✏️ Edit</button>
+              <button class="btn brd" style=${{fontSize:12,color:'var(--rd)'}} onClick=${()=>delDiag(selD.id)}>🗑</button>
+            </div>
+          </div>
+          <pre style=${{fontFamily:'monospace',fontSize:13,color:'var(--tx2)',lineHeight:1.7,margin:0,whiteSpace:'pre-wrap',wordBreak:'break-word',background:'var(--sf)',borderRadius:10,padding:'16px 20px',border:'1px solid var(--bd)'}}>${selD.content||'No content.'}</pre>
+        </div>`:null}
+        ${editD?html`<div style=${{display:'flex',flexDirection:'column',gap:12}}>
+          <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <h3 style=${{margin:0,fontSize:15,fontWeight:700}}>${selD?'Edit Diagram':'New Diagram'}</h3>
+            <button class="btn bg" onClick=${()=>setEditD(false)}>✕</button>
+          </div>
+          <div><label class="lbl">Title</label><input class="inp" value=${diagForm.title} onInput=${e=>setDiagForm(p=>({...p,title:e.target.value}))} placeholder="e.g. System Architecture"/></div>
+          <div><label class="lbl">Type</label>
+            <select class="inp" value=${diagForm.type} onChange=${e=>setDiagForm(p=>({...p,type:e.target.value}))}>
+              ${Object.entries(DTYPE).map(([v,l])=>html`<option key=${v} value=${v}>${l}</option>`)}
+            </select></div>
+          <div><label class="lbl">Diagram Content (Mermaid / ASCII / PlantUML / text)</label>
+            <textarea class="inp" rows="16" style=${{resize:'vertical',fontFamily:'monospace',fontSize:12,lineHeight:1.6}}
+              value=${diagForm.content} onInput=${e=>setDiagForm(p=>({...p,content:e.target.value}))}
+              placeholder="graph TD&#10;  A[User] --> B[API Gateway]&#10;  B --> C[Auth Service]&#10;  B --> D[Task Service]&#10;  D --> E[(PostgreSQL)]"></textarea></div>
+          <div style=${{padding:'9px 13px',background:'rgba(29,78,216,0.06)',borderRadius:9,border:'1px solid rgba(29,78,216,0.15)',fontSize:12,color:'var(--tx2)'}}>
+            💡 Use Mermaid syntax, ASCII art, or plain text. All formats supported.
+          </div>
+          <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <button class="btn bg" onClick=${()=>setEditD(false)}>Cancel</button>
+            <button class="btn bp" onClick=${saveDiag} disabled=${!diagForm.title.trim()}>Save</button>
+          </div>
+        </div>`:null}
+      </div>
+    </div>`:null}
   </div>`;
 }
 
-/* ─── Audit Log View ─────────────────────────────────────────────────────── */
-function AuditLogView({cu}){
-  const [logs,setLogs]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const load=async()=>{setLoading(true);const r=await api.get('/api/audit-logs');setLogs(r||[]);setLoading(false);};
-  useEffect(()=>{load();},[]);
-  const ACTION_COLOR={create:'#15803d',update:'#0891b2',delete:'#b91c1c',login:'#7c3aed',time_log:'#d97706'};
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📋 Audit Log</h2>
-      <button class="btn bg" onClick=${load}>Refresh</button>
-    </div>
-    ${loading?html`<div class="tx3-11" style=${{textAlign:'center',padding:40}}>Loading…</div>`:null}
-    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,overflow:'hidden'}}>
-      ${logs.map((l,i)=>html`
-        <div key=${l.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderBottom:i<logs.length-1?'1px solid var(--bd)':'none'}}>
-          <span style=${{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:4,background:(ACTION_COLOR[l.action]||'#888')+'22',color:ACTION_COLOR[l.action]||'#888',minWidth:52,textAlign:'center'}}>${l.action}</span>
-          <span style=${{fontSize:12,color:'var(--tx)',flex:1}}>${l.user_name||l.user_id} · ${l.entity_type} ${l.entity_id} · ${l.details||''}</span>
-          <span style=${{fontSize:11,color:'var(--tx3)',flexShrink:0}}>${(l.created||'').slice(0,16).replace('T',' ')}</span>
-        </div>`)}
-      ${!loading&&!logs.length?html`<div style=${{padding:24,textAlign:'center',fontSize:13,color:'var(--tx3)'}}>No audit logs yet</div>`:null}
-    </div>
-  </div>`;
-}
 
-/* ─── Time Tracker Panel (embedded in task detail) ───────────────────────── */
 function TimeTracker({taskId,cu}){
   const [logs,setLogs]=useState([]);
   const [form,setForm]=useState({minutes:'',description:'',logged_date:new Date().toISOString().slice(0,10)});
@@ -11259,272 +10156,11 @@ function TaskDepsPanel({taskId,allTasks}){
 }
 
 /* ─── Integrations Dashboard View ────────────────────────────────────────── */
-function IntegrationsView({cu}){
-  const [tab,setTab]=useState('webhooks');
-  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-    <div style=${{display:'flex',alignItems:'center',gap:0,padding:'14px 20px',borderBottom:'1px solid var(--bd)'}}>
-      <h2 style=${{margin:'0 16px 0 0',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔌 Integrations</h2>
-      ${[['webhooks','Webhooks'],['apikeys','API Keys']].map(([id,lbl])=>html`
-        <button key=${id} class="btn ${tab===id?'bp':'bg'}" style=${{fontSize:13,marginRight:6}} onClick=${()=>setTab(id)}>${lbl}</button>`)}
-    </div>
-    <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-      ${tab==='webhooks'?html`<${WebhooksView} cu=${cu}/>`:null}
-      ${tab==='apikeys'?html`<${APIKeysView} cu=${cu}/>`:null}
-    </div>
-  </div>`;
-}
-
 /* ─── Referral Panel (for settings) ─────────────────────────────────────── */
-function ReferralPanel(){
-  const [data,setData]=useState(null);
-  const load=async()=>{const r=await api.get('/api/referral');setData(r);};
-  useEffect(()=>{load();},[]);
-  if(!data)return null;
-  const url=`${window.location.origin}/register?ref=${data.code}`;
-  return html`<div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:16}}>
-    <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:6}}>🎁 Referral Program</div>
-    <div style=${{fontSize:13,color:'var(--tx2)',marginBottom:10}}>Invite others and grow your network. You've referred <b>${data.referrals}</b> workspace(s).</div>
-    <div style=${{display:'flex',gap:8,alignItems:'center'}}>
-      <input class="inp" readOnly value=${url} style=${{flex:1,fontSize:12,height:32}}/>
-      <button class="btn bp" style=${{fontSize:12}} onClick=${()=>{navigator.clipboard?.writeText(url);alert('Copied!');}}>Copy</button>
-    </div>
-  </div>`;
-}
-
-
-
 /* ─── Announcements Banner + View ───────────────────────────────────────── */
-function AnnouncementBanner({cu}){
-  const [items,setItems]=useState([]);
-  const load=async()=>{const r=await api.get('/api/announcements');setItems((r||[]).filter(a=>!a.read&&a.pinned));};
-  useEffect(()=>{load();},[]);
-  const dismiss=async(id)=>{await api.post(`/api/announcements/${id}/read`,{});setItems(p=>p.filter(a=>a.id!==id));};
-  if(!items.length)return null;
-  return html`<div style=${{padding:'0 20px',marginBottom:0}}>
-    ${items.map(a=>html`
-      <div key=${a.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'rgba(37,99,235,0.08)',border:'1px solid rgba(37,99,235,0.2)',borderRadius:9,marginBottom:6}}>
-        <span style=${{fontSize:16}}>📢</span>
-        <div style=${{flex:1}}>
-          <span style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>${a.title}</span>
-          ${a.content?html`<span style=${{fontSize:12,color:'var(--tx2)',marginLeft:8}}>${a.content.slice(0,120)}${a.content.length>120?'…':''}</span>`:null}
-        </div>
-        <button onClick=${()=>dismiss(a.id)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'0 4px'}}>✕</button>
-      </div>`)}
-  </div>`;
-}
-
-function AnnouncementsView({cu}){
-  const [items,setItems]=useState([]);
-  const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({title:'',content:'',pinned:false});
-  const [saving,setSaving]=useState(false);
-  const canPost=cu&&(cu.role==='Admin'||cu.role==='Manager');
-  const load=async()=>{const r=await api.get('/api/announcements');setItems(r||[]);};
-  useEffect(()=>{load();},[]);
-  const save=async()=>{
-    setSaving(true);
-    await api.post('/api/announcements',form);
-    setSaving(false);setShowAdd(false);setForm({title:'',content:'',pinned:false});load();
-  };
-  const del=async(id)=>{if(!confirm('Delete?'))return;await api.del(`/api/announcements/${id}`);load();};
-  const markRead=async(id)=>{await api.post(`/api/announcements/${id}/read`,{});load();};
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📢 Announcements</h2>
-      ${canPost?html`<button class="btn bp" onClick=${()=>setShowAdd(true)}>+ Post Announcement</button>`:null}
-    </div>
-    ${showAdd?html`
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
-        <input class="inp" placeholder="Title…" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})} style=${{width:'100%',height:38,fontSize:15,fontWeight:600,marginBottom:10}}/>
-        <textarea class="inp" placeholder="Message content (optional)…" value=${form.content} onInput=${e=>setForm({...form,content:e.target.value})} style=${{width:'100%',height:80,fontSize:13,resize:'none',marginBottom:10}}></textarea>
-        <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <label style=${{display:'flex',alignItems:'center',gap:6,fontSize:13,cursor:'pointer',flex:1}}>
-            <input type="checkbox" checked=${form.pinned} onChange=${e=>setForm({...form,pinned:e.target.checked})}/> Pin to top
-          </label>
-          <button class="btn bp" onClick=${save} disabled=${saving||!form.title}>${saving?'Posting…':'Post'}</button>
-          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
-        </div>
-      </div>`:null}
-    ${items.map(a=>html`
-      <div key=${a.id} style=${{background:'var(--sf)',border:`1px solid ${a.read?'var(--bd)':'rgba(37,99,235,0.3)'}`,borderLeft:`3px solid ${a.pinned?'#f59e0b':'var(--ac)'}`,borderRadius:10,padding:'14px 16px',marginBottom:10}}>
-        <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10}}>
-          <div style=${{flex:1}}>
-            <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-              ${a.pinned?html`<span style=${{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:'rgba(245,158,11,0.15)',color:'#b45309'}}>📌 Pinned</span>`:null}
-              ${!a.read?html`<span style=${{width:7,height:7,borderRadius:'50%',background:'var(--ac)',display:'inline-block'}}></span>`:null}
-              <span style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${a.title}</span>
-            </div>
-            ${a.content?html`<p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.6,margin:0}}>${a.content}</p>`:null}
-            <div style=${{fontSize:11,color:'var(--tx3)',marginTop:6}}>By ${a.author_name||'Admin'} · ${(a.created||'').slice(0,10)}</div>
-          </div>
-          <div style=${{display:'flex',gap:6,flexShrink:0}}>
-            ${!a.read?html`<button class="btn bg" style=${{fontSize:11,padding:'3px 10px'}} onClick=${()=>markRead(a.id)}>Mark read</button>`:null}
-            ${canPost?html`<button class="btn br" style=${{fontSize:11,padding:'3px 8px'}} onClick=${()=>del(a.id)}>Del</button>`:null}
-          </div>
-        </div>
-      </div>`)}
-    ${!items.length?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)'}}><div style=${{fontSize:40,marginBottom:12}}>📢</div><div style=${{fontSize:14}}>No announcements yet</div></div>`:null}
-  </div>`;
-}
-
 /* ─── AI Standup View ────────────────────────────────────────────────────── */
-function StandupView({cu,users}){
-  const [report,setReport]=useState('');
-  const [selUser,setSelUser]=useState(cu?.id||'');
-  const [loading,setLoading]=useState(false);
-  const [err,setErr]=useState('');
-  const [history,setHistory]=useState([]);
-  const canSelectOthers=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
-  const generate=async()=>{
-    setLoading(true);setErr('');setReport('');
-    const r=await api.post('/api/ai/standup',{user_id:selUser||cu?.id});
-    setLoading(false);
-    if(r?.error){setErr(r.message||r.error);}
-    else{setReport(r.report||'');setHistory(p=>[{user:r.user,report:r.report,date:new Date().toLocaleDateString()},...p.slice(0,4)]);}
-  };
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:800}}>
-    <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
-      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🤖 AI Daily Standup</h2>
-    </div>
-    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
-      <div style=${{fontSize:13,color:'var(--tx2)',marginBottom:14,lineHeight:1.6}}>Generate a professional daily standup report based on task activity, time logs, and progress — no manual writing needed.</div>
-      <div style=${{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-        ${canSelectOthers?html`
-          <select class="inp" style=${{height:36,fontSize:13,width:200}} value=${selUser} onChange=${e=>setSelUser(e.target.value)}>
-            ${safe(users).map(u=>html`<option value=${u.id}>${u.name} (${u.role})</option>`)}
-          </select>`:html`<span style=${{fontSize:13,fontWeight:600,color:'var(--tx)'}}>${cu?.name}</span>`}
-        <button class="btn bp" style=${{height:36,fontSize:13,padding:'0 20px',display:'flex',alignItems:'center',gap:8}} onClick=${generate} disabled=${loading}>
-          ${loading?html`<span class="spin"></span>`:null} ${loading?'Generating…':'Generate Standup'}
-        </button>
-      </div>
-    </div>
-    ${err?html`<div style=${{padding:14,background:'rgba(185,28,28,0.08)',border:'1px solid rgba(185,28,28,0.25)',borderRadius:9,color:'#b91c1c',fontSize:13,marginBottom:16}}>${err}</div>`:null}
-    ${report?html`
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
-        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
-          <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>Today's Standup</div>
-          <button class="btn bg" style=${{fontSize:12}} onClick=${()=>navigator.clipboard?.writeText(report).then(()=>alert('Copied!'))}>📋 Copy</button>
-        </div>
-        <div style=${{fontSize:14,color:'var(--tx)',lineHeight:1.75,whiteSpace:'pre-wrap'}}>${report}</div>
-      </div>`:null}
-    ${history.length>1?html`
-      <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:8}}>RECENT STANDUPS</div>
-      ${history.slice(1).map((h,i)=>html`
-        <div key=${i} style=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,padding:'12px 16px',marginBottom:8}}>
-          <div style=${{fontSize:12,color:'var(--tx3)',marginBottom:6}}>${h.user} · ${h.date}</div>
-          <div style=${{fontSize:13,color:'var(--tx)',lineHeight:1.6,whiteSpace:'pre-wrap'}}>${h.report.slice(0,300)}${h.report.length>300?'…':''}</div>
-        </div>`)}`:null}
-  </div>`;
-}
-
 /* ─── AI Code Review View ────────────────────────────────────────────────── */
-function CodeReviewView({cu}){
-  const [diff,setDiff]=useState('');
-  const [ctx,setCtx]=useState('');
-  const [result,setResult]=useState('');
-  const [loading,setLoading]=useState(false);
-  const [err,setErr]=useState('');
-  const canUse=cu&&!['Viewer'].includes(cu.role);
-  if(!canUse)return html`<div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx3)'}}>Not available for your role</div>`;
-  const review=async()=>{
-    if(!diff.trim())return;
-    setLoading(true);setErr('');setResult('');
-    const r=await api.post('/api/ai/code-review',{diff,context:ctx});
-    setLoading(false);
-    if(r?.error)setErr(r.message||r.error);
-    else setResult(r.review||'');
-  };
-  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',gap:0}}>
-    <div style=${{flex:1,overflowY:'auto',padding:'20px 24px',borderRight:'1px solid var(--bd)',minWidth:0}}>
-      <h2 style=${{margin:'0 0 16px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔍 AI Code Review</h2>
-      <div style=${{marginBottom:10}}>
-        <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Paste PR diff or code changes</label>
-        <textarea class="inp" value=${diff} onInput=${e=>setDiff(e.target.value)} placeholder="--- a/file.py\n+++ b/file.py\n@@ -1,5 +1,6 @@\n..."
-          style=${{width:'100%',minHeight:280,fontSize:12,fontFamily:'monospace',resize:'vertical',lineHeight:1.5}}></textarea>
-      </div>
-      <div style=${{marginBottom:14}}>
-        <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Context (optional)</label>
-        <input class="inp" value=${ctx} onInput=${e=>setCtx(e.target.value)} placeholder="e.g. This is a payment processing module, focus on security" style=${{width:'100%',height:34,fontSize:13}}/>
-      </div>
-      <button class="btn bp" style=${{fontSize:13,padding:'8px 20px',display:'flex',alignItems:'center',gap:8}} onClick=${review} disabled=${loading||!diff.trim()}>
-        ${loading?html`<span class="spin"></span>`:null} ${loading?'Reviewing…':'Review Code'}
-      </button>
-      ${err?html`<div style=${{marginTop:12,padding:12,background:'rgba(185,28,28,0.08)',borderRadius:8,color:'#b91c1c',fontSize:13}}>${err}</div>`:null}
-    </div>
-    <div style=${{flex:1,overflowY:'auto',padding:'20px 24px',minWidth:0}}>
-      ${result?html`
-        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:14}}>Review Results</div>
-        <div style=${{fontSize:13,color:'var(--tx)',lineHeight:1.8,whiteSpace:'pre-wrap'}}>${result}</div>`:
-      html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx3)',gap:10}}>
-        <div style=${{fontSize:40}}>🔍</div>
-        <div style=${{fontSize:14}}>Paste a diff and click Review</div>
-        <div style=${{fontSize:12,textAlign:'center',maxWidth:220}}>AI will check for bugs, security issues, code style and give a verdict</div>
-      </div>`}
-    </div>
-  </div>`;
-}
-
 /* ─── AI Risk View ───────────────────────────────────────────────────────── */
-function RiskView({cu,projects,tasks}){
-  const [analysis,setAnalysis]=useState('');
-  const [loading,setLoading]=useState(false);
-  const [err,setErr]=useState('');
-  const canUse=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
-  if(!canUse)return html`<div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx3)'}}>Available for Admin, Manager and TeamLead only</div>`;
-  const analyze=async()=>{
-    setLoading(true);setErr('');setAnalysis('');
-    const r=await api.get('/api/ai/risk');
-    setLoading(false);
-    if(r?.error)setErr(r.message||r.error);
-    else setAnalysis(r.analysis||'');
-  };
-  const RISK_COLORS={'CRITICAL':'#ef4444','HIGH':'#f97316','MEDIUM':'#eab308','LOW':'#22c55e'};
-  const sections=(analysis||'').split('---').filter(Boolean);
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:860}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <div>
-        <h2 style=${{margin:'0 0 4px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>⚠️ AI Risk Predictor</h2>
-        <p style=${{margin:0,fontSize:13,color:'var(--tx3)'}}>Analyzes task overdue rates, blockers, and deadlines to flag at-risk projects</p>
-      </div>
-      <button class="btn bp" style=${{fontSize:13,padding:'8px 18px',display:'flex',alignItems:'center',gap:8}} onClick=${analyze} disabled=${loading}>
-        ${loading?html`<span class="spin"></span>`:null} ${loading?'Analyzing…':'Run Analysis'}
-      </button>
-    </div>
-    ${err?html`<div style=${{padding:14,background:'rgba(185,28,28,0.08)',border:'1px solid rgba(185,28,28,0.2)',borderRadius:9,color:'#b91c1c',fontSize:13,marginBottom:16}}>${err}</div>`:null}
-    ${!analysis&&!loading?html`
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24}}>
-        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:10}}>What this analyzes</div>
-        ${[['Tasks overdue','How many tasks are past their due date'],['Blocked tasks','Tasks stuck in blocked state'],['Completion rate','Average % done vs deadline proximity'],['Sprint health','Story points done vs planned']].map(([t,d])=>html`
-          <div style=${{display:'flex',gap:10,marginBottom:8}}>
-            <span style=${{fontSize:14}}>•</span>
-            <div><span style=${{fontWeight:600,fontSize:13,color:'var(--tx)'}}>${t}</span> <span style=${{fontSize:12,color:'var(--tx3)'}}>${d}</span></div>
-          </div>`)}
-        <div style=${{marginTop:16,fontSize:12,color:'var(--tx3)'}}>Uses your workspace AI key · ${projects.length} projects to analyze</div>
-      </div>`:null}
-    ${sections.map((s,i)=>{
-      const lines=s.trim().split('\n').filter(Boolean);
-      const projectLine=lines.find(l=>l.startsWith('PROJECT:'));
-      const riskLine=lines.find(l=>l.startsWith('RISK:'));
-      const reasonLine=lines.find(l=>l.startsWith('REASON:'));
-      const actionLines=lines.filter(l=>l.startsWith('-')||l.startsWith('•'));
-      const projName=projectLine?projectLine.replace('PROJECT:','').trim():'Project';
-      const risk=riskLine?riskLine.replace('RISK:','').trim().toUpperCase():'MEDIUM';
-      const reason=reasonLine?reasonLine.replace('REASON:','').trim():'';
-      return html`
-        <div key=${i} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderLeft:`3px solid ${RISK_COLORS[risk]||'#888'}`,borderRadius:10,padding:'14px 16px',marginBottom:10}}>
-          <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:8}}>
-            <span style=${{fontWeight:700,fontSize:15,color:'var(--tx)',flex:1}}>${projName}</span>
-            <span style=${{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:99,background:(RISK_COLORS[risk]||'#888')+'20',color:RISK_COLORS[risk]||'#888'}}>${risk}</span>
-          </div>
-          ${reason?html`<p style=${{fontSize:13,color:'var(--tx2)',margin:'0 0 8px',lineHeight:1.5}}>${reason}</p>`:null}
-          ${actionLines.length?html`
-            <div style=${{fontSize:12,fontWeight:600,color:'var(--tx3)',marginBottom:4}}>RECOMMENDED ACTIONS</div>
-            ${actionLines.map((a,j)=>html`<div key=${j} style=${{fontSize:12,color:'var(--tx)',padding:'2px 0',lineHeight:1.5}}>${a}</div>`)}`:null}
-        </div>`;
-    })}
-  </div>`;
-}
-
 /* ─── Time Report View ───────────────────────────────────────────────────── */
 function TimeReportView({cu,users}){
   const [logs,setLogs]=useState([]);
@@ -11611,103 +10247,6 @@ function TimeReportView({cu,users}){
 }
 
 /* ─── Forms & Intake View ────────────────────────────────────────────────── */
-function FormsView({cu,projects}){
-  const [forms,setForms]=useState([]);
-  const [showBuilder,setShowBuilder]=useState(false);
-  const [editForm,setEditForm]=useState(null);
-  const [form,setForm]=useState({title:'',description:'',project_id:'',fields:[]});
-  const [saving,setSaving]=useState(false);
-  const [submissions,setSubmissions]=useState({});
-  const canCreate=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
-  const FIELD_TYPES=[{v:'text',l:'Text'},{v:'email',l:'Email'},{v:'textarea',l:'Long text'},{v:'select',l:'Dropdown'},{v:'number',l:'Number'}];
-  const load=async()=>{const r=await api.get('/api/forms');setForms(r||[]);};
-  useEffect(()=>{load();},[]);
-  const openBuilder=(f=null)=>{
-    if(f){setEditForm(f);setForm({title:f.title,description:f.description||'',project_id:f.project_id||'',fields:JSON.parse(f.fields||'[]')});}
-    else{setEditForm(null);setForm({title:'',description:'',project_id:'',fields:[]});}
-    setShowBuilder(true);
-  };
-  const addField=()=>setForm(p=>({...p,fields:[...p.fields,{type:'text',name:`field${p.fields.length+1}`,label:'New field',required:false,options:[]}]}));
-  const removeField=i=>setForm(p=>({...p,fields:p.fields.filter((_,j)=>j!==i)}));
-  const updateField=(i,k,v)=>setForm(p=>({...p,fields:p.fields.map((f,j)=>j===i?{...f,[k]:v}:f)}));
-  const save=async()=>{
-    setSaving(true);
-    if(editForm){await api.put(`/api/forms/${editForm.id}`,form);}
-    else{await api.post('/api/forms',form);}
-    setSaving(false);setShowBuilder(false);load();
-  };
-  const del=async(id)=>{if(!confirm('Delete form?'))return;await api.del(`/api/forms/${id}`);load();};
-  const loadSubs=async(fid)=>{
-    if(submissions[fid])return;
-    const r=await api.get(`/api/forms/${fid}/submissions`);
-    setSubmissions(p=>({...p,[fid]:r||[]}));
-  };
-  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <div><h2 style=${{margin:'0 0 4px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>📝 Forms & Intake</h2>
-        <p style=${{margin:0,fontSize:13,color:'var(--tx3)'}}>Public forms that auto-create tickets on submission</p></div>
-      ${canCreate?html`<button class="btn bp" onClick=${()=>openBuilder()}>+ Build Form</button>`:null}
-    </div>
-    ${showBuilder?html`
-      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
-        <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)',marginBottom:14}}>${editForm?'Edit Form':'New Form'}</div>
-        <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
-          <input class="inp" placeholder="Form title" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})} style=${{height:36,fontSize:14,fontWeight:600}}/>
-          <select class="inp" style=${{height:36,fontSize:13}} value=${form.project_id} onChange=${e=>setForm({...form,project_id:e.target.value})}>
-            <option value="">No project</option>
-            ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
-          </select>
-        </div>
-        <textarea class="inp" placeholder="Description shown to submitters…" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{width:'100%',height:56,fontSize:13,resize:'none',marginBottom:14}}></textarea>
-        <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:8}}>FORM FIELDS</div>
-        ${form.fields.map((f,i)=>html`
-          <div key=${i} style=${{display:'flex',gap:6,marginBottom:8,alignItems:'center',background:'var(--sf2)',padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)'}}>
-            <select class="inp" style=${{height:30,fontSize:12,width:110}} value=${f.type} onChange=${e=>updateField(i,'type',e.target.value)}>
-              ${FIELD_TYPES.map(t=>html`<option value=${t.v}>${t.l}</option>`)}
-            </select>
-            <input class="inp" value=${f.label} onInput=${e=>updateField(i,'label',e.target.value)} style=${{flex:1,height:30,fontSize:12}} placeholder="Label"/>
-            <input class="inp" value=${f.name} onInput=${e=>updateField(i,'name',e.target.value)} style=${{width:90,height:30,fontSize:11,fontFamily:'monospace'}} placeholder="field_name"/>
-            ${f.type==='select'?html`<input class="inp" value=${(f.options||[]).join(',')} onInput=${e=>updateField(i,'options',e.target.value.split(','))} style=${{width:130,height:30,fontSize:11}} placeholder="opt1,opt2"/>`:null}
-            <label style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}}>
-              <input type="checkbox" checked=${f.required} onChange=${e=>updateField(i,'required',e.target.checked)}/> Req
-            </label>
-            <button style=${{background:'none',border:'none',cursor:'pointer',color:'#ef4444',fontSize:16}} onClick=${()=>removeField(i)}>✕</button>
-          </div>`)}
-        <div style=${{display:'flex',gap:8,marginTop:8}}>
-          <button class="btn bg" style=${{fontSize:12}} onClick=${addField}>+ Add Field</button>
-          <button class="btn bp" style=${{marginLeft:'auto'}} onClick=${save} disabled=${saving||!form.title}>${saving?'Saving…':'Save Form'}</button>
-          <button class="btn bg" onClick=${()=>setShowBuilder(false)}>Cancel</button>
-        </div>
-      </div>`:null}
-    ${forms.map(f=>html`
-      <div key=${f.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',marginBottom:10}}>
-        <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <div style=${{flex:1}}>
-            <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>${f.title}</div>
-            ${f.description?html`<div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${f.description}</div>`:null}
-          </div>
-          <span style=${{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99,background:f.active?'rgba(21,128,61,0.15)':'rgba(100,116,139,0.15)',color:f.active?'#15803d':'#64748b'}}>${f.active?'Active':'Inactive'}</span>
-          <button class="btn bg" style=${{fontSize:11}} onClick=${()=>navigator.clipboard?.writeText(window.location.origin+'/form/'+f.id).then(()=>alert('Link copied!'))}>📋 Copy Link</button>
-          <a href=${'/form/'+f.id} target="_blank"><button class="btn bg" style=${{fontSize:11}}>Preview</button></a>
-          ${canCreate?html`
-            <button class="btn bg" style=${{fontSize:11}} onClick=${()=>openBuilder(f)}>Edit</button>
-            <button class="btn br" style=${{fontSize:11}} onClick=${()=>del(f.id)}>Del</button>`:null}
-        </div>
-        <div style=${{marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
-          <button class="btn bg" style=${{fontSize:11,height:26,padding:'0 10px'}} onClick=${()=>loadSubs(f.id)}>
-            ${submissions[f.id]!==undefined?`${submissions[f.id].length} submissions`:'View submissions'}
-          </button>
-        </div>
-        ${submissions[f.id]&&submissions[f.id].length?html`
-          <div style=${{marginTop:10,overflowX:'auto'}}>
-            ${submissions[f.id].slice(0,5).map((s,i)=>html`
-              <div key=${i} style=${{fontSize:11,padding:'5px 0',borderTop:'1px solid var(--bd)',color:'var(--tx2)'}}>${(s.created||'').slice(0,16)} · ${s.submitter_email||'Anonymous'} · Ticket: ${s.ticket_id}</div>`)}
-          </div>`:null}
-      </div>`)}
-    ${!forms.length?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)'}}><div style=${{fontSize:36,marginBottom:10}}>📝</div><div>No forms yet</div></div>`:null}
-  </div>`;
-}
-
 /* ─── TOTP 2FA Setup Panel (in settings) ────────────────────────────────── */
 function TOTPSetupPanel({cu}){
   const [status,setStatus]=useState(null);
@@ -11983,109 +10522,7 @@ function MentionInput({value,onChange,onKeyDown,users,placeholder,style,cu}){
 }
 
 /* ─── Pinned Messages Panel ──────────────────────────────────────────────── */
-function PinnedMessagesPanel({projectId,cu,onClose}){
-  const [pins,setPins]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const load=async()=>{
-    setLoading(true);
-    const r=await api.get(`/api/projects/${projectId}/pinned-messages`);
-    setPins(r||[]);setLoading(false);
-  };
-  useEffect(()=>{if(projectId)load();},[projectId]);
-  const canPin=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
-  const unpin=async(id)=>{
-    await api.post(`/api/messages/${id}/unpin`,{});load();
-  };
-  return html`<div style=${{width:300,borderLeft:'1px solid var(--bd)',background:'var(--sf)',display:'flex',flexDirection:'column',flexShrink:0}}>
-    <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-      <div style=${{fontWeight:700,fontSize:13,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>
-        <span style=${{fontSize:14}}>📌</span> Pinned Messages
-      </div>
-      <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16}}>✕</button>
-    </div>
-    <div style=${{flex:1,overflowY:'auto',padding:'10px 12px'}}>
-      ${loading?html`<div style=${{textAlign:'center',padding:20,color:'var(--tx3)',fontSize:12}}>Loading…</div>`:null}
-      ${!loading&&!pins.length?html`<div style=${{textAlign:'center',padding:24,color:'var(--tx3)'}}>
-        <div style=${{fontSize:28,marginBottom:8}}>📌</div>
-        <div style=${{fontSize:12}}>No pinned messages yet</div>
-        ${canPin?html`<div style=${{fontSize:11,marginTop:4,color:'var(--tx3)'}}>Hover a message and click pin</div>`:null}
-      </div>`:null}
-      ${pins.map(p=>html`
-        <div key=${p.id} style=${{padding:'10px 12px',borderRadius:9,background:'var(--bg)',border:'1px solid var(--bd)',marginBottom:8}}>
-          <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-            <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)'}}>${p.sender_name||'?'}</span>
-            <div style=${{display:'flex',gap:6,alignItems:'center'}}>
-              <span style=${{fontSize:10,color:'var(--tx3)'}}>${(p.ts||'').slice(0,10)}</span>
-              ${canPin?html`<button onClick=${()=>unpin(p.id)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:11,padding:'0 2px'}}>Unpin</button>`:null}
-            </div>
-          </div>
-          <div style=${{fontSize:12,color:'var(--tx)',lineHeight:1.5}}>${p.content}</div>
-        </div>`)}
-    </div>
-  </div>`;
-}
-
 /* ─── Task Templates Panel ───────────────────────────────────────────────── */
-function TaskTemplatesPanel({onApply,onClose,cu}){
-  const [templates,setTemplates]=useState([]);
-  const [showCreate,setShowCreate]=useState(false);
-  const [form,setForm]=useState({name:'',description:'',priority:'medium',stage:'backlog',labels:[],subtasks:[]});
-  const [saving,setSaving]=useState(false);
-  const load=async()=>{const r=await api.get('/api/task-templates');setTemplates(r||[]);};
-  useEffect(()=>{load();},[]);
-  const save=async()=>{
-    if(!form.name)return;setSaving(true);
-    await api.post('/api/task-templates',form);setSaving(false);setShowCreate(false);load();
-  };
-  const del=async(id)=>{if(!confirm('Delete template?'))return;await api.del(`/api/task-templates/${id}`);load();};
-  const PRIO_COLOR={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
-  return html`<div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center'}}
-    onClick=${e=>{if(e.target===e.currentTarget)onClose();}}>
-    <div style=${{background:'var(--sf)',borderRadius:16,width:'min(520px,94vw)',maxHeight:'80vh',display:'flex',flexDirection:'column',border:'1px solid var(--bd)',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}>
-      <div style=${{padding:'16px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>📋 Task Templates</div>
-        <div style=${{display:'flex',gap:8}}>
-          <button class="btn bp" style=${{fontSize:12}} onClick=${()=>setShowCreate(p=>!p)}>+ Create</button>
-          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18}}>✕</button>
-        </div>
-      </div>
-      ${showCreate?html`
-        <div style=${{padding:'14px 20px',borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
-          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-            <input class="inp" placeholder="Template name…" value=${form.name} onInput=${e=>setForm({...form,name:e.target.value})} style=${{height:32,fontSize:13,gridColumn:'span 2'}}/>
-            <select class="inp" style=${{height:32,fontSize:12}} value=${form.priority} onChange=${e=>setForm({...form,priority:e.target.value})}>
-              ${['critical','high','medium','low'].map(p=>html`<option value=${p}>${p}</option>`)}
-            </select>
-            <select class="inp" style=${{height:32,fontSize:12}} value=${form.stage} onChange=${e=>setForm({...form,stage:e.target.value})}>
-              ${['backlog','planning','inprogress','review','testing'].map(s=>html`<option value=${s}>${s}</option>`)}
-            </select>
-          </div>
-          <textarea class="inp" placeholder="Description (optional)…" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{width:'100%',height:52,fontSize:12,resize:'none',marginBottom:8}}></textarea>
-          <div style=${{display:'flex',gap:8}}>
-            <button class="btn bp" style=${{fontSize:12}} onClick=${save} disabled=${saving||!form.name}>${saving?'Saving…':'Save Template'}</button>
-            <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setShowCreate(false)}>Cancel</button>
-          </div>
-        </div>`:null}
-      <div style=${{flex:1,overflowY:'auto',padding:'10px 14px'}}>
-        ${templates.map(t=>html`
-          <div key=${t.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:9,background:'var(--bg)',border:'1px solid var(--bd)',marginBottom:8}}>
-            <div style=${{flex:1}}>
-              <div style=${{fontWeight:600,fontSize:13,color:'var(--tx)',marginBottom:3}}>${t.name}</div>
-              <div style=${{display:'flex',gap:5}}>
-                <span style=${{fontSize:10,padding:'1px 6px',borderRadius:3,background:(PRIO_COLOR[t.priority]||'#888')+'18',color:PRIO_COLOR[t.priority]||'#888',fontWeight:600}}>${t.priority}</span>
-                <span style=${{fontSize:10,padding:'1px 6px',borderRadius:3,background:'var(--sf2)',color:'var(--tx3)'}}>${t.stage}</span>
-              </div>
-            </div>
-            <button class="btn bp" style=${{fontSize:11,padding:'4px 12px'}} onClick=${()=>{onApply(t);onClose();}}>Use</button>
-            <button class="btn br" style=${{fontSize:11,padding:'4px 8px'}} onClick=${()=>del(t.id)}>Del</button>
-          </div>`)}
-        ${!templates.length?html`<div style=${{textAlign:'center',padding:24,color:'var(--tx3)'}}><div style=${{fontSize:28,marginBottom:8}}>📋</div><div style=${{fontSize:12}}>No templates yet — create one above</div></div>`:null}
-      </div>
-    </div>
-  </div>`;
-}
-
-
 /* ─── AIAssistant floating panel ──────────────────────────────────────────── */
 function AIAssistant({cu,projects,tasks,users}){
   const [open,setOpen]=useState(false);const [msgs,setMsgs]=useState([]);const [input,setInput]=useState('');const [busy,setBusy]=useState(false);const ref=useRef(null);const iref=useRef(null);
@@ -12734,12 +11171,10 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-function HuddleCall(){return null;}
-
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','docs','sprints','goals','announcements','standup','codereview','risk','timereport','forms'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','docs','settings','team','productivity','timereport','notifs'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -12774,10 +11209,9 @@ function App(){
     dashboard:'Dashboard',projects:'Projects',tasks:'Kanban Board',
     messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
     timeline:'Timeline Tracker',reminders:'Reminders',
-    settings:'Settings',team:'Team Management',productivity:'Dev Productivity',
-    calendar:'Calendar',docs:'Docs & Wiki',sprints:'Sprints',goals:'Goals & OKRs',tasks:'Kanban Board',
-    announcements:'Announcements',standup:'AI Standup',codereview:'Code Review',
-    risk:'Risk Predictor',timereport:'Time Report',forms:'Forms & Intake'
+    settings:'Settings',team:'Team Management',
+    productivity:'Dev Productivity',docs:'Documentation & Diagrams',
+    timereport:'Time Report',notifs:'Notifications',
   };
   const _setView=useCallback((v)=>{
     setView(v);
@@ -13231,7 +11665,8 @@ function App(){
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, announcements:{title:'Announcements',sub:'Workspace-wide announcements'}, standup:{title:'AI Standup',sub:'Auto-generated daily standups'}, codereview:{title:'AI Code Review',sub:'Paste a diff and get AI feedback'}, risk:{title:'AI Risk Predictor',sub:'Projects flagged for potential slip'}, timereport:{title:'Time Report',sub:'Hours logged by member and project'}, forms:{title:'Forms & Intake',sub:'Public forms that create tickets automatically'}, };
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support & bug tickets'}, docs:{title:'Documentation & Diagrams',sub:'Docs, architecture & technical diagrams'}, timereport:{title:'Time Report',sub:'Hours logged by member and project'},
+  };
 
   const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
@@ -13287,32 +11722,24 @@ function App(){
           <${AnnouncementBanner} cu=${cu}/>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
-            ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId} onClearInitial=${()=>setInitialProjectId(null)}/>`:null}
-            ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${_setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
+            ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>setReminderTask(t)} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId} onClearInitial=${()=>setInitialProjectId(null)}/>`:null}
+            ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>setReminderTask(t)} teams=${data.teams} activeTeam=${activeTeam}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
               initialPriority=${taskFilterType==='priority'?taskFilterValue:null}
               initialAssignee=${taskFilterType==='assignee'?taskFilterValue:null}
             />`:null}
             ${baseView==='messages'?html`<${MessagesView} projects=${scopedProjects} users=${data.users} cu=${cu} tasks=${scopedTasks} key=${'msgs-'+(teamCtx||'all')}/>`:null}
             ${baseView==='dm'?html`<${DirectMessages} cu=${cu} users=${data.users} dmUnread=${dmUnread} onDmRead=${onDmRead} dmEnabled=${wsDmEnabled} initialUserId=${dmTargetUser} onClearInitial=${()=>setDmTargetUser(null)} onlineUsers=${onlineUsers}/>`:null}
-            ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>{setReminderTask(t);}} onReload=${load}/>`:null}
-            ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${setView}/>`:null}
+            ${baseView==='reminders'?html`<${RemindersView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onSetReminder=${t=>setReminderTask(t)} onReload=${load}/>`:null}
+            ${baseView==='notifs'?html`<${NotifsView} notifs=${data.notifs} reload=${load} onNavigate=${_setView}/>`:null}
             ${baseView==='tickets'?html`<${TicketsView} cu=${cu} users=${scopedUsers} projects=${scopedProjects} onReload=${load} activeTeam=${activeTeam} initialAssignee=${ticketFilterType==='assignee'?ticketFilterValue:null} initialStatus=${ticketFilterType==='status'?ticketFilterValue:null}/>`:null}
-            ${baseView==='team'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
-            ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
-            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
-            ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
-            ${baseView==='calendar'?html`<${CalendarView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{_setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
             ${baseView==='docs'?html`<${DocsView} projects=${scopedProjects} cu=${cu}/>`:null}
-            ${baseView==='sprints'?html`<${SprintsView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
-            ${baseView==='goals'?html`<${GoalsView} cu=${cu} users=${scopedUsers}/>`:null}
-            ${baseView==='announcements'?html`<${AnnouncementsView} cu=${cu}/>`:null}
-            ${baseView==='standup'?html`<${StandupView} cu=${cu} users=${scopedUsers}/>`:null}
-            ${baseView==='codereview'&&cu&&cu.role!=='Viewer'?html`<${CodeReviewView} cu=${cu}/>`:null}
-            ${baseView==='risk'&&cu&&['Admin','Manager','TeamLead'].includes(cu.role)?html`<${RiskView} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks}/>`:null}
-            ${baseView==='timereport'?html`<${TimeReportView} cu=${cu} users=${scopedUsers}/>`:null}
-            ${baseView==='forms'?html`<${FormsView} cu=${cu} projects=${scopedProjects}/>`:null}
+            ${baseView==='team'&&isAdminManager?html`<${TeamView} users=${data.users} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='settings'&&isAdminManager?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
+            ${baseView==='timereport'&&isAdminManager?html`<${TimeReportView} cu=${cu} users=${scopedUsers}/>`:null}
+            ${baseView==='productivity'&&isAdminManager?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             </div>
           <//>
         </div>
