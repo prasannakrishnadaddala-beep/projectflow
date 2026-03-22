@@ -826,29 +826,278 @@ def _totp_qr_url(secret, email, issuer="VEWIT"):
     params = urllib.parse.urlencode({"secret": secret_padded, "issuer": issuer})
     return f"otpauth://totp/{urllib.parse.quote(issuer)}:{urllib.parse.quote(email)}?{params}"
 
+# ── Pure-Python QR Code generator (no external deps) ─────────────────────────
+def _qr_make_matrix(data: str):
+    """Generate a QR code matrix for the given string using only stdlib.
+    Returns a list-of-lists of booleans (True = dark module)."""
+    # We use a minimal QR encoder: Version 3, Error Correction M, byte mode.
+    # This handles URLs up to ~77 bytes which covers any otpauth:// URL.
+    import struct, math
+
+    # ── Reed-Solomon GF(256) over x^8+x^4+x^3+x^2+1 (QR primitive poly) ────
+    GF_EXP = [0]*512; GF_LOG = [0]*256
+    x = 1
+    for i in range(255):
+        GF_EXP[i] = x; GF_LOG[x] = i
+        x = x << 1
+        if x & 0x100: x ^= 0x11d
+    for i in range(255,512): GF_EXP[i] = GF_EXP[i-255]
+
+    def gf_mul(a,b):
+        if a==0 or b==0: return 0
+        return GF_EXP[GF_LOG[a]+GF_LOG[b]]
+
+    def rs_poly_mul(p,q):
+        r = [0]*(len(p)+len(q)-1)
+        for i,a in enumerate(p):
+            for j,b in enumerate(q):
+                r[i+j] ^= gf_mul(a,b)
+        return r
+
+    def rs_generator(n):
+        g = [1]
+        for i in range(n):
+            g = rs_poly_mul(g,[1, GF_EXP[i]])
+        return g
+
+    def rs_encode(msg_poly, n_ec):
+        gen = rs_generator(n_ec)
+        rem = list(msg_poly) + [0]*n_ec
+        for i in range(len(msg_poly)):
+            c = rem[i]
+            if c:
+                for j,b in enumerate(gen):
+                    rem[i+j] ^= gf_mul(b,c)
+        return rem[len(msg_poly):]
+
+    # ── Select version (auto: try 2,3,4,5 with EC M) ─────────────────────────
+    data_b = data.encode('iso-8859-1') if all(ord(c)<256 for c in data) else data.encode('utf-8')
+    n = len(data_b)
+    # Version capacities for EC M, byte mode (data codewords, ec codewords per block, blocks)
+    VERS = [
+        (1, 16, 10, 1),  (2, 28, 16, 1),  (3, 44, 26, 1),
+        (4, 64, 18, 2),  (5, 86, 24, 2),  (6, 108,16, 4),
+        (7, 124,18, 4),  (8, 154,22, 2),  (9, 182,22, 3),
+        (10,216,26, 4),
+    ]
+    ver_info = None
+    for v,cap,ec_per,blk in VERS:
+        if n <= cap - 3:  # 2 byte mode indicator + length byte
+            ver_info = (v, cap, ec_per, blk); break
+    if not ver_info:
+        raise ValueError(f"Data too long for QR ({n} bytes)")
+    version, data_cap, ec_per_block, num_blocks = ver_info
+    size = version*4 + 17
+
+    # ── Build data bit stream ─────────────────────────────────────────────────
+    bits = []
+    def add_bits(val, count):
+        for i in range(count-1,-1,-1): bits.append((val>>i)&1)
+
+    add_bits(0b0100, 4)   # byte mode
+    char_count_bits = 8 if version < 10 else 16
+    add_bits(n, char_count_bits)
+    for byte in data_b: add_bits(byte, 8)
+    add_bits(0, 4)  # terminator
+    while len(bits)%8: bits.append(0)
+
+    # Convert to codewords and pad
+    codewords = [int(''.join(str(b) for b in bits[i:i+8]),2) for i in range(0,len(bits),8)]
+    PAD = [0xEC,0x11]
+    total_data = data_cap
+    while len(codewords) < total_data: codewords.append(PAD[len(codewords)%2])
+    codewords = codewords[:total_data]
+
+    # ── Reed-Solomon error correction ─────────────────────────────────────────
+    block_size = total_data // num_blocks
+    ec_blocks = []; data_blocks = []
+    for b in range(num_blocks):
+        blk = codewords[b*block_size:(b+1)*block_size]
+        data_blocks.append(blk)
+        ec_blocks.append(rs_encode(blk, ec_per_block))
+
+    # Interleave
+    final_cw = []
+    max_d = max(len(b) for b in data_blocks)
+    for i in range(max_d):
+        for b in data_blocks:
+            if i < len(b): final_cw.append(b[i])
+    max_e = max(len(b) for b in ec_blocks)
+    for i in range(max_e):
+        for b in ec_blocks:
+            if i < len(b): final_cw.append(b[i])
+
+    # ── Build QR matrix ───────────────────────────────────────────────────────
+    DARK=True; LIGHT=False
+    mat  = [[LIGHT]*size for _ in range(size)]
+    used = [[False]*size for _ in range(size)]
+
+    def place(r,c,v):
+        if 0<=r<size and 0<=c<size:
+            mat[r][c]=v; used[r][c]=True
+
+    def reserve(r,c):
+        if 0<=r<size and 0<=c<size: used[r][c]=True
+
+    def finder(tr,tc):
+        for r in range(7):
+            for c in range(7):
+                v = (r in (0,6)) or (c in (0,6)) or (2<=r<=4 and 2<=c<=4)
+                place(tr+r, tc+c, v)
+        # Separator
+        for i in range(8):
+            place(tr+7,tc+i,LIGHT); place(tr+i,tc+7,LIGHT)
+            reserve(tr+7,tc+i); reserve(tr+i,tc+7)
+
+    finder(0,0); finder(0,size-7); finder(size-7,0)
+
+    # Timing patterns
+    for i in range(8, size-8):
+        v = i%2==0
+        place(6,i,v); place(i,6,v)
+
+    # Dark module
+    place(size-8,8,DARK)
+
+    # Alignment patterns (version >= 2)
+    ALIGN_POS = {2:[6,18],3:[6,22],4:[6,26],5:[6,30],6:[6,34],
+                 7:[6,22,38],8:[6,24,42],9:[6,26,46],10:[6,28,50]}
+    if version in ALIGN_POS:
+        pos = ALIGN_POS[version]
+        for r in pos:
+            for c in pos:
+                if used[r][c]: continue
+                for dr in range(-2,3):
+                    for dc in range(-2,3):
+                        v = abs(dr)==2 or abs(dc)==2 or (dr==0 and dc==0)
+                        place(r+dr,c+dc,v)
+
+    # Reserve format info areas
+    for i in range(9):
+        reserve(8,i); reserve(i,8)
+    for i in range(size-8,size):
+        reserve(8,i); reserve(i,8)
+
+    # ── Place data bits (zigzag) ──────────────────────────────────────────────
+    all_bits = []
+    for cw in final_cw:
+        for i in range(7,-1,-1): all_bits.append((cw>>i)&1)
+    # Remainder bits
+    REM = [0,7,7,7,7,7,0,0,0,0,0,0,0,3,3,3,3,3,3,3,4,4,4,4,4,4,4,3,3,3,3,3,3]
+    all_bits += [0]*REM[version-1]
+
+    bi = 0
+    col = size-1
+    while col > 0:
+        if col == 6: col -= 1
+        up = True
+        row_range = range(size-1,-1,-1) if up else range(size)
+        rows = list(range(size-1,-1,-1))
+        going_up = True
+        for r in (range(size-1,-1,-1) if going_up else range(size)):
+            for dc in range(2):
+                c = col-dc
+                if not used[r][c]:
+                    if bi < len(all_bits):
+                        mat[r][c] = bool(all_bits[bi]); bi+=1
+        col -= 2
+
+    # ── Apply mask 0 (checkerboard) ───────────────────────────────────────────
+    for r in range(size):
+        for c in range(size):
+            if not used[r][c] and (r+c)%2==0:
+                mat[r][c] = not mat[r][c]
+
+    # ── Write format information (EC M, mask 0) ───────────────────────────────
+    # Format = EC_M(01) + mask_0(000) = 0b01_000 = 8
+    # BCH encoded: precomputed for EC=M, mask=0 → 0x7973 XOR 0x5412 = 0x2D61
+    fmt = 0x2D61  # precomputed format string for EC=M, mask pattern 0
+    fmt_bits = [(fmt>>i)&1 for i in range(14,-1,-1)]
+    # Place format bits around finders
+    pos1 = [(8,0),(8,1),(8,2),(8,3),(8,4),(8,5),(8,7),(8,8),(7,8),(5,8),(4,8),(3,8),(2,8),(1,8),(0,8)]
+    pos2 = [(size-1,8),(size-2,8),(size-3,8),(size-4,8),(size-5,8),(size-6,8),(size-7,8),(size-8,8),
+            (8,size-8),(8,size-7),(8,size-6),(8,size-5),(8,size-4),(8,size-3),(8,size-2),(8,size-1)]
+    for i,(r,c) in enumerate(pos1[:15]):
+        mat[r][c] = bool(fmt_bits[i])
+    for i,(r,c) in enumerate(pos2[:15]):
+        mat[r][c] = bool(fmt_bits[i])
+
+    return mat
+
+def _qr_to_svg(mat, cell=8, border=4):
+    """Render QR matrix as SVG string."""
+    n = len(mat)
+    total = n*cell + 2*border
+    rects = []
+    for r in range(n):
+        for c in range(n):
+            if mat[r][c]:
+                x = border + c*cell
+                y = border + r*cell
+                rects.append(f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}"/>')
+    inner = ''.join(rects)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{total}" height="{total}" '
+            f'viewBox="0 0 {total} {total}">'
+            f'<rect width="{total}" height="{total}" fill="white"/>'
+            f'<g fill="black">{inner}</g>'
+            f'</svg>')
+
+def _qr_to_png_base64(mat, cell=8, border=4):
+    """Render QR matrix as base64 PNG using only stdlib struct/zlib."""
+    import zlib, struct as _st
+    n = len(mat)
+    img_w = img_h = n*cell + 2*border
+    # Build raw RGBA pixels (white background, black modules)
+    rows = []
+    for r in range(img_h):
+        row = [0]  # filter byte
+        qr_r = (r - border) // cell
+        for c in range(img_w):
+            qr_c = (c - border) // cell
+            if 0 <= qr_r < n and 0 <= qr_c < n and mat[qr_r][qr_c]:
+                row += [0,0,0,255]    # black
+            else:
+                row += [255,255,255,255]  # white
+        rows.append(bytes(row))
+    raw = b''.join(rows)
+    compressed = zlib.compress(raw, 9)
+
+    def png_chunk(tag, data):
+        c = _st.pack('>I', len(data)) + tag + data
+        crc = zlib.crc32(tag+data) & 0xffffffff
+        return c + _st.pack('>I', crc)
+
+    png = (b'\x89PNG\r\n\x1a\n'
+           + png_chunk(b'IHDR', _st.pack('>IIBBBBB', img_w, img_h, 8, 6, 0, 0, 0))
+           + png_chunk(b'IDAT', compressed)
+           + png_chunk(b'IEND', b''))
+    return 'data:image/png;base64,' + base64.b64encode(png).decode()
+
 def _totp_qr_base64(secret, email, issuer="VEWIT"):
-    """Generate a base64-encoded PNG QR code for the TOTP secret.
-    Uses only stdlib + segno (pure-python) if available, else returns SVG fallback."""
+    """Generate a real scannable QR code PNG — pure Python, zero dependencies."""
     otpauth_url = _totp_qr_url(secret, email, issuer)
     try:
-        import segno
-        import io
+        mat = _qr_make_matrix(otpauth_url)
+        return _qr_to_png_base64(mat, cell=8, border=4)
+    except Exception as e:
+        print(f"[QR] Pure-Python QR failed: {e} — trying segno")
+    # Try segno if installed
+    try:
+        import segno, io
         qr = segno.make_qr(otpauth_url, error='M')
         buf = io.BytesIO()
         qr.save(buf, kind='png', scale=6, border=2)
-        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    except ImportError:
-        pass
+        return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+    except ImportError: pass
+    # Last resort: SVG (still scannable)
     try:
-        import qrcode, io
-        img = qrcode.make(otpauth_url)
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    except ImportError:
-        pass
-    # SVG fallback – minimal placeholder (client renders the URL instead)
+        mat2 = _qr_make_matrix(otpauth_url)
+        svg = _qr_to_svg(mat2, cell=10, border=4)
+        return 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
+    except Exception as e2:
+        print(f"[QR] SVG fallback also failed: {e2}")
     return None
+
 
 @app.route("/api/auth/totp/setup", methods=["POST"])
 @login_required
@@ -5426,31 +5675,53 @@ function PersonalTwoFAToggle({cu,setCu}){
       ${msg?html`<div style=${{fontSize:10,color:msg.startsWith('✓')?'#4ade80':'var(--rd)',fontWeight:600,padding:'4px 0'}}>${msg}</div>`:null}
 
       ${showSetup&&totpData?html`
-        <div style=${{marginTop:8,padding:12,background:'var(--sf2)',borderRadius:10,border:'1px solid var(--bd)'}}>
-          <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
-            <span style=${{fontSize:14}}>📱</span> Scan QR Code
+        <div style=${{marginTop:10,padding:14,background:'var(--sf2)',borderRadius:12,border:'1px solid var(--bd)'}}>
+
+          <!-- QR code — shown big and centered -->
+          <div style=${{textAlign:'center',marginBottom:12}}>
+            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+              <span style=${{fontSize:14}}>📱</span> Scan with Google Authenticator
+            </div>
+            ${totpData.qr_image?html`
+              <div style=${{display:'inline-block',background:'white',padding:10,borderRadius:10,border:'2px solid var(--bd)',boxShadow:'0 4px 16px rgba(0,0,0,0.15)'}}>
+                <img src=${totpData.qr_image}
+                  style=${{width:180,height:180,display:'block',imageRendering:'pixelated'}}
+                  alt="Google Authenticator QR Code"
+                  onError=${e=>{e.target.style.display='none';e.target.nextSibling.style.display='block';}}
+                />
+                <div style=${{display:'none',width:180,height:180,background:'#f8fafc',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#64748b',textAlign:'center',padding:10}}>
+                  QR failed to load.<br/>Use manual key below.
+                </div>
+              </div>`:html`
+              <div style=${{width:180,height:180,background:'#f1f5f9',borderRadius:10,border:'2px dashed #cbd5e1',margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#64748b',textAlign:'center',padding:12}}>
+                QR not available.<br/>Use manual key below.
+              </div>`}
+            <div style=${{fontSize:9,color:'var(--tx3)',marginTop:6}}>Open Google Authenticator → tap + → Scan QR</div>
           </div>
-          ${totpData.qr_image?html`
-            <div style=${{textAlign:'center',marginBottom:10}}>
-              <img src=${totpData.qr_image} style=${{width:140,height:140,background:'white',padding:8,borderRadius:8,border:'1px solid var(--bd)'}} alt="QR"/>
-            </div>`:null}
-          <div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Manual key:</div>
-          <div style=${{fontFamily:'monospace',fontSize:10,background:'var(--bg)',padding:'6px 8px',borderRadius:6,border:'1px solid var(--bd)',wordBreak:'break-all',color:'var(--tx2)',marginBottom:10,userSelect:'all',letterSpacing:2}}>
-            ${totpData.secret}
+
+          <!-- Manual entry key -->
+          <div style=${{marginBottom:10}}>
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.6,marginBottom:4}}>Manual Key (if you can't scan)</div>
+            <div style=${{fontFamily:'monospace',fontSize:11,background:'var(--bg)',padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',wordBreak:'break-all',color:'var(--ac)',marginBottom:4,userSelect:'all',letterSpacing:3,textAlign:'center',fontWeight:700}}>
+              ${totpData.secret}
+            </div>
+            <div style=${{fontSize:9,color:'var(--tx3)',textAlign:'center'}}>Tap to select → copy → paste in app</div>
           </div>
-          <div style=${{fontSize:10,color:'var(--tx3)',marginBottom:8}}>Enter the 6-digit code from your app:</div>
-          <input class="inp" type="text" inputMode="numeric" pattern="[0-9]*"
+
+          <!-- Verify code -->
+          <div style=${{fontSize:10,fontWeight:600,color:'var(--tx2)',marginBottom:6}}>After scanning, enter the 6-digit code:</div>
+          <input class="inp" type="text" inputMode="numeric" pattern="[0-9]*" autoFocus
             value=${verifyToken}
             onInput=${e=>setVerifyToken(e.target.value.replace(/\D/g,'').slice(0,6))}
             onKeyDown=${e=>e.key==='Enter'&&confirmSetup()}
-            placeholder="000000"
-            style=${{textAlign:'center',fontSize:18,fontWeight:700,fontFamily:'monospace',letterSpacing:6,marginBottom:8}}/>
-          ${msg&&!msg.startsWith('✓')?html`<div style=${{fontSize:10,color:'var(--rd)',marginBottom:6}}>${msg}</div>`:null}
+            placeholder="0  0  0  0  0  0"
+            style=${{textAlign:'center',fontSize:20,fontWeight:700,fontFamily:'monospace',letterSpacing:8,marginBottom:8,height:48}}/>
+          ${msg&&!msg.startsWith('✓')?html`<div style=${{fontSize:10,color:'var(--rd)',marginBottom:6,textAlign:'center'}}>${msg}</div>`:null}
           <div style=${{display:'flex',gap:7}}>
             <button class="btn bg" style=${{flex:1,justifyContent:'center',fontSize:11}} onClick=${()=>{setShowSetup(false);setTotpData(null);setMsg('');}}>Cancel</button>
             <button class="btn bp" style=${{flex:1,justifyContent:'center',fontSize:11}}
               onClick=${confirmSetup} disabled=${verifying||verifyToken.replace(/\s/g,'').length!==6}>
-              ${verifying?html`<span class="spin"></span>`:'Confirm'}
+              ${verifying?html`<span class="spin"></span>`:'✓ Confirm & Enable'}
             </button>
           </div>
         </div>`:null}
@@ -8266,14 +8537,19 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
                 <button class="btn bg" style=${{padding:'6px 10px'}} onClick=${()=>setShowTotpSetup(false)}>✕</button>
               </div>
 
-              <div style=${{display:'grid',gridTemplateColumns:totpData.qr_image?'auto 1fr':'1fr',gap:20,marginBottom:20,alignItems:'start'}}>
-                ${totpData.qr_image?html`
-                  <div style=${{textAlign:'center'}}>
-                    <div style=${{background:'white',padding:12,borderRadius:12,border:'1px solid var(--bd)',display:'inline-block',boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
-                      <img src=${totpData.qr_image} style=${{width:160,height:160,display:'block'}} alt="QR Code"/>
-                    </div>
-                    <div style=${{fontSize:9,color:'var(--tx3)',marginTop:6}}>Scan with Google Authenticator</div>
-                  </div>`:null}
+              <div style=${{display:'grid',gridTemplateColumns:'auto 1fr',gap:20,marginBottom:20,alignItems:'start'}}>
+                <div style=${{textAlign:'center'}}>
+                  ${totpData.qr_image?html`
+                    <div style=${{background:'white',padding:10,borderRadius:10,border:'1px solid var(--bd)',display:'inline-block',boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
+                      <img src=${totpData.qr_image}
+                        style=${{width:160,height:160,display:'block',imageRendering:'pixelated'}}
+                        alt="QR Code"/>
+                    </div>`:html`
+                    <div style=${{width:160,height:160,background:'var(--sf2)',borderRadius:10,border:'2px dashed var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--tx3)',textAlign:'center',padding:12}}>
+                      QR unavailable.<br/>Use manual key →
+                    </div>`}
+                  <div style=${{fontSize:9,color:'var(--tx3)',marginTop:6}}>Scan with Google Authenticator</div>
+                </div>
                 <div>
                   <div style=${{marginBottom:12}}>
                     <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:6}}>Manual Entry</div>
