@@ -995,7 +995,6 @@ def login():
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
-        session.pop("_logged_out", None)
         try:
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
@@ -1020,7 +1019,6 @@ def totp_login():
         if _totp_verify(rec["secret"], code):
             session.pop("_totp_pending_uid", None)
             session.pop("_totp_pending_ws",  None)
-            session.pop("_logged_out", None)
             session.permanent = True
             session["user_id"] = uid
             session["workspace_id"] = ws_id
@@ -1034,7 +1032,6 @@ def totp_login():
             db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),uid))
             session.pop("_totp_pending_uid", None)
             session.pop("_totp_pending_ws",  None)
-            session.pop("_logged_out", None)
             session.permanent = True
             session["user_id"] = uid
             session["workspace_id"] = ws_id
@@ -6669,7 +6666,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
                   marginBottom:1
                 }}
                 onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.12)';e.currentTarget.style.color='#93c5fd';}}}
-                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}>\n                <span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}}>${NAV_ICONS[it.id]||null}</span>
+                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}><span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}}>${NAV_ICONS[it.id]||null}</span>
                 ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
                 ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{minWidth:16,height:16,borderRadius:8,background:'#06b6d4',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
               </button>`):null}
