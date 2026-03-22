@@ -733,6 +733,33 @@ def init_db():
                 start_date TEXT, end_date TEXT, velocity INTEGER DEFAULT 0, created TEXT);
             CREATE TABLE IF NOT EXISTS referrals (
                 id TEXT PRIMARY KEY, referrer_ws TEXT, referred_ws TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS announcements (
+                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, content TEXT,
+                author TEXT, pinned INTEGER DEFAULT 0, created TEXT, expires TEXT DEFAULT '');
+            CREATE TABLE IF NOT EXISTS announcement_reads (
+                id TEXT PRIMARY KEY, announcement_id TEXT, user_id TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS message_reactions (
+                id TEXT PRIMARY KEY, workspace_id TEXT, message_id TEXT, message_type TEXT DEFAULT 'channel',
+                user_id TEXT, emoji TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS message_threads (
+                id TEXT PRIMARY KEY, workspace_id TEXT, parent_id TEXT, sender TEXT,
+                content TEXT, ts TEXT);
+            CREATE TABLE IF NOT EXISTS intake_forms (
+                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
+                project_id TEXT, fields TEXT DEFAULT '[]', active INTEGER DEFAULT 1,
+                created_by TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS intake_submissions (
+                id TEXT PRIMARY KEY, form_id TEXT, workspace_id TEXT,
+                data TEXT DEFAULT '{}', ticket_id TEXT, submitter_email TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS totp_secrets (
+                id TEXT PRIMARY KEY, user_id TEXT, secret TEXT,
+                enabled INTEGER DEFAULT 0, backup_codes TEXT DEFAULT '[]', created TEXT);
+            CREATE TABLE IF NOT EXISTS standup_reports (
+                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+                report_date TEXT, content TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS code_reviews (
+                id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT, ticket_id TEXT,
+                diff_text TEXT, review_result TEXT, author TEXT, created TEXT);
             """)
         except: pass
         try: db.execute("""CREATE TABLE IF NOT EXISTS subtasks (
@@ -2895,6 +2922,392 @@ def _run_digest():
     except Exception as e:
         print(f"Digest runner error: {e}")
 
+
+# ── Announcements ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/announcements", methods=["GET"])
+@login_required
+def get_announcements():
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT a.*,u.name as author_name FROM announcements a LEFT JOIN users u ON a.author=u.id "
+            "WHERE a.workspace_id=? ORDER BY a.pinned DESC, a.created DESC",(wid(),)).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            read = db.execute("SELECT id FROM announcement_reads WHERE announcement_id=? AND user_id=?",
+                              (r["id"],session["user_id"])).fetchone()
+            d["read"] = bool(read)
+            result.append(d)
+        return jsonify(result)
+
+@app.route("/api/announcements", methods=["POST"])
+@login_required
+def create_announcement():
+    d = request.json or {}
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
+        aid = f"ann{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO announcements VALUES (?,?,?,?,?,?,?,?)",
+                   (aid,wid(),d.get("title",""),d.get("content",""),
+                    session["user_id"],int(d.get("pinned",0)),ts(),d.get("expires","")))
+        users = db.execute("SELECT id FROM users WHERE workspace_id=?",(wid(),)).fetchall()
+        for u in users:
+            if u["id"] == session["user_id"]: continue
+            nid = f"n{int(__import__('time').time()*1000)}{secrets.token_hex(2)}"
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"announcement",f"Announcement: {d.get('title','')}",u["id"],0,ts()))
+        return jsonify({"ok":True,"id":aid})
+
+@app.route("/api/announcements/<aid>/read", methods=["POST"])
+@login_required
+def mark_announcement_read(aid):
+    with get_db() as db:
+        existing = db.execute("SELECT id FROM announcement_reads WHERE announcement_id=? AND user_id=?",
+                              (aid,session["user_id"])).fetchone()
+        if not existing:
+            rid = f"ar{int(__import__('time').time()*1000)}"
+            db.execute("INSERT INTO announcement_reads VALUES (?,?,?,?)",(rid,aid,session["user_id"],ts()))
+        return jsonify({"ok":True})
+
+@app.route("/api/announcements/<aid>", methods=["DELETE"])
+@login_required
+def delete_announcement(aid):
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
+        db.execute("DELETE FROM announcement_reads WHERE announcement_id=?",(aid,))
+        db.execute("DELETE FROM announcements WHERE id=? AND workspace_id=?",(aid,wid()))
+        return jsonify({"ok":True})
+
+# ── Message Reactions ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/reactions/<msg_type>/<msg_id>", methods=["GET"])
+@login_required
+def get_reactions(msg_type, msg_id):
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT emoji, user_id FROM message_reactions WHERE workspace_id=? AND message_id=? AND message_type=?",
+            (wid(),msg_id,msg_type)).fetchall()
+        grouped = {}
+        for r in rows:
+            if r["emoji"] not in grouped: grouped[r["emoji"]] = []
+            grouped[r["emoji"]].append(r["user_id"])
+        return jsonify(grouped)
+
+@app.route("/api/reactions/<msg_type>/<msg_id>", methods=["POST"])
+@login_required
+def toggle_reaction(msg_type, msg_id):
+    d = request.json or {}
+    emoji = d.get("emoji","like")
+    with get_db() as db:
+        existing = db.execute(
+            "SELECT id FROM message_reactions WHERE workspace_id=? AND message_id=? AND message_type=? AND user_id=? AND emoji=?",
+            (wid(),msg_id,msg_type,session["user_id"],emoji)).fetchone()
+        if existing:
+            db.execute("DELETE FROM message_reactions WHERE id=?",(existing["id"],))
+            return jsonify({"ok":True,"action":"removed"})
+        rid = f"r{int(__import__('time').time()*1000)}{secrets.token_hex(2)}"
+        db.execute("INSERT INTO message_reactions VALUES (?,?,?,?,?,?,?)",
+                   (rid,wid(),msg_id,msg_type,session["user_id"],emoji,ts()))
+        return jsonify({"ok":True,"action":"added"})
+
+# ── Message Threads ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/messages/<mid>/thread", methods=["GET"])
+@login_required
+def get_thread(mid):
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT t.*,u.name as sender_name FROM message_threads t LEFT JOIN users u ON t.sender=u.id "
+            "WHERE t.workspace_id=? AND t.parent_id=? ORDER BY t.ts",(wid(),mid)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/messages/<mid>/thread", methods=["POST"])
+@login_required
+def post_thread_reply(mid):
+    d = request.json or {}
+    content = d.get("content","").strip()
+    if not content: return jsonify({"error":"Empty"}),400
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if cu and cu["role"] == "Viewer": return jsonify({"error":"Viewers cannot post"}),403
+        tid = f"th{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO message_threads VALUES (?,?,?,?,?,?)",
+                   (tid,wid(),mid,session["user_id"],content,ts()))
+        return jsonify({"ok":True,"id":tid})
+
+# ── AI Daily Standup ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/ai/standup", methods=["POST"])
+@login_required
+def ai_standup():
+    d = request.json or {}
+    target_user_id = d.get("user_id", session["user_id"])
+    with get_db() as db:
+        ws = db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
+        if not api_key: return jsonify({"error":"NO_KEY"}),400
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        cu_role = cu["role"] if cu else "Viewer"
+        if cu_role in ("Developer","Tester") and target_user_id != session["user_id"]:
+            return jsonify({"error":"Forbidden"}),403
+        target_user = db.execute("SELECT name FROM users WHERE id=? AND workspace_id=?",(target_user_id,wid())).fetchone()
+        if not target_user: return jsonify({"error":"User not found"}),404
+        today_str = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
+        yesterday = (__import__("datetime").datetime.utcnow() - __import__("datetime").timedelta(days=1)).strftime("%Y-%m-%d")
+        tasks = db.execute(
+            "SELECT title,stage,priority,due,pct FROM tasks WHERE workspace_id=? AND assignee=? ORDER BY created DESC LIMIT 20",
+            (wid(),target_user_id)).fetchall()
+        time_logs = db.execute(
+            "SELECT tl.description,tl.minutes,t.title as task_title FROM time_logs tl LEFT JOIN tasks t ON tl.task_id=t.id "
+            "WHERE tl.workspace_id=? AND tl.user_id=? AND tl.logged_date>=? ORDER BY tl.created DESC LIMIT 10",
+            (wid(),target_user_id,yesterday)).fetchall()
+        task_ctx = "\n".join([f"- [{t['stage']}] {t['title']} ({t['pct']}% done)" for t in tasks])
+        time_ctx = "\n".join([f"- {l['task_title']}: {l['minutes']}min" for l in time_logs]) or "No time logged recently"
+        prompt = f"Generate a daily standup for {target_user['name']}. Tasks: {task_ctx or 'None'}. Recent time logs: {time_ctx}. Today: {today_str}. Format: 3 sections: What I did yesterday, What I am doing today, Blockers. Be concise, bullet-pointed."
+    try:
+        req_data = json.dumps({"model":"claude-sonnet-4-5","max_tokens":500,"messages":[{"role":"user","content":prompt}]}).encode()
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages",data=req_data,method="POST",
+            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
+        with urllib.request.urlopen(req,timeout=30) as resp:
+            result = json.loads(resp.read().decode())
+            report = result["content"][0]["text"]
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+    with get_db() as db:
+        sid = f"sr{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO standup_reports VALUES (?,?,?,?,?,?)",
+                   (sid,wid(),target_user_id,today_str,report,ts()))
+    return jsonify({"ok":True,"report":report,"user":target_user["name"]})
+
+# ── AI Code Review ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/ai/code-review", methods=["POST"])
+@login_required
+def ai_code_review():
+    d = request.json or {}
+    diff = d.get("diff","").strip()
+    context = d.get("context","")
+    if not diff: return jsonify({"error":"No diff provided"}),400
+    with get_db() as db:
+        ws = db.execute("SELECT ai_api_key FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
+        if not api_key: return jsonify({"error":"NO_KEY"}),400
+    system = f"You are a senior code reviewer. Review this diff and give structured feedback with: Summary, Issues Found (Critical/Major/Minor), Suggestions, Security Notes, and a Verdict (Approve/Request Changes/Reject). Context: {context or 'None'}"
+    try:
+        req_data = json.dumps({"model":"claude-sonnet-4-5","max_tokens":1500,"system":system,
+            "messages":[{"role":"user","content":f"Review this diff:\n```\n{diff[:6000]}\n```"}]}).encode()
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages",data=req_data,method="POST",
+            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
+        with urllib.request.urlopen(req,timeout=45) as resp:
+            result = json.loads(resp.read().decode())
+            review = result["content"][0]["text"]
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+    with get_db() as db:
+        rid = f"cr{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO code_reviews VALUES (?,?,?,?,?,?,?,?)",
+                   (rid,wid(),d.get("task_id",""),d.get("ticket_id",""),diff[:6000],review,session["user_id"],ts()))
+    return jsonify({"ok":True,"review":review,"id":rid})
+
+# ── AI Risk ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/ai/risk", methods=["GET"])
+@login_required
+def ai_risk():
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager","TeamLead"):
+            return jsonify({"error":"Forbidden"}),403
+        ws = db.execute("SELECT ai_api_key FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
+        if not api_key: return jsonify({"error":"NO_KEY"}),400
+        projects = db.execute("SELECT * FROM projects WHERE workspace_id=?",(wid(),)).fetchall()
+        tasks = db.execute("SELECT * FROM tasks WHERE workspace_id=?",(wid(),)).fetchall()
+        today = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
+    summaries = []
+    for p in projects:
+        ptasks = [t for t in tasks if t["project"] == p["id"]]
+        overdue = len([t for t in ptasks if t.get("due","") and t["due"] < today and t["stage"] != "completed"])
+        blocked = len([t for t in ptasks if t["stage"] == "blocked"])
+        pct_done = round(sum(t["pct"] or 0 for t in ptasks) / max(len(ptasks),1))
+        summaries.append(f"Project '{p['name']}': {len(ptasks)} tasks, {overdue} overdue, {blocked} blocked, {pct_done}% avg done, deadline: {p.get('target_date','unknown')}")
+    prompt = "Analyze these projects for risk. For each: PROJECT name, RISK level (LOW/MEDIUM/HIGH/CRITICAL), REASON (one sentence), ACTIONS (2-3 bullets). Today: " + today + ". Projects:\n" + "\n".join(summaries)
+    try:
+        req_data = json.dumps({"model":"claude-sonnet-4-5","max_tokens":1500,"messages":[{"role":"user","content":prompt}]}).encode()
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages",data=req_data,method="POST",
+            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
+        with urllib.request.urlopen(req,timeout=45) as resp:
+            result = json.loads(resp.read().decode())
+            analysis = result["content"][0]["text"]
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
+    return jsonify({"ok":True,"analysis":analysis})
+
+# ── Intake Forms ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/forms", methods=["GET"])
+@login_required
+def get_forms():
+    with get_db() as db:
+        rows = db.execute("SELECT * FROM intake_forms WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/forms", methods=["POST"])
+@login_required
+def create_form():
+    d = request.json or {}
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager","TeamLead"): return jsonify({"error":"Forbidden"}),403
+        fid = f"frm{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO intake_forms VALUES (?,?,?,?,?,?,?,?,?)",
+                   (fid,wid(),d.get("title",""),d.get("description",""),
+                    d.get("project_id",""),json.dumps(d.get("fields",[])),1,session["user_id"],ts()))
+        return jsonify({"ok":True,"id":fid,"url":f"/form/{fid}"})
+
+@app.route("/api/forms/<fid>", methods=["PUT"])
+@login_required
+def update_form(fid):
+    d = request.json or {}
+    with get_db() as db:
+        f = db.execute("SELECT * FROM intake_forms WHERE id=? AND workspace_id=?",(fid,wid())).fetchone()
+        if not f: return jsonify({"error":"Not found"}),404
+        db.execute("UPDATE intake_forms SET title=?,description=?,fields=?,project_id=?,active=? WHERE id=?",
+                   (d.get("title",f["title"]),d.get("description",f["description"]),
+                    json.dumps(d.get("fields",json.loads(f["fields"] or "[]"))),
+                    d.get("project_id",f["project_id"]),int(d.get("active",f["active"])),fid))
+        return jsonify({"ok":True})
+
+@app.route("/api/forms/<fid>", methods=["DELETE"])
+@login_required
+def delete_form(fid):
+    with get_db() as db:
+        db.execute("DELETE FROM intake_forms WHERE id=? AND workspace_id=?",(fid,wid()))
+        return jsonify({"ok":True})
+
+@app.route("/form/<fid>")
+def public_form(fid):
+    with get_db() as db:
+        f = db.execute("SELECT * FROM intake_forms WHERE id=? AND active=1",(fid,)).fetchone()
+        if not f: return "Form not found or inactive",404
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?",(f["workspace_id"],)).fetchone()
+        ws_name = ws["name"] if ws else "VEWIT"
+        fields_html = ""
+        for field in json.loads(f["fields"] or "[]"):
+            ft = field.get("type","text"); fn = field.get("name",""); flbl = field.get("label",fn)
+            req = "required" if field.get("required") else ""
+            star = "*" if req else ""
+            if ft == "textarea":
+                fields_html += f'<div class="fg"><label>{flbl}{star}</label><textarea name="{fn}" {req} rows="4"></textarea></div>'
+            elif ft == "select":
+                opts = "".join(f'<option value="{o}">{o}</option>' for o in field.get("options",[]))
+                fields_html += f'<div class="fg"><label>{flbl}</label><select name="{fn}" {req}><option value="">Select...</option>{opts}</select></div>'
+            else:
+                fields_html += f'<div class="fg"><label>{flbl}{star}</label><input type="{ft}" name="{fn}" {req}/></div>'
+    css = """*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;background:#f8fafc;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}.card{background:#fff;border-radius:16px;padding:36px;width:100%;max-width:560px;box-shadow:0 4px 24px rgba(0,0,0,.08)}h1{font-size:22px;font-weight:700;color:#0f172a;margin-bottom:6px}p{font-size:14px;color:#64748b;margin-bottom:24px;line-height:1.6}.fg{margin-bottom:16px}label{font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:5px}input,textarea,select{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;color:#1e293b;outline:none;font-family:inherit}input:focus,textarea:focus,select:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1)}button{width:100%;padding:12px;background:#1d4ed8;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}button:hover{background:#1e40af}.badge{display:inline-block;padding:2px 10px;background:#eff6ff;color:#1d4ed8;border-radius:99px;font-size:12px;font-weight:600;margin-bottom:16px}"""
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{f["title"]}</title><style>{css}</style></head><body><div class="card"><div class="badge">{ws_name}</div><h1>{f["title"]}</h1><p>{f["description"] or "Fill out the form below."}</p><div id="fw"><form id="if">{fields_html}<div class="fg"><label>Your email (optional)</label><input type="email" name="_email" placeholder="your@email.com"/></div><button type="submit">Submit</button></form></div></div><script>document.getElementById("if").onsubmit=async(e)=>{{e.preventDefault();const data={{}};new FormData(e.target).forEach((v,k)=>data[k]=v);const r=await fetch("/api/forms/{fid}/submit",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify(data)}});if(r.ok)document.getElementById("fw").innerHTML='<div style="text-align:center;padding:32px"><h2 style="color:#15803d">Submitted!</h2><p>Your response has been received.</p></div>'}};</script></body></html>"""
+
+@app.route("/api/forms/<fid>/submit", methods=["POST"])
+def submit_form(fid):
+    data = request.json or {}
+    with get_db() as db:
+        f = db.execute("SELECT * FROM intake_forms WHERE id=? AND active=1",(fid,)).fetchone()
+        if not f: return jsonify({"error":"Form not found"}),404
+        sid = f"sub{int(__import__('time').time()*1000)}"
+        submitter_email = data.pop("_email","")
+        ticket_title = f"[Form] {f['title']} submission"
+        ticket_body = "\n".join([f"**{k}**: {v}" for k,v in data.items()])
+        tid = f"TK-{sid[-8:]}"
+        db.execute("INSERT INTO tickets VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (tid,f["workspace_id"],ticket_title,ticket_body,
+                    "task","medium","open","",submitter_email,f["project_id"],"[]",ts(),ts(),f["workspace_id"]))
+        db.execute("INSERT INTO intake_submissions VALUES (?,?,?,?,?,?,?)",
+                   (sid,fid,f["workspace_id"],json.dumps(data),tid,submitter_email,ts()))
+        return jsonify({"ok":True})
+
+@app.route("/api/forms/<fid>/submissions", methods=["GET"])
+@login_required
+def get_form_submissions(fid):
+    with get_db() as db:
+        rows = db.execute("SELECT * FROM intake_submissions WHERE form_id=? AND workspace_id=? ORDER BY created DESC",(fid,wid())).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+# ── TOTP 2FA ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/totp/setup", methods=["POST"])
+@login_required
+def totp_setup():
+    try:
+        import pyotp
+        with get_db() as db:
+            existing = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
+            if existing and existing["enabled"]: return jsonify({"error":"2FA already enabled"}),400
+            secret = pyotp.random_base32()
+            user = db.execute("SELECT email FROM users WHERE id=?",(session["user_id"],)).fetchone()
+            totp = pyotp.TOTP(secret)
+            uri = totp.provisioning_uri(user["email"], issuer_name="VEWIT")
+            backup_codes = [secrets.token_hex(4).upper() for _ in range(8)]
+            tid = f"totp{int(__import__('time').time()*1000)}"
+            if existing:
+                db.execute("UPDATE totp_secrets SET secret=?,backup_codes=? WHERE user_id=?",(secret,json.dumps(backup_codes),session["user_id"]))
+            else:
+                db.execute("INSERT INTO totp_secrets VALUES (?,?,?,?,?,?)",(tid,session["user_id"],secret,0,json.dumps(backup_codes),ts()))
+            return jsonify({"ok":True,"secret":secret,"uri":uri,"backup_codes":backup_codes})
+    except ImportError:
+        return jsonify({"error":"Run: pip install pyotp"}),500
+
+@app.route("/api/totp/verify", methods=["POST"])
+@login_required
+def totp_verify():
+    d = request.json or {}
+    code = d.get("code","").strip()
+    try:
+        import pyotp
+        with get_db() as db:
+            rec = db.execute("SELECT * FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
+            if not rec: return jsonify({"error":"2FA not set up"}),400
+            totp = pyotp.TOTP(rec["secret"])
+            if totp.verify(code, valid_window=1):
+                db.execute("UPDATE totp_secrets SET enabled=1 WHERE user_id=?",(session["user_id"],))
+                return jsonify({"ok":True,"message":"2FA enabled"})
+            backup = json.loads(rec["backup_codes"] or "[]")
+            if code.upper() in backup:
+                backup.remove(code.upper())
+                db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),session["user_id"]))
+                return jsonify({"ok":True,"message":"Backup code used","remaining":len(backup)})
+            return jsonify({"error":"Invalid code"}),400
+    except ImportError:
+        return jsonify({"error":"pyotp not installed"}),500
+
+@app.route("/api/totp/disable", methods=["POST"])
+@login_required
+def totp_disable():
+    with get_db() as db:
+        db.execute("UPDATE totp_secrets SET enabled=0 WHERE user_id=?",(session["user_id"],))
+        return jsonify({"ok":True})
+
+@app.route("/api/totp/status", methods=["GET"])
+@login_required
+def totp_status():
+    with get_db() as db:
+        rec = db.execute("SELECT enabled FROM totp_secrets WHERE user_id=?",(session["user_id"],)).fetchone()
+        return jsonify({"enabled":bool(rec and rec["enabled"])})
+
+# ── Time Report ────────────────────────────────────────────────────────────────────────────
+@app.route("/api/reports/time", methods=["GET"])
+@login_required
+def time_report():
+    period = request.args.get("period","week")
+    user_filter = request.args.get("user_id","")
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if cu and cu["role"] in ("Developer","Tester"): user_filter = session["user_id"]
+        now = __import__("datetime").datetime.utcnow()
+        if period == "week": start = (now - __import__("datetime").timedelta(days=7)).strftime("%Y-%m-%d")
+        elif period == "month": start = now.replace(day=1).strftime("%Y-%m-%d")
+        else: start = (now - __import__("datetime").timedelta(days=90)).strftime("%Y-%m-%d")
+        q = "SELECT tl.*,u.name as user_name,t.title as task_title,p.name as project_name FROM time_logs tl LEFT JOIN users u ON tl.user_id=u.id LEFT JOIN tasks t ON tl.task_id=t.id LEFT JOIN projects p ON t.project=p.id WHERE tl.workspace_id=? AND tl.logged_date>=?"
+        params = [wid(), start]
+        if user_filter: q += " AND tl.user_id=?"; params.append(user_filter)
+        rows = db.execute(q + " ORDER BY tl.logged_date DESC", params).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+
 # ── Budget Tracking ───────────────────────────────────────────────────────────
 @app.route("/api/projects/<pid>/budget", methods=["GET"])
 @login_required
@@ -3564,6 +3977,12 @@ Sitemap: https://www.vewit.in/sitemap.xml"""
 @app.route("/sprints")
 @app.route("/integrations")
 @app.route("/audit")
+@app.route("/announcements")
+@app.route("/standup")
+@app.route("/codereview")
+@app.route("/risk")
+@app.route("/timereport")
+@app.route("/forms")
 def app_page(**kwargs):
     """Serve the SPA for all clean URLs — JS picks up the path and sets the view."""
     return HTML
@@ -5766,9 +6185,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const NAV_ICONS={
     dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'risk', label:'Risk Predictor'}, {id:'timereport', label:'Time Report'}, {id:'forms', label:'Forms & Intake'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'codereview', label:'Code Review'}, {id:'timereport', label:'Time Report'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -7893,6 +8312,43 @@ function ProductivityView({cu,tasks,projects,users}){
 function renderMd(text){
   return text.replace(/[*][*](.*?)[*][*]/g,'<b>$1</b>');
 }
+
+/* ─── Message Reactions Component ───────────────────────────────────────── */
+function MsgReactions({msgId,msgType,cu,users}){
+  const [reactions,setReactions]=useState({});
+  const [showPicker,setShowPicker]=useState(false);
+  const EMOJIS=['👍','❤️','😂','🎉','🚀','👀','✅','🔥'];
+  const load=async()=>{const r=await api.get(`/api/reactions/${msgType}/${msgId}`);if(r&&!r.error)setReactions(r);};
+  useEffect(()=>{load();},[msgId]);
+  const toggle=async(emoji)=>{
+    await api.post(`/api/reactions/${msgType}/${msgId}`,{emoji});
+    setShowPicker(false);load();
+  };
+  const uMap={};safe(users||[]).forEach(u=>uMap[u.id]=u);
+  const total=Object.values(reactions).reduce((s,arr)=>s+arr.length,0);
+  return html`<div style=${{display:'flex',gap:4,flexWrap:'wrap',alignItems:'center',marginTop:2}}>
+    ${Object.entries(reactions).map(([emoji,uids])=>html`
+      <button key=${emoji} onClick=${()=>toggle(emoji)} title=${uids.map(id=>uMap[id]?.name||id).join(', ')}
+        style=${{display:'flex',alignItems:'center',gap:3,padding:'1px 7px',borderRadius:99,border:'1px solid var(--bd)',background:uids.includes(cu?.id)?'rgba(37,99,235,0.12)':'var(--sf2)',cursor:'pointer',fontSize:12,fontWeight:600,color:'var(--tx)'}}>
+        ${emoji} <span style=${{fontSize:11,color:'var(--tx3)'}}>${uids.length}</span>
+      </button>`)}
+    <div style=${{position:'relative'}}>
+      <button onClick=${()=>setShowPicker(p=>!p)}
+        style=${{padding:'1px 6px',borderRadius:99,border:'1px solid var(--bd)',background:'transparent',cursor:'pointer',fontSize:12,color:'var(--tx3)',opacity:.6}}>
+        +
+      </button>
+      ${showPicker?html`
+        <div style=${{position:'absolute',bottom:'100%',left:0,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:6,display:'flex',gap:4,zIndex:100,boxShadow:'0 4px 16px rgba(0,0,0,.15)'}}>
+          ${EMOJIS.map(e=>html`
+            <button key=${e} onClick=${()=>toggle(e)}
+              style=${{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 4px',borderRadius:6}}>
+              ${e}
+            </button>`)}
+        </div>`:null}
+    </div>
+  </div>`;
+}
+
 function MessagesView({projects,users,cu,tasks}){
   const [allProjects,setAllProjects]=useState(safe(projects));
   const [lastMsgTs,setLastMsgTs]=useState({});
@@ -8223,6 +8679,7 @@ function MessagesView({projects,users,cu,tasks}){
                 <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
                   ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
                   <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5, background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)', border:isMe?'none':'1px solid var(--bd)', borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
+                  <${MsgReactions} msgId=${m.id} msgType="channel" cu=${cu} users=${users}/>
                   <span class="mono-10">${timeStr}</span>
                 </div>
               </div>`;
@@ -8987,7 +9444,16 @@ function WorkspaceSettings({cu,onReload}){
   const [emailEnabled,setEmailEnabled]=useState(true);const [smtpServer,setSmtpServer]=useState('smtp.gmail.com');const [smtpPort,setSmtpPort]=useState(587);const [smtpUsername,setSmtpUsername]=useState('');const [smtpPassword,setSmtpPassword]=useState('');const [fromEmail,setFromEmail]=useState('');const [showSmtpPass,setShowSmtpPass]=useState(false);const [testEmail,setTestEmail]=useState('');const [testingEmail,setTestingEmail]=useState(false);const [testResult,setTestResult]=useState(null);const [otpEnabled,setOtpEnabled]=useState(false);
   const [dmEnabled,setDmEnabled]=useState(true);
   const PERM_DEFAULTS={
-    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false}, 'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Start Instant Meet Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, };
+    'Create & Edit Projects':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create & Assign Tasks':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Edit Tasks':               {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tasks':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Create Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false}, 'Edit Tickets':             {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Delete Tickets':           {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Close / Resolve Tickets':  {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false}, 'Delete Projects':          {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'Send Channel Messages':    {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Manage Team Members':      {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false}, 'Manage Workspace Settings':{Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, 'View All Projects':        {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Start Instant Meet Calls':       {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true}, 'Delete Team Members':      {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'Post Announcements':       {Admin:true, Manager:true, TeamLead:false,Developer:false,Tester:false,Viewer:false},
+    'Generate AI Standup':      {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:false},
+    'AI Standup All Members':   {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'AI Code Review':           {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:false,Viewer:false},
+    'AI Risk Analysis':         {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'View Time Report All':     {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Build Intake Forms':       {Admin:true, Manager:true, TeamLead:true, Developer:false,Tester:false,Viewer:false},
+    'Setup 2FA':                {Admin:true, Manager:true, TeamLead:true, Developer:true, Tester:true, Viewer:true},
+    'Enforce 2FA Workspace':    {Admin:true, Manager:false,TeamLead:false,Developer:false,Tester:false,Viewer:false}, };
   const storedPerms=()=>{try{return JSON.parse(localStorage.getItem('pf_perms')||'null');}catch{return null;}};
   const [perms,setPerms]=useState(()=>storedPerms()||PERM_DEFAULTS);
   const togglePerm=(label,role)=>{
@@ -9223,6 +9689,8 @@ function WorkspaceSettings({cu,onReload}){
           </div>
         </div>
       </div>
+
+      <${TOTPSetupPanel} cu=${cu}/>
 
       <${ReferralPanel}/>
 
@@ -10347,6 +10815,474 @@ function ReferralPanel(){
 }
 
 
+
+/* ─── Announcements Banner + View ───────────────────────────────────────── */
+function AnnouncementBanner({cu}){
+  const [items,setItems]=useState([]);
+  const load=async()=>{const r=await api.get('/api/announcements');setItems((r||[]).filter(a=>!a.read&&a.pinned));};
+  useEffect(()=>{load();},[]);
+  const dismiss=async(id)=>{await api.post(`/api/announcements/${id}/read`,{});setItems(p=>p.filter(a=>a.id!==id));};
+  if(!items.length)return null;
+  return html`<div style=${{padding:'0 20px',marginBottom:0}}>
+    ${items.map(a=>html`
+      <div key=${a.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'rgba(37,99,235,0.08)',border:'1px solid rgba(37,99,235,0.2)',borderRadius:9,marginBottom:6}}>
+        <span style=${{fontSize:16}}>📢</span>
+        <div style=${{flex:1}}>
+          <span style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>${a.title}</span>
+          ${a.content?html`<span style=${{fontSize:12,color:'var(--tx2)',marginLeft:8}}>${a.content.slice(0,120)}${a.content.length>120?'…':''}</span>`:null}
+        </div>
+        <button onClick=${()=>dismiss(a.id)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16,padding:'0 4px'}}>✕</button>
+      </div>`)}
+  </div>`;
+}
+
+function AnnouncementsView({cu}){
+  const [items,setItems]=useState([]);
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({title:'',content:'',pinned:false});
+  const [saving,setSaving]=useState(false);
+  const canPost=cu&&(cu.role==='Admin'||cu.role==='Manager');
+  const load=async()=>{const r=await api.get('/api/announcements');setItems(r||[]);};
+  useEffect(()=>{load();},[]);
+  const save=async()=>{
+    setSaving(true);
+    await api.post('/api/announcements',form);
+    setSaving(false);setShowAdd(false);setForm({title:'',content:'',pinned:false});load();
+  };
+  const del=async(id)=>{if(!confirm('Delete?'))return;await api.del(`/api/announcements/${id}`);load();};
+  const markRead=async(id)=>{await api.post(`/api/announcements/${id}/read`,{});load();};
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📢 Announcements</h2>
+      ${canPost?html`<button class="btn bp" onClick=${()=>setShowAdd(true)}>+ Post Announcement</button>`:null}
+    </div>
+    ${showAdd?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
+        <input class="inp" placeholder="Title…" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})} style=${{width:'100%',height:38,fontSize:15,fontWeight:600,marginBottom:10}}/>
+        <textarea class="inp" placeholder="Message content (optional)…" value=${form.content} onInput=${e=>setForm({...form,content:e.target.value})} style=${{width:'100%',height:80,fontSize:13,resize:'none',marginBottom:10}}></textarea>
+        <div style=${{display:'flex',alignItems:'center',gap:10}}>
+          <label style=${{display:'flex',alignItems:'center',gap:6,fontSize:13,cursor:'pointer',flex:1}}>
+            <input type="checkbox" checked=${form.pinned} onChange=${e=>setForm({...form,pinned:e.target.checked})}/> Pin to top
+          </label>
+          <button class="btn bp" onClick=${save} disabled=${saving||!form.title}>${saving?'Posting…':'Post'}</button>
+          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
+        </div>
+      </div>`:null}
+    ${items.map(a=>html`
+      <div key=${a.id} style=${{background:'var(--sf)',border:`1px solid ${a.read?'var(--bd)':'rgba(37,99,235,0.3)'}`,borderLeft:`3px solid ${a.pinned?'#f59e0b':'var(--ac)'}`,borderRadius:10,padding:'14px 16px',marginBottom:10}}>
+        <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10}}>
+          <div style=${{flex:1}}>
+            <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+              ${a.pinned?html`<span style=${{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:'rgba(245,158,11,0.15)',color:'#b45309'}}>📌 Pinned</span>`:null}
+              ${!a.read?html`<span style=${{width:7,height:7,borderRadius:'50%',background:'var(--ac)',display:'inline-block'}}></span>`:null}
+              <span style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${a.title}</span>
+            </div>
+            ${a.content?html`<p style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.6,margin:0}}>${a.content}</p>`:null}
+            <div style=${{fontSize:11,color:'var(--tx3)',marginTop:6}}>By ${a.author_name||'Admin'} · ${(a.created||'').slice(0,10)}</div>
+          </div>
+          <div style=${{display:'flex',gap:6,flexShrink:0}}>
+            ${!a.read?html`<button class="btn bg" style=${{fontSize:11,padding:'3px 10px'}} onClick=${()=>markRead(a.id)}>Mark read</button>`:null}
+            ${canPost?html`<button class="btn br" style=${{fontSize:11,padding:'3px 8px'}} onClick=${()=>del(a.id)}>Del</button>`:null}
+          </div>
+        </div>
+      </div>`)}
+    ${!items.length?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)'}}><div style=${{fontSize:40,marginBottom:12}}>📢</div><div style=${{fontSize:14}}>No announcements yet</div></div>`:null}
+  </div>`;
+}
+
+/* ─── AI Standup View ────────────────────────────────────────────────────── */
+function StandupView({cu,users}){
+  const [report,setReport]=useState('');
+  const [selUser,setSelUser]=useState(cu?.id||'');
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+  const [history,setHistory]=useState([]);
+  const canSelectOthers=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
+  const generate=async()=>{
+    setLoading(true);setErr('');setReport('');
+    const r=await api.post('/api/ai/standup',{user_id:selUser||cu?.id});
+    setLoading(false);
+    if(r?.error){setErr(r.message||r.error);}
+    else{setReport(r.report||'');setHistory(p=>[{user:r.user,report:r.report,date:new Date().toLocaleDateString()},...p.slice(0,4)]);}
+  };
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:800}}>
+    <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🤖 AI Daily Standup</h2>
+    </div>
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
+      <div style=${{fontSize:13,color:'var(--tx2)',marginBottom:14,lineHeight:1.6}}>Generate a professional daily standup report based on task activity, time logs, and progress — no manual writing needed.</div>
+      <div style=${{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+        ${canSelectOthers?html`
+          <select class="inp" style=${{height:36,fontSize:13,width:200}} value=${selUser} onChange=${e=>setSelUser(e.target.value)}>
+            ${safe(users).map(u=>html`<option value=${u.id}>${u.name} (${u.role})</option>`)}
+          </select>`:html`<span style=${{fontSize:13,fontWeight:600,color:'var(--tx)'}}>${cu?.name}</span>`}
+        <button class="btn bp" style=${{height:36,fontSize:13,padding:'0 20px',display:'flex',alignItems:'center',gap:8}} onClick=${generate} disabled=${loading}>
+          ${loading?html`<span class="spin"></span>`:null} ${loading?'Generating…':'Generate Standup'}
+        </button>
+      </div>
+    </div>
+    ${err?html`<div style=${{padding:14,background:'rgba(185,28,28,0.08)',border:'1px solid rgba(185,28,28,0.25)',borderRadius:9,color:'#b91c1c',fontSize:13,marginBottom:16}}>${err}</div>`:null}
+    ${report?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+          <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>Today's Standup</div>
+          <button class="btn bg" style=${{fontSize:12}} onClick=${()=>navigator.clipboard?.writeText(report).then(()=>alert('Copied!'))}>📋 Copy</button>
+        </div>
+        <div style=${{fontSize:14,color:'var(--tx)',lineHeight:1.75,whiteSpace:'pre-wrap'}}>${report}</div>
+      </div>`:null}
+    ${history.length>1?html`
+      <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:8}}>RECENT STANDUPS</div>
+      ${history.slice(1).map((h,i)=>html`
+        <div key=${i} style=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:9,padding:'12px 16px',marginBottom:8}}>
+          <div style=${{fontSize:12,color:'var(--tx3)',marginBottom:6}}>${h.user} · ${h.date}</div>
+          <div style=${{fontSize:13,color:'var(--tx)',lineHeight:1.6,whiteSpace:'pre-wrap'}}>${h.report.slice(0,300)}${h.report.length>300?'…':''}</div>
+        </div>`)}`:null}
+  </div>`;
+}
+
+/* ─── AI Code Review View ────────────────────────────────────────────────── */
+function CodeReviewView({cu}){
+  const [diff,setDiff]=useState('');
+  const [ctx,setCtx]=useState('');
+  const [result,setResult]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+  const canUse=cu&&!['Viewer'].includes(cu.role);
+  if(!canUse)return html`<div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx3)'}}>Not available for your role</div>`;
+  const review=async()=>{
+    if(!diff.trim())return;
+    setLoading(true);setErr('');setResult('');
+    const r=await api.post('/api/ai/code-review',{diff,context:ctx});
+    setLoading(false);
+    if(r?.error)setErr(r.message||r.error);
+    else setResult(r.review||'');
+  };
+  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',gap:0}}>
+    <div style=${{flex:1,overflowY:'auto',padding:'20px 24px',borderRight:'1px solid var(--bd)',minWidth:0}}>
+      <h2 style=${{margin:'0 0 16px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔍 AI Code Review</h2>
+      <div style=${{marginBottom:10}}>
+        <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Paste PR diff or code changes</label>
+        <textarea class="inp" value=${diff} onInput=${e=>setDiff(e.target.value)} placeholder="--- a/file.py\n+++ b/file.py\n@@ -1,5 +1,6 @@\n..."
+          style=${{width:'100%',minHeight:280,fontSize:12,fontFamily:'monospace',resize:'vertical',lineHeight:1.5}}></textarea>
+      </div>
+      <div style=${{marginBottom:14}}>
+        <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Context (optional)</label>
+        <input class="inp" value=${ctx} onInput=${e=>setCtx(e.target.value)} placeholder="e.g. This is a payment processing module, focus on security" style=${{width:'100%',height:34,fontSize:13}}/>
+      </div>
+      <button class="btn bp" style=${{fontSize:13,padding:'8px 20px',display:'flex',alignItems:'center',gap:8}} onClick=${review} disabled=${loading||!diff.trim()}>
+        ${loading?html`<span class="spin"></span>`:null} ${loading?'Reviewing…':'Review Code'}
+      </button>
+      ${err?html`<div style=${{marginTop:12,padding:12,background:'rgba(185,28,28,0.08)',borderRadius:8,color:'#b91c1c',fontSize:13}}>${err}</div>`:null}
+    </div>
+    <div style=${{flex:1,overflowY:'auto',padding:'20px 24px',minWidth:0}}>
+      ${result?html`
+        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:14}}>Review Results</div>
+        <div style=${{fontSize:13,color:'var(--tx)',lineHeight:1.8,whiteSpace:'pre-wrap'}}>${result}</div>`:
+      html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx3)',gap:10}}>
+        <div style=${{fontSize:40}}>🔍</div>
+        <div style=${{fontSize:14}}>Paste a diff and click Review</div>
+        <div style=${{fontSize:12,textAlign:'center',maxWidth:220}}>AI will check for bugs, security issues, code style and give a verdict</div>
+      </div>`}
+    </div>
+  </div>`;
+}
+
+/* ─── AI Risk View ───────────────────────────────────────────────────────── */
+function RiskView({cu,projects,tasks}){
+  const [analysis,setAnalysis]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+  const canUse=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
+  if(!canUse)return html`<div style=${{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--tx3)'}}>Available for Admin, Manager and TeamLead only</div>`;
+  const analyze=async()=>{
+    setLoading(true);setErr('');setAnalysis('');
+    const r=await api.get('/api/ai/risk');
+    setLoading(false);
+    if(r?.error)setErr(r.message||r.error);
+    else setAnalysis(r.analysis||'');
+  };
+  const RISK_COLORS={'CRITICAL':'#ef4444','HIGH':'#f97316','MEDIUM':'#eab308','LOW':'#22c55e'};
+  const sections=(analysis||'').split('---').filter(Boolean);
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:860}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <div>
+        <h2 style=${{margin:'0 0 4px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>⚠️ AI Risk Predictor</h2>
+        <p style=${{margin:0,fontSize:13,color:'var(--tx3)'}}>Analyzes task overdue rates, blockers, and deadlines to flag at-risk projects</p>
+      </div>
+      <button class="btn bp" style=${{fontSize:13,padding:'8px 18px',display:'flex',alignItems:'center',gap:8}} onClick=${analyze} disabled=${loading}>
+        ${loading?html`<span class="spin"></span>`:null} ${loading?'Analyzing…':'Run Analysis'}
+      </button>
+    </div>
+    ${err?html`<div style=${{padding:14,background:'rgba(185,28,28,0.08)',border:'1px solid rgba(185,28,28,0.2)',borderRadius:9,color:'#b91c1c',fontSize:13,marginBottom:16}}>${err}</div>`:null}
+    ${!analysis&&!loading?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:24}}>
+        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:10}}>What this analyzes</div>
+        ${[['Tasks overdue','How many tasks are past their due date'],['Blocked tasks','Tasks stuck in blocked state'],['Completion rate','Average % done vs deadline proximity'],['Sprint health','Story points done vs planned']].map(([t,d])=>html`
+          <div style=${{display:'flex',gap:10,marginBottom:8}}>
+            <span style=${{fontSize:14}}>•</span>
+            <div><span style=${{fontWeight:600,fontSize:13,color:'var(--tx)'}}>${t}</span> <span style=${{fontSize:12,color:'var(--tx3)'}}>${d}</span></div>
+          </div>`)}
+        <div style=${{marginTop:16,fontSize:12,color:'var(--tx3)'}}>Uses your workspace AI key · ${projects.length} projects to analyze</div>
+      </div>`:null}
+    ${sections.map((s,i)=>{
+      const lines=s.trim().split('\n').filter(Boolean);
+      const projectLine=lines.find(l=>l.startsWith('PROJECT:'));
+      const riskLine=lines.find(l=>l.startsWith('RISK:'));
+      const reasonLine=lines.find(l=>l.startsWith('REASON:'));
+      const actionLines=lines.filter(l=>l.startsWith('-')||l.startsWith('•'));
+      const projName=projectLine?projectLine.replace('PROJECT:','').trim():'Project';
+      const risk=riskLine?riskLine.replace('RISK:','').trim().toUpperCase():'MEDIUM';
+      const reason=reasonLine?reasonLine.replace('REASON:','').trim():'';
+      return html`
+        <div key=${i} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderLeft:`3px solid ${RISK_COLORS[risk]||'#888'}`,borderRadius:10,padding:'14px 16px',marginBottom:10}}>
+          <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:8}}>
+            <span style=${{fontWeight:700,fontSize:15,color:'var(--tx)',flex:1}}>${projName}</span>
+            <span style=${{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:99,background:(RISK_COLORS[risk]||'#888')+'20',color:RISK_COLORS[risk]||'#888'}}>${risk}</span>
+          </div>
+          ${reason?html`<p style=${{fontSize:13,color:'var(--tx2)',margin:'0 0 8px',lineHeight:1.5}}>${reason}</p>`:null}
+          ${actionLines.length?html`
+            <div style=${{fontSize:12,fontWeight:600,color:'var(--tx3)',marginBottom:4}}>RECOMMENDED ACTIONS</div>
+            ${actionLines.map((a,j)=>html`<div key=${j} style=${{fontSize:12,color:'var(--tx)',padding:'2px 0',lineHeight:1.5}}>${a}</div>`)}`:null}
+        </div>`;
+    })}
+  </div>`;
+}
+
+/* ─── Time Report View ───────────────────────────────────────────────────── */
+function TimeReportView({cu,users}){
+  const [logs,setLogs]=useState([]);
+  const [period,setPeriod]=useState('week');
+  const [userFilter,setUserFilter]=useState('');
+  const [loading,setLoading]=useState(false);
+  const canSeeAll=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
+  const load=async()=>{
+    setLoading(true);
+    const params=new URLSearchParams({period});
+    if(userFilter)params.append('user_id',userFilter);
+    const r=await api.get('/api/reports/time?'+params);
+    setLogs(r||[]);setLoading(false);
+  };
+  useEffect(()=>{load();},[period,userFilter]);
+  // Group by user
+  const byUser={};
+  logs.forEach(l=>{
+    const key=l.user_name||l.user_id;
+    if(!byUser[key])byUser[key]={name:key,total:0,logs:[]};
+    byUser[key].total+=l.minutes||0;
+    byUser[key].logs.push(l);
+  });
+  const totalMins=logs.reduce((s,l)=>s+(l.minutes||0),0);
+  const fmt=m=>`${Math.floor(m/60)}h ${m%60}m`;
+  const exportCSV=()=>{
+    const rows=[['Date','User','Task','Project','Minutes','Description'],...logs.map(l=>[l.logged_date,l.user_name,l.task_title,l.project_name,l.minutes,l.description])];
+    const csv=rows.map(r=>r.join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`time-report-${period}.csv`;a.click();
+  };
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+    <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:20,flexWrap:'wrap'}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>⏱️ Time Report</h2>
+      <div style=${{display:'flex',gap:6,marginLeft:'auto',alignItems:'center',flexWrap:'wrap'}}>
+        <select class="inp" style=${{height:32,fontSize:12,width:120}} value=${period} onChange=${e=>setPeriod(e.target.value)}>
+          <option value="week">Last 7 days</option>
+          <option value="month">This month</option>
+          <option value="quarter">Last 90 days</option>
+        </select>
+        ${canSeeAll?html`
+          <select class="inp" style=${{height:32,fontSize:12,width:150}} value=${userFilter} onChange=${e=>setUserFilter(e.target.value)}>
+            <option value="">All members</option>
+            ${safe(users).map(u=>html`<option value=${u.id}>${u.name}</option>`)}
+          </select>`:null}
+        <button class="btn bg" style=${{fontSize:12,height:32,padding:'0 12px'}} onClick=${exportCSV}>Export CSV</button>
+      </div>
+    </div>
+    <!-- Summary cards -->
+    <div style=${{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20}}>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',textAlign:'center'}}>
+        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)'}}>${fmt(totalMins)}</div>
+        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Total time logged</div>
+      </div>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',textAlign:'center'}}>
+        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)'}}>${Object.keys(byUser).length}</div>
+        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Active members</div>
+      </div>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',textAlign:'center'}}>
+        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)'}}>${logs.length}</div>
+        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Log entries</div>
+      </div>
+    </div>
+    <!-- By user breakdown -->
+    ${Object.values(byUser).sort((a,b)=>b.total-a.total).map(u=>html`
+      <div key=${u.name} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,marginBottom:12,overflow:'hidden'}}>
+        <div style=${{padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--sf2)',borderBottom:'1px solid var(--bd)'}}>
+          <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>${u.name}</div>
+          <div style=${{fontWeight:700,fontSize:14,color:'var(--ac)'}}>${fmt(u.total)}</div>
+        </div>
+        ${u.logs.slice(0,5).map(l=>html`
+          <div style=${{display:'flex',gap:12,padding:'8px 16px',borderBottom:'1px solid var(--bd)',fontSize:12}}>
+            <span style=${{color:'var(--tx3)',minWidth:80}}>${(l.logged_date||'').slice(5)}</span>
+            <span style=${{color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${l.task_title||'—'}</span>
+            <span style=${{color:'var(--tx3)',minWidth:60}}>${l.project_name||'—'}</span>
+            <span style=${{fontWeight:600,color:'var(--ac)',minWidth:50,textAlign:'right'}}>${fmt(l.minutes||0)}</span>
+          </div>`)}
+        ${u.logs.length>5?html`<div style=${{padding:'6px 16px',fontSize:11,color:'var(--tx3)'}}>+${u.logs.length-5} more entries</div>`:null}
+      </div>`)}
+    ${!loading&&!logs.length?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)'}}><div style=${{fontSize:36,marginBottom:10}}>⏱️</div><div>No time logs for this period</div></div>`:null}
+    ${loading?html`<div style=${{textAlign:'center',padding:40}}><span class="spin"></span></div>`:null}
+  </div>`;
+}
+
+/* ─── Forms & Intake View ────────────────────────────────────────────────── */
+function FormsView({cu,projects}){
+  const [forms,setForms]=useState([]);
+  const [showBuilder,setShowBuilder]=useState(false);
+  const [editForm,setEditForm]=useState(null);
+  const [form,setForm]=useState({title:'',description:'',project_id:'',fields:[]});
+  const [saving,setSaving]=useState(false);
+  const [submissions,setSubmissions]=useState({});
+  const canCreate=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
+  const FIELD_TYPES=[{v:'text',l:'Text'},{v:'email',l:'Email'},{v:'textarea',l:'Long text'},{v:'select',l:'Dropdown'},{v:'number',l:'Number'}];
+  const load=async()=>{const r=await api.get('/api/forms');setForms(r||[]);};
+  useEffect(()=>{load();},[]);
+  const openBuilder=(f=null)=>{
+    if(f){setEditForm(f);setForm({title:f.title,description:f.description||'',project_id:f.project_id||'',fields:JSON.parse(f.fields||'[]')});}
+    else{setEditForm(null);setForm({title:'',description:'',project_id:'',fields:[]});}
+    setShowBuilder(true);
+  };
+  const addField=()=>setForm(p=>({...p,fields:[...p.fields,{type:'text',name:`field${p.fields.length+1}`,label:'New field',required:false,options:[]}]}));
+  const removeField=i=>setForm(p=>({...p,fields:p.fields.filter((_,j)=>j!==i)}));
+  const updateField=(i,k,v)=>setForm(p=>({...p,fields:p.fields.map((f,j)=>j===i?{...f,[k]:v}:f)}));
+  const save=async()=>{
+    setSaving(true);
+    if(editForm){await api.put(`/api/forms/${editForm.id}`,form);}
+    else{await api.post('/api/forms',form);}
+    setSaving(false);setShowBuilder(false);load();
+  };
+  const del=async(id)=>{if(!confirm('Delete form?'))return;await api.del(`/api/forms/${id}`);load();};
+  const loadSubs=async(fid)=>{
+    if(submissions[fid])return;
+    const r=await api.get(`/api/forms/${fid}/submissions`);
+    setSubmissions(p=>({...p,[fid]:r||[]}));
+  };
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <div><h2 style=${{margin:'0 0 4px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>📝 Forms & Intake</h2>
+        <p style=${{margin:0,fontSize:13,color:'var(--tx3)'}}>Public forms that auto-create tickets on submission</p></div>
+      ${canCreate?html`<button class="btn bp" onClick=${()=>openBuilder()}>+ Build Form</button>`:null}
+    </div>
+    ${showBuilder?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
+        <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)',marginBottom:14}}>${editForm?'Edit Form':'New Form'}</div>
+        <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12}}>
+          <input class="inp" placeholder="Form title" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})} style=${{height:36,fontSize:14,fontWeight:600}}/>
+          <select class="inp" style=${{height:36,fontSize:13}} value=${form.project_id} onChange=${e=>setForm({...form,project_id:e.target.value})}>
+            <option value="">No project</option>
+            ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
+          </select>
+        </div>
+        <textarea class="inp" placeholder="Description shown to submitters…" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{width:'100%',height:56,fontSize:13,resize:'none',marginBottom:14}}></textarea>
+        <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:8}}>FORM FIELDS</div>
+        ${form.fields.map((f,i)=>html`
+          <div key=${i} style=${{display:'flex',gap:6,marginBottom:8,alignItems:'center',background:'var(--sf2)',padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)'}}>
+            <select class="inp" style=${{height:30,fontSize:12,width:110}} value=${f.type} onChange=${e=>updateField(i,'type',e.target.value)}>
+              ${FIELD_TYPES.map(t=>html`<option value=${t.v}>${t.l}</option>`)}
+            </select>
+            <input class="inp" value=${f.label} onInput=${e=>updateField(i,'label',e.target.value)} style=${{flex:1,height:30,fontSize:12}} placeholder="Label"/>
+            <input class="inp" value=${f.name} onInput=${e=>updateField(i,'name',e.target.value)} style=${{width:90,height:30,fontSize:11,fontFamily:'monospace'}} placeholder="field_name"/>
+            ${f.type==='select'?html`<input class="inp" value=${(f.options||[]).join(',')} onInput=${e=>updateField(i,'options',e.target.value.split(','))} style=${{width:130,height:30,fontSize:11}} placeholder="opt1,opt2"/>`:null}
+            <label style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,cursor:'pointer',whiteSpace:'nowrap'}}>
+              <input type="checkbox" checked=${f.required} onChange=${e=>updateField(i,'required',e.target.checked)}/> Req
+            </label>
+            <button style=${{background:'none',border:'none',cursor:'pointer',color:'#ef4444',fontSize:16}} onClick=${()=>removeField(i)}>✕</button>
+          </div>`)}
+        <div style=${{display:'flex',gap:8,marginTop:8}}>
+          <button class="btn bg" style=${{fontSize:12}} onClick=${addField}>+ Add Field</button>
+          <button class="btn bp" style=${{marginLeft:'auto'}} onClick=${save} disabled=${saving||!form.title}>${saving?'Saving…':'Save Form'}</button>
+          <button class="btn bg" onClick=${()=>setShowBuilder(false)}>Cancel</button>
+        </div>
+      </div>`:null}
+    ${forms.map(f=>html`
+      <div key=${f.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',marginBottom:10}}>
+        <div style=${{display:'flex',alignItems:'center',gap:10}}>
+          <div style=${{flex:1}}>
+            <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>${f.title}</div>
+            ${f.description?html`<div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${f.description}</div>`:null}
+          </div>
+          <span style=${{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99,background:f.active?'rgba(21,128,61,0.15)':'rgba(100,116,139,0.15)',color:f.active?'#15803d':'#64748b'}}>${f.active?'Active':'Inactive'}</span>
+          <button class="btn bg" style=${{fontSize:11}} onClick=${()=>navigator.clipboard?.writeText(window.location.origin+'/form/'+f.id).then(()=>alert('Link copied!'))}>📋 Copy Link</button>
+          <a href=${'/form/'+f.id} target="_blank"><button class="btn bg" style=${{fontSize:11}}>Preview</button></a>
+          ${canCreate?html`
+            <button class="btn bg" style=${{fontSize:11}} onClick=${()=>openBuilder(f)}>Edit</button>
+            <button class="btn br" style=${{fontSize:11}} onClick=${()=>del(f.id)}>Del</button>`:null}
+        </div>
+        <div style=${{marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
+          <button class="btn bg" style=${{fontSize:11,height:26,padding:'0 10px'}} onClick=${()=>loadSubs(f.id)}>
+            ${submissions[f.id]!==undefined?`${submissions[f.id].length} submissions`:'View submissions'}
+          </button>
+        </div>
+        ${submissions[f.id]&&submissions[f.id].length?html`
+          <div style=${{marginTop:10,overflowX:'auto'}}>
+            ${submissions[f.id].slice(0,5).map((s,i)=>html`
+              <div key=${i} style=${{fontSize:11,padding:'5px 0',borderTop:'1px solid var(--bd)',color:'var(--tx2)'}}>${(s.created||'').slice(0,16)} · ${s.submitter_email||'Anonymous'} · Ticket: ${s.ticket_id}</div>`)}
+          </div>`:null}
+      </div>`)}
+    ${!forms.length?html`<div style=${{textAlign:'center',padding:'40px 0',color:'var(--tx3)'}}><div style=${{fontSize:36,marginBottom:10}}>📝</div><div>No forms yet</div></div>`:null}
+  </div>`;
+}
+
+/* ─── TOTP 2FA Setup Panel (in settings) ────────────────────────────────── */
+function TOTPSetupPanel({cu}){
+  const [status,setStatus]=useState(null);
+  const [setup,setSetup]=useState(null);
+  const [code,setCode]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [msg,setMsg]=useState('');
+  const load=async()=>{const r=await api.get('/api/totp/status');setStatus(r?.enabled);};
+  useEffect(()=>{load();},[]);
+  const startSetup=async()=>{
+    setLoading(true);const r=await api.post('/api/totp/setup',{});setLoading(false);
+    if(r?.error)setMsg(r.error);else setSetup(r);
+  };
+  const verify=async()=>{
+    setLoading(true);const r=await api.post('/api/totp/verify',{code});setLoading(false);
+    if(r?.ok){setMsg('2FA enabled!');setSetup(null);load();}else setMsg(r?.error||'Invalid code');
+  };
+  const disable=async()=>{
+    if(!confirm('Disable 2FA?'))return;
+    await api.post('/api/totp/disable',{});setStatus(false);setMsg('2FA disabled');
+  };
+  return html`<div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:16}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+      <div>
+        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)'}}>🔑 Two-Factor Authentication</div>
+        <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Add an extra layer of security using an authenticator app</div>
+      </div>
+      <span style=${{fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:99,background:status?'rgba(21,128,61,0.15)':'rgba(100,116,139,0.15)',color:status?'#15803d':'#64748b'}}>${status===null?'…':status?'Enabled':'Disabled'}</span>
+    </div>
+    ${msg?html`<div style=${{fontSize:12,padding:'6px 10px',borderRadius:6,background:msg.includes('!')?'rgba(21,128,61,0.1)':'rgba(185,28,28,0.08)',color:msg.includes('!')?'#15803d':'#b91c1c',marginBottom:10}}>${msg}</div>`:null}
+    ${!status&&!setup?html`<button class="btn bg" style=${{fontSize:12}} onClick=${startSetup} disabled=${loading}>${loading?'…':'Set Up Authenticator'}</button>`:null}
+    ${setup?html`
+      <div style=${{marginTop:8}}>
+        <div style=${{fontSize:12,color:'var(--tx2)',marginBottom:10}}>1. Scan this QR code with Google Authenticator, Authy, or 1Password:</div>
+        ${setup.qr?html`<img src=${'data:image/png;base64,'+setup.qr} style=${{width:160,height:160,border:'1px solid var(--bd)',borderRadius:8,display:'block',marginBottom:10}}/>`:null}
+        <div style=${{fontSize:11,fontFamily:'monospace',background:'var(--sf2)',padding:'5px 10px',borderRadius:6,marginBottom:10}}>Manual key: ${setup.secret}</div>
+        <div style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>2. Enter the 6-digit code from your app:</div>
+        <div style=${{display:'flex',gap:8}}>
+          <input class="inp" value=${code} onInput=${e=>setCode(e.target.value)} placeholder="000000" maxLength="6" style=${{width:120,height:34,fontSize:16,fontFamily:'monospace',letterSpacing:'.2em',textAlign:'center'}}
+            onKeyDown=${e=>{if(e.key==='Enter')verify();}}/>
+          <button class="btn bp" style=${{fontSize:13}} onClick=${verify} disabled=${loading||code.length<6}>${loading?'…':'Verify'}</button>
+          <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setSetup(null)}>Cancel</button>
+        </div>
+        <div style=${{marginTop:12,fontSize:11,color:'var(--tx3)'}}>Backup codes (save these): ${(setup.backup_codes||[]).join(' · ')}</div>
+      </div>`:null}
+    ${status?html`<button class="btn br" style=${{fontSize:12}} onClick=${disable}>Disable 2FA</button>`:null}
+  </div>`;
+}
+
+/* ─── Goals & OKRs (re-enabled with role gating) ────────────────────────── */
+
+
 /* ─── AIAssistant floating panel ──────────────────────────────────────────── */
 function AIAssistant({cu,projects,tasks,users}){
   const [open,setOpen]=useState(false);const [msgs,setMsgs]=useState([]);const [input,setInput]=useState('');const [busy,setBusy]=useState(false);const ref=useRef(null);const iref=useRef(null);
@@ -11000,7 +11936,7 @@ function HuddleCall(){return null;}
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','docs','sprints'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','docs','sprints','announcements','standup','codereview','risk','timereport','forms'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -11016,7 +11952,7 @@ function App(){
   useEffect(()=>{
     try{
       const p=window.location.pathname.replace(/^\//, '').split('/')[0].trim();
-      const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity'};
+      const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Kanban Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity',announcements:'Announcements',standup:'AI Standup',codereview:'Code Review',risk:'Risk Predictor',timereport:'Time Report',forms:'Forms & Intake'};
       if(p&&VIEW_T[p]) document.title='VEWIT — '+VIEW_T[p]+' | AI-Powered Team Collaboration';
       else document.title='VEWIT — AI-Powered Team Collaboration Platform';
     }catch(e){}
@@ -11036,8 +11972,9 @@ function App(){
     messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
     timeline:'Timeline Tracker',reminders:'Reminders',
     settings:'Settings',team:'Team Management',productivity:'Dev Productivity',
-    calendar:'Calendar',docs:'Docs & Wiki',sprints:'Sprints',
-    tasks:'Kanban Board'
+    calendar:'Calendar',docs:'Docs & Wiki',sprints:'Sprints',tasks:'Kanban Board',
+    announcements:'Announcements',standup:'AI Standup',codereview:'Code Review',
+    risk:'Risk Predictor',timereport:'Time Report',forms:'Forms & Intake'
   };
   const _setView=useCallback((v)=>{
     setView(v);
@@ -11453,7 +12390,7 @@ function App(){
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, };
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, announcements:{title:'Announcements',sub:'Workspace-wide announcements'}, standup:{title:'AI Standup',sub:'Auto-generated daily standups'}, codereview:{title:'AI Code Review',sub:'Paste a diff and get AI feedback'}, risk:{title:'AI Risk Predictor',sub:'Projects flagged for potential slip'}, timereport:{title:'Time Report',sub:'Hours logged by member and project'}, forms:{title:'Forms & Intake',sub:'Public forms that create tickets automatically'}, };
 
   const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
@@ -11506,6 +12443,7 @@ function App(){
           onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
         />
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+          <${AnnouncementBanner} cu=${cu}/>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
             ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
@@ -11527,6 +12465,12 @@ function App(){
             ${baseView==='calendar'?html`<${CalendarView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load}/>`:null}
             ${baseView==='docs'?html`<${DocsView} projects=${scopedProjects} cu=${cu}/>`:null}
             ${baseView==='sprints'?html`<${SprintsView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='announcements'?html`<${AnnouncementsView} cu=${cu}/>`:null}
+            ${baseView==='standup'?html`<${StandupView} cu=${cu} users=${scopedUsers}/>`:null}
+            ${baseView==='codereview'&&cu&&cu.role!=='Viewer'?html`<${CodeReviewView} cu=${cu}/>`:null}
+            ${baseView==='risk'&&cu&&['Admin','Manager','TeamLead'].includes(cu.role)?html`<${RiskView} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks}/>`:null}
+            ${baseView==='timereport'?html`<${TimeReportView} cu=${cu} users=${scopedUsers}/>`:null}
+            ${baseView==='forms'?html`<${FormsView} cu=${cu} projects=${scopedProjects}/>`:null}
             </div>
           <//>
         </div>
