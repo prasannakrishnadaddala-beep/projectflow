@@ -4374,280 +4374,342 @@ LANDING_HTML = """
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>VEWIT — AI-Powered Team Collaboration &amp; Project Management Platform</title>
-<meta name="description" content="VEWIT — AI-powered team collaboration. Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, docs wiki, 2FA and more. Free to start."/>
-<meta name="keywords" content="VEWIT, AI project management, team collaboration software, kanban board, sprint planning, AI standup, code review bot, risk predictor, intake forms, docs wiki, 2FA security, time tracking, announcements"/>
+<meta name="description" content="VEWIT — AI-powered team collaboration. Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, 2FA and more. Free to start."/>
+<meta name="keywords" content="VEWIT, AI project management, team collaboration software, kanban board, sprint planning, AI standup, code review bot, risk predictor, intake forms, 2FA security, time tracking"/>
 <meta name="author" content="VEWIT"/>
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
-<meta name="theme-color" content="#0f172a"/>
+<meta name="theme-color" content="#0a0f1e"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:description" content="Kanban boards, sprints, AI standup, code review bot, risk predictor, intake forms, 2FA and more — all in one platform. Free to start."/>
+<meta property="og:description" content="Kanban, sprints, AI standup, code review bot, risk predictor, 2FA — all in one. Free to start."/>
 <meta property="og:site_name" content="VEWIT"/>
 <meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
-<meta name="twitter:description" content="Kanban, sprints, AI standup generator, code review bot, risk predictor and more — free to start."/>
+<meta name="twitter:description" content="Kanban, sprints, AI standup generator, code review bot, risk predictor — free to start."/>
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform with kanban boards, sprint planning, AI standup generator, code review bot, risk predictor, intake forms, 2FA and developer productivity analytics.","applicationCategory":"BusinessApplication","operatingSystem":"Web, PWA","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"featureList":["AI Standup Generator","AI Code Review Bot","AI Risk Predictor","Kanban Board","Sprint Planning","Docs and Wiki","Intake Forms","TOTP 2FA","Time Tracking","Message Reactions","Threaded Replies","Announcements","Role-Based Access Control","Push Notifications","Timeline Tracker"]}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform with kanban boards, sprint planning, AI standup, code review, risk predictor, 2FA and developer productivity analytics.","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"featureList":["AI Standup Generator","AI Code Review","AI Risk Predictor","Kanban Board","Sprint Planning","2FA Security","Time Tracking","Intake Forms","Docs Wiki"]}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 :root{
   --bg:#ffffff;--sf:#f8fafc;--sf2:#f1f5f9;--sf3:#e2e8f0;
-  --ac:#2563eb;--ac2:#1d4ed8;--ac3:rgba(37,99,235,0.08);--ac4:rgba(37,99,235,0.15);
-  --tx:#0a0f1e;--tx2:#334155;--tx3:#64748b;--tx4:#94a3b8;
-  --bd:rgba(0,0,0,0.07);--bd2:rgba(0,0,0,0.12);
-  --green:#16a34a;--amber:#d97706;--red:#dc2626;--purple:#7c3aed;
-  --r8:8px;--r12:12px;--r16:16px;
+  --tx:#0a0f1e;--tx2:#1e293b;--tx3:#475569;--tx4:#94a3b8;
+  --ac:#2563eb;--ac2:#1d4ed8;--pu:#7c3aed;--pi:#db2777;
+  --gn:#16a34a;--cy:#0891b2;--am:#d97706;--rd:#dc2626;
+  --g1:linear-gradient(135deg,#2563eb,#7c3aed);
+  --g2:linear-gradient(135deg,#7c3aed,#db2777);
+  --g3:linear-gradient(135deg,#2563eb,#0891b2);
+  --r8:8px;--r12:12px;--r16:16px;--r20:20px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
 body{background:var(--bg);color:var(--tx);font-family:'Inter',system-ui,sans-serif;font-size:16px;line-height:1.65;overflow-x:hidden;}
-h1,h2,h3,h4{font-family:'Inter',sans-serif;line-height:1.15;letter-spacing:-.02em;}
 a{color:inherit;text-decoration:none;}
-img{max-width:100%;}
 
-/* ── NAV ───────────────────────────────────────── */
-nav{position:fixed;top:0;left:0;right:0;z-index:300;height:58px;display:flex;align-items:center;background:rgba(255,255,255,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid var(--bd);}
-.nav-inner{max-width:1200px;margin:0 auto;padding:0 32px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:20px;}
+/* ── NOISE TEXTURE OVERLAY ─────────────────────────── */
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.4;}
+
+/* ── NAV ──────────────────────────────────────────── */
+nav{position:fixed;top:0;left:0;right:0;z-index:300;height:60px;display:flex;align-items:center;
+  background:rgba(255,255,255,.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(0,0,0,.06);}
+.nav-in{max-width:1200px;margin:0 auto;padding:0 32px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:20px;}
 .logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:.97rem;color:var(--tx);letter-spacing:-.03em;}
-.logo-mark{width:30px;height:30px;border-radius:8px;background:var(--ac);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(37,99,235,.3);}
+.logo-mark{width:32px;height:32px;border-radius:9px;background:var(--g1);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(37,99,235,.35);}
 .nav-links{display:flex;align-items:center;gap:2px;list-style:none;}
 .nav-links a{font-size:.84rem;font-weight:500;color:var(--tx3);padding:6px 13px;border-radius:var(--r8);transition:all .15s;}
 .nav-links a:hover{color:var(--tx);background:var(--sf2);}
 .nav-cta{display:flex;gap:8px;align-items:center;}
 .btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;transition:all .17s;white-space:nowrap;}
-.btn-ghost{background:transparent;color:var(--tx3);padding:8px 18px;border-radius:var(--r8);font-size:.84rem;border:1.5px solid var(--bd2);}
-.btn-ghost:hover{color:var(--tx);border-color:rgba(0,0,0,.18);background:var(--sf);}
-.btn-solid{background:var(--ac);color:#fff;padding:9px 20px;border-radius:var(--r8);font-size:.84rem;box-shadow:0 2px 12px rgba(37,99,235,.22);}
-.btn-solid:hover{background:var(--ac2);box-shadow:0 4px 20px rgba(37,99,235,.35);transform:translateY(-1px);}
-.btn-lg{padding:13px 30px!important;font-size:.95rem!important;border-radius:10px!important;}
-.btn-outline-white{background:transparent;color:#fff;padding:12px 28px;border-radius:10px;font-size:.95rem;border:1.5px solid rgba(255,255,255,.3);}
-.btn-outline-white:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.5);}
+.btn-ghost{background:transparent;color:var(--tx3);padding:8px 18px;border-radius:var(--r8);font-size:.84rem;border:1.5px solid rgba(0,0,0,.12);}
+.btn-ghost:hover{color:var(--tx);border-color:rgba(0,0,0,.2);background:var(--sf);}
+.btn-grd{background:var(--g1);color:#fff;padding:9px 22px;border-radius:var(--r8);font-size:.84rem;box-shadow:0 4px 16px rgba(37,99,235,.3);}
+.btn-grd:hover{opacity:.92;box-shadow:0 6px 24px rgba(37,99,235,.4);transform:translateY(-1px);}
+.btn-lg{padding:14px 32px!important;font-size:.96rem!important;border-radius:12px!important;}
+.btn-white{background:#fff;color:#1d4ed8;padding:13px 28px;border-radius:12px;font-size:.96rem;box-shadow:0 4px 20px rgba(0,0,0,.15);}
+.btn-white:hover{background:#f0f9ff;transform:translateY(-1px);}
+.btn-outline-white{background:rgba(255,255,255,.1);color:#fff;padding:13px 28px;border-radius:12px;font-size:.96rem;border:1.5px solid rgba(255,255,255,.3);}
+.btn-outline-white:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.5);}
 
-/* ── HERO ──────────────────────────────────────── */
-.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 32px 60px;position:relative;overflow:hidden;}
-.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 90% 70% at 60% -5%,rgba(37,99,235,.07) 0%,transparent 65%),radial-gradient(ellipse 50% 40% at 10% 80%,rgba(124,58,237,.04) 0%,transparent 60%);pointer-events:none;}
-.hero::after{content:'';position:absolute;top:15%;right:5%;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.04) 0%,transparent 70%);pointer-events:none;}
-.hero-inner{max-width:1200px;margin:0 auto;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;}
-.hero-left{}
-.hero-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.18);padding:5px 14px 5px 7px;border-radius:100px;font-size:.72rem;font-weight:700;color:var(--ac);margin-bottom:22px;letter-spacing:.04em;text-transform:uppercase;}
-.hero-badge-dot{width:20px;height:20px;border-radius:50%;background:var(--ac);display:flex;align-items:center;justify-content:center;}
-.hero h1{font-size:clamp(2.2rem,4vw,3.3rem);font-weight:900;color:var(--tx);margin-bottom:18px;line-height:1.08;letter-spacing:-.035em;}
-.hero h1 em{font-style:normal;color:var(--ac);}
-.hero-sub{font-size:1rem;color:var(--tx3);max-width:480px;margin-bottom:34px;font-weight:400;line-height:1.75;}
-.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+/* ── HERO ─────────────────────────────────────────── */
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:100px 32px 80px;position:relative;overflow:hidden;
+  background:linear-gradient(160deg,#0a0f1e 0%,#0f1b3d 40%,#1a0a2e 70%,#0a0f1e 100%);}
+/* Animated orbs */
+.hero::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;
+  background:radial-gradient(circle,rgba(37,99,235,.25) 0%,transparent 70%);
+  top:-100px;right:-100px;animation:orb1 8s ease-in-out infinite alternate;pointer-events:none;}
+.hero::after{content:'';position:absolute;width:500px;height:500px;border-radius:50%;
+  background:radial-gradient(circle,rgba(124,58,237,.2) 0%,transparent 70%);
+  bottom:-50px;left:-80px;animation:orb2 10s ease-in-out infinite alternate;pointer-events:none;}
+@keyframes orb1{0%{transform:translate(0,0) scale(1);}100%{transform:translate(-60px,40px) scale(1.15);}}
+@keyframes orb2{0%{transform:translate(0,0) scale(1);}100%{transform:translate(50px,-40px) scale(1.1);}}
+/* Grid pattern */
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(37,99,235,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.07) 1px,transparent 1px);background-size:60px 60px;pointer-events:none;}
+.hero-in{position:relative;z-index:2;max-width:1200px;margin:0 auto;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);padding:5px 14px 5px 8px;border-radius:100px;font-size:.72rem;font-weight:700;color:rgba(255,255,255,.9);margin-bottom:24px;letter-spacing:.04em;text-transform:uppercase;backdrop-filter:blur(8px);}
+.badge-dot{width:22px;height:22px;border-radius:50%;background:var(--g1);display:flex;align-items:center;justify-content:center;}
+.hero h1{font-size:clamp(2.2rem,4vw,3.5rem);font-weight:900;color:#fff;margin-bottom:20px;line-height:1.06;letter-spacing:-.04em;}
+.hero h1 .grad{background:linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero-sub{font-size:1.02rem;color:rgba(255,255,255,.6);max-width:480px;margin-bottom:36px;line-height:1.75;}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
 .hero-trust{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
-.trust-item{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--tx4);font-weight:500;}
-.trust-item svg{flex-shrink:0;}
+.trust-it{display:flex;align-items:center;gap:5px;font-size:.78rem;color:rgba(255,255,255,.45);}
+.trust-it svg{opacity:.6;}
+
+/* App window mockup */
 .hero-right{position:relative;}
-.app-window{border-radius:14px;overflow:hidden;border:1px solid var(--bd2);box-shadow:0 32px 80px rgba(0,0,0,.12),0 0 0 1px var(--bd);background:#fff;}
-.win-bar{height:38px;background:#f8fafc;border-bottom:1px solid var(--sf3);display:flex;align-items:center;padding:0 14px;gap:6px;}
-.wdot{width:10px;height:10px;border-radius:50%;}
-.win-url{flex:1;margin:0 12px;height:20px;background:var(--sf2);border-radius:5px;display:flex;align-items:center;padding:0 10px;gap:5px;}
-.win-url-txt{font-size:.62rem;color:var(--tx4);font-family:'JetBrains Mono',monospace;}
-.win-body{display:flex;height:400px;}
-.win-sidebar{width:178px;flex-shrink:0;background:#0f172a;padding:12px 8px;display:flex;flex-direction:column;gap:1px;}
-.ws-header{display:flex;align-items:center;gap:8px;padding:8px 8px 14px;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:8px;}
-.ws-av{width:28px;height:28px;border-radius:7px;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#fff;flex-shrink:0;}
-.ws-name{font-size:.72rem;font-weight:700;color:#f1f5f9;letter-spacing:-.01em;}
-.ws-sub{font-size:.6rem;color:#475569;}
-.nav-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:.7rem;color:#94a3b8;font-weight:500;cursor:default;}
-.nav-item.active{background:rgba(37,99,235,.18);color:#93c5fd;}
-.nav-item svg{width:13px;height:13px;flex-shrink:0;}
-.nav-section{font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#334155;padding:10px 8px 3px;}
-.win-main{flex:1;background:#f8fafc;overflow:hidden;display:flex;flex-direction:column;}
-.win-header{padding:10px 16px;border-bottom:1px solid var(--sf3);background:#fff;display:flex;align-items:center;justify-content:space-between;}
-.win-title{font-size:.82rem;font-weight:700;color:var(--tx);}
-.win-badge{font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(37,99,235,.08);color:var(--ac);}
-.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px;flex:1;align-content:start;overflow:hidden;}
-.kol{background:#fff;border:1px solid var(--sf3);border-radius:8px;padding:8px;}
-.kol-h{font-size:.58rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;}
-.kcard{background:#f8fafc;border:1px solid var(--sf3);border-radius:6px;padding:7px;margin-bottom:5px;border-left-width:2.5px;border-left-style:solid;}
-.kcard-t{font-size:.65rem;font-weight:500;color:var(--tx);margin-bottom:5px;line-height:1.4;}
-.kcard-meta{display:flex;gap:4px;flex-wrap:wrap;}
-.tag{display:inline-block;font-size:.55rem;padding:1.5px 5px;border-radius:3px;font-weight:600;}
-.tag-r{background:rgba(220,38,38,.08);color:var(--red);}
-.tag-a{background:rgba(217,119,6,.09);color:var(--amber);}
-.tag-b{background:rgba(37,99,235,.08);color:var(--ac);}
-.tag-g{background:rgba(22,163,74,.08);color:var(--green);}
-.tag-p{background:rgba(124,58,237,.08);color:var(--purple);}
-.ai-bubble{position:absolute;bottom:-16px;right:-20px;background:#fff;border:1px solid var(--bd2);border-radius:14px;padding:12px 16px;box-shadow:0 8px 32px rgba(0,0,0,.1);max-width:220px;}
-.ai-bubble-head{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;color:var(--ac);margin-bottom:5px;}
-.ai-bubble p{font-size:.7rem;color:var(--tx2);line-height:1.5;}
-.ai-dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+.app-win{border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);box-shadow:0 40px 100px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.05);background:#0d1117;}
+.win-bar{height:40px;background:#161b22;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 14px;gap:7px;}
+.wd{width:11px;height:11px;border-radius:50%;}
+.win-url{flex:1;margin:0 10px;height:22px;background:rgba(255,255,255,.06);border-radius:6px;display:flex;align-items:center;padding:0 10px;gap:6px;}
+.win-url-txt{font-size:.62rem;color:rgba(255,255,255,.35);font-family:'JetBrains Mono',monospace;}
+.win-body{display:flex;height:360px;}
+.win-sb{width:168px;flex-shrink:0;background:#0d1117;padding:10px 8px;border-right:1px solid rgba(255,255,255,.06);}
+.ws-head{display:flex;align-items:center;gap:8px;padding:7px 8px 12px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:8px;}
+.ws-av{width:28px;height:28px;border-radius:7px;background:var(--g1);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;color:#fff;flex-shrink:0;}
+.ws-nm{font-size:.7rem;font-weight:700;color:#e2e8f0;letter-spacing:-.01em;}
+.ws-sub{font-size:.58rem;color:#475569;}
+.nav-sec{font-size:.56rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#334155;padding:8px 8px 3px;}
+.nav-it{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;font-size:.68rem;color:#64748b;margin-bottom:1px;}
+.nav-it.act{background:rgba(37,99,235,.2);color:#93c5fd;}
+.nav-it svg{width:12px;height:12px;flex-shrink:0;}
+.win-main{flex:1;background:#0a0f1e;overflow:hidden;display:flex;flex-direction:column;}
+.win-hdr{height:38px;background:#0d1117;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 14px;justify-content:space-between;flex-shrink:0;}
+.win-title{font-size:.75rem;font-weight:700;color:#e2e8f0;}
+.win-badges{display:flex;gap:5px;}
+.win-badge{font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:99px;}
+.kan{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px;overflow:hidden;}
+.kcol{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:8px;}
+.kcol-h{font-size:.56rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;}
+.kcard{background:#161b22;border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:7px;margin-bottom:5px;border-left-width:2px;border-left-style:solid;}
+.kcard-t{font-size:.62rem;font-weight:500;color:#e2e8f0;margin-bottom:5px;line-height:1.4;}
+.ktag{display:inline-block;font-size:.52rem;padding:1.5px 5px;border-radius:3px;font-weight:600;margin-right:3px;}
+/* floating cards */
+.float-card{position:absolute;background:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.25);border:1px solid rgba(0,0,0,.07);}
+.fc-head{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.fc-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.fc-title{font-size:.7rem;font-weight:700;color:#0a0f1e;}
+.fc-body{font-size:.68rem;color:#475569;line-height:1.5;}
 
-/* ── TICKER ─────────────────────────────────────── */
-.ticker-wrap{overflow:hidden;padding:12px 0;background:var(--sf);border-top:1px solid var(--sf3);border-bottom:1px solid var(--sf3);}
-.ticker{display:flex;animation:ticker 40s linear infinite;width:max-content;}
-@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-.t-item{display:flex;align-items:center;gap:7px;padding:0 28px;font-size:.78rem;color:var(--tx3);white-space:nowrap;flex-shrink:0;}
-.t-sep{color:var(--sf3);margin-left:14px;}
-.t-hi{font-weight:700;background:linear-gradient(135deg,var(--ac),#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+/* ── TICKER ───────────────────────────────────────── */
+.ticker-wrap{overflow:hidden;padding:14px 0;background:linear-gradient(135deg,#0a0f1e,#1a0a2e);border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);}
+.ticker{display:flex;animation:tick 45s linear infinite;width:max-content;}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.t-it{display:flex;align-items:center;gap:8px;padding:0 28px;font-size:.78rem;color:rgba(255,255,255,.4);white-space:nowrap;flex-shrink:0;}
+.t-hi{font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.t-sep{color:rgba(255,255,255,.15);}
 
-/* ── STATS ──────────────────────────────────────── */
-.stats{padding:56px 0;background:var(--sf);}
-.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
-.stat-card{background:#fff;text-align:center;padding:24px 16px;border-radius:14px;border:1px solid var(--sf3);transition:transform .2s,box-shadow .2s;}
-.stat-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(37,99,235,.08);}
-.stat-n{font-size:2.2rem;font-weight:900;background:linear-gradient(135deg,var(--ac),#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-.04em;line-height:1;}
-.stat-l{font-size:.8rem;color:var(--tx3);font-weight:500;margin-top:6px;}
+/* ── STATS ────────────────────────────────────────── */
+.stats{padding:72px 0;background:#fff;}
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.stat-card{text-align:center;padding:28px 16px;border-radius:var(--r16);border:1.5px solid var(--sf3);background:#fff;transition:all .2s;position:relative;overflow:hidden;}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--g1);opacity:0;transition:opacity .2s;}
+.stat-card:hover{transform:translateY(-4px);box-shadow:0 12px 36px rgba(37,99,235,.1);border-color:rgba(37,99,235,.2);}
+.stat-card:hover::before{opacity:1;}
+.stat-n{font-size:2.4rem;font-weight:900;background:var(--g1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:6px;}
+.stat-l{font-size:.8rem;color:var(--tx3);font-weight:500;}
 
-/* ── SECTIONS ────────────────────────────────────── */
-section{padding:88px 0;position:relative;}
+/* ── SECTIONS ─────────────────────────────────────── */
+section{padding:96px 0;}
 .wrap{max-width:1200px;margin:0 auto;padding:0 32px;}
-.sec-tag{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;background:var(--ac3);padding:3px 12px;border-radius:100px;border:1px solid var(--ac4);}
-.sec-title{font-size:clamp(1.7rem,2.8vw,2.3rem);font-weight:800;max-width:560px;margin-bottom:10px;color:var(--tx);}
-.sec-sub{color:var(--tx3);font-size:.95rem;max-width:500px;margin-bottom:48px;line-height:1.75;}
+.sec-tag{display:inline-flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff;margin-bottom:12px;background:var(--g1);padding:4px 14px;border-radius:100px;box-shadow:0 2px 12px rgba(37,99,235,.3);}
+.sec-title{font-size:clamp(1.8rem,3vw,2.5rem);font-weight:900;max-width:580px;margin-bottom:12px;color:var(--tx);letter-spacing:-.03em;line-height:1.1;}
+.sec-sub{color:var(--tx3);font-size:.97rem;max-width:520px;margin-bottom:52px;line-height:1.8;}
 .centered{text-align:center;}.centered .sec-title,.centered .sec-sub{margin-left:auto;margin-right:auto;}
 
-/* ── AI FEATURES SHOWCASE ───────────────────────── */
-.ai-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.ai-card{border-radius:16px;padding:28px;border:1.5px solid var(--sf3);background:#fff;transition:all .2s;position:relative;overflow:hidden;}
-.ai-card:hover{border-color:var(--ac4);box-shadow:0 12px 40px rgba(37,99,235,.08);transform:translateY(-3px);}
-.ai-card.featured{border-color:var(--ac4);background:linear-gradient(135deg,rgba(37,99,235,.04),rgba(124,58,237,.02) 50%,#fff 80%);}
-.ai-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(37,99,235,.0),transparent);border-radius:16px 16px 0 0;transition:background .3s;}
-.ai-card:hover::before{background:linear-gradient(90deg,transparent,rgba(37,99,235,.25),transparent);}
+/* ── AI SECTION ───────────────────────────────────── */
+.ai-section{background:linear-gradient(160deg,#0a0f1e 0%,#0f1b3d 50%,#1a0a2e 100%);position:relative;overflow:hidden;}
+.ai-section::before{content:'';position:absolute;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.12) 0%,transparent 70%);top:-200px;right:-200px;pointer-events:none;}
+.ai-section::after{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.1) 0%,transparent 70%);bottom:-100px;left:-100px;pointer-events:none;}
+.ai-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;position:relative;z-index:2;}
+.ai-card{border-radius:var(--r16);padding:28px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);backdrop-filter:blur(12px);transition:all .25s;position:relative;overflow:hidden;}
+.ai-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.04),transparent);opacity:0;transition:opacity .25s;}
+.ai-card:hover{border-color:rgba(255,255,255,.2);transform:translateY(-4px);box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.ai-card:hover::before{opacity:1;}
 .ai-card.span2{grid-column:span 2;}
-.ai-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:20px;}
-.ai-icon.blue{background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.14);}
-.ai-icon.green{background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.14);}
-.ai-icon.amber{background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.14);}
-.ai-icon.purple{background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.14);}
-.ai-icon.red{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.14);}
-.ai-card h3{font-size:1.05rem;font-weight:700;color:var(--tx);margin-bottom:8px;}
-.ai-card p{font-size:.88rem;color:var(--tx3);line-height:1.7;}
-.ai-list{list-style:none;margin-top:14px;display:flex;flex-direction:column;gap:7px;}
-.ai-list li{display:flex;align-items:flex-start;gap:8px;font-size:.84rem;color:var(--tx2);}
-.ai-list li::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:7px;}
-.role-chip{font-size:.63rem;font-weight:600;padding:2px 8px;border-radius:100px;background:rgba(37,99,235,.07);color:var(--ac);border:1px solid rgba(37,99,235,.15);margin-left:6px;}
-.code-preview{margin-top:16px;background:#0f172a;border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.7;overflow:hidden;}
-.cp-comment{color:#475569;}
-.cp-key{color:#93c5fd;}
-.cp-val{color:#86efac;}
-.cp-str{color:#fca5a5;}
+.ai-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:22px;}
+.ai-ic-blue{background:linear-gradient(135deg,rgba(37,99,235,.3),rgba(37,99,235,.1));border:1px solid rgba(37,99,235,.3);}
+.ai-ic-purple{background:linear-gradient(135deg,rgba(124,58,237,.3),rgba(124,58,237,.1));border:1px solid rgba(124,58,237,.3);}
+.ai-ic-red{background:linear-gradient(135deg,rgba(220,38,38,.25),rgba(220,38,38,.08));border:1px solid rgba(220,38,38,.25);}
+.ai-ic-green{background:linear-gradient(135deg,rgba(22,163,74,.25),rgba(22,163,74,.08));border:1px solid rgba(22,163,74,.25);}
+.ai-card h3{font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:10px;}
+.ai-card p{font-size:.88rem;color:rgba(255,255,255,.55);line-height:1.75;}
+.ai-list{list-style:none;margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+.ai-list li{display:flex;align-items:flex-start;gap:8px;font-size:.84rem;color:rgba(255,255,255,.6);}
+.ai-list li::before{content:'';width:5px;height:5px;border-radius:50%;background:linear-gradient(135deg,#60a5fa,#a78bfa);flex-shrink:0;margin-top:8px;}
+.role-chip{font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:100px;background:rgba(96,165,250,.15);color:#93c5fd;border:1px solid rgba(96,165,250,.25);margin-left:5px;}
+.code-prev{margin-top:18px;background:rgba(0,0,0,.4);border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:.72rem;line-height:1.8;border:1px solid rgba(255,255,255,.06);}
+.cp-c{color:#475569;}
+.cp-k{color:#93c5fd;}
+.cp-v{color:#86efac;}
+.cp-s{color:#fca5a5;}
 
-/* ── FEATURE BENTO ──────────────────────────────── */
-.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.ben{background:#fff;border:1.5px solid var(--sf3);border-radius:16px;padding:26px;transition:all .2s;cursor:default;}
-.ben:hover{border-color:rgba(37,99,235,.18);box-shadow:0 12px 40px rgba(37,99,235,.07);transform:translateY(-3px);}
-.ben::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:transparent;border-radius:16px 16px 0 0;transition:background .3s;}
-.ben:hover::before{background:linear-gradient(90deg,transparent,rgba(37,99,235,.2),transparent);}
+/* ── FEATURE BENTO ────────────────────────────────── */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.ben{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r16);padding:28px;transition:all .2s;cursor:default;position:relative;overflow:hidden;}
+.ben::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--g1);opacity:0;transition:opacity .2s;}
+.ben:hover{transform:translateY(-4px);box-shadow:0 16px 50px rgba(37,99,235,.08);border-color:rgba(37,99,235,.18);}
+.ben:hover::after{opacity:1;}
 .ben.wide{grid-column:span 2;}
-.ben-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:14px;background:var(--ac3);border:1px solid var(--ac4);}
-.ben:nth-child(2) .ben-ico{background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.15);}
-.ben:nth-child(3) .ben-ico{background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.15);}
-.ben:nth-child(4) .ben-ico{background:rgba(14,165,233,.08);border-color:rgba(14,165,233,.15);}
-.ben:nth-child(5) .ben-ico{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.15);}
-.ben:nth-child(6) .ben-ico{background:rgba(6,182,212,.08);border-color:rgba(6,182,212,.15);}
-.ben:nth-child(7) .ben-ico{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.15);}
-.ben:nth-child(8) .ben-ico{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.15);}
-.ben h3{font-size:.95rem;font-weight:700;margin-bottom:7px;color:var(--tx);}
-.ben p{font-size:.86rem;color:var(--tx3);line-height:1.65;}
-.ben-list{list-style:none;margin-top:11px;display:flex;flex-direction:column;gap:5px;}
-.ben-list li{display:flex;align-items:flex-start;gap:7px;font-size:.83rem;color:var(--tx2);}
-.ben-list li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:7px;}
+.ben-ico{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px;transition:transform .2s;}
+.ben:hover .ben-ico{transform:scale(1.1);}
+.ben-ico-1{background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(37,99,235,.04));border:1px solid rgba(37,99,235,.15);}
+.ben-ico-2{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(124,58,237,.04));border:1px solid rgba(124,58,237,.15);}
+.ben-ico-3{background:linear-gradient(135deg,rgba(22,163,74,.1),rgba(22,163,74,.03));border:1px solid rgba(22,163,74,.15);}
+.ben-ico-4{background:linear-gradient(135deg,rgba(14,165,233,.1),rgba(14,165,233,.03));border:1px solid rgba(14,165,233,.15);}
+.ben-ico-5{background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(245,158,11,.03));border:1px solid rgba(245,158,11,.15);}
+.ben-ico-6{background:linear-gradient(135deg,rgba(219,39,119,.1),rgba(219,39,119,.03));border:1px solid rgba(219,39,119,.15);}
+.ben-ico-7{background:linear-gradient(135deg,rgba(6,182,212,.1),rgba(6,182,212,.03));border:1px solid rgba(6,182,212,.15);}
+.ben-ico-8{background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(16,185,129,.03));border:1px solid rgba(16,185,129,.15);}
+.ben h3{font-size:.97rem;font-weight:700;margin-bottom:8px;color:var(--tx);}
+.ben p{font-size:.87rem;color:var(--tx3);line-height:1.7;}
+.ben-list{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.ben-list li{display:flex;align-items:flex-start;gap:7px;font-size:.84rem;color:var(--tx2);}
+.ben-list li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--g1);flex-shrink:0;margin-top:8px;}
 
-/* ── ROLE MATRIX ────────────────────────────────── */
+/* ── SECURITY SECTION ─────────────────────────────── */
+.sec-section{background:linear-gradient(160deg,#0a0f1e 0%,#0c1a3b 50%,#150a2e 100%);position:relative;overflow:hidden;}
+.sec-section::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(96,165,250,.4),transparent);}
+.sec-section::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(167,139,250,.4),transparent);}
+.sec-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.sec-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:var(--r16);padding:26px;display:flex;gap:16px;align-items:flex-start;transition:all .2s;backdrop-filter:blur(8px);}
+.sec-card:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18);transform:translateY(-2px);}
+.sec-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.sec-ico-blue{background:linear-gradient(135deg,rgba(37,99,235,.35),rgba(37,99,235,.12));border:1px solid rgba(37,99,235,.3);}
+.sec-ico-purple{background:linear-gradient(135deg,rgba(124,58,237,.35),rgba(124,58,237,.12));border:1px solid rgba(124,58,237,.3);}
+.sec-ico-green{background:linear-gradient(135deg,rgba(22,163,74,.3),rgba(22,163,74,.1));border:1px solid rgba(22,163,74,.25);}
+.sec-ico-amber{background:linear-gradient(135deg,rgba(217,119,6,.3),rgba(217,119,6,.1));border:1px solid rgba(217,119,6,.25);}
+.sec-card h4{font-size:.93rem;font-weight:700;margin-bottom:6px;color:#fff;}
+.sec-card p{font-size:.84rem;color:rgba(255,255,255,.5);line-height:1.65;}
+
+/* ── ROLE MATRIX ──────────────────────────────────── */
 .role-section{background:var(--sf);}
-.role-table-wrap{overflow-x:auto;}
-.role-table{width:100%;border-collapse:collapse;border-radius:14px;overflow:hidden;font-size:.84rem;}
-.role-table th{background:#fff;padding:12px 16px;text-align:center;font-weight:700;font-size:.75rem;color:var(--tx2);border-bottom:1.5px solid var(--sf3);white-space:nowrap;}
-.role-table th.feat-col{text-align:left;width:220px;}
-.role-table td{padding:10px 16px;border-bottom:1px solid var(--sf3);background:#fff;text-align:center;vertical-align:middle;}
-.role-table td.feat-col{text-align:left;font-weight:500;color:var(--tx);background:#fafbfc;}
+.role-table-wrap{overflow-x:auto;border-radius:var(--r16);border:1.5px solid var(--sf3);overflow:hidden;}
+.role-table{width:100%;border-collapse:collapse;font-size:.84rem;}
+.role-table th{background:#fff;padding:13px 16px;text-align:center;font-weight:700;font-size:.73rem;color:var(--tx2);border-bottom:1.5px solid var(--sf3);white-space:nowrap;}
+.role-table th.feat-col{text-align:left;min-width:200px;}
+.role-table td{padding:11px 16px;border-bottom:1px solid var(--sf3);background:#fff;text-align:center;vertical-align:middle;}
+.role-table td.feat-col{text-align:left;font-weight:500;color:var(--tx);background:#fafbfc;border-right:1.5px solid var(--sf3);}
+.role-table .cat-row td{background:linear-gradient(135deg,#eff6ff,#f5f3ff);font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#4338ca;padding:8px 16px;}
 .role-table tr:last-child td{border-bottom:none;}
-.role-table .cat-row td{background:var(--sf2);font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx3);padding:8px 16px;}
-.pchip{display:inline-block;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:99px;}
-.pc-full{background:rgba(22,163,74,.1);color:#15803d;}
-.pc-own{background:rgba(217,119,6,.1);color:#b45309;}
-.pc-view{background:rgba(37,99,235,.08);color:#1d4ed8;}
-.pc-no{color:#cbd5e1;font-size:.8rem;}
+.pchip{display:inline-block;font-size:.68rem;font-weight:600;padding:2px 9px;border-radius:99px;}
+.pc-full{background:linear-gradient(135deg,rgba(22,163,74,.12),rgba(16,185,129,.08));color:#15803d;border:1px solid rgba(22,163,74,.2);}
+.pc-own{background:rgba(217,119,6,.1);color:#b45309;border:1px solid rgba(217,119,6,.2);}
+.pc-view{background:rgba(37,99,235,.08);color:#1d4ed8;border:1px solid rgba(37,99,235,.15);}
+.pc-no{color:#cbd5e1;font-size:.9rem;}
 
-/* ── HOW IT WORKS ─────────────────────────────── */
-.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:48px;}
-.step-card{position:relative;}
-.step-num{width:46px;height:46px;border-radius:50%;border:2px solid var(--ac4);display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-weight:800;font-size:.9rem;color:var(--ac);background:var(--ac3);}
-.step-card h3{font-size:.95rem;font-weight:700;margin-bottom:7px;color:var(--tx);}
-.step-card p{font-size:.86rem;color:var(--tx3);line-height:1.65;}
-.step-connector{position:absolute;top:23px;left:calc(50% + 30px);width:calc(100% - 60px);height:1px;background:var(--ac4);z-index:0;}
+/* ── HOW IT WORKS ─────────────────────────────────── */
+.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:52px;position:relative;}
+.steps-grid::before{content:'';position:absolute;top:23px;left:10%;right:10%;height:1px;background:linear-gradient(90deg,transparent,rgba(37,99,235,.3),rgba(124,58,237,.3),rgba(37,99,235,.3),transparent);z-index:0;}
+.step-card{text-align:center;position:relative;z-index:1;}
+.step-num{width:48px;height:48px;border-radius:50%;background:var(--g1);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-weight:800;font-size:.9rem;color:#fff;box-shadow:0 4px 20px rgba(37,99,235,.35);}
+.step-card h3{font-size:.97rem;font-weight:700;margin-bottom:8px;color:var(--tx);}
+.step-card p{font-size:.87rem;color:var(--tx3);line-height:1.65;}
 
-/* ── INTEGRATIONS ─────────────────────────────── */
-.int-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;}
-.int-card{background:#fff;border:1.5px solid var(--sf3);border-radius:12px;padding:18px 16px;text-align:center;transition:all .18s;}
-.int-card:hover{border-color:var(--ac4);transform:translateY(-2px);}
-.int-ico{font-size:1.7rem;margin-bottom:8px;}
-.int-n{font-size:.84rem;font-weight:700;color:var(--tx);margin-bottom:3px;}
-.int-d{font-size:.75rem;color:var(--tx3);line-height:1.4;}
+/* ── INTEGRATIONS ─────────────────────────────────── */
+.int-section{background:linear-gradient(135deg,#f0f9ff,#f5f3ff,#fce7f3);}
+.int-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;}
+.int-card{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r16);padding:20px 16px;text-align:center;transition:all .2s;position:relative;overflow:hidden;}
+.int-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--g1);transform:scaleX(0);transition:transform .2s;}
+.int-card:hover{transform:translateY(-3px);box-shadow:0 10px 32px rgba(37,99,235,.1);border-color:rgba(37,99,235,.2);}
+.int-card:hover::before{transform:scaleX(1);}
+.int-ico{font-size:1.9rem;margin-bottom:9px;}
+.int-n{font-size:.86rem;font-weight:700;color:var(--tx);margin-bottom:3px;}
+.int-d{font-size:.75rem;color:var(--tx3);line-height:1.45;}
 
-/* ── SECURITY ─────────────────────────────────── */
-.sec-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.sec-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:24px;display:flex;gap:14px;align-items:flex-start;transition:all .18s;backdrop-filter:blur(8px);}
-.sec-card:hover{border-color:var(--ac4);}
-.sec-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
-.sec-ico.blue{background:rgba(37,99,235,.08);}
-.sec-ico.green{background:rgba(22,163,74,.08);}
-.sec-ico.purple{background:rgba(124,58,237,.08);}
-.sec-ico.amber{background:rgba(217,119,6,.08);}
-.sec-card h4{font-size:.9rem;font-weight:700;margin-bottom:5px;color:#fff;}
-.sec-card p{font-size:.83rem;color:rgba(255,255,255,.55);line-height:1.6;}
+/* ── TESTIMONIALS ─────────────────────────────────── */
+.testimonial-section{background:#fff;}
+.quote-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.quote-card{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r20);padding:28px;transition:all .2s;position:relative;overflow:hidden;}
+.quote-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;opacity:0;transition:opacity .2s;}
+.quote-card:nth-child(1)::before{background:linear-gradient(90deg,#2563eb,#7c3aed);}
+.quote-card:nth-child(2)::before{background:linear-gradient(90deg,#7c3aed,#db2777);}
+.quote-card:nth-child(3)::before{background:linear-gradient(90deg,#16a34a,#0891b2);}
+.quote-card:hover{border-color:rgba(37,99,235,.2);box-shadow:0 12px 40px rgba(37,99,235,.08);transform:translateY(-3px);}
+.quote-card:hover::before{opacity:1;}
+.q-stars{font-size:.95rem;letter-spacing:2px;margin-bottom:14px;}
+.q-text{font-size:.91rem;color:var(--tx2);line-height:1.75;margin-bottom:20px;font-style:italic;}
+.q-author{display:flex;align-items:center;gap:11px;}
+.q-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:#fff;flex-shrink:0;}
+.q-name{font-size:.86rem;font-weight:700;color:var(--tx);}
+.q-role{font-size:.76rem;color:var(--tx3);}
 
-/* ── TESTIMONIAL / QUOTE ─────────────────────── */
-.quote-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-.quote-card{background:#fff;border:1.5px solid var(--sf3);border-radius:16px;padding:26px;transition:all .18s;}
-.quote-card:hover{border-color:var(--ac4);box-shadow:0 8px 28px rgba(37,99,235,.07);}
-.quote-stars{color:#f59e0b;font-size:.9rem;margin-bottom:12px;letter-spacing:2px;}
-.quote-text{font-size:.9rem;color:var(--tx2);line-height:1.7;margin-bottom:18px;font-style:italic;}
-.quote-author{display:flex;align-items:center;gap:10px;}
-.quote-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;color:#fff;flex-shrink:0;}
-.quote-name{font-size:.84rem;font-weight:700;color:var(--tx);}
-.quote-role{font-size:.75rem;color:var(--tx3);}
+/* ── FAQ ──────────────────────────────────────────── */
+.faq-section{background:var(--sf);}
+.faq-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
+.faq-item{background:#fff;border:1.5px solid var(--sf3);border-radius:var(--r16);padding:22px 24px;transition:all .2s;}
+.faq-item:hover{border-color:rgba(37,99,235,.2);box-shadow:0 6px 24px rgba(37,99,235,.07);}
+.faq-item h4{font-size:.93rem;font-weight:700;color:var(--tx);margin-bottom:8px;}
+.faq-item p{font-size:.86rem;color:var(--tx3);line-height:1.7;}
 
-/* ── CTA ──────────────────────────────────────── */
-.cta-section{padding:88px 0;background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 50%,#2563eb 100%);}
-.cta-inner{text-align:center;position:relative;}
-.cta-inner::before{content:'';position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:1px;height:40px;background:rgba(255,255,255,.15);}
-.cta-tag{display:inline-block;background:rgba(255,255,255,.12);color:#bfdbfe;font-size:.7rem;font-weight:700;padding:3px 12px;border-radius:100px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:20px;}
-.cta-inner h2{font-size:clamp(1.9rem,4vw,3rem);font-weight:900;color:#fff;margin-bottom:14px;letter-spacing:-.035em;}
-.cta-inner p{color:rgba(255,255,255,.7);font-size:1rem;max-width:440px;margin:0 auto 36px;line-height:1.7;}
+/* ── CTA ──────────────────────────────────────────── */
+.cta-section{padding:100px 0;background:linear-gradient(160deg,#0a0f1e 0%,#0f1b3d 40%,#1a0a2e 70%,#0a0f1e 100%);position:relative;overflow:hidden;}
+.cta-section::before{content:'';position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(37,99,235,.15) 0%,transparent 70%);top:-200px;left:-100px;pointer-events:none;}
+.cta-section::after{content:'';position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.12) 0%,transparent 70%);bottom:-150px;right:-100px;pointer-events:none;}
+.cta-in{text-align:center;position:relative;z-index:2;}
+.cta-tag{display:inline-block;background:rgba(96,165,250,.15);color:#93c5fd;font-size:.72rem;font-weight:700;padding:4px 14px;border-radius:100px;letter-spacing:.07em;text-transform:uppercase;margin-bottom:22px;border:1px solid rgba(96,165,250,.2);}
+.cta-in h2{font-size:clamp(2rem,4vw,3.2rem);font-weight:900;color:#fff;margin-bottom:14px;letter-spacing:-.04em;line-height:1.08;}
+.cta-in h2 .grad{background:linear-gradient(135deg,#60a5fa,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.cta-in p{color:rgba(255,255,255,.55);font-size:1rem;max-width:440px;margin:0 auto 36px;line-height:1.75;}
 .cta-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:28px;}
 .cta-trust{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;}
-.cta-t{display:flex;align-items:center;gap:6px;font-size:.78rem;color:rgba(255,255,255,.6);}
-.cta-t svg{opacity:.7;}
+.ct-it{display:flex;align-items:center;gap:6px;font-size:.78rem;color:rgba(255,255,255,.45);}
 
-/* ── FAQ ──────────────────────────────────────── */
-.faq-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
-.faq-item{background:#fff;border:1.5px solid var(--sf3);border-radius:12px;padding:20px 22px;transition:all .18s;}
-.faq-item:hover{border-color:var(--ac4);}
-.faq-item h4{font-size:.92rem;font-weight:700;color:var(--tx);margin-bottom:7px;}
-.faq-item p{font-size:.85rem;color:var(--tx3);line-height:1.65;}
+/* ── FOOTER ───────────────────────────────────────── */
+footer{padding:60px 0 36px;background:#0a0f1e;border-top:1px solid rgba(255,255,255,.06);}
+.footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px;}
+.footer-brand p{font-size:.83rem;color:rgba(255,255,255,.35);margin-top:10px;line-height:1.75;max-width:240px;}
+.footer-col h4{font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:14px;}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:10px;}
+.footer-col a{color:rgba(255,255,255,.35);font-size:.84rem;transition:color .15s;}
+.footer-col a:hover{color:rgba(255,255,255,.8);}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:28px;border-top:1px solid rgba(255,255,255,.06);flex-wrap:wrap;gap:12px;}
+.footer-copy{font-size:.79rem;color:rgba(255,255,255,.25);}
+.footer-badges{display:flex;gap:8px;}
+.fb{font-size:.7rem;padding:3px 10px;border-radius:100px;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.3);}
 
-/* ── FOOTER ─────────────────────────────────── */
-footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
-.footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;margin-bottom:44px;}
-.footer-brand p{font-size:.82rem;color:var(--tx3);margin-top:10px;line-height:1.7;max-width:240px;}
-.footer-col h4{font-size:.73rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx2);margin-bottom:14px;}
-.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:9px;}
-.footer-col a{color:var(--tx3);font-size:.83rem;transition:color .15s;}
-.footer-col a:hover{color:var(--ac);}
-.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:24px;border-top:1px solid var(--sf3);flex-wrap:wrap;gap:12px;}
-.footer-copy{font-size:.78rem;color:var(--tx4);}
-.footer-badges{display:flex;gap:7px;}
-.fb{font-size:.7rem;padding:3px 10px;border-radius:100px;border:1px solid var(--sf3);color:var(--tx4);}
+/* ── ANIMATIONS ───────────────────────────────────── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+.a1{animation:fadeUp .65s .08s both;}
+.a2{animation:fadeUp .65s .18s both;}
+.a3{animation:fadeUp .65s .3s both;}
+.a4{animation:fadeUp .65s .44s both;}
+.a5{animation:fadeUp .65s .6s both;}
 
-/* ── RESPONSIVE ─────────────────────────────── */
-@media(max-width:1024px){.hero-inner{grid-template-columns:1fr;gap:48px;}.hero-right{display:none;}.ai-grid{grid-template-columns:1fr 1fr;}.ai-card.span2{grid-column:span 1;}.bento{grid-template-columns:1fr 1fr;}.ben.wide{grid-column:span 1;}.steps-grid{grid-template-columns:1fr 1fr;}.sec-grid{grid-template-columns:1fr;}.quote-grid{grid-template-columns:1fr 1fr;}.footer-grid{grid-template-columns:1fr 1fr;}.int-grid{grid-template-columns:repeat(2,1fr);}.stats-grid{grid-template-columns:repeat(3,1fr);}.faq-grid{grid-template-columns:1fr;}}
-@media(max-width:640px){.nav-links,.nav-cta .btn-ghost{display:none;}.ai-grid,.bento{grid-template-columns:1fr;}.steps-grid{grid-template-columns:1fr;}.quote-grid{grid-template-columns:1fr;}.footer-grid{grid-template-columns:1fr;}.stats-grid{grid-template-columns:1fr 1fr;}.int-grid{grid-template-columns:1fr 1fr;}.faq-grid{grid-template-columns:1fr;}.hero{padding:90px 20px 40px;}}
+/* ── RESPONSIVE ───────────────────────────────────── */
+@media(max-width:1024px){
+  .hero-in{grid-template-columns:1fr;gap:48px;}
+  .hero-right{display:none;}
+  .ai-grid,.bento{grid-template-columns:1fr 1fr;}
+  .ai-card.span2,.ben.wide{grid-column:span 1;}
+  .steps-grid{grid-template-columns:1fr 1fr;}
+  .sec-grid{grid-template-columns:1fr;}
+  .quote-grid{grid-template-columns:1fr 1fr;}
+  .footer-grid{grid-template-columns:1fr 1fr;}
+  .int-grid{grid-template-columns:repeat(2,1fr);}
+  .stats-grid{grid-template-columns:repeat(3,1fr);}
+  .faq-grid{grid-template-columns:1fr;}
+}
+@media(max-width:640px){
+  .nav-links,.nav-cta .btn-ghost{display:none;}
+  .ai-grid,.bento,.quote-grid{grid-template-columns:1fr;}
+  .steps-grid{grid-template-columns:1fr;}
+  .footer-grid{grid-template-columns:1fr;}
+  .stats-grid{grid-template-columns:1fr 1fr;}
+  .int-grid{grid-template-columns:1fr 1fr;}
+  .hero{padding:90px 20px 50px;}
+  .steps-grid::before{display:none;}
+}
 </style>
 </head>
 <body>
-
 <!-- NAV -->
 <nav id="nav">
-  <div class="nav-inner">
+  <div class="nav-in">
     <a href="/" class="logo">
       <div class="logo-mark"><svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
       VEWIT
@@ -4658,101 +4720,94 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
       <li><a href="#security">Security</a></li>
       <li><a href="#roles">Roles</a></li>
       <li><a href="#how">How it works</a></li>
-      <li><a href="#faq">About</a></li>
     </ul>
     <div class="nav-cta">
       <a href="/?action=login" class="btn btn-ghost">Sign In</a>
-      <a href="/?action=register" class="btn btn-solid">Get Started Free</a>
+      <a href="/?action=register" class="btn btn-grd">Get Started Free</a>
     </div>
   </div>
 </nav>
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-inner">
-    <div class="hero-left">
-      <div class="hero-badge">
-        <div class="hero-badge-dot"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
-        v5.0 — AI Standup · Code Review · Risk Predictor · 2FA
+  <div class="hero-grid"></div>
+  <div class="hero-in">
+    <div>
+      <div class="hero-badge a1">
+        <div class="badge-dot"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+        v5.0 — AI Standup · Code Review · Risk · 2FA
       </div>
-      <h1>Ship <span style="background:linear-gradient(135deg,#2563eb,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">faster.</span><br/>Stay in <em>sync.</em></h1>
-      <p class="hero-sub">Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, 2FA, time tracking — one platform built for engineering teams that move fast.</p>
-      <div class="hero-actions">
-        <a href="/?action=register" class="btn btn-solid btn-lg">Start Free — No Card Needed →</a>
-        <a href="/#features" class="btn btn-ghost btn-lg">See All Features</a>
+      <h1 class="a2">Ship <span class="grad">faster.</span><br/>Stay in sync.</h1>
+      <p class="hero-sub a3">Kanban boards, sprints, AI standup generator, code review bot, risk predictor, intake forms, 2FA — one platform built for engineering teams that move fast.</p>
+      <div class="hero-actions a4">
+        <a href="/?action=register" class="btn btn-grd btn-lg">Start Free — No Card Needed →</a>
+        <a href="#features" class="btn btn-outline-white btn-lg">See All Features</a>
       </div>
-      <div class="hero-trust">
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever plan</div>
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>TOTP 2FA security</div>
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>AI with your own key</div>
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Up in 2 minutes</div>
+      <div class="hero-trust a4">
+        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever</div>
+        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>TOTP 2FA built-in</div>
+        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Your own AI key</div>
+        <div class="trust-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Up in 2 min</div>
       </div>
     </div>
-    <div class="hero-right">
-      <div style="text-align:center;margin-bottom:12px;">
-        <span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--tx4);background:var(--sf2);padding:4px 12px;border-radius:99px;border:1px solid var(--sf3);">Live preview</span>
-      </div>
-      <div class="app-window">
+    <div class="hero-right a5">
+      <div style="text-align:center;margin-bottom:10px;"><span style="font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.25);background:rgba(255,255,255,.06);padding:3px 12px;border-radius:99px;border:1px solid rgba(255,255,255,.08);">Live Preview</span></div>
+      <div class="app-win">
         <div class="win-bar">
-          <div class="wdot" style="background:#ff5f57"></div>
-          <div class="wdot" style="background:#febc2e"></div>
-          <div class="wdot" style="background:#28c840"></div>
+          <div class="wd" style="background:#ff5f57"></div>
+          <div class="wd" style="background:#febc2e"></div>
+          <div class="wd" style="background:#28c840"></div>
           <div class="win-url"><span class="win-url-txt">vewit.in/tasks</span></div>
         </div>
         <div class="win-body">
-          <div class="win-sidebar">
-            <div class="ws-header">
+          <div class="win-sb">
+            <div class="ws-head">
               <div class="ws-av">VW</div>
-              <div><div class="ws-name">VEWIT Corp</div><div class="ws-sub">8 online</div></div>
+              <div><div class="ws-nm">VEWIT Corp</div><div class="ws-sub">8 online</div></div>
             </div>
-            <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Kanban Board</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Calendar</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Channels</div>
-            <div class="nav-section">AI Tools</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>AI Standup</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Code Review</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Risk Predictor</div>
-            <div class="nav-section">Workspace</div>
-            <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/><path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/><path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/><path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/><path d="M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"/><path d="M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z"/><path d="M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z"/></svg>Integrations</div>
+            <div class="nav-it act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Kanban</div>
+            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Channels</div>
+            <div class="nav-sec">AI Tools</div>
+            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>AI Standup</div>
+            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Code Review</div>
+            <div class="nav-it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>Risk Predictor</div>
           </div>
           <div class="win-main">
-            <div class="win-header">
+            <div class="win-hdr">
               <div class="win-title">Kanban Board</div>
-              <div style="display:flex;gap:5px;">
-                <div class="win-badge">Sprint 4</div>
-                <div class="win-badge" style="background:rgba(22,163,74,.08);color:#16a34a;">42 pts</div>
+              <div class="win-badges">
+                <span class="win-badge" style="background:rgba(37,99,235,.15);color:#93c5fd;">Sprint 4</span>
+                <span class="win-badge" style="background:rgba(34,197,94,.12);color:#4ade80;">42 pts</span>
               </div>
             </div>
-            <div class="kanban">
-              <div class="kol"><div class="kol-h" style="color:#64748b;">Backlog<span style="background:#f1f5f9;color:#94a3b8;font-size:.55rem;padding:1px 5px;border-radius:4px;font-weight:700;">8</span></div>
-                <div class="kcard" style="border-left-color:#8b5cf6;"><div class="kcard-t">Auth flow redesign</div><div class="kcard-meta"><span class="tag tag-p">5pt</span><span class="tag tag-b">Design</span></div></div>
-                <div class="kcard" style="border-left-color:#8b5cf6;"><div class="kcard-t">API rate limiting</div><div class="kcard-meta"><span class="tag tag-p">3pt</span></div></div>
+            <div class="kan">
+              <div class="kcol"><div class="kcol-h" style="color:#64748b">Backlog<span style="background:#1e293b;color:#475569;font-size:.5rem;padding:1px 5px;border-radius:3px;">8</span></div>
+                <div class="kcard" style="border-left-color:#8b5cf6"><div class="kcard-t">Auth flow redesign</div><div><span class="ktag" style="background:rgba(139,92,246,.2);color:#a78bfa">5pt</span><span class="ktag" style="background:rgba(37,99,235,.15);color:#93c5fd">Design</span></div></div>
+                <div class="kcard" style="border-left-color:#8b5cf6"><div class="kcard-t">API rate limiting</div><div><span class="ktag" style="background:rgba(139,92,246,.2);color:#a78bfa">3pt</span></div></div>
               </div>
-              <div class="kol"><div class="kol-h" style="color:#0ea5e9;">In Progress<span style="background:#e0f2fe;color:#0ea5e9;font-size:.55rem;padding:1px 5px;border-radius:4px;font-weight:700;">5</span></div>
-                <div class="kcard" style="border-left-color:#0ea5e9;"><div class="kcard-t">Payment gateway integration</div><div class="kcard-meta"><span class="tag tag-r">High</span><span class="tag tag-b">8pt</span></div></div>
-                <div class="kcard" style="border-left-color:#0ea5e9;"><div class="kcard-t">Dashboard analytics</div><div class="kcard-meta"><span class="tag tag-a">Med</span><span class="tag tag-b">5pt</span></div></div>
+              <div class="kcol"><div class="kcol-h" style="color:#38bdf8">In Progress<span style="background:#0c4a6e;color:#38bdf8;font-size:.5rem;padding:1px 5px;border-radius:3px;">5</span></div>
+                <div class="kcard" style="border-left-color:#38bdf8"><div class="kcard-t">Payment gateway</div><div><span class="ktag" style="background:rgba(239,68,68,.2);color:#f87171">High</span><span class="ktag" style="background:rgba(14,165,233,.15);color:#38bdf8">8pt</span></div></div>
+                <div class="kcard" style="border-left-color:#38bdf8"><div class="kcard-t">Dashboard charts</div><div><span class="ktag" style="background:rgba(245,158,11,.2);color:#fbbf24">Med</span></div></div>
               </div>
-              <div class="kol"><div class="kol-h" style="color:#f59e0b;">Review<span style="background:#fef3c7;color:#f59e0b;font-size:.55rem;padding:1px 5px;border-radius:4px;font-weight:700;">3</span></div>
-                <div class="kcard" style="border-left-color:#f59e0b;"><div class="kcard-t">Mobile responsive fix</div><div class="kcard-meta"><span class="tag tag-a">3pt</span></div></div>
+              <div class="kcol"><div class="kcol-h" style="color:#fbbf24">Review<span style="background:#451a03;color:#fbbf24;font-size:.5rem;padding:1px 5px;border-radius:3px;">3</span></div>
+                <div class="kcard" style="border-left-color:#fbbf24"><div class="kcard-t">Mobile responsive</div><div><span class="ktag" style="background:rgba(245,158,11,.2);color:#fbbf24">3pt</span></div></div>
               </div>
-              <div class="kol"><div class="kol-h" style="color:#16a34a;">Done<span style="background:#dcfce7;color:#16a34a;font-size:.55rem;padding:1px 5px;border-radius:4px;font-weight:700;">12</span></div>
-                <div class="kcard" style="border-left-color:#16a34a;"><div class="kcard-t">User onboarding flow</div><div class="kcard-meta"><span class="tag tag-g">Done</span></div></div>
-                <div class="kcard" style="border-left-color:#16a34a;"><div class="kcard-t">Email notifications</div><div class="kcard-meta"><span class="tag tag-g">Done</span></div></div>
+              <div class="kcol"><div class="kcol-h" style="color:#4ade80">Done<span style="background:#052e16;color:#4ade80;font-size:.5rem;padding:1px 5px;border-radius:3px;">12</span></div>
+                <div class="kcard" style="border-left-color:#4ade80"><div class="kcard-t">User onboarding</div><div><span class="ktag" style="background:rgba(34,197,94,.15);color:#4ade80">Done</span></div></div>
+                <div class="kcard" style="border-left-color:#4ade80"><div class="kcard-t">Email notifications</div><div><span class="ktag" style="background:rgba(34,197,94,.15);color:#4ade80">Done</span></div></div>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div class="ai-bubble">
-        <div class="ai-bubble-head"><div class="ai-dot"></div>AI Standup Generated</div>
-        <p>✅ Merged auth PR<br/>🔨 Starting payment gateway<br/>🚧 Waiting on design review</p>
+      <!-- Floating cards -->
+      <div class="float-card" style="bottom:-16px;right:-20px;max-width:210px;">
+        <div class="fc-head"><div class="fc-dot" style="background:#22c55e"></div><div class="fc-title">AI Standup Generated</div></div>
+        <div class="fc-body">✅ Merged auth PR<br/>🔨 Starting payment gateway<br/>🚧 Waiting on design review</div>
       </div>
-      <div style="position:absolute;top:-14px;left:-24px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:9px 13px;box-shadow:0 4px 20px rgba(0,0,0,.08);font-size:11px;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-          <span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;"></span>
-          <span style="font-weight:700;color:#b45309;">Risk Alert</span>
-        </div>
-        <div style="color:#64748b;">Payment sprint — HIGH risk<br/>3 tasks overdue</div>
+      <div class="float-card" style="top:-14px;left:-20px;max-width:200px;">
+        <div class="fc-head"><div class="fc-dot" style="background:#f59e0b"></div><div class="fc-title" style="color:#b45309">⚠️ Risk Alert</div></div>
+        <div class="fc-body">Payment sprint — HIGH risk<br/>3 tasks overdue</div>
       </div>
     </div>
   </div>
@@ -4761,30 +4816,30 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 <!-- TICKER -->
 <div class="ticker-wrap">
   <div class="ticker">
-    <div class="t-item"><span class="t-hi">Kanban Board</span> Drag-drop task management <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">AI Standup</span> Auto-generate daily reports <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Code Review Bot</span> AI reviews your PR diffs <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Risk Predictor</span> Flag at-risk projects early <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Intake Forms</span> Public forms → auto tickets <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">TOTP 2FA</span> Authenticator app security <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Message Reactions</span> Emoji reactions on messages <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Time Reports</span> Billable hours tracking <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Docs &amp; Wiki</span> AI-generated documentation <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Sprint Planning</span> Velocity &amp; story points <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Announcements</span> Workspace-wide broadcasts <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Calendar View</span> Tasks on a monthly calendar <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Kanban Board</span> Drag-drop task management <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">AI Standup</span> Auto-generate daily reports <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Code Review Bot</span> AI reviews your PR diffs <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Risk Predictor</span> Flag at-risk projects early <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Intake Forms</span> Public forms → auto tickets <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">TOTP 2FA</span> Authenticator app security <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Message Reactions</span> Emoji reactions on messages <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Time Reports</span> Billable hours tracking <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Docs &amp; Wiki</span> AI-generated documentation <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Sprint Planning</span> Velocity &amp; story points <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Announcements</span> Workspace-wide broadcasts <span class="t-sep">·</span></div>
-    <div class="t-item"><span class="t-hi">Calendar View</span> Tasks on a monthly calendar <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Kanban Board</span> Drag-drop task management <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">AI Standup</span> Auto-generate daily reports <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Code Review Bot</span> AI reviews your PR diffs <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Risk Predictor</span> Flag at-risk projects early <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Intake Forms</span> Public forms → auto tickets <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">TOTP 2FA</span> Authenticator app security <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Message Reactions</span> Emoji reactions on messages <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Time Reports</span> Billable hours tracking <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Sprint Planning</span> Velocity &amp; story points <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Announcements</span> Workspace-wide broadcasts <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Goals &amp; OKRs</span> Track key results <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Docs &amp; Wiki</span> AI-generated documentation <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Kanban Board</span> Drag-drop task management <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">AI Standup</span> Auto-generate daily reports <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Code Review Bot</span> AI reviews your PR diffs <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Risk Predictor</span> Flag at-risk projects early <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Intake Forms</span> Public forms → auto tickets <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">TOTP 2FA</span> Authenticator app security <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Message Reactions</span> Emoji reactions on messages <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Time Reports</span> Billable hours tracking <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Sprint Planning</span> Velocity &amp; story points <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Announcements</span> Workspace-wide broadcasts <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Goals &amp; OKRs</span> Track key results <span class="t-sep">·</span></div>
+    <div class="t-it"><span class="t-hi">Docs &amp; Wiki</span> AI-generated documentation <span class="t-sep">·</span></div>
   </div>
 </div>
 
@@ -4802,61 +4857,60 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 </div>
 
 <!-- AI FEATURES -->
-<section id="ai" style="background:linear-gradient(180deg,#f8fafc 0%,#eff6ff 50%,#f5f3ff 100%);">
+<section id="ai" class="ai-section">
   <div class="wrap">
     <div class="centered">
-      <div class="sec-tag">AI-Powered Tools</div>
-      <h2 class="sec-title">Your team's AI co-pilot</h2>
-      <p class="sec-sub">Four powerful AI tools built into your workflow — use your own Anthropic API key, zero vendor lock-in, no extra subscription.</p>
+      <div class="sec-tag">🤖 AI-Powered Tools</div>
+      <h2 class="sec-title" style="color:#fff">Your team's AI co-pilot</h2>
+      <p class="sec-sub" style="color:rgba(255,255,255,.55)">Four powerful AI tools built into your workflow — use your own Anthropic API key, zero vendor lock-in.</p>
     </div>
     <div class="ai-grid">
-      <div class="ai-card featured span2">
-        <div class="ai-icon blue">🤖</div>
+      <div class="ai-card span2">
+        <div class="ai-icon ai-ic-blue">🤖</div>
         <h3>AI Daily Standup Generator</h3>
-        <p>Automatically generates professional standup reports by analyzing each team member's task activity, time logs, and progress updates. No more manual writing — one click generates "What I did, What I'm doing, Blockers" in seconds.</p>
+        <p>Automatically generates professional standup reports from task activity, time logs, and progress — no manual writing.</p>
         <ul class="ai-list">
-          <li>Pulls from task stage changes, time logs, and comments from the last 24h</li>
-          <li>Managers can generate standups for entire team; developers see their own<span class="role-chip">Role-gated</span></li>
+          <li>Pulls from task changes, time logs, and comments from the last 24h</li>
+          <li>Managers generate standups for whole team; devs see their own<span class="role-chip">Role-gated</span></li>
           <li>Auto-saves to standup history for retrospectives</li>
-          <li>Copy to clipboard and post to Slack or email in one click</li>
+          <li>Copy to clipboard and share in one click</li>
         </ul>
-        <div class="code-preview">
-          <span class="cp-comment">// Generated standup for Prasanna — March 22</span><br/>
-          <span class="cp-key">✅ Yesterday:</span> <span class="cp-val">Merged MuleSoft auth API to staging</span><br/>
-          <span class="cp-key">🔨 Today:</span> <span class="cp-val">Starting payment gateway integration (T-024)</span><br/>
-          <span class="cp-key">🚧 Blockers:</span> <span class="cp-str">Waiting on design review for checkout UI</span>
+        <div class="code-prev">
+          <span class="cp-c">// Generated standup for Prasanna — today</span><br/>
+          <span class="cp-k">✅ Yesterday:</span> <span class="cp-v">Merged MuleSoft auth API to staging</span><br/>
+          <span class="cp-k">🔨 Today:</span> <span class="cp-v">Starting payment gateway integration (T-024)</span><br/>
+          <span class="cp-k">🚧 Blockers:</span> <span class="cp-s">Waiting on design review for checkout UI</span>
         </div>
       </div>
       <div class="ai-card">
-        <div class="ai-icon purple">🔍</div>
+        <div class="ai-icon ai-ic-purple">🔍</div>
         <h3>AI Code Review Bot</h3>
-        <p>Paste any PR diff and get an instant, structured AI code review with bug detection, security analysis, and a clear verdict.</p>
+        <p>Paste any PR diff and get instant structured code review with bug detection, security analysis, and a clear verdict.</p>
         <ul class="ai-list">
-          <li>🔴 Critical · 🟠 Major · 🟡 Minor issue classification</li>
+          <li>🔴 Critical · 🟠 Major · 🟡 Minor classification</li>
           <li>Security vulnerability detection</li>
           <li>Approve / Request Changes / Reject verdict</li>
-          <li>Reviews saved to ticket or task history</li>
+          <li>Reviews saved to task or ticket history</li>
         </ul>
       </div>
       <div class="ai-card">
-        <div class="ai-icon red">⚠️</div>
+        <div class="ai-icon ai-ic-red">⚠️</div>
         <h3>AI Risk Predictor</h3>
-        <p>Scans all your projects for overdue tasks, blocked items, and deadline proximity — then flags each project with a risk level and recommended actions.</p>
+        <p>Scans all projects for overdue tasks, blockers, and deadline proximity — flags each with risk level and actions.</p>
         <ul class="ai-list">
           <li>LOW / MEDIUM / HIGH / CRITICAL risk scoring</li>
-          <li>Overdue count, blocked tasks, completion rate analysis</li>
+          <li>Overdue, blocked, completion rate analysis</li>
           <li>Actionable recommendations per project</li>
-          <li>Available to Admin, Manager, TeamLead<span class="role-chip">Role-gated</span></li>
+          <li>Admin, Manager, TeamLead only<span class="role-chip">Role-gated</span></li>
         </ul>
       </div>
       <div class="ai-card">
-        <div class="ai-icon green">📄</div>
+        <div class="ai-icon ai-ic-green">📄</div>
         <h3>AI Docs &amp; Wiki Generator</h3>
-        <p>Generate professional technical documentation in seconds — architecture diagrams, API references, README files, and runbooks — from a single prompt.</p>
+        <p>Generate technical documentation in seconds — architecture diagrams, API references, READMEs, and runbooks.</p>
         <ul class="ai-list">
           <li>5 doc types: General, Architecture, API, README, Runbook</li>
-          <li>Auto-renders Mermaid architecture diagrams inline</li>
-          <li>Project-aware — uses your workspace context</li>
+          <li>Auto-renders Mermaid architecture diagrams</li>
           <li>Auto-saves to your docs library</li>
         </ul>
       </div>
@@ -4868,183 +4922,123 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 <section id="features">
   <div class="wrap">
     <div class="centered">
-      <div class="sec-tag">Platform Features</div>
+      <div class="sec-tag">🚀 Platform Features</div>
       <h2 class="sec-title">Everything your team needs</h2>
-      <p class="sec-sub">30+ features across project management, communication, security and analytics — all in a single workspace.</p>
+      <p class="sec-sub">35+ features across project management, communication, security and analytics — in a single workspace.</p>
     </div>
     <div class="bento">
       <div class="ben wide">
-        <div class="ben-ico">🗂</div>
+        <div class="ben-ico ben-ico-1">🗂</div>
         <h3>Kanban Board &amp; Sprint Planning</h3>
-        <p>Visual drag-and-drop task board with 7 stages, story points, sprint assignment, task dependencies, recurring tasks, time tracking, and custom labels.</p>
+        <p>Visual drag-and-drop task board with 7 stages, story points, sprint assignment, task dependencies, recurring tasks, and time tracking.</p>
         <ul class="ben-list">
           <li>7 pipeline stages: Backlog → Planning → In Progress → Review → Testing → Done → Blocked</li>
-          <li>Story points, sprint velocity tracking, task dependencies (blocked by / blocks)</li>
-          <li>Recurring tasks (daily, weekly, monthly) — auto-spawned by background scheduler</li>
-          <li>Per-task time logging with manual and timer modes — connects to Time Report</li>
+          <li>Story points, sprint velocity tracking, task dependencies</li>
+          <li>Recurring tasks (daily, weekly, monthly) auto-spawned by scheduler</li>
+          <li>Per-task time logging with timer and manual modes</li>
         </ul>
       </div>
       <div class="ben">
-        <div class="ben-ico">📅</div>
-        <h3>Professional Calendar</h3>
-        <p>Month and week views with color-coded tasks, overdue indicators, side panel details, and quick task creation on any date.</p>
-        <ul class="ben-list">
-          <li>Color by stage or priority</li>
-          <li>Filter by team member</li>
-          <li>4 live stats: Total, Due this week, Overdue, Done this month</li>
-          <li>Click any day to add a task with full form</li>
-        </ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico">📢</div>
+        <div class="ben-ico ben-ico-2">📢</div>
         <h3>Announcements</h3>
-        <p>Workspace-wide announcements with pin support, read receipts, and push notifications to all members — posted by Admin or Manager only.</p>
-        <ul class="ben-list">
-          <li>Pinned banner shown until dismissed</li>
-          <li>Read receipt tracking per announcement</li>
-          <li>Auto push notification to all workspace members</li>
-        </ul>
+        <p>Workspace-wide broadcasts with pin support, read receipts, and push notifications.</p>
+        <ul class="ben-list"><li>Pinned banner until dismissed</li><li>Read receipt tracking</li><li>Push to all workspace members</li></ul>
       </div>
       <div class="ben">
-        <div class="ben-ico">💬</div>
-        <h3>Channels &amp; Direct Messages</h3>
-        <p>Project channels with message reactions, threaded replies, file uploads, and private DMs — all real-time with push notifications.</p>
-        <ul class="ben-list">
-          <li>Emoji reactions (👍❤️🚀🎉✅🔥) on any message</li>
-          <li>Threaded replies — Slack-style side panel</li>
-          <li>Rich text with Markdown support</li>
-        </ul>
-      </div>
-      <div class="ben">
-        <div class="ben-ico">📝</div>
+        <div class="ben-ico ben-ico-3">📝</div>
         <h3>Forms &amp; Intake</h3>
-        <p>Build public intake forms with a drag-and-drop builder. Share a URL — every submission automatically creates a support ticket.</p>
-        <ul class="ben-list">
-          <li>5 field types: text, email, textarea, select, number</li>
-          <li>Public URL — no login required to submit</li>
-          <li>Auto-creates ticket with form data as description</li>
-          <li>View all submissions with submitter email</li>
-        </ul>
+        <p>Public intake forms that auto-create support tickets on submission — no login needed for clients.</p>
+        <ul class="ben-list"><li>5 field types: text, email, textarea, select, number</li><li>Auto-creates ticket with form data</li><li>View all submissions</li></ul>
       </div>
       <div class="ben">
-        <div class="ben-ico">🎫</div>
-        <h3>Support Tickets</h3>
-        <p>Full ticket lifecycle — bug reports, feature requests, improvements and tasks — with threaded comments, priority, assignee and status tracking.</p>
-        <ul class="ben-list">
-          <li>Types: Bug, Feature, Improvement, Task, Question</li>
-          <li>Priority tiers, status workflow, tag support</li>
-          <li>Ticket comments with notifications</li>
-        </ul>
+        <div class="ben-ico ben-ico-4">💬</div>
+        <h3>Channels &amp; DMs</h3>
+        <p>Project channels with emoji reactions, threaded replies, file uploads, and private DMs — all real-time.</p>
+        <ul class="ben-list"><li>Emoji reactions on all messages</li><li>Threaded replies — Slack-style</li><li>Markdown rich text</li></ul>
       </div>
       <div class="ben">
-        <div class="ben-ico">⏱️</div>
+        <div class="ben-ico ben-ico-5">⏱️</div>
         <h3>Time Report</h3>
-        <p>Complete time tracking with per-member, per-project breakdowns for any date range. Export to CSV for billing.</p>
-        <ul class="ben-list">
-          <li>Timer mode + manual log entry per task</li>
-          <li>Weekly, monthly, quarterly views</li>
-          <li>Admin sees all; developers see their own</li>
-          <li>One-click CSV export for invoicing</li>
-        </ul>
+        <p>Complete time tracking with per-member, per-project breakdowns. Export to CSV for billing.</p>
+        <ul class="ben-list"><li>Timer mode + manual log entry</li><li>Weekly, monthly, quarterly views</li><li>One-click CSV export</li></ul>
       </div>
       <div class="ben wide">
-        <div class="ben-ico">📊</div>
-        <h3>Timeline Tracker &amp; Dev Productivity</h3>
-        <p>Gantt-style timeline with health badges and dual progress bars — plus a full developer productivity leaderboard with 0–100 score per engineer.</p>
+        <div class="ben-ico ben-ico-6">📊</div>
+        <h3>Timeline &amp; Dev Productivity</h3>
+        <p>Gantt-style timeline with health badges — plus a full developer productivity leaderboard with 0–100 score per engineer.</p>
         <ul class="ben-list">
-          <li>Health badges auto-calculated: On Track · At Risk · Needs Attention · Overdue</li>
-          <li>Productivity score from task velocity, completion rate, and time logged</li>
-          <li>Drill into any developer's full task history with timeline</li>
+          <li>Health badges: On Track · At Risk · Needs Attention · Overdue</li>
+          <li>Productivity score from velocity, completion rate, and time logged</li>
+          <li>Drill into any developer's full task history</li>
         </ul>
       </div>
       <div class="ben">
-        <div class="ben-ico">🏃</div>
+        <div class="ben-ico ben-ico-7">🏃</div>
         <h3>Sprint Management</h3>
-        <p>Create and manage sprints per project with story point tracking, velocity charts, and team capacity planning.</p>
-        <ul class="ben-list">
-          <li>Sprint states: Planning → Active → Completed</li>
-          <li>Story point burndown, done vs total velocity</li>
-          <li>Assign tasks to sprints from any view</li>
-        </ul>
+        <p>Create and manage sprints with story points, velocity charts, and team capacity planning.</p>
+        <ul class="ben-list"><li>Sprint states: Planning → Active → Completed</li><li>Story point burndown</li><li>Assign tasks from any view</li></ul>
+      </div>
+      <div class="ben">
+        <div class="ben-ico ben-ico-8">🎯</div>
+        <h3>Goals &amp; OKRs</h3>
+        <p>Set company and team goals with key result tracking. Link results to sprints for auto-progress updates.</p>
+        <ul class="ben-list"><li>Quarterly goal views</li><li>KR progress tracking</li><li>Dashboard health badges</li></ul>
       </div>
     </div>
   </div>
 </section>
 
 <!-- SECURITY -->
-<section id="security" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);color:#fff;">
+<section id="security" class="sec-section">
   <div class="wrap">
     <div class="centered">
-      <div class="sec-tag" style="background:rgba(255,255,255,.1);color:#a5b4fc;border-color:rgba(165,180,252,.3)">Security &amp; Access Control</div>
-      <h2 class="sec-title" style="color:#fff">Enterprise-grade security, zero complexity</h2>
-      <p class="sec-sub" style="color:rgba(255,255,255,.65)">Multi-layered security built for teams that take data protection seriously — without the enterprise price tag.</p>
+      <div class="sec-tag" style="background:rgba(96,165,250,.15);color:#93c5fd;border:1px solid rgba(96,165,250,.25)">🔐 Security</div>
+      <h2 class="sec-title" style="color:#fff">Enterprise-grade security,<br/>zero complexity</h2>
+      <p class="sec-sub" style="color:rgba(255,255,255,.5)">Multi-layered security for teams that take data protection seriously — without the enterprise price tag.</p>
     </div>
     <div class="sec-grid">
       <div class="sec-card">
-        <div class="sec-ico blue">🔑</div>
-        <div>
-          <h4>TOTP Two-Factor Authentication</h4>
-          <p>Every user can enable authenticator-based 2FA (Google Authenticator, Authy, 1Password). Setup in 60 seconds — QR code, backup codes, and instant activation. Admins can enforce 2FA workspace-wide.</p>
-        </div>
+        <div class="sec-ico sec-ico-blue">🔑</div>
+        <div><h4>TOTP Two-Factor Authentication</h4><p>Enable authenticator-based 2FA (Google Authenticator, Authy, 1Password). QR code setup, backup codes, instant activation. Prompted on every login when enabled. Admins can enforce workspace-wide.</p></div>
       </div>
       <div class="sec-card">
-        <div class="sec-ico green">🛡️</div>
-        <div>
-          <h4>Role-Based Access Control (RBAC)</h4>
-          <p>6 granular roles — Admin, Manager, TeamLead, Developer, Tester, Viewer — each with fine-grained permissions across every feature. 26 permission toggles configurable from the Settings panel.</p>
-        </div>
+        <div class="sec-ico sec-ico-purple">🛡️</div>
+        <div><h4>Role-Based Access Control</h4><p>6 granular roles — Admin, Manager, TeamLead, Developer, Tester, Viewer — each with fine-grained permissions across every feature. 26 permission toggles configurable from Settings.</p></div>
       </div>
       <div class="sec-card">
-        <div class="sec-ico purple">📧</div>
-        <div>
-          <h4>OTP Email Verification</h4>
-          <p>Optional OTP-based login verification via email. Configurable per workspace — works with any SMTP provider including Gmail, SendGrid, and Resend. Add a second layer before accessing the dashboard.</p>
-        </div>
+        <div class="sec-ico sec-ico-green">📧</div>
+        <div><h4>OTP Email Verification</h4><p>Optional OTP-based login via email. Works with any SMTP provider — Gmail, SendGrid, Resend. Adds a second layer before accessing the dashboard.</p></div>
       </div>
       <div class="sec-card">
-        <div class="sec-ico amber">🔗</div>
-        <div>
-          <h4>API Key Management</h4>
-          <p>Generate scoped API keys for CI/CD pipelines, external automations, and integrations. Keys are hashed at rest, shown only once on creation, and revocable at any time from your profile settings.</p>
-        </div>
+        <div class="sec-ico sec-ico-amber">🔗</div>
+        <div><h4>API Key Management</h4><p>Generate scoped API keys for CI/CD pipelines and integrations. Keys are hashed at rest, shown only once on creation, and revocable at any time.</p></div>
       </div>
       <div class="sec-card">
-        <div class="sec-ico green">👁️</div>
-        <div>
-          <h4>Guest Access</h4>
-          <p>Invite external collaborators as guests with access restricted to specific projects only. Guests get a Viewer role with temporary credentials sent by email — no workspace-wide access.</p>
-        </div>
+        <div class="sec-ico sec-ico-purple">👁️</div>
+        <div><h4>Guest Access</h4><p>Invite external collaborators as guests with access restricted to specific projects only — no workspace-wide access, no login required for intake forms.</p></div>
       </div>
       <div class="sec-card">
-        <div class="sec-ico blue">🔐</div>
-        <div>
-          <h4>Secure Session Management</h4>
-          <p>Server-side sessions with 7-day lifetime, HttpOnly cookies, bcrypt-hashed passwords with SHA-256 legacy fallback, and CORS protection. All secrets auto-generated and stored encrypted.</p>
-        </div>
+        <div class="sec-ico sec-ico-blue">🔐</div>
+        <div><h4>Secure Session Management</h4><p>Server-side sessions with 7-day lifetime, HttpOnly cookies, bcrypt-hashed passwords, CORS protection, and automatic session invalidation on logout.</p></div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ROLE MATRIX -->
-<section id="roles" style="background:#fff;border-top:3px solid transparent;border-image:linear-gradient(90deg,#2563eb,#7c3aed,#db2777) 1;">
+<section id="roles" class="role-section">
   <div class="wrap">
     <div class="centered">
-      <div class="sec-tag">Role Permissions</div>
-      <h2 class="sec-title">Right access for every team member</h2>
-      <p class="sec-sub">Six pre-configured roles with 26 permission toggles — all fully customisable from Workspace Settings.</p>
+      <div class="sec-tag">👥 Role Permissions</div>
+      <h2 class="sec-title">Right access for every member</h2>
+      <p class="sec-sub">Six pre-configured roles with 26 permission toggles — all customisable from Workspace Settings.</p>
     </div>
     <div class="role-table-wrap">
       <table class="role-table">
         <thead>
           <tr>
             <th class="feat-col">Feature</th>
-            <th>👑 Admin</th>
-            <th>🗂 Manager</th>
-            <th>🧑‍💼 TeamLead</th>
-            <th>💻 Developer</th>
-            <th>🔍 Tester</th>
-            <th>👁 Viewer</th>
+            <th>👑 Admin</th><th>🗂 Manager</th><th>🧑‍💼 TeamLead</th><th>💻 Developer</th><th>🔍 Tester</th><th>👁 Viewer</th>
           </tr>
         </thead>
         <tbody>
@@ -5055,15 +5049,13 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
           <tr><td class="feat-col">Time Tracking</td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-own">Team only</span></td><td><span class="pchip pc-own">Own only</span></td><td><span class="pchip pc-own">Own only</span></td><td class="pc-no">—</td></tr>
           <tr class="cat-row"><td colspan="7">Communication</td></tr>
           <tr><td class="feat-col">Post Announcements</td><td><span class="pchip pc-full">Post + pin</span></td><td><span class="pchip pc-full">Post + pin</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
-          <tr><td class="feat-col">Channel Messages + Reactions</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-view">View</span></td></tr>
-          <tr><td class="feat-col">Threaded Replies</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-view">View</span></td></tr>
+          <tr><td class="feat-col">Channels + Reactions</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-view">View</span></td></tr>
           <tr class="cat-row"><td colspan="7">AI Tools</td></tr>
           <tr><td class="feat-col">AI Standup Generator</td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-full">All members</span></td><td><span class="pchip pc-own">Team only</span></td><td><span class="pchip pc-own">Own only</span></td><td><span class="pchip pc-own">Own only</span></td><td class="pc-no">—</td></tr>
           <tr><td class="feat-col">AI Code Review</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-view">View results</span></td><td class="pc-no">—</td></tr>
           <tr><td class="feat-col">AI Risk Predictor</td><td><span class="pchip pc-full">All projects</span></td><td><span class="pchip pc-full">All projects</span></td><td><span class="pchip pc-own">Team projects</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
-          <tr class="cat-row"><td colspan="7">Security &amp; Administration</td></tr>
+          <tr class="cat-row"><td colspan="7">Security</td></tr>
           <tr><td class="feat-col">TOTP 2FA Setup</td><td><span class="pchip pc-full">Self + enforce</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td><td><span class="pchip pc-own">Self only</span></td></tr>
-          <tr><td class="feat-col">Forms &amp; Intake Builder</td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-full">Full</span></td><td><span class="pchip pc-own">Own projects</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
           <tr><td class="feat-col">Workspace Settings</td><td><span class="pchip pc-full">Full</span></td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td><td class="pc-no">—</td></tr>
         </tbody>
       </table>
@@ -5072,122 +5064,97 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
 </section>
 
 <!-- HOW IT WORKS -->
-<section id="how" style="background:#fafbfc;">
+<section id="how">
   <div class="wrap centered">
-    <div class="sec-tag">Getting Started</div>
+    <div class="sec-tag">⚡ Getting Started</div>
     <h2 class="sec-title">Up and running in minutes</h2>
-    <p class="sec-sub">No complex onboarding, no credit card, no setup fees. Your whole team can be productive the same day.</p>
+    <p class="sec-sub">No complex onboarding, no credit card, no setup fees. Productive the same day.</p>
     <div class="steps-grid">
-      <div class="step-card">
-        <div class="step-num">1</div>
-        <h3>Create workspace</h3>
-        <p>Register in under 60 seconds. Your workspace is instantly ready — name it, set your invite code, and go.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">2</div>
-        <h3>Invite your team</h3>
-        <p>Share your invite code or send email invites. Assign roles — Admin, Manager, Developer, Tester, or Viewer.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">3</div>
-        <h3>Add your AI key</h3>
-        <p>Paste your Anthropic API key in Settings to unlock AI Standup, Code Review, Risk Predictor, and Docs generator.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">4</div>
-        <h3>Ship faster</h3>
-        <p>Create projects, plan sprints, track tasks on the Kanban board, and let AI handle your daily standups and code reviews.</p>
-      </div>
+      <div class="step-card"><div class="step-num">1</div><h3>Create workspace</h3><p>Register in under 60 seconds. Workspace is ready instantly — name it, set invite code, go.</p></div>
+      <div class="step-card"><div class="step-num">2</div><h3>Invite your team</h3><p>Share your invite code or send email invites. Assign roles — Admin, Manager, Developer, Tester, or Viewer.</p></div>
+      <div class="step-card"><div class="step-num">3</div><h3>Add your AI key</h3><p>Paste your Anthropic API key in Settings to unlock all four AI tools.</p></div>
+      <div class="step-card"><div class="step-num">4</div><h3>Ship faster</h3><p>Plan sprints, track on Kanban, run AI standups, review code — all from one place.</p></div>
     </div>
   </div>
 </section>
 
 <!-- INTEGRATIONS -->
-<section id="integrations" style="background:#fff;">
+<section id="integrations" class="int-section">
   <div class="wrap centered">
-    <div class="sec-tag">Integrations &amp; API</div>
+    <div class="sec-tag">🔗 Integrations</div>
     <h2 class="sec-title">Connects to your stack</h2>
-    <p class="sec-sub">Webhook events, API keys, public intake forms, and email via any SMTP provider — build your own automation layer.</p>
+    <p class="sec-sub">Webhooks, API keys, public intake forms, and email via any SMTP — build your own automation layer.</p>
     <div class="int-grid">
       <div class="int-card"><div class="int-ico">📬</div><div class="int-n">SMTP Email</div><div class="int-d">Gmail, SendGrid, Resend, any provider</div></div>
-      <div class="int-card"><div class="int-ico">🔗</div><div class="int-n">Webhooks</div><div class="int-d">HTTP POST on any event — task, ticket, project</div></div>
-      <div class="int-card"><div class="int-ico">🔑</div><div class="int-n">REST API Keys</div><div class="int-d">Scoped tokens for external read/write access</div></div>
+      <div class="int-card"><div class="int-ico">🔗</div><div class="int-n">Webhooks</div><div class="int-d">HTTP POST on task, ticket, project events</div></div>
+      <div class="int-card"><div class="int-ico">🔑</div><div class="int-n">REST API Keys</div><div class="int-d">Scoped tokens for external access</div></div>
       <div class="int-card"><div class="int-ico">📝</div><div class="int-n">Intake Forms</div><div class="int-d">Public URL → auto-ticket on submission</div></div>
-      <div class="int-card"><div class="int-ico">🤖</div><div class="int-n">Anthropic Claude</div><div class="int-d">Bring your own key — full AI feature suite</div></div>
-      <div class="int-card"><div class="int-ico">📱</div><div class="int-n">Push Notifications</div><div class="int-d">Web push — works on desktop and mobile</div></div>
-      <div class="int-card"><div class="int-ico">📞</div><div class="int-n">Instant Meet</div><div class="int-d">WebRTC video calls — no third-party needed</div></div>
+      <div class="int-card"><div class="int-ico">🤖</div><div class="int-n">Anthropic Claude</div><div class="int-d">Bring your own key — full AI suite</div></div>
+      <div class="int-card"><div class="int-ico">📱</div><div class="int-n">Push Notifications</div><div class="int-d">Web push — desktop and mobile</div></div>
+      <div class="int-card"><div class="int-ico">📞</div><div class="int-n">Instant Meet</div><div class="int-d">WebRTC video calls — no third-party</div></div>
       <div class="int-card"><div class="int-ico">🌐</div><div class="int-n">Public Status Page</div><div class="int-d">Share project status via public URL</div></div>
     </div>
   </div>
 </section>
 
 <!-- TESTIMONIALS -->
-<section style="background:#fafbfc;">
+<section class="testimonial-section">
   <div class="wrap centered">
-    <div class="sec-tag">Trusted by Teams</div>
+    <div class="sec-tag">⭐ Trusted by Teams</div>
     <h2 class="sec-title">Built for real engineering teams</h2>
-    <p class="sec-sub">From early-stage startups to established engineering orgs — teams that need one tool to do it all.</p>
+    <p class="sec-sub">From early-stage startups to established engineering orgs.</p>
     <div class="quote-grid">
       <div class="quote-card">
-        <div class="quote-stars">★★★★★</div>
-        <p class="quote-text">"The AI standup generator alone saves our team 30 minutes every morning. It pulls from actual task data, not just what people remember to type."</p>
-        <div class="quote-author">
-          <div class="quote-av" style="background:linear-gradient(135deg,#2563eb,#7c3aed);">AK</div>
-          <div><div class="quote-name">Arjun Kumar</div><div class="quote-role">Engineering Manager, FinTech startup</div></div>
-        </div>
+        <div class="q-stars">★★★★★</div>
+        <p class="q-text">"The AI standup generator alone saves our team 30 minutes every morning. It pulls from actual task data, not just what people remember to type."</p>
+        <div class="q-author"><div class="q-av" style="background:linear-gradient(135deg,#2563eb,#7c3aed)">AK</div><div><div class="q-name">Arjun Kumar</div><div class="q-role">Engineering Manager, FinTech startup</div></div></div>
       </div>
       <div class="quote-card">
-        <div class="quote-stars">★★★★★</div>
-        <p class="quote-text">"The code review bot caught a SQL injection vulnerability that passed our normal review. It's like having a senior engineer on call 24/7."</p>
-        <div class="quote-author">
-          <div class="quote-av" style="background:linear-gradient(135deg,#7c3aed,#db2777);">SR</div>
-          <div><div class="quote-name">Sneha Reddy</div><div class="quote-role">Lead Developer, SaaS company</div></div>
-        </div>
+        <div class="q-stars">★★★★★</div>
+        <p class="q-text">"The code review bot caught a SQL injection vulnerability that passed our normal review. It's like having a senior engineer on call 24/7."</p>
+        <div class="q-author"><div class="q-av" style="background:linear-gradient(135deg,#7c3aed,#db2777)">SR</div><div><div class="q-name">Sneha Reddy</div><div class="q-role">Lead Developer, SaaS company</div></div></div>
       </div>
       <div class="quote-card">
-        <div class="quote-stars">★★★★★</div>
-        <p class="quote-text">"The intake forms to tickets flow completely replaced our email support. Clients submit, tickets are created, assigned, and tracked — all automatically."</p>
-        <div class="quote-author">
-          <div class="quote-av" style="background:linear-gradient(135deg,#16a34a,#0891b2);">MP</div>
-          <div><div class="quote-name">Meera Pillai</div><div class="quote-role">Product Manager, Agency</div></div>
-        </div>
+        <div class="q-stars">★★★★★</div>
+        <p class="q-text">"Intake forms to tickets completely replaced our email support. Clients submit, tickets are created, assigned, and tracked — all automatically."</p>
+        <div class="q-author"><div class="q-av" style="background:linear-gradient(135deg,#16a34a,#0891b2)">MP</div><div><div class="q-name">Meera Pillai</div><div class="q-role">Product Manager, Agency</div></div></div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- FAQ -->
-<section id="faq" style="background:#fff;">
+<section id="faq" class="faq-section">
   <div class="wrap centered">
-    <div class="sec-tag">FAQ</div>
+    <div class="sec-tag">❓ FAQ</div>
     <h2 class="sec-title">Common questions</h2>
     <p class="sec-sub">Everything you need to know before getting started.</p>
-    <div class="faq-grid" style="text-align:left;">
-      <div class="faq-item"><h4>Is VEWIT really free?</h4><p>Yes — VEWIT is free to start with no credit card required. Create a workspace, invite your team, and use all features immediately. There are no hidden paywalls on core features.</p></div>
-      <div class="faq-item"><h4>How does the AI work?</h4><p>AI features (Standup, Code Review, Risk Predictor, Docs) use the Anthropic Claude API. You bring your own API key — paste it in Workspace Settings. No markup, no middleman — you pay Anthropic directly at their rates.</p></div>
-      <div class="faq-item"><h4>How is VEWIT different from Jira + Slack?</h4><p>VEWIT replaces both Jira and Slack in one platform — with built-in channels, DMs, tickets, kanban, sprints, timeline, AI tools, and forms. No integrations, no subscription stacking, no switching context.</p></div>
-      <div class="faq-item"><h4>Is my data secure?</h4><p>Yes. Passwords are bcrypt-hashed, sessions are server-side with HttpOnly cookies, optional TOTP 2FA per user, OTP email verification, and all API keys are hashed at rest. You can also self-host on your own infrastructure.</p></div>
-      <div class="faq-item"><h4>Can external clients submit tickets?</h4><p>Yes — use the Intake Forms feature to create a public form URL. Share it with clients. When they submit, a ticket is automatically created in your workspace with all their form data as the description.</p></div>
-      <div class="faq-item"><h4>Can I limit what each team member sees?</h4><p>Yes — 6 role levels (Admin, Manager, TeamLead, Developer, Tester, Viewer) with 26 individual permission toggles. Guest access further restricts users to specific projects only.</p></div>
+    <div class="faq-grid" style="text-align:left">
+      <div class="faq-item"><h4>Is VEWIT really free?</h4><p>Yes — free to start with no credit card. All core features are immediately available with no paywalls.</p></div>
+      <div class="faq-item"><h4>How does the AI work?</h4><p>AI features use the Anthropic Claude API with your own key. No markup — you pay Anthropic directly at their rates.</p></div>
+      <div class="faq-item"><h4>How is VEWIT different from Jira + Slack?</h4><p>One platform replaces both — channels, DMs, tickets, kanban, sprints, timeline, AI tools, and forms. No integration tax.</p></div>
+      <div class="faq-item"><h4>Is my data secure?</h4><p>bcrypt passwords, HttpOnly cookies, TOTP 2FA, OTP email verification, API keys hashed at rest, automatic session invalidation on logout.</p></div>
+      <div class="faq-item"><h4>Can external clients submit tickets?</h4><p>Yes — Intake Forms create a public URL. Clients submit without logging in; a ticket is automatically created with all form data.</p></div>
+      <div class="faq-item"><h4>Can I control what each member sees?</h4><p>Yes — 6 role levels with 26 individual permission toggles. Guest access restricts users to specific projects only.</p></div>
     </div>
   </div>
 </section>
 
 <!-- CTA -->
 <section class="cta-section">
-  <div class="wrap cta-inner">
+  <div class="wrap cta-in">
     <div class="cta-tag">🚀 Ready to ship faster?</div>
-    <h2>One platform.<br/>Every tool your team needs.</h2>
+    <h2>One platform.<br/>Every tool your team <span class="grad">needs.</span></h2>
     <p>Kanban boards, AI standup, code review, 2FA security — set up in 2 minutes, no credit card, no vendor lock-in.</p>
     <div class="cta-actions">
-      <a href="/?action=register" class="btn btn-solid btn-lg" style="background:#fff;color:#1d4ed8;box-shadow:0 4px 20px rgba(0,0,0,.15);">Start Free — No Card Needed →</a>
-      <a href="/#ai" class="btn btn-outline-white btn-lg">Explore All Features</a>
+      <a href="/?action=register" class="btn btn-white btn-lg">Start Free — No Card Needed →</a>
+      <a href="#features" class="btn btn-outline-white btn-lg">See All Features</a>
     </div>
     <div class="cta-trust">
-      <div class="cta-t"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever plan</div>
-      <div class="cta-t"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>TOTP 2FA security</div>
-      <div class="cta-t"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Bring your own AI key</div>
-      <div class="cta-t"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Self-hostable</div>
+      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free forever</div>
+      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>TOTP 2FA built-in</div>
+      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Bring your own AI key</div>
+      <div class="ct-it"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>PostgreSQL backed</div>
     </div>
   </div>
 </section>
@@ -5197,80 +5164,44 @@ footer{padding:56px 0 32px;border-top:1px solid var(--sf3);background:#fff;}
   <div class="wrap">
     <div class="footer-grid">
       <div class="footer-brand">
-        <a href="/" class="logo" style="margin-bottom:10px;display:inline-flex;">
-          <div class="logo-mark" style="width:26px;height:26px;border-radius:7px;"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.96rem;">VEWIT</span>
+        <a href="/" class="logo" style="margin-bottom:12px;display:inline-flex;">
+          <div class="logo-mark" style="width:28px;height:28px;border-radius:7px;"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
+          <span style="font-size:.96rem;color:#fff;">VEWIT</span>
         </a>
-        <p>AI-powered team collaboration platform for modern engineering teams. Kanban, sprints, AI tools, security — all in one place.</p>
+        <p>AI-powered team collaboration for modern engineering teams. Kanban, sprints, AI tools, 2FA — all in one place.</p>
       </div>
-      <div class="footer-col">
-        <h4>Product</h4>
-        <ul>
-          <li><a href="#features">Features</a></li>
-          <li><a href="#ai">AI Tools</a></li>
-          <li><a href="#security">Security</a></li>
-          <li><a href="#roles">Role Matrix</a></li>
-          <li><a href="#integrations">Integrations</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <ul>
-          <li><a href="/?action=register">Get Started</a></li>
-          <li><a href="/?action=login">Sign In</a></li>
-          <li><a href="/about">About VEWIT</a></li>
-          <li><a href="#faq">FAQ</a></li>
-          <li><a href="#contact">Contact</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Features</h4>
-        <ul>
-          <li><a href="#features">Kanban Board</a></li>
-          <li><a href="#features">Sprint Planning</a></li>
-          <li><a href="#ai">AI Standup</a></li>
-          <li><a href="#ai">Code Review Bot</a></li>
-          <li><a href="#features">Intake Forms</a></li>
-          <li><a href="#security">TOTP 2FA</a></li>
-        </ul>
-      </div>
+      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#ai">AI Tools</a></li><li><a href="#security">Security</a></li><li><a href="#roles">Role Matrix</a></li></ul></div>
+      <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Get Started</a></li><li><a href="/?action=login">Sign In</a></li><li><a href="#faq">FAQ</a></li><li><a href="#how">How it works</a></li></ul></div>
+      <div class="footer-col"><h4>Features</h4><ul><li><a href="#features">Kanban Board</a></li><li><a href="#ai">AI Standup</a></li><li><a href="#ai">Code Review Bot</a></li><li><a href="#security">TOTP 2FA</a></li></ul></div>
     </div>
     <div class="footer-bottom">
-      <div class="footer-copy">&copy; 2025 VEWIT. All rights reserved. &nbsp;·&nbsp; <a href="https://www.vewit.in" style="color:var(--ac);">vewit.in</a></div>
-      <div class="footer-badges">
-        <span class="fb">Free to start</span>
-        <span class="fb">TOTP 2FA</span>
-        <span class="fb">AI-powered</span>
-        <span class="fb">Self-hostable</span>
-      </div>
+      <div class="footer-copy">© 2025 VEWIT. All rights reserved. · <a href="https://www.vewit.in" style="color:rgba(96,165,250,.6)">vewit.in</a></div>
+      <div class="footer-badges"><span class="fb">Free to start</span><span class="fb">TOTP 2FA</span><span class="fb">AI-powered</span><span class="fb">PostgreSQL</span></div>
     </div>
   </div>
 </footer>
 
 <script>
-// Smooth scroll
 document.querySelectorAll('a[href^="#"]').forEach(a=>{
-  a.addEventListener('click',e=>{
-    const t=document.querySelector(a.getAttribute('href'));
-    if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth',block:'start'});}
-  });
+  a.addEventListener('click',e=>{const t=document.querySelector(a.getAttribute('href'));if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth',block:'start'});}});
 });
-// Nav scroll effect
 window.addEventListener('scroll',()=>{
-  document.getElementById('nav').style.background=
-    window.scrollY>40?'rgba(255,255,255,0.97)':'rgba(255,255,255,0.92)';
+  const n=document.getElementById('nav');
+  n.style.background=window.scrollY>50?'rgba(255,255,255,.97)':'rgba(255,255,255,.85)';
+  n.style.boxShadow=window.scrollY>50?'0 2px 20px rgba(0,0,0,.08)':'none';
 });
-// Fade-in on scroll
 const obs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='translateY(0)';}});
-},{threshold:0.1});
-document.querySelectorAll('.ai-card,.ben,.sec-card,.int-card,.quote-card,.faq-item,.step-card').forEach(el=>{
-  el.style.opacity='0';el.style.transform='translateY(18px)';el.style.transition='opacity .5s ease, transform .5s ease';
+},{threshold:0.08});
+document.querySelectorAll('.ai-card,.ben,.sec-card,.int-card,.quote-card,.faq-item,.step-card,.stat-card').forEach(el=>{
+  el.style.opacity='0';el.style.transform='translateY(20px)';
+  el.style.transition='opacity .5s ease, transform .5s ease';
   obs.observe(el);
 });
 </script>
 </body>
 </html>
+
 """
 
 HTML = r"""<!DOCTYPE html>
@@ -11917,7 +11848,7 @@ function OnboardingChecklist({cu,projects,users,tasks,setView,onDismiss}){
   const done=steps.filter(s=>s.done).length;
   const pct=Math.round((done/steps.length)*100);
   // Auto-dismiss when all done
-  useEffect(()=>{if(fetched&&done===steps.length){onDismiss&&onDismiss();}},([fetched,done]));
+  useEffect(()=>{if(fetched&&done===steps.length){onDismiss&&onDismiss();}},[fetched,done]);
   if(done===steps.length) return null;
   return html`
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 18px',marginBottom:14}}>
