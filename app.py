@@ -3068,804 +3068,363 @@ def icon_512():
         headers={'Cache-Control':'public,max-age=86400'})
 
 
-LANDING_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>VEWIT — AI-Powered Project Management &amp; Team Collaboration Platform</title>
-<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timeline tracking and developer productivity — all in one place. Free to start."/>
-<meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
-<meta name="robots" content="index, follow"/>
-<meta name="theme-color" content="#080c14"/>
-<link rel="canonical" href="https://www.vewit.in/"/>
-<meta property="og:type" content="website"/>
-<meta property="og:url" content="https://www.vewit.in/"/>
-<meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
-<meta property="og:site_name" content="VEWIT"/>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform","applicationCategory":"BusinessApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"featureList":["AI-Powered Project Management","Kanban Board","Real-time Direct Messaging","Support Ticket System","Gantt Timeline","Developer Productivity Analytics","Claude AI Assistant","Push Notifications","Multi-Workspace","Role-Based Access Control"]}
-</script>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#080c14;
-  --bg2:#0d1221;
-  --bg3:#111827;
-  --bg4:#1a2236;
-  --surface:rgba(255,255,255,0.04);
-  --surface2:rgba(255,255,255,0.07);
-  --surface3:rgba(255,255,255,0.11);
-  --border:rgba(255,255,255,0.08);
-  --border2:rgba(255,255,255,0.14);
-  --border3:rgba(255,255,255,0.22);
-  --text:#f0f4ff;
-  --text2:#a8b4cc;
-  --text3:#5c6b84;
-  --blue:#4f8ef7;
-  --blue2:#3b7ef4;
-  --purple:#8b5cf6;
-  --cyan:#22d3ee;
-  --green:#34d399;
-  --amber:#fbbf24;
-  --pink:#f472b6;
-  --orange:#fb923c;
-  --grad-blue:linear-gradient(135deg,#4f8ef7 0%,#8b5cf6 100%);
-  --grad-cyan:linear-gradient(135deg,#22d3ee 0%,#4f8ef7 100%);
-  --grad-warm:linear-gradient(135deg,#fb923c 0%,#f472b6 100%);
-  --grad-green:linear-gradient(135deg,#34d399 0%,#22d3ee 100%);
-  --glow-blue:0 0 60px rgba(79,142,247,0.25);
-  --glow-purple:0 0 60px rgba(139,92,246,0.2);
-  --radius:20px;
-  --radius-sm:12px;
-  --shadow:0 32px 80px rgba(0,0,0,0.7);
-  --font:'Bricolage Grotesque',system-ui,sans-serif;
-  --font-body:'Inter',system-ui,sans-serif;
-}
-html{scroll-behavior:smooth}
-body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-
-/* Noise texture overlay */
-body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");opacity:1;pointer-events:none;z-index:0}
-
-/* ── Nav ── */
-nav{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 48px;height:58px;background:rgba(8,12,20,0.75);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);border-bottom:1px solid var(--border);transition:background .3s}
-.nav-logo{font-family:var(--font);font-size:22px;font-weight:800;letter-spacing:-1px;text-decoration:none;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.nav-links{display:flex;align-items:center;gap:32px}
-.nav-links a{color:var(--text2);font-size:13.5px;font-weight:500;text-decoration:none;transition:color .2s;font-family:var(--font-body)}
-.nav-links a:hover{color:var(--text)}
-.nav-cta-wrap{display:flex;align-items:center;gap:10px}
-.nav-signin{color:var(--text2);font-size:13.5px;font-weight:500;text-decoration:none;padding:7px 16px;border-radius:980px;transition:color .2s,background .2s;font-family:var(--font-body)}
-.nav-signin:hover{color:var(--text);background:var(--surface2)}
-.nav-start{background:var(--grad-blue);color:#fff;font-size:13.5px;font-weight:600;text-decoration:none;padding:8px 20px;border-radius:980px;transition:opacity .2s,transform .15s;font-family:var(--font-body)}
-.nav-start:hover{opacity:.88;transform:scale(1.03)}
-
-/* ── Hero ── */
-.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:130px 24px 80px;position:relative;overflow:hidden}
-.hero-mesh{position:absolute;inset:0;pointer-events:none;z-index:0}
-.mesh-blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.45;animation:blobFloat 8s ease-in-out infinite}
-.mesh-blob-1{width:600px;height:600px;background:radial-gradient(circle,rgba(79,142,247,0.35),transparent 70%);top:-200px;left:-100px;animation-delay:0s}
-.mesh-blob-2{width:500px;height:500px;background:radial-gradient(circle,rgba(139,92,246,0.3),transparent 70%);top:-100px;right:-150px;animation-delay:-3s}
-.mesh-blob-3{width:400px;height:400px;background:radial-gradient(circle,rgba(34,211,238,0.2),transparent 70%);bottom:100px;left:20%;animation-delay:-5s}
-@keyframes blobFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-30px) scale(1.05)}}
-.hero-content{position:relative;z-index:1}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.3);color:var(--blue);font-size:12px;font-weight:600;padding:6px 16px;border-radius:980px;margin-bottom:32px;letter-spacing:.04em;text-transform:uppercase;animation:fadeUp .7s ease both;font-family:var(--font-body)}
-.hero-badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-h1.hero-title{font-family:var(--font);font-size:clamp(44px,7.5vw,96px);font-weight:800;letter-spacing:-3.5px;line-height:1.02;margin-bottom:28px;max-width:900px;animation:fadeUp .7s .1s ease both}
-h1.hero-title .line2{display:block}
-.grad-text-blue{background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.grad-text-cyan{background:var(--grad-cyan);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.grad-text-warm{background:var(--grad-warm);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-sub{font-size:clamp(16px,2.2vw,20px);color:var(--text2);max-width:580px;line-height:1.7;margin:0 auto 48px;font-weight:400;animation:fadeUp .7s .2s ease both}
-.hero-ctas{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center;animation:fadeUp .7s .3s ease both}
-.cta-primary{background:var(--grad-blue);color:#fff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 36px;border-radius:980px;transition:transform .2s,box-shadow .2s;font-family:var(--font);letter-spacing:-.3px;box-shadow:0 8px 32px rgba(79,142,247,0.4)}
-.cta-primary:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 16px 48px rgba(79,142,247,0.5)}
-.cta-secondary{color:var(--text);font-size:16px;font-weight:600;text-decoration:none;padding:15px 32px;border-radius:980px;border:1px solid var(--border3);transition:background .2s,border-color .2s,transform .15s;font-family:var(--font);letter-spacing:-.3px}
-.cta-secondary:hover{background:var(--surface2);border-color:var(--border3);transform:translateY(-1px)}
-.hero-trust{margin-top:56px;display:flex;gap:36px;flex-wrap:wrap;justify-content:center;animation:fadeUp .7s .4s ease both}
-.trust-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text3);font-family:var(--font-body)}
-.trust-check{width:18px;height:18px;border-radius:50%;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.4);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:var(--green)}
-@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-
-/* ── Dashboard Preview ── */
-.preview-section{padding:0 24px 120px;display:flex;justify-content:center;position:relative;z-index:1;animation:fadeUp .9s .5s ease both}
-.preview-outer{max-width:1120px;width:100%;position:relative}
-.preview-glow-wrap{position:absolute;inset:-1px;border-radius:24px;background:var(--grad-blue);opacity:.2;filter:blur(40px);pointer-events:none}
-.preview-frame{background:var(--bg3);border:1px solid var(--border2);border-radius:22px;overflow:hidden;box-shadow:var(--shadow);position:relative}
-.preview-topbar{display:flex;align-items:center;gap:8px;padding:13px 18px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border)}
-.pdot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
-.purl{flex:1;text-align:center;font-size:11px;color:rgba(255,255,255,0.2);font-family:monospace}
-.preview-layout{display:grid;grid-template-columns:210px 1fr;min-height:400px;font-size:12px}
-.preview-nav{background:rgba(0,0,0,0.4);border-right:1px solid var(--border);padding:16px 10px;display:flex;flex-direction:column;gap:2px}
-.pnav-logo{font-family:var(--font);font-size:14px;font-weight:800;letter-spacing:-0.5px;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;padding:4px 10px;margin-bottom:16px}
-.pnav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;color:var(--text3);font-size:12px;font-weight:500;cursor:default;transition:background .15s}
-.pnav-item.active{background:rgba(79,142,247,0.15);color:var(--blue)}
-.pnav-item:hover:not(.active){background:var(--surface);color:var(--text2)}
-.pnav-sep{height:1px;background:var(--border);margin:8px 6px}
-.preview-body{padding:22px 24px;background:var(--bg2)}
-.preview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
-.preview-page-title{font-family:var(--font);font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.5px}
-.preview-sprint-badge{font-size:10px;font-weight:700;padding:4px 12px;border-radius:980px;background:rgba(52,211,153,0.12);color:var(--green);border:1px solid rgba(52,211,153,0.25)}
-.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.kcol-head{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.kcol-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.ktask{background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:8px;transition:border-color .2s}
-.ktask:hover{border-color:var(--border2)}
-.ktask-title{font-size:11.5px;font-weight:500;color:var(--text2);margin-bottom:10px;line-height:1.4}
-.ktask-meta{display:flex;align-items:center;gap:7px}
-.kav{width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.kprio{font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;margin-left:auto}
-
-/* ── Section base ── */
-.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
-.section{padding:100px 0;position:relative}
-.eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:18px;font-family:var(--font-body)}
-.eyebrow::before{content:'';width:4px;height:18px;background:var(--grad-blue);border-radius:2px;display:inline-block}
-h2.section-title{font-family:var(--font);font-size:clamp(32px,4.5vw,56px);font-weight:800;letter-spacing:-2.5px;line-height:1.05;color:var(--text);margin-bottom:18px}
-.section-sub{font-size:17px;color:var(--text2);max-width:560px;line-height:1.7;font-weight:400;margin-bottom:64px;font-family:var(--font-body)}
-
-/* ── Feature Grid ── */
-.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.feat-card{background:var(--bg3);padding:36px 30px;transition:background .25s;position:relative;overflow:hidden}
-.feat-card::after{content:'';position:absolute;inset:0;background:var(--grad-blue);opacity:0;transition:opacity .3s}
-.feat-card:hover{background:rgba(255,255,255,0.03)}
-.feat-card:hover::after{opacity:.03}
-.feat-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:20px;position:relative;z-index:1}
-.feat-card h3{font-family:var(--font);font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.4px;margin-bottom:10px;position:relative;z-index:1}
-.feat-card p{font-size:13.5px;color:var(--text3);line-height:1.7;position:relative;z-index:1;font-family:var(--font-body)}
-.feat-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:980px;margin-top:14px;position:relative;z-index:1;font-family:var(--font-body)}
-
-/* ── Plan Cards (pricing) ── */
-.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start}
-.plan-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:36px 32px;position:relative;transition:transform .25s,box-shadow .25s}
-.plan-card:hover{transform:translateY(-6px);box-shadow:0 24px 60px rgba(0,0,0,0.5)}
-.plan-card.best{background:linear-gradient(180deg,rgba(79,142,247,0.08) 0%,var(--bg3) 100%);border-color:rgba(79,142,247,0.4)}
-.plan-badge-wrap{position:absolute;top:-1px;left:50%;transform:translateX(-50%)}
-.plan-badge{background:var(--grad-blue);color:#fff;font-size:11px;font-weight:700;padding:5px 18px;border-radius:0 0 12px 12px;letter-spacing:.04em;font-family:var(--font-body)}
-.plan-name{font-family:var(--font);font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.5px;margin-bottom:8px}
-.plan-desc{font-size:13.5px;color:var(--text3);margin-bottom:24px;line-height:1.6;font-family:var(--font-body)}
-.plan-price{font-family:var(--font);font-size:52px;font-weight:800;letter-spacing:-2.5px;color:var(--text);line-height:1;margin-bottom:6px}
-.plan-price sup{font-size:24px;font-weight:700;vertical-align:super;margin-top:6px;letter-spacing:0}
-.plan-price small{font-size:14px;color:var(--text3);font-weight:500;font-family:var(--font-body);letter-spacing:0}
-.plan-price-custom{font-family:var(--font);font-size:36px;font-weight:800;letter-spacing:-1.5px;color:var(--text);line-height:1;margin-bottom:6px}
-.plan-period{font-size:12px;color:var(--text3);margin-bottom:28px;font-family:var(--font-body)}
-.plan-cta{display:block;text-align:center;padding:14px 24px;border-radius:980px;font-size:15px;font-weight:700;text-decoration:none;transition:all .2s;margin-bottom:30px;font-family:var(--font);letter-spacing:-.2px}
-.plan-cta.fill{background:var(--grad-blue);color:#fff;box-shadow:0 8px 24px rgba(79,142,247,0.35)}
-.plan-cta.fill:hover{transform:scale(1.03);box-shadow:0 12px 36px rgba(79,142,247,0.5)}
-.plan-cta.outline{background:transparent;color:var(--text);border:1px solid var(--border3)}
-.plan-cta.outline:hover{background:var(--surface2);transform:scale(1.02)}
-.plan-divider{height:1px;background:var(--border);margin-bottom:24px}
-.plan-feature-head{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;font-family:var(--font-body)}
-.plan-features{list-style:none;display:flex;flex-direction:column;gap:10px}
-.plan-features li{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--text2);font-family:var(--font-body);line-height:1.5}
-.plan-features li .check{width:18px;height:18px;border-radius:50%;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:9px;color:var(--green)}
-.plan-features li.dim{opacity:.4}
-.plan-features li.dim .check{background:var(--surface);border-color:var(--border);color:var(--text3)}
-
-/* ── Stats ── */
-.stats-band{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:72px 0}
-.stats-inner{max-width:900px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.stat{padding:44px 28px;text-align:center;background:var(--bg3)}
-.stat-n{font-family:var(--font);font-size:clamp(40px,5vw,60px);font-weight:800;letter-spacing:-2.5px;line-height:1;margin-bottom:8px}
-.stat-l{font-size:13px;color:var(--text3);font-family:var(--font-body)}
-
-/* ── Testimonials ── */
-.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.testi{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:28px;transition:border-color .2s}
-.testi:hover{border-color:var(--border2)}
-.testi-stars{display:flex;gap:3px;margin-bottom:14px;font-size:15px}
-.testi-text{font-size:14px;color:var(--text2);line-height:1.75;margin-bottom:22px;font-style:italic;font-family:var(--font-body)}
-.testi-author{display:flex;align-items:center;gap:12px}
-.testi-av{width:38px;height:38px;border-radius:50%;font-size:13px;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--font)}
-.testi-name{font-family:var(--font);font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.3px}
-.testi-role{font-size:12px;color:var(--text3);font-family:var(--font-body)}
-
-/* ── FAQ ── */
-.faq-list{display:flex;flex-direction:column;gap:2px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.faq-item{background:var(--bg3)}
-.faq-q{width:100%;background:none;border:none;padding:22px 28px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-family:var(--font);font-size:16px;font-weight:600;color:var(--text);letter-spacing:-.3px;text-align:left;transition:background .2s}
-.faq-q:hover{background:var(--surface)}
-.faq-q .arr{font-size:18px;color:var(--text3);transition:transform .3s;flex-shrink:0}
-.faq-a{padding:0 28px 22px;font-size:14px;color:var(--text2);line-height:1.75;font-family:var(--font-body);display:none}
-.faq-item.open .faq-a{display:block}
-.faq-item.open .arr{transform:rotate(180deg)}
-
-/* ── CTA banner ── */
-.cta-strip{padding:80px 24px;position:relative}
-.cta-inner{max-width:920px;margin:0 auto;background:linear-gradient(135deg,rgba(79,142,247,0.1) 0%,rgba(139,92,246,0.1) 100%);border:1px solid rgba(79,142,247,0.2);border-radius:28px;padding:72px 48px;text-align:center;position:relative;overflow:hidden}
-.cta-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.6),rgba(139,92,246,.6),transparent)}
-.cta-inner::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.3),transparent)}
-.cta-inner h2{font-family:var(--font);font-size:clamp(28px,4.5vw,48px);font-weight:800;letter-spacing:-2px;margin-bottom:16px;line-height:1.1}
-.cta-inner p{font-size:17px;color:var(--text2);max-width:500px;margin:0 auto 40px;line-height:1.7;font-family:var(--font-body)}
-.cta-inner-btns{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
-
-/* ── Contact section ── */
-.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
-.contact-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:28px;transition:border-color .2s,transform .2s}
-.contact-card:hover{border-color:var(--border2);transform:translateY(-3px)}
-.contact-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:18px}
-.contact-card h3{font-family:var(--font);font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin-bottom:8px}
-.contact-card p{font-size:13.5px;color:var(--text3);line-height:1.65;margin-bottom:16px;font-family:var(--font-body)}
-.contact-link{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--blue);text-decoration:none;font-family:var(--font-body);transition:opacity .2s}
-.contact-link:hover{opacity:.75}
-
-/* ── Footer ── */
-footer{border-top:1px solid var(--border);padding:64px 48px 40px;background:var(--bg)}
-.footer-grid{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:48px;margin-bottom:52px}
-.footer-brand-name{font-family:var(--font);font-size:24px;font-weight:800;letter-spacing:-1px;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block;margin-bottom:14px}
-.footer-brand p{font-size:13.5px;color:var(--text3);line-height:1.75;max-width:260px;font-family:var(--font-body);margin-bottom:20px}
-.footer-contact-mini{display:flex;flex-direction:column;gap:6px}
-.footer-contact-mini a{font-size:12.5px;color:var(--text3);text-decoration:none;transition:color .2s;font-family:var(--font-body)}
-.footer-contact-mini a:hover{color:var(--blue)}
-.footer-col h4{font-family:var(--font-body);font-size:11.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:18px}
-.footer-col a{display:block;font-size:13.5px;color:var(--text3);text-decoration:none;margin-bottom:10px;transition:color .2s;font-family:var(--font-body)}
-.footer-col a:hover{color:var(--text)}
-.footer-bottom{max-width:1120px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-top:1px solid var(--border);padding-top:28px}
-.footer-bottom p,.footer-bottom a{font-size:12.5px;color:var(--text3);text-decoration:none;font-family:var(--font-body);transition:color .2s}
-.footer-bottom a:hover{color:var(--blue)}
-
-/* ── Scroll reveal ── */
-.reveal{opacity:0;transform:translateY(36px);transition:opacity .65s ease,transform .65s ease}
-.reveal.visible{opacity:1;transform:none}
-.reveal-fast{opacity:0;transform:translateY(20px);transition:opacity .4s ease,transform .4s ease}
-.reveal-fast.visible{opacity:1;transform:none}
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.18)}
-
-/* ── Responsive ── */
-@media(max-width:960px){.feat-grid{grid-template-columns:repeat(2,1fr)}.plan-grid{grid-template-columns:1fr}.stats-inner{grid-template-columns:repeat(2,1fr)}.testi-grid{grid-template-columns:1fr 1fr}.contact-grid{grid-template-columns:1fr 1fr}.footer-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:680px){nav{padding:0 20px}.nav-links{display:none}.feat-grid{grid-template-columns:1fr}.testi-grid{grid-template-columns:1fr}.contact-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr 1fr}.preview-nav{display:none}.kanban{grid-template-columns:repeat(2,1fr)}.cta-inner{padding:40px 24px}.stats-inner{grid-template-columns:repeat(2,1fr)}}
-</style>
-</head>
-<body>
-
-<!-- Nav -->
-<nav id="main-nav">
-  <a href="/" class="nav-logo">VEWIT</a>
-  <div class="nav-links">
-    <a href="#features">Features</a>
-    <a href="#pricing">Pricing</a>
-    <a href="#contact">Contact</a>
-    <a href="/about">About</a>
-  </div>
-  <div class="nav-cta-wrap">
-    <a href="/?action=login" class="nav-signin">Sign In</a>
-    <a href="/?action=register" class="nav-start">Get Started →</a>
-  </div>
-</nav>
-
-<!-- Hero -->
-<section class="hero">
-  <div class="hero-mesh">
-    <div class="mesh-blob mesh-blob-1"></div>
-    <div class="mesh-blob mesh-blob-2"></div>
-    <div class="mesh-blob mesh-blob-3"></div>
-  </div>
-  <div class="hero-content">
-    <div class="hero-badge"><span class="hero-badge-dot"></span> AI-Powered Workspace v4.0 — Free to start</div>
-    <h1 class="hero-title">
-      Where teams <span class="grad-text-blue">ship</span> faster<span class="line2">with <span class="grad-text-cyan">AI</span> by their side.</span>
-    </h1>
-    <p class="hero-sub">VEWIT unifies your projects, tasks, messages, tickets and analytics into one beautifully powerful platform — with Claude AI built right in.</p>
-    <div class="hero-ctas">
-      <a href="/?action=register" class="cta-primary">Start free — no card needed</a>
-      <a href="/?action=login" class="cta-secondary">Sign In →</a>
-    </div>
-    <div class="hero-trust">
-      <div class="trust-item"><div class="trust-check">✓</div> Free workspace forever</div>
-      <div class="trust-item"><div class="trust-check">✓</div> Claude AI assistant</div>
-      <div class="trust-item"><div class="trust-check">✓</div> 12 integrated modules</div>
-      <div class="trust-item"><div class="trust-check">✓</div> No credit card needed</div>
-    </div>
-  </div>
-</section>
-
-<!-- App Preview -->
-<div class="preview-section">
-  <div class="preview-outer">
-    <div class="preview-glow-wrap"></div>
-    <div class="preview-frame">
-      <div class="preview-topbar">
-        <div class="pdot" style="background:#ff5f57"></div>
-        <div class="pdot" style="background:#febc2e"></div>
-        <div class="pdot" style="background:#28c840"></div>
-        <div class="purl">app.vewit.in — E-Commerce Platform · Sprint 3</div>
-      </div>
-      <div class="preview-layout">
-        <div class="preview-nav">
-          <div class="pnav-logo">VEWIT</div>
-          <div class="pnav-item active"><span>📋</span> Projects</div>
-          <div class="pnav-item"><span>✅</span> Tasks</div>
-          <div class="pnav-item"><span>💬</span> Messages</div>
-          <div class="pnav-item"><span>🎫</span> Tickets</div>
-          <div class="pnav-item"><span>📅</span> Timeline</div>
-          <div class="pnav-item"><span>🤖</span> AI Assistant</div>
-          <div class="pnav-item"><span>📊</span> Productivity</div>
-          <div class="pnav-sep"></div>
-          <div class="pnav-item"><span>⚙️</span> Settings</div>
-        </div>
-        <div class="preview-body">
-          <div class="preview-header">
-            <div class="preview-page-title">E-Commerce Platform</div>
-            <div class="preview-sprint-badge">● Sprint 3 Active</div>
-          </div>
-          <div class="kanban">
-            <div>
-              <div class="kcol-head"><div class="kcol-dot" style="background:#5c6b84"></div>Backlog</div>
-              <div class="ktask"><div class="ktask-title">Performance testing suite</div><div class="ktask-meta"><div class="kav" style="background:#d97706">DK</div><div class="kprio" style="background:rgba(92,107,132,0.2);color:#5c6b84">Low</div></div></div>
-            </div>
-            <div>
-              <div class="kcol-head"><div class="kcol-dot" style="background:#4f8ef7"></div>In Progress</div>
-              <div class="ktask"><div class="ktask-title">Product catalog UI with filtering</div><div class="ktask-meta"><div class="kav" style="background:#8b5cf6">AC</div><div class="kprio" style="background:rgba(251,191,36,0.15);color:#fbbf24">Med</div></div></div>
-              <div class="ktask"><div class="ktask-title">Inventory management module</div><div class="ktask-meta"><div class="kav" style="background:#4f8ef7">BM</div><div class="kprio" style="background:rgba(244,114,182,0.15);color:#f472b6">High</div></div></div>
-            </div>
-            <div>
-              <div class="kcol-head"><div class="kcol-dot" style="background:#fb923c"></div>Review</div>
-              <div class="ktask"><div class="ktask-title">Payment gateway (Stripe)</div><div class="ktask-meta"><div class="kav" style="background:#34d399">CS</div><div class="kprio" style="background:rgba(244,114,182,0.15);color:#f472b6">High</div></div></div>
-            </div>
-            <div>
-              <div class="kcol-head"><div class="kcol-dot" style="background:#34d399"></div>Done</div>
-              <div class="ktask"><div class="ktask-title">Design system setup ✓</div><div class="ktask-meta"><div class="kav" style="background:#f472b6">EW</div><div class="kprio" style="background:rgba(52,211,153,0.15);color:#34d399">✓</div></div></div>
-              <div class="ktask"><div class="ktask-title">User authentication API ✓</div><div class="ktask-meta"><div class="kav" style="background:#8b5cf6">AC</div><div class="kprio" style="background:rgba(52,211,153,0.15);color:#34d399">✓</div></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Features -->
-<section class="section reveal" id="features">
-  <div class="wrap">
-    <div class="eyebrow">Features</div>
-    <h2 class="section-title">Built for the whole team.<br/><span class="grad-text-blue">All 12 modules included.</span></h2>
-    <p class="section-sub">Every feature is designed to work together — your tasks connect to your projects, messages stay in context, and your AI assistant knows your entire workspace.</p>
-    <div class="feat-grid">
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress tracking, target dates and priority management. Filter and search across everything.</p><div class="feat-tag" style="background:rgba(79,142,247,0.1);color:#4f8ef7;border:1px solid rgba(79,142,247,0.2)">Core</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">✅</div><h3>Smart Kanban Board</h3><p>Kanban with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders. Role-based access throughout.</p><div class="feat-tag" style="background:rgba(139,92,246,0.1);color:#8b5cf6;border:1px solid rgba(139,92,246,0.2)">Core</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">🤖</div><h3>Claude AI Assistant</h3><p>Ask AI to create tasks, generate EOD reports, update statuses and query your whole workspace in plain English. Powered by Anthropic Claude.</p><div class="feat-tag" style="background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2)">AI-Powered</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.2)">💬</div><h3>Direct Messages</h3><p>Private 1-to-1 messaging with real-time online presence, message history and unread notification badges. Know who's active right now.</p><div class="feat-tag" style="background:rgba(34,211,238,0.1);color:#22d3ee;border:1px solid rgba(34,211,238,0.2)">Real-time</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.2)">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication. Share updates, files and decisions in context without clutter.</p><div class="feat-tag" style="background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)">Collaboration</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(244,114,182,0.12);border:1px solid rgba(244,114,182,0.2)">🎫</div><h3>Support Tickets</h3><p>Full ticketing with bug reports, feature requests, priority levels, assignee tracking, status workflows and team-based filtering.</p><div class="feat-tag" style="background:rgba(244,114,182,0.1);color:#f472b6;border:1px solid rgba(244,114,182,0.2)">Support</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.2)">📅</div><h3>Gantt Timeline</h3><p>Visual Gantt-style timeline to plan project schedules, track milestones and identify overlapping workloads. Navigate weeks and months at a glance.</p><div class="feat-tag" style="background:rgba(251,146,60,0.1);color:#fb923c;border:1px solid rgba(251,146,60,0.2)">Planning</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">📊</div><h3>Developer Productivity</h3><p>Analytics measuring individual and team output — velocity, blocked work, sprint performance, story point burn and contribution breakdowns.</p><div class="feat-tag" style="background:rgba(79,142,247,0.1);color:#4f8ef7;border:1px solid rgba(79,142,247,0.2)">Analytics</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">🔔</div><h3>Desktop Push Notifications</h3><p>Stay informed even when the app is minimised — task assignments, status changes, comments, DMs and time-based reminders delivered instantly.</p><div class="feat-tag" style="background:rgba(139,92,246,0.1);color:#8b5cf6;border:1px solid rgba(139,92,246,0.2)">Notifications</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">📹</div><h3>Instant Meet Calls</h3><p>Launch instant video meetings via WebRTC, invite team members and collaborate in real-time without ever leaving VEWIT. No third-party app needed.</p><div class="feat-tag" style="background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2)">Meetings</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.2)">🏢</div><h3>Multi-Workspace</h3><p>Create separate workspaces for different companies or clients — each with its own team, projects, settings and invite codes. Switch in one click.</p><div class="feat-tag" style="background:rgba(34,211,238,0.1);color:#22d3ee;border:1px solid rgba(34,211,238,0.2)">Enterprise</div></div>
-      <div class="feat-card"><div class="feat-icon" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.2)">🔐</div><h3>Security &amp; Access Control</h3><p>6 role types (Admin to Viewer), bcrypt passwords, Google Authenticator TOTP 2FA, session security and workspace-isolated data across every API endpoint.</p><div class="feat-tag" style="background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)">Security</div></div>
-    </div>
-  </div>
-</section>
-
-<!-- Stats band -->
-<div class="stats-band reveal">
-  <div class="stats-inner">
-    <div class="stat"><div class="stat-n grad-text-blue">12+</div><div class="stat-l">Integrated modules</div></div>
-    <div class="stat"><div class="stat-n grad-text-cyan">6</div><div class="stat-l">User role types</div></div>
-    <div class="stat"><div class="stat-n grad-text-warm">₹0</div><div class="stat-l">To get started</div></div>
-    <div class="stat"><div class="stat-n grad-text-blue">AI</div><div class="stat-l">Powered by Claude</div></div>
-  </div>
-</div>
-
-<!-- Testimonials -->
-<section class="section reveal">
-  <div class="wrap">
-    <div class="eyebrow">Testimonials</div>
-    <h2 class="section-title">Loved by teams who<br/><span class="grad-text-cyan">ship fast.</span></h2>
-    <p class="section-sub">From early-stage startups to growing engineering orgs — here's what people say about replacing Jira, Slack and Linear with VEWIT.</p>
-    <div class="testi-grid">
-      <div class="testi"><div class="testi-stars">★★★★★</div><p class="testi-text">"We replaced Jira and Slack with VEWIT in a single afternoon. The AI assistant alone saves us 2–3 hours per week — it generates our EOD reports automatically and creates tasks from plain English."</p><div class="testi-author"><div class="testi-av" style="background:linear-gradient(135deg,#8b5cf6,#4f8ef7)">PR</div><div><div class="testi-name">Priya R.</div><div class="testi-role">Engineering Manager · Fintech startup</div></div></div></div>
-      <div class="testi"><div class="testi-stars">★★★★★</div><p class="testi-text">"The Kanban board with sprint planning is exactly what a dev team needs. Story points, subtasks, file attachments — everything in one clean view. Our velocity is up 40% since switching."</p><div class="testi-author"><div class="testi-av" style="background:linear-gradient(135deg,#34d399,#22d3ee)">SK</div><div><div class="testi-name">Suresh K.</div><div class="testi-role">CTO · SaaS company</div></div></div></div>
-      <div class="testi"><div class="testi-stars">★★★★★</div><p class="testi-text">"The support ticket system and DMs work seamlessly together. Our team stays in the loop without any context-switching. The multi-workspace setup is perfect for our agency model."</p><div class="testi-author"><div class="testi-av" style="background:linear-gradient(135deg,#f472b6,#fb923c)">AM</div><div><div class="testi-name">Anika M.</div><div class="testi-role">Product Lead · E-commerce</div></div></div></div>
-    </div>
-  </div>
-</section>
-
-<!-- Pricing -->
-<section class="section reveal" id="pricing">
-  <div class="wrap">
-    <div class="eyebrow">Pricing</div>
-    <h2 class="section-title">Simple, honest pricing.<br/><span class="grad-text-blue">Start free today.</span></h2>
-    <p class="section-sub">No hidden fees, no feature-gating tricks. Every plan includes the full platform — pricing reflects team size and support level only.</p>
-    <div class="plan-grid">
-
-      <!-- Starter -->
-      <div class="plan-card">
-        <div class="plan-name">Starter</div>
-        <div class="plan-desc">Perfect for small teams, side projects and solo founders who want professional-grade tooling at zero cost.</div>
-        <div class="plan-price"><sup>₹</sup>0<small>/mo</small></div>
-        <div class="plan-period">Free forever · No credit card</div>
-        <a href="/?action=register" class="plan-cta outline">Create free workspace →</a>
-        <div class="plan-divider"></div>
-        <div class="plan-feature-head">What's included</div>
-        <ul class="plan-features">
-          <li><div class="check">✓</div> 1 workspace</li>
-          <li><div class="check">✓</div> Up to 5 team members</li>
-          <li><div class="check">✓</div> Unlimited projects &amp; tasks</li>
-          <li><div class="check">✓</div> Kanban board with sprints</li>
-          <li><div class="check">✓</div> Gantt timeline tracker</li>
-          <li><div class="check">✓</div> Support ticket system</li>
-          <li><div class="check">✓</div> Direct messages &amp; channels</li>
-          <li><div class="check">✓</div> Desktop push notifications</li>
-          <li><div class="check">✓</div> AI assistant (bring your own key)</li>
-          <li><div class="check">✓</div> File attachments (150 MB each)</li>
-          <li><div class="check">✓</div> Google Authenticator 2FA</li>
-        </ul>
-      </div>
-
-      <!-- Team -->
-      <div class="plan-card best">
-        <div class="plan-badge-wrap"><div class="plan-badge">Most Popular</div></div>
-        <div class="plan-name">Team</div>
-        <div class="plan-desc">For growing teams who need unlimited members, deeper analytics and managed email notifications.</div>
-        <div class="plan-price"><sup>₹</sup>499<small>/mo</small></div>
-        <div class="plan-period">Per workspace · Billed monthly</div>
-        <a href="/?action=register" class="plan-cta fill">Start free 14-day trial →</a>
-        <div class="plan-divider"></div>
-        <div class="plan-feature-head">Everything in Starter, plus</div>
-        <ul class="plan-features">
-          <li><div class="check">✓</div> <b>Unlimited team members</b></li>
-          <li><div class="check">✓</div> Multiple workspaces</li>
-          <li><div class="check">✓</div> Teams &amp; sub-team management</li>
-          <li><div class="check">✓</div> Role-based access control (6 roles)</li>
-          <li><div class="check">✓</div> Developer productivity analytics</li>
-          <li><div class="check">✓</div> Velocity &amp; sprint burn-down charts</li>
-          <li><div class="check">✓</div> Custom SMTP / Resend email</li>
-          <li><div class="check">✓</div> Instant Meet video calls (WebRTC)</div></li>
-          <li><div class="check">✓</div> Task labels &amp; story points</li>
-          <li><div class="check">✓</div> EOD report automation (AI)</li>
-          <li><div class="check">✓</div> Priority email support</li>
-        </ul>
-      </div>
-
-      <!-- Enterprise -->
-      <div class="plan-card">
-        <div class="plan-name">Enterprise</div>
-        <div class="plan-desc">Custom solutions for large organisations, regulated industries or teams that need on-premise deployment and SLA guarantees.</div>
-        <div class="plan-price-custom">Custom</div>
-        <div class="plan-period">Volume pricing · Annual billing</div>
-        <a href="mailto:support@vewit.in" class="plan-cta outline">Contact support@vewit.in →</a>
-        <div class="plan-divider"></div>
-        <div class="plan-feature-head">Everything in Team, plus</div>
-        <ul class="plan-features">
-          <li><div class="check">✓</div> Dedicated hosted instance</li>
-          <li><div class="check">✓</div> On-premise / self-hosted deployment</li>
-          <li><div class="check">✓</div> Custom integrations &amp; webhooks</li>
-          <li><div class="check">✓</div> 99.9% SLA uptime guarantee</li>
-          <li><div class="check">✓</div> SSO / SAML authentication</li>
-          <li><div class="check">✓</div> Advanced audit logs</li>
-          <li><div class="check">✓</div> Dedicated account manager</li>
-          <li><div class="check">✓</div> Custom onboarding &amp; training</li>
-          <li><div class="check">✓</div> White-label branding option</li>
-          <li><div class="check">✓</div> 24/7 priority support</li>
-        </ul>
-      </div>
-
-    </div>
-
-    <!-- Pricing note -->
-    <div style="text-align:center;margin-top:36px;padding:24px;background:rgba(79,142,247,0.06);border:1px solid rgba(79,142,247,0.15);border-radius:14px">
-      <p style="font-size:14px;color:var(--text2);font-family:var(--font-body);line-height:1.7">💡 <b style="color:var(--text)">Pricing applies to your workspace subscription.</b> The AI assistant requires your own Anthropic API key — bring it in Workspace Settings. All other features work fully without it.</p>
-    </div>
-  </div>
-</section>
-
-<!-- FAQ -->
-<section class="section reveal">
-  <div class="wrap">
-    <div class="eyebrow">FAQ</div>
-    <h2 class="section-title">Common questions.</h2>
-    <p class="section-sub" style="margin-bottom:40px">Can't find an answer? Email us at <a href="mailto:support@vewit.in" style="color:var(--blue);text-decoration:none">support@vewit.in</a></p>
-    <div class="faq-list">
-      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Do I need a credit card to start?<span class="arr">▾</span></button><div class="faq-a">No. The Starter plan is completely free — create a workspace, invite your team and start using all 12 modules with zero payment required. You only need billing details when upgrading to Team or Enterprise.</div></div>
-      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">How does the AI assistant work?<span class="arr">▾</span></button><div class="faq-a">VEWIT's AI assistant is powered by Anthropic Claude. You bring your own API key (set it in Workspace Settings → AI Key). Once configured, the assistant can create tasks, update stages, generate EOD reports, and answer questions about your projects — all in natural language.</div></div>
-      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I invite my whole team on the free plan?<span class="arr">▾</span></button><div class="faq-a">The Starter plan supports up to 5 team members. If your team is larger, upgrade to the Team plan for unlimited members. You can invite people using the workspace invite code found in Settings.</div></div>
-      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Is my data secure?<span class="arr">▾</span></button><div class="faq-a">Yes. VEWIT uses bcrypt password hashing, session-based authentication, Google Authenticator TOTP 2FA, HTTPS-only sessions, and tenant-isolated database queries so no workspace can access another's data. Enterprise customers can opt for on-premise deployment for complete data sovereignty.</div></div>
-      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">What does "bring your own AI key" mean?<span class="arr">▾</span></button><div class="faq-a">You get an API key from Anthropic (anthropic.com) and paste it once in VEWIT's Workspace Settings. VEWIT calls the Anthropic Claude API directly — you pay Anthropic only for what you use, and VEWIT never stores your key beyond your workspace settings.</div></div>
-      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I upgrade or downgrade anytime?<span class="arr">▾</span></button><div class="faq-a">Yes. You can upgrade from Starter to Team at any time and your data is preserved exactly as-is. Downgrades are handled at the end of your billing period. Contact support@vewit.in for Enterprise custom billing arrangements.</div></div>
-    </div>
-  </div>
-</section>
-
-<!-- Contact -->
-<section class="section reveal" id="contact">
-  <div class="wrap">
-    <div class="eyebrow">Contact</div>
-    <h2 class="section-title">We're here to help.</h2>
-    <p class="section-sub">Have a question, need onboarding help, or want to explore an Enterprise deal? Reach out — we respond fast.</p>
-    <div class="contact-grid">
-      <div class="contact-card">
-        <div class="contact-icon" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">🤝</div>
-        <h3>Sales &amp; Partnerships</h3>
-        <p>Enterprise pricing, volume deals, custom contracts and strategic partnership discussions.</p>
-        <a href="mailto:ceo@vewit.in" class="contact-link">ceo@vewit.in →</a>
-      </div>
-      <div class="contact-card">
-        <div class="contact-icon" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">🛟</div>
-        <h3>Technical Support</h3>
-        <p>Bug reports, feature requests, onboarding help, API questions and general product support.</p>
-        <a href="mailto:support@vewit.in" class="contact-link">support@vewit.in →</a>
-      </div>
-      <div class="contact-card">
-        <div class="contact-icon" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">📣</div>
-        <h3>General Inquiries</h3>
-        <p>Press, media, feedback, partnerships and anything else — we'd love to hear from you.</p>
-        <a href="mailto:ceo@vewit.in" class="contact-link">ceo@vewit.in →</a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- CTA Banner -->
-<div class="cta-strip reveal">
-  <div class="cta-inner">
-    <h2>Ready to transform<br/>how your team works?</h2>
-    <p>Join hundreds of teams using VEWIT to ship faster, communicate better and stay aligned — all powered by Claude AI.</p>
-    <div class="cta-inner-btns">
-      <a href="/?action=register" class="cta-primary">Create free workspace</a>
-      <a href="/about" class="cta-secondary">Learn more</a>
-    </div>
-  </div>
-</div>
-
-<!-- Footer -->
-<footer>
-  <div class="footer-grid">
-    <div class="footer-brand">
-      <div class="footer-brand-name">VEWIT</div>
-      <p>AI-powered team collaboration platform. Projects, tasks, messages, tickets and analytics — all in one beautifully unified workspace.</p>
-      <div class="footer-contact-mini">
-        <a href="mailto:ceo@vewit.in">📧 ceo@vewit.in — Sales &amp; CEO</a>
-        <a href="mailto:support@vewit.in">🛟 support@vewit.in — Support</a>
-      </div>
-    </div>
-    <div class="footer-col">
-      <h4>Product</h4>
-      <a href="#features">Features</a>
-      <a href="#pricing">Pricing</a>
-      <a href="/about">About VEWIT</a>
-      <a href="/?action=register">Get started</a>
-      <a href="/?action=login">Sign in</a>
-    </div>
-    <div class="footer-col">
-      <h4>Use Cases</h4>
-      <a href="/?action=register">Engineering teams</a>
-      <a href="/?action=register">Product managers</a>
-      <a href="/?action=register">Startups</a>
-      <a href="/?action=register">Agencies</a>
-      <a href="/?action=register">Freelancers</a>
-    </div>
-    <div class="footer-col">
-      <h4>Contact</h4>
-      <a href="mailto:ceo@vewit.in">ceo@vewit.in</a>
-      <a href="mailto:support@vewit.in">support@vewit.in</a>
-      <a href="/about">About us</a>
-      <a href="#faq">FAQ</a>
-    </div>
-  </div>
-  <div class="footer-bottom">
-    <p>© 2025 VEWIT. All rights reserved. Built with ♥ in India.</p>
-    <p><a href="mailto:ceo@vewit.in">ceo@vewit.in</a> · <a href="mailto:support@vewit.in">support@vewit.in</a></p>
-  </div>
-</footer>
-
-<script>
-// Scroll reveal
-const obs = new IntersectionObserver(entries=>{
-  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); } });
-},{ threshold:0.07 });
-document.querySelectorAll('.reveal,.reveal-fast').forEach(el=>obs.observe(el));
-
-// Nav bg on scroll
-const nav = document.getElementById('main-nav');
-if(nav){
-  window.addEventListener('scroll',()=>{
-    nav.style.background = window.scrollY > 50
-      ? 'rgba(8,12,20,0.95)'
-      : 'rgba(8,12,20,0.75)';
-  },{passive:true});
-}
-</script>
-</body>
-</html>"""
-
-
-ABOUT_HTML = """<!DOCTYPE html>
+@app.route("/about")
+def about_page():
+    """Public About page — indexed by Google, no login required."""
+    return """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>About VEWIT — AI-Powered Team Collaboration Platform</title>
 <link rel="icon" type="image/png" href="/icon-192.png"/>
+<link rel="shortcut icon" href="/favicon.ico"/>
 <meta name="description" content="VEWIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
+<meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
 <meta name="robots" content="index, follow"/>
 <link rel="canonical" href="https://www.vewit.in/about"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<meta property="og:title" content="About VEWIT — AI-Powered Team Collaboration"/>
+<meta property="og:description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, tickets and analytics all in one place."/>
+<meta property="og:url" content="https://www.vewit.in/about"/>
+<meta property="og:type" content="website"/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization",
+"name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
+"foundingDate":"2024","applicationCategory":"BusinessApplication",
+"sameAs":["https://www.vewit.in"]}
+</script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#080c14;--bg2:#0d1221;--bg3:#111827;--bg4:#1a2236;--surface:rgba(255,255,255,0.04);--surface2:rgba(255,255,255,0.07);--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);--text:#f0f4ff;--text2:#a8b4cc;--text3:#5c6b84;--blue:#4f8ef7;--purple:#8b5cf6;--cyan:#22d3ee;--green:#34d399;--amber:#fbbf24;--pink:#f472b6;--grad-blue:linear-gradient(135deg,#4f8ef7 0%,#8b5cf6 100%);--font:'Bricolage Grotesque',system-ui,sans-serif;--font-body:'Inter',system-ui,sans-serif}
-html{scroll-behavior:smooth}
-body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-nav{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 48px;height:58px;background:rgba(8,12,20,0.82);backdrop-filter:blur(24px);border-bottom:1px solid var(--border)}
-.nav-logo{font-family:var(--font);font-size:22px;font-weight:800;letter-spacing:-1px;text-decoration:none;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.nav-links{display:flex;align-items:center;gap:32px}
-.nav-links a{color:var(--text2);font-size:13.5px;text-decoration:none;transition:color .2s}
-.nav-links a:hover,.nav-links a.cur{color:var(--text)}
-.nav-start{background:var(--grad-blue);color:#fff;font-size:13.5px;font-weight:600;text-decoration:none;padding:8px 20px;border-radius:980px;transition:opacity .2s}
-.nav-start:hover{opacity:.88}
-.page-hero{padding:150px 24px 80px;text-align:center;position:relative;overflow:hidden}
-.hero-bg-blob{position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:700px;height:500px;background:radial-gradient(ellipse,rgba(79,142,247,0.12) 0%,transparent 70%);pointer-events:none}
-.page-hero h1{font-family:var(--font);font-size:clamp(40px,7vw,80px);font-weight:800;letter-spacing:-3px;line-height:1.05;margin-bottom:20px;position:relative;z-index:1}
-.grad{background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.page-hero p{font-size:18px;color:var(--text2);max-width:580px;margin:0 auto;line-height:1.7;position:relative;z-index:1}
-.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:18px;font-family:var(--font-body)}
-.eyebrow::before{content:'';width:4px;height:16px;background:var(--grad-blue);border-radius:2px;display:inline-block}
-.wrap{max-width:1040px;margin:0 auto;padding:0 24px 120px}
-.sec{padding:72px 0;border-top:1px solid var(--border)}
-.sec:first-child{border-top:none}
-.sec h2{font-family:var(--font);font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-2px;margin-bottom:16px;color:var(--text)}
-.sec p{font-size:15.5px;color:var(--text2);line-height:1.8;max-width:680px}
-.sec p+p{margin-top:14px}
-.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:40px}
-.fc{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:28px;transition:border-color .2s,transform .2s}
-.fc:hover{border-color:var(--border2);transform:translateY(-3px)}
-.fc .ico{font-size:24px;margin-bottom:14px}
-.fc h3{font-family:var(--font);font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin-bottom:8px}
-.fc p{font-size:13px;color:var(--text3);line-height:1.65}
-.roles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:32px}
-.rc{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:22px;text-align:center;transition:border-color .2s}
-.rc:hover{border-color:var(--border2)}
-.rc .ico{font-size:26px;margin-bottom:10px}
-.rc h4{font-family:var(--font);font-size:14px;font-weight:700;color:var(--text);margin-bottom:5px;letter-spacing:-.2px}
-.rc p{font-size:12px;color:var(--text3);line-height:1.55}
-.stack-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
-.sp{background:var(--surface2);border:1px solid var(--border);border-radius:980px;padding:7px 16px;font-size:13px;font-weight:500;color:var(--text2)}
-.contact-sec{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:36px}
-.cc{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:28px;transition:border-color .2s,transform .2s}
-.cc:hover{border-color:var(--border2);transform:translateY(-3px)}
-.cc .ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px}
-.cc h3{font-family:var(--font);font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-.3px}
-.cc p{font-size:13px;color:var(--text3);line-height:1.65;margin-bottom:14px}
-.cc a{font-size:14px;font-weight:600;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
-.cc a:hover{text-decoration:underline}
-.cta-box{background:linear-gradient(135deg,rgba(79,142,247,0.1),rgba(139,92,246,0.08));border:1px solid rgba(79,142,247,0.2);border-radius:24px;padding:60px;text-align:center;margin-top:60px;position:relative;overflow:hidden}
-.cta-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.5),transparent)}
-.cta-box h2{font-family:var(--font);font-size:clamp(26px,4vw,40px);font-weight:800;letter-spacing:-2px;margin-bottom:12px}
-.cta-box p{font-size:16px;color:var(--text2);max-width:440px;margin:0 auto 32px;line-height:1.7}
-.cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-.cta-main{background:var(--grad-blue);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:980px;font-family:var(--font);box-shadow:0 8px 24px rgba(79,142,247,0.3)}
-.cta-out{color:var(--text);font-size:15px;font-weight:600;text-decoration:none;padding:13px 24px;border-radius:980px;border:1px solid var(--border2);transition:background .2s;font-family:var(--font)}
-.cta-out:hover{background:var(--surface2)}
-footer{border-top:1px solid var(--border);padding:36px 48px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
-footer p,footer a{font-size:12.5px;color:var(--text3);text-decoration:none;transition:color .2s}
-footer a:hover{color:var(--blue)}
-.reveal{opacity:0;transform:translateY(28px);transition:opacity .65s ease,transform .65s ease}
-.reveal.visible{opacity:1;transform:none}
-@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
-@media(max-width:768px){nav{padding:0 20px}.nav-links{display:none}.cta-box{padding:36px 24px}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1e293b;background:#fff;line-height:1.6}
+.nav{background:#0f172a;padding:16px 40px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{color:#fff;font-size:20px;font-weight:800;letter-spacing:-0.5px;text-decoration:none}
+.nav-logo span{color:#2563eb}
+.nav-cta{background:#2563eb;color:#fff;padding:9px 22px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700}
+.hero{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:#fff;padding:80px 40px;text-align:center}
+.hero h1{font-size:clamp(28px,5vw,52px);font-weight:800;letter-spacing:-1px;margin-bottom:20px;line-height:1.15}
+.hero h1 span{color:#60a5fa}
+.hero p{font-size:18px;color:#94a3b8;max-width:640px;margin:0 auto 36px}
+.hero-cta{display:inline-block;background:#2563eb;color:#fff;padding:14px 36px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-right:12px}
+.hero-sec{display:inline-block;border:1px solid rgba(255,255,255,.25);color:#cbd5e1;padding:13px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600}
+.section{padding:72px 40px;max-width:1100px;margin:0 auto}
+.section-label{font-size:12px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
+.section h2{font-size:clamp(24px,3.5vw,38px);font-weight:800;letter-spacing:-0.5px;margin-bottom:16px;color:#0f172a}
+.section p{color:#475569;font-size:16px;max-width:680px}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:48px}
+.feat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:28px;transition:box-shadow .2s}
+.feat:hover{box-shadow:0 8px 32px rgba(37,99,235,.1)}
+.feat-icon{width:48px;height:48px;background:#eff6ff;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px}
+.feat h3{font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px}
+.feat p{font-size:14px;color:#64748b;line-height:1.55}
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-top:36px}
+.role{background:#f1f5f9;border-radius:12px;padding:20px;text-align:center}
+.role-icon{font-size:28px;margin-bottom:8px}
+.role h4{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px}
+.role p{font-size:12px;color:#64748b}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px;background:#0f172a;border-radius:20px;padding:48px;margin-top:48px}
+.stat{text-align:center;color:#fff}
+.stat-num{font-size:42px;font-weight:800;color:#60a5fa;display:block;letter-spacing:-1px}
+.stat-label{font-size:13px;color:#94a3b8;margin-top:4px}
+.divider{height:1px;background:#e2e8f0;margin:0 40px}
+footer{background:#0f172a;color:#94a3b8;padding:40px;text-align:center;font-size:13px}
+footer a{color:#60a5fa;text-decoration:none}
+footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:16px;flex-wrap:wrap}
 </style>
 </head>
 <body>
-<nav>
+
+<nav class="nav">
   <a href="/" class="nav-logo">VEWIT</a>
-  <div class="nav-links">
-    <a href="/#features">Features</a>
-    <a href="/#pricing">Pricing</a>
-    <a href="/#contact">Contact</a>
-    <a href="/about" class="cur">About</a>
-  </div>
-  <a href="/?action=register" class="nav-start">Get Started →</a>
+  <a href="/?action=login" class="nav-cta">Sign In →</a>
 </nav>
 
-<div class="page-hero" style="animation:fadeUp .7s ease both">
-  <div class="hero-bg-blob"></div>
-  <div class="eyebrow">About VEWIT</div>
-  <h1>One platform.<br/><span class="grad">Every team need.</span></h1>
-  <p>VEWIT replaces Jira, Slack and Linear with a single AI-powered workspace — built for modern engineering teams who want to move fast without the tool-switching tax.</p>
+<section class="hero">
+  <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);padding:5px 14px;border-radius:100px;margin-bottom:20px">
+    <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e"></span>
+    <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.8);letter-spacing:.06em;text-transform:uppercase">Free to start · No credit card</span>
+  </div>
+  <h1>AI-Powered <span>Project Management</span><br/>&amp; Team Collaboration Platform</h1>
+  <p>VEWIT replaces Jira, Slack and Linear with one unified platform — project management, task tracking, direct messaging, support tickets, timeline planning and AI-powered analytics for your entire team.</p>
+  <a href="/?action=register" class="hero-cta">Get Started Free</a>
+  <a href="/?action=login" class="hero-sec">Sign In</a>
+  <div style="display:flex;gap:24px;justify-content:center;margin-top:28px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> Free workspace</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> AI assistant included</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> 12+ modules built-in</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> No credit card needed</div>
+  </div>
+</section>
+
+<div class="section">
+  <div class="section-label">What is VEWIT</div>
+  <h2>Everything your team needs, in one place</h2>
+  <p>VEWIT is a multi-workspace team collaboration platform powered by AI. Teams use VEWIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
+
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon">📋</div>
+      <h3>Project Management</h3>
+      <p>Create and manage multiple projects with team assignments, progress tracking, target dates and priority management. Filter projects by team and track completion rates in real time.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">✅</div>
+      <h3>Smart Kanban Board</h3>
+      <p>Kanban-style task board with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders. Assign tasks to specific team members with role-based access.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">💬</div>
+      <h3>Direct Messages</h3>
+      <p>Private one-to-one messaging between team members with real-time online presence indicators, message history and unread notification badges. See who is active at a glance.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">#️⃣</div>
+      <h3>Project Channels</h3>
+      <p>Dedicated message channels per project for focused team communication. Share updates, files and decisions in context without cluttering direct messages.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🎫</div>
+      <h3>Support Tickets</h3>
+      <p>Full ticketing system with bug reports, feature requests, priority levels, assignee tracking, status workflows and team-based filtering. Close issues faster with full context.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📅</div>
+      <h3>Timeline Tracker</h3>
+      <p>Visual Gantt-style timeline to plan project schedules, track milestones and identify overlapping workloads across your entire team. Navigate weeks and months effortlessly.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📊</div>
+      <h3>Developer Productivity</h3>
+      <p>Analytics dashboard measuring individual and team output — completed tasks, velocity, blocked work, sprint performance and project contribution breakdowns.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🤖</div>
+      <h3>AI Assistant</h3>
+      <p>Built-in AI assistant powered by Anthropic Claude. Ask questions about your projects and tasks, get summaries, generate task descriptions and get intelligent suggestions.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">⏰</div>
+      <h3>Smart Reminders</h3>
+      <p>Set reminders on tasks and deadlines. Get desktop push notifications at the right time so nothing falls through the cracks — even when the app is in the background.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔔</div>
+      <h3>Push Notifications</h3>
+      <p>Real-time notifications for task assignments, status changes, comments, direct messages and reminders. Desktop and in-app notifications route you directly to the relevant item.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">👥</div>
+      <h3>Team Management</h3>
+      <p>Create sub-teams within your workspace, assign team leads, add members and filter all views by team. Admins control roles, permissions and workspace settings.</p>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🏢</div>
+      <h3>Multi-Workspace</h3>
+      <p>Separate workspaces for different companies or departments, each with their own members, projects, settings and branding. Invite members with a unique workspace code.</p>
+    </div>
+  </div>
 </div>
 
-<div class="wrap">
-  <div class="sec reveal">
-    <div class="eyebrow">What is VEWIT</div>
-    <h2>Everything your team needs, in one place</h2>
-    <p>VEWIT is a multi-workspace team collaboration platform powered by Claude AI (Anthropic). Teams use VEWIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
-    <p>Built for engineers, designed for everyone. VEWIT is used by startup founders, product managers, developers and remote teams who want a single source of truth for all their work. Free to start, with no credit card required.</p>
-  </div>
+<div class="divider"></div>
 
-  <div class="sec reveal">
-    <div class="eyebrow">Core Features</div>
-    <h2>12 modules, <span class="grad">fully integrated</span></h2>
-    <p>Every feature is designed to work together. Your tasks connect to projects, messages stay in context, and your AI assistant knows your entire workspace.</p>
-    <div class="grid2">
-      <div class="fc"><div class="ico">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress, target dates and priorities.</p></div>
-      <div class="fc"><div class="ico">✅</div><h3>Smart Kanban Board</h3><p>Kanban with custom stages, story points, sprint planning, subtasks, comments and file attachments.</p></div>
-      <div class="fc"><div class="ico">🤖</div><h3>Claude AI Assistant</h3><p>Create tasks, generate EOD reports, update statuses and query your workspace in natural language.</p></div>
-      <div class="fc"><div class="ico">💬</div><h3>Direct Messages</h3><p>Private 1-to-1 messaging with real-time online presence and unread notification badges.</p></div>
-      <div class="fc"><div class="ico">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication.</p></div>
-      <div class="fc"><div class="ico">🎫</div><h3>Support Tickets</h3><p>Full ticketing with bug reports, feature requests, priorities and status workflows.</p></div>
-      <div class="fc"><div class="ico">📅</div><h3>Gantt Timeline</h3><p>Visual timeline to plan schedules, track milestones and spot overlapping workloads.</p></div>
-      <div class="fc"><div class="ico">📊</div><h3>Productivity Analytics</h3><p>Team velocity, blocked work, sprint performance and individual contribution breakdowns.</p></div>
-      <div class="fc"><div class="ico">🔔</div><h3>Push Notifications</h3><p>Desktop notifications for task assignments, comments, DMs and time-based reminders.</p></div>
-      <div class="fc"><div class="ico">📹</div><h3>Instant Meet</h3><p>Launch WebRTC video meetings and invite team members without leaving the platform.</p></div>
-      <div class="fc"><div class="ico">🏢</div><h3>Multi-Workspace</h3><p>Separate workspaces for different companies or clients — each isolated and secure.</p></div>
-      <div class="fc"><div class="ico">🔐</div><h3>Role-Based Access</h3><p>6 roles (Admin → Viewer), bcrypt passwords, TOTP 2FA and workspace-isolated data.</p></div>
-    </div>
-  </div>
-
-  <div class="sec reveal">
-    <div class="eyebrow">User Roles</div>
-    <h2>Built for <span class="grad">every member</span> of your team</h2>
-    <p>VEWIT's role system gives each person exactly the right level of access — granular enough for enterprises, simple enough for startups.</p>
-    <div class="roles-grid">
-      <div class="rc"><div class="ico">👑</div><h4>Admin</h4><p>Full workspace control — users, settings, billing and AI configuration.</p></div>
-      <div class="rc"><div class="ico">🧑‍💼</div><h4>Manager</h4><p>Create and manage projects, assign tasks, run sprints and view analytics.</p></div>
-      <div class="rc"><div class="ico">🧑‍✈️</div><h4>Team Lead</h4><p>Lead a sub-team, review work, manage task stages and team dashboards.</p></div>
-      <div class="rc"><div class="ico">💻</div><h4>Developer</h4><p>Work on tasks, log progress, collaborate in channels and DMs.</p></div>
-      <div class="rc"><div class="ico">🧪</div><h4>Tester</h4><p>Manage tickets, verify task completion, report bugs and run QA workflows.</p></div>
-      <div class="rc"><div class="ico">👁️</div><h4>Viewer</h4><p>Read-only access to projects and task progress — perfect for stakeholders.</p></div>
-    </div>
-  </div>
-
-  <div class="sec reveal">
-    <div class="eyebrow">Technology</div>
-    <h2>Modern, reliable stack</h2>
-    <p>VEWIT is built on battle-tested technologies — fast, secure and deployable anywhere. React 18 runs via CDN with no build step; the entire backend is a single Python file serving both the REST API and the frontend shell.</p>
-    <div class="stack-pills">
-      <span class="sp">Python 3 · Flask</span><span class="sp">PostgreSQL · pg8000</span><span class="sp">React 18 · HTM</span><span class="sp">Anthropic Claude API</span><span class="sp">Recharts</span><span class="sp">Web Push (VAPID)</span><span class="sp">WebRTC (Instant Meet)</span><span class="sp">TOTP / Google Authenticator 2FA</span><span class="sp">SMTP · Resend API</span><span class="sp">Railway · Docker</span><span class="sp">bcrypt · SHA-256</span>
-    </div>
-  </div>
-
-  <div class="sec reveal">
-    <div class="eyebrow">Security</div>
-    <h2>Security you can trust</h2>
-    <p>Every layer of VEWIT is designed with security in mind — bcrypt password hashing with automatic legacy SHA-256 upgrade, session-based auth with 7-day persistence, TOTP two-factor authentication via Google Authenticator, role-based access control enforced on every API endpoint, HTTPS-only sessions and tenant-isolated database queries throughout. Enterprise customers can opt for on-premise deployment for complete data sovereignty.</p>
-  </div>
-
-  <div class="sec reveal">
-    <div class="eyebrow">Contact Us</div>
-    <h2>Get in touch</h2>
-    <p>Whether you need support, want to explore Enterprise pricing, or just have a question — we'd love to hear from you.</p>
-    <div class="contact-sec">
-      <div class="cc"><div class="ico" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">🤝</div><h3>CEO &amp; Sales</h3><p>Enterprise pricing, partnerships, custom contracts and strategic discussions.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
-      <div class="cc"><div class="ico" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding help, API questions and product support.</p><a href="mailto:support@vewit.in">support@vewit.in →</a></div>
-      <div class="cc"><div class="ico" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we respond to every message.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
-    </div>
-  </div>
-
-  <div class="cta-box reveal">
-    <h2>Ready to get started?</h2>
-    <p>Create your free workspace in under 60 seconds. No credit card required.</p>
-    <div class="cta-btns">
-      <a href="/?action=register" class="cta-main">Create free workspace →</a>
-      <a href="/?action=login" class="cta-out">Sign in</a>
-    </div>
+<div class="section">
+  <div class="section-label">User Roles</div>
+  <h2>Role-based access for every team</h2>
+  <p>VEWIT supports five user roles with fine-grained permissions, so every team member sees exactly what they need.</p>
+  <div class="roles">
+    <div class="role"><div class="role-icon">👑</div><h4>Admin</h4><p>Full workspace control, settings, billing and all data</p></div>
+    <div class="role"><div class="role-icon">🗂️</div><h4>Manager</h4><p>Create projects, manage tasks and view all team data</p></div>
+    <div class="role"><div class="role-icon">🏷️</div><h4>Team Lead</h4><p>Lead sub-teams, assign tasks and manage team members</p></div>
+    <div class="role"><div class="role-icon">💻</div><h4>Developer</h4><p>Work on assigned tasks, log progress and communicate</p></div>
+    <div class="role"><div class="role-icon">🔍</div><h4>Tester</h4><p>Create and manage tickets, test and verify work items</p></div>
+    <div class="role"><div class="role-icon">👁️</div><h4>Viewer</h4><p>Read-only access to projects and team progress</p></div>
   </div>
 </div>
+
+<div class="divider"></div>
+
+<div class="section" style="padding-bottom:0">
+  <div class="section-label">Why VEWIT</div>
+  <h2>One platform, zero context switching</h2>
+  <p>Most teams use 5–7 separate tools for project management, communication, ticketing and analytics. VEWIT replaces all of them with a single integrated platform that keeps your entire team in sync.</p>
+  <div class="stats">
+    <div class="stat"><span class="stat-num">12+</span><span class="stat-label">Integrated modules</span></div>
+    <div class="stat"><span class="stat-num">6</span><span class="stat-label">User role levels</span></div>
+    <div class="stat"><span class="stat-num">∞</span><span class="stat-label">Projects & tasks</span></div>
+    <div class="stat"><span class="stat-num">AI</span><span class="stat-label">Powered by Claude</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Get Started</div>
+  <h2>Ready to bring your team together?</h2>
+  <p>Create a free workspace in seconds. Invite your team, set up your first project and start shipping faster — no credit card required.</p>
+  <div style="margin-top:28px;display:flex;gap:16px;flex-wrap:wrap">
+    <a href="/?action=register" class="hero-cta" style="display:inline-block">Create Free Account</a>
+    <a href="/?action=login" class="hero-sec" style="display:inline-block;background:#f1f5f9;border-color:#e2e8f0;color:#475569">Sign In to VEWIT</a>
+  </div>
+</div>
+
+
 
 <footer>
-  <p>© 2025 VEWIT · Built with ♥ in India</p>
-  <p><a href="/">Home</a> · <a href="/#pricing">Pricing</a> · <a href="mailto:ceo@vewit.in">ceo@vewit.in</a> · <a href="mailto:support@vewit.in">support@vewit.in</a></p>
+  <div class="footer-links">
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+    <a href="/?action=login">Sign In</a>
+    <a href="/?action=register">Sign Up</a>
+  </div>
+  <p>© 2024 VEWIT — AI-Powered Team Collaboration Platform &nbsp;·&nbsp; <a href="https://www.vewit.in">www.vewit.in</a></p>
 </footer>
 
-<script>
-const obs = new IntersectionObserver(e=>e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('visible')}),{threshold:.08});
-document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
-</script>
 </body>
 </html>"""
 
-@app.route("/about")
-def about_page():
-    return ABOUT_HTML
+
+@app.route("/api/contact", methods=["POST"])
+def contact_form():
+    """Handle public contact form — sends email to ceo@vewit.in."""
+    d = request.json or {}
+    name    = d.get("name","").strip()
+    email   = d.get("email","").strip()
+    company = d.get("company","").strip()
+    topic   = d.get("topic","").strip()
+    message = d.get("message","").strip()
+
+    if not name or not email or not message or not topic:
+        return jsonify({"error": "Please fill in all required fields."}), 400
+
+    topic_labels = {
+        "demo": "Request a Demo",
+        "support": "Technical Support",
+        "feature": "Feature Request",
+        "enterprise": "Enterprise / Pricing",
+        "partnership": "Partnership",
+        "other": "General Inquiry"
+    }
+    topic_label = topic_labels.get(topic, topic)
+
+    subject = f"VEWIT Contact Form: {topic_label} — from {name}"
+    body_html = f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;">
+      <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <div style="background:#0f172a;padding:24px 32px;display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <span style="color:white;font-weight:800;font-size:14px">V</span>
+          </div>
+          <h1 style="color:#fff;margin:0;font-size:18px;font-weight:700;">VEWIT — New Contact Form Submission</h1>
+        </div>
+        <div style="padding:28px 32px;">
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
+            <p style="margin:0;font-size:13px;color:#0369a1;font-weight:600;">📩 Topic: {topic_label}</p>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
+            <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;width:130px;">Name</td><td style="padding:10px 0;color:#1e293b;">{name}</td></tr>
+            <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;">Email</td><td style="padding:10px 0;"><a href="mailto:{email}" style="color:#2563eb;">{email}</a></td></tr>
+            {"<tr style='border-bottom:1px solid #f1f5f9;'><td style='padding:10px 0;color:#64748b;font-weight:600;'>Company</td><td style='padding:10px 0;color:#1e293b;'>" + company + "</td></tr>" if company else ""}
+          </table>
+          <div style="background:#f8fafc;border-radius:8px;padding:18px;border:1px solid #e2e8f0;">
+            <p style="margin:0 0 8px;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Message</p>
+            <p style="margin:0;font-size:14px;color:#1e293b;line-height:1.7;white-space:pre-wrap;">{message}</p>
+          </div>
+        </div>
+        <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Reply directly to <a href="mailto:{email}" style="color:#2563eb;">{email}</a></p>
+          <p style="margin:0;font-size:11px;color:#cbd5e1;">VEWIT Contact Form</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    # Log before sending
+    print(f"[Contact] Attempting send: {name} <{email}> | SMTP={SMTP_SERVER}:{SMTP_PORT} | user={SMTP_USERNAME} | pwd_len={len((SMTP_PASSWORD or '').replace(' ',''))}")
+
+    # Send to CEO
+    success = send_email("ceo@vewit.in", subject, body_html)
+    print(f"[Contact] send_email to CEO returned: {success}")
+
+    # Also send auto-reply to the person who submitted
+    auto_reply_html = f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;">
+      <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <div style="background:#0f172a;padding:24px 32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:20px;font-weight:800;">VEWIT</h1>
+          <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">We received your message</p>
+        </div>
+        <div style="padding:32px;">
+          <h2 style="color:#1e293b;margin:0 0 12px;font-size:16px;">Hi {name}, thanks for reaching out! 👋</h2>
+          <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;">We've received your message about <strong>{topic_label}</strong> and will get back to you within <strong>24 hours</strong>.</p>
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+            <p style="margin:0;font-size:13px;color:#0369a1;"><strong>Your message summary:</strong><br/><span style="color:#1e293b;">{message[:200]}{"..." if len(message)>200 else ""}</span></p>
+          </div>
+          <p style="color:#64748b;font-size:13px;margin:0;">In the meantime, you can <a href="https://www.vewit.in" style="color:#2563eb;">explore VEWIT</a> or reply to this email if you have anything to add.</p>
+        </div>
+        <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">© 2026 VEWIT · <a href="https://www.vewit.in" style="color:#2563eb;">www.vewit.in</a></p>
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    send_email(email, f"We received your message — VEWIT", auto_reply_html)
+
+    if success:
+        return jsonify({"ok": True, "message": f"Message sent successfully! We'll reply to {email} within 24 hours."})
+    else:
+        return jsonify({"ok": False, "error": "Email could not be sent. Please email ceo@vewit.in directly."}), 500
+
+@app.route("/sitemap.xml")
+def sitemap():
+    from datetime import datetime as _dt
+    today = _dt.utcnow().strftime("%Y-%m-%d")
+    xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.vewit.in/</loc><lastmod>{today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://www.vewit.in/about</loc><lastmod>{today}</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
+</urlset>'''
+    return xml, 200, {"Content-Type": "application/xml"}
+
+@app.route("/robots.txt")
+def robots():
+    txt = """User-agent: *
+Allow: /
+Allow: /about
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /projects
+Disallow: /tasks
+Disallow: /messages
+Disallow: /dm
+Disallow: /tickets
+Disallow: /timeline
+Disallow: /reminders
+Disallow: /settings
+Disallow: /team
+Disallow: /productivity
+Sitemap: https://www.vewit.in/sitemap.xml"""
+    return txt, 200, {"Content-Type": "text/plain"}
+
+@app.route("/dashboard")
+@app.route("/projects")
+@app.route("/tasks")
+@app.route("/messages")
+@app.route("/dm")
+@app.route("/dashboard")
+@app.route("/projects")
+@app.route("/tasks")
+@app.route("/messages")
+@app.route("/dm")
+@app.route("/tickets")
+@app.route("/timeline")
+@app.route("/reminders")
+@app.route("/settings")
+@app.route("/team")
+@app.route("/productivity")
+def app_page(**kwargs):
+    """Serve the SPA for all clean URLs — JS picks up the path and sets the view."""
+    return HTML
 
 @app.route("/",defaults={"p":""})
 @app.route("/<path:p>")
@@ -3874,6 +3433,1025 @@ def root(p):
     if action in ("login","register") or p!="":
         return HTML
     return LANDING_HTML
+
+LANDING_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VEWIT — AI-Powered Project Management &amp; Team Collaboration Platform</title>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timeline tracking and developer productivity — all in one place. Free to start."/>
+<meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
+<meta name="author" content="VEWIT"/>
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<meta name="googlebot" content="index, follow"/>
+<meta name="revisit-after" content="3 days"/>
+<meta name="language" content="English"/>
+<meta name="rating" content="general"/>
+<meta name="category" content="Business Software, Project Management, Team Collaboration"/>
+<meta name="theme-color" content="#0f172a"/>
+<link rel="canonical" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="en" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="en-in" href="https://www.vewit.in/"/>
+<link rel="alternate" hreflang="x-default" href="https://www.vewit.in/"/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://www.vewit.in/"/>
+<meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
+<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
+<meta property="og:site_name" content="VEWIT"/>
+<meta property="og:locale" content="en_IN"/>
+<meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
+<meta property="og:image:width" content="512"/>
+<meta property="og:image:height" content="512"/>
+<meta property="og:image:alt" content="VEWIT — AI-Powered Team Collaboration Platform"/>
+<meta property="og:site_name" content="VEWIT"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
+<meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication",
+"name":"VEWIT","alternateName":"VEWIT Team Collaboration","url":"https://www.vewit.in",
+"description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
+"applicationCategory":"BusinessApplication","applicationSubCategory":"Project Management",
+"operatingSystem":"Web, PWA, iOS, Android",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"INR","availability":"https://schema.org/InStock"},
+"aggregateRating":{"@type":"AggregateRating","ratingValue":"5","reviewCount":"1"},
+"featureList":["AI-Powered Project Management","Kanban Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"],
+"screenshot":"https://www.vewit.in/icon-512.png",
+"softwareVersion":"4.0",
+"releaseNotes":"AI assistant, multi-workspace support, push notifications"}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebSite",
+"name":"VEWIT","url":"https://www.vewit.in",
+"potentialAction":{"@type":"SearchAction","target":"https://www.vewit.in/tasks?q={search_term_string}","query-input":"required name=search_term_string"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage",
+"mainEntity":[
+  {"@type":"Question","name":"What is VEWIT?","acceptedAnswer":{"@type":"Answer","text":"VEWIT is an AI-powered team collaboration platform that combines project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics in one unified workspace."}},
+  {"@type":"Question","name":"Is VEWIT free?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT is free to start. Create a workspace instantly with no credit card required."}},
+  {"@type":"Question","name":"How is VEWIT different from Jira?","acceptedAnswer":{"@type":"Answer","text":"Unlike Jira, VEWIT includes built-in direct messaging, support tickets, AI assistant, developer productivity analytics and timeline tracking all in one platform — no plugins or integrations needed."}},
+  {"@type":"Question","name":"Does VEWIT have an AI assistant?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT has a built-in AI assistant powered by Anthropic Claude that understands your actual projects and tasks and can answer questions, summarise work and generate task descriptions."}},
+  {"@type":"Question","name":"How many users can join a VEWIT workspace?","acceptedAnswer":{"@type":"Answer","text":"VEWIT supports unlimited team members in a workspace with six role levels: Admin, Manager, Team Lead, Developer, Tester and Viewer."}}
+]}
+</script>
+<meta name="description" content="VEWIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#ffffff;--sf:#f8fafc;--sf2:#f1f5f9;--bd:rgba(37,99,235,0.12);--bd2:rgba(0,0,0,0.06);
+  --ac:#2563eb;--ac2:#1d4ed8;--ac3:rgba(37,99,235,0.08);
+  --tx:#0a0f1e;--tx2:#475569;--tx3:#94a3b8;
+  --ocean1:#e0f2fe;--ocean2:#bae6fd;--ocean3:#7dd3fc;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:#ffffff;color:var(--tx);font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.65;overflow-x:hidden;}
+h1,h2,h3,h4{font-family:'Syne',sans-serif;line-height:1.15;}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:56px;display:flex;align-items:center;background:rgba(255,255,255,0.88);backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.06);transition:background .3s;}
+.nav-inner{max-width:1160px;margin:0 auto;padding:0 28px;width:100%;display:flex;align-items:center;justify-content:space-between;}
+.logo{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:800;color:var(--tx);text-decoration:none;display:flex;align-items:center;gap:8px;letter-spacing:-.02em;}
+.logo-icon{width:28px;height:28px;border-radius:7px;background:var(--ac);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,0.3);}
+.nav-links{display:flex;align-items:center;gap:4px;list-style:none;}
+.nav-links a{color:var(--tx2);text-decoration:none;font-size:.875rem;padding:6px 12px;border-radius:7px;transition:all .18s;}
+.nav-links a:hover{color:var(--tx);background:var(--sf2);}
+.nav-pill{background:var(--ac3);color:var(--ac)!important;border:1px solid var(--bd);}
+.nav-pill:hover{background:rgba(37,99,235,0.12)!important;}
+.btn{display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;transition:all .18s;text-decoration:none;white-space:nowrap;}
+.btn-primary{background:var(--ac);color:#fff;padding:9px 20px;border-radius:9px;font-size:.875rem;box-shadow:0 2px 10px rgba(37,99,235,0.25);}
+.btn-primary:hover{background:var(--ac2);box-shadow:0 4px 18px rgba(37,99,235,0.35);transform:translateY(-1px);}
+.btn-outline{background:transparent;color:var(--tx);padding:9px 20px;border-radius:9px;font-size:.875rem;border:1.5px solid var(--bd2);}
+.btn-outline:hover{border-color:rgba(0,0,0,0.15);background:var(--sf);}
+.nav-cta{display:flex;gap:8px;align-items:center;}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 28px 0;position:relative;overflow:hidden;}
+.hero-content{position:relative;z-index:2;text-align:center;max-width:760px;margin:0 auto;}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);padding:5px 14px;border-radius:100px;font-size:.75rem;font-weight:700;color:var(--ac);margin-bottom:24px;letter-spacing:.05em;text-transform:uppercase;}
+.hero-badge-dot{width:5px;height:5px;background:var(--ac);border-radius:50%;}
+.hero h1{font-size:clamp(2.4rem,5.5vw,4rem);font-weight:800;color:var(--tx);margin-bottom:18px;letter-spacing:-.04em;line-height:1.1;}
+.hero h1 .blue{color:var(--ac);}
+.hero-sub{font-size:1.05rem;color:var(--tx2);max-width:520px;margin:0 auto 36px;font-weight:300;line-height:1.75;}
+.hero-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.btn-xl{padding:13px 28px!important;font-size:.96rem!important;border-radius:11px!important;}
+.hero-note{font-size:.78rem;color:var(--tx3);}
+.hero-note span{color:var(--ac);font-weight:600;}
+
+/* APP MOCKUP */
+.hero-mockup{position:relative;z-index:2;width:100%;max-width:900px;margin:48px auto 0;}
+.mockup-frame{border-radius:16px 16px 0 0;overflow:hidden;box-shadow:0 -4px 60px rgba(37,99,235,0.12),0 0 0 1px rgba(0,0,0,0.06);background:#fff;}
+.mockup-topbar{height:36px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;padding:0 14px;gap:6px;}
+.m-dot{width:9px;height:9px;border-radius:50%;}
+.mockup-url{flex:1;margin:0 10px;height:18px;background:#f1f5f9;border-radius:5px;display:flex;align-items:center;padding:0 8px;}
+.mockup-url-txt{font-size:.6rem;color:#94a3b8;font-family:monospace;}
+.mockup-body{display:flex;height:360px;}
+.m-sidebar{width:180px;flex-shrink:0;background:#fafbfc;border-right:1px solid #f1f5f9;padding:12px 10px;display:flex;flex-direction:column;gap:2px;}
+.m-ws{display:flex;align-items:center;gap:7px;padding:7px 8px;margin-bottom:6px;border-radius:7px;background:#f1f5f9;}
+.m-ws-av{width:26px;height:26px;border-radius:6px;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;color:#fff;flex-shrink:0;}
+.m-ws-n{font-size:.72rem;font-weight:700;color:var(--tx);}
+.m-ws-s{font-size:.62rem;color:var(--tx3);}
+.m-sec{font-size:.58rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx3);padding:8px 8px 3px;}
+.m-nav{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;font-size:.72rem;color:var(--tx2);}
+.m-nav.act{background:rgba(37,99,235,0.08);color:var(--ac);}
+.m-badge{margin-left:auto;background:var(--ac);color:#fff;font-size:.55rem;font-weight:700;padding:1px 5px;border-radius:100px;}
+.m-main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.m-header{padding:11px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;}
+.m-title{font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;color:var(--tx);}
+.m-tabs{display:flex;gap:2px;}
+.m-tab{font-size:.62rem;padding:3px 9px;border-radius:5px;color:var(--tx3);}
+.m-tab.act{background:rgba(37,99,235,0.08);color:var(--ac);}
+.m-board{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:12px 14px;height:100%;align-content:start;}
+.m-col{background:#f8fafc;border:1px solid #f1f5f9;border-radius:7px;padding:8px;}
+.m-col-h{font-size:.6rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin-bottom:7px;display:flex;justify-content:space-between;}
+.m-col-c{width:15px;height:15px;border-radius:4px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--tx3);}
+.m-card{background:#fff;border:1px solid #f1f5f9;border-radius:6px;padding:7px;margin-bottom:6px;}
+.m-card-t{font-size:.66rem;font-weight:500;color:var(--tx);margin-bottom:5px;line-height:1.4;}
+.m-pill{display:inline-block;font-size:.54rem;padding:2px 5px;border-radius:100px;font-weight:600;}
+.pill-h{background:rgba(239,68,68,.08);color:#ef4444;}
+.pill-m{background:rgba(180,83,9,0.10);color:#f59e0b;}
+.pill-d{background:rgba(37,99,235,.08);color:#2563eb;}
+.pill-ok{background:rgba(34,197,94,.08);color:#16a34a;}
+.m-prog{height:2px;background:#f1f5f9;border-radius:100px;margin-top:6px;}
+.m-prog-fill{height:100%;border-radius:100px;background:var(--ac);}
+.m-prog-fill.g{background:#16a34a;}
+.m-prog-fill.o{background:#f59e0b;}
+
+/* STATS BAR */
+.stats-bar{padding:40px 0;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
+.stats-grid{max-width:1160px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e2e8f0;border-radius:12px;overflow:hidden;}
+.stat-item{background:#f8fafc;text-align:center;padding:24px 16px;}
+.stat-num{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;line-height:1;margin-bottom:5px;color:var(--ac);}
+.stat-lbl{font-size:.82rem;color:#475569;font-weight:500;}
+
+/* SECTIONS */
+section{padding:80px 0;}
+.wrap{max-width:1160px;margin:0 auto;padding:0 28px;}
+.sec-tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;background:var(--ac3);padding:3px 11px;border-radius:100px;border:1px solid var(--bd);}
+.sec-title{font-size:clamp(1.7rem,3vw,2.2rem);font-weight:800;max-width:540px;margin-bottom:10px;letter-spacing:-.025em;color:var(--tx);}
+.sec-sub{color:var(--tx2);font-size:.95rem;max-width:500px;margin-bottom:44px;font-weight:300;line-height:1.75;}
+.centered{text-align:center;}.centered .sec-title,.centered .sec-sub{margin-left:auto;margin-right:auto;}
+
+/* FEATURES BENTO */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.bc{background:#fff;border:1.5px solid #f1f5f9;border-radius:14px;padding:24px;transition:all .22s;cursor:default;position:relative;overflow:hidden;}
+.bc:hover{border-color:rgba(37,99,235,0.2);box-shadow:0 8px 32px rgba(37,99,235,0.08);transform:translateY(-2px);}
+.bc.span2{grid-column:span 2;}
+.bc.featured{border-color:rgba(37,99,235,0.15);background:linear-gradient(135deg,rgba(37,99,235,0.03) 0%,#fff 60%);}
+.b-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:13px;background:var(--ac3);border:1px solid var(--bd);}
+.bc h3{font-size:1rem;font-weight:700;margin-bottom:8px;color:#0a0f1e;}
+.bc p{font-size:.88rem;color:#334155;line-height:1.68;}
+.feat-list{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.feat-list li{display:flex;align-items:flex-start;gap:8px;font-size:.84rem;color:#334155;}
+.feat-list li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:7px;}
+.role-badge{font-size:.64rem;background:rgba(37,99,235,.08);color:var(--ac);padding:2px 8px;border-radius:100px;margin-left:5px;border:1px solid var(--bd);font-weight:600;}
+
+/* MODULES */
+.modules-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:40px;}
+.mod-card{background:#fff;border:1.5px solid #f1f5f9;border-radius:11px;padding:16px 14px;text-align:center;transition:all .2s;}
+.mod-card:hover{border-color:rgba(37,99,235,.15);transform:translateY(-1px);box-shadow:0 4px 16px rgba(37,99,235,.07);}
+.mod-ico{font-size:1.6rem;margin-bottom:8px;}
+.mod-n{font-size:.84rem;font-weight:700;margin-bottom:3px;color:#0a0f1e;}
+.mod-d{font-size:.76rem;color:#475569;line-height:1.5;}
+
+/* HOW IT WORKS */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:44px;}
+.step{text-align:center;}
+.step-num{width:44px;height:44px;border-radius:50%;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-family:'Syne',sans-serif;font-weight:800;font-size:.9rem;color:var(--ac);background:var(--ac3);}
+.step h3{font-size:.95rem;font-weight:700;margin-bottom:6px;color:#0a0f1e;}
+.step p{font-size:.86rem;color:#334155;}
+
+/* CTA */
+.cta-section{padding:80px 0;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 50%,#e0f2fe 100%);}
+.cta-box{text-align:center;border:1.5px solid rgba(37,99,235,0.15);border-radius:20px;padding:64px 40px;background:#fff;position:relative;overflow:hidden;box-shadow:0 4px 40px rgba(37,99,235,0.08);}
+.cta-box::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:240px;height:2px;background:linear-gradient(90deg,transparent,var(--ac),transparent);}
+.cta-box h2{font-size:clamp(1.7rem,3vw,2.3rem);font-weight:800;margin-bottom:12px;color:var(--tx);letter-spacing:-.03em;}
+.cta-box p{color:var(--tx2);margin-bottom:30px;font-size:.96rem;max-width:440px;margin-left:auto;margin-right:auto;}
+.cta-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+.trust-row{display:flex;justify-content:center;align-items:center;gap:18px;flex-wrap:wrap;}
+.trust-item{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--tx3);}
+.trust-item span{color:var(--ac);font-weight:600;}
+
+/* FOOTER */
+footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
+.footer-top{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:36px;margin-bottom:40px;}
+.footer-brand p{font-size:.82rem;color:var(--tx3);margin-top:9px;line-height:1.7;max-width:230px;}
+.footer-col h4{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx2);margin-bottom:12px;}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.footer-col a{color:var(--tx3);font-size:.82rem;text-decoration:none;transition:color .18s;}
+.footer-col a:hover{color:var(--tx2);}
+.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:20px;border-top:1px solid #f1f5f9;flex-wrap:wrap;gap:10px;}
+.footer-copy{color:var(--tx3);font-size:.78rem;}
+.footer-badges{display:flex;gap:6px;}
+.fb{font-size:.7rem;padding:3px 9px;border-radius:100px;border:1px solid #e2e8f0;color:var(--tx3);}
+
+/* TICKER */
+.ticker-wrap{overflow:hidden;border-top:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;padding:10px 0;background:#fafbfc;}
+.ticker{display:flex;animation:ticker 32s linear infinite;}
+.ticker-item{display:flex;align-items:center;gap:8px;padding:0 28px;font-size:.76rem;color:var(--tx3);white-space:nowrap;flex-shrink:0;}
+.ticker-item .hi{color:var(--ac);font-weight:600;}
+.ticker-sep{color:#e2e8f0;margin-left:20px;}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* ANIMATIONS */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.a1{animation:fadeUp .6s .1s both;}.a2{animation:fadeUp .6s .22s both;}.a3{animation:fadeUp .6s .36s both;}
+.a4{animation:fadeUp .6s .5s both;}.a5{animation:fadeUp .6s .64s both;}
+
+/* RESPONSIVE */
+@media(max-width:960px){.bento{grid-template-columns:1fr 1fr;}.bc.span2{grid-column:span 1;}.modules-grid{grid-template-columns:repeat(2,1fr);}.steps{grid-template-columns:1fr 1fr;}.footer-top{grid-template-columns:1fr 1fr;}.stats-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:640px){.nav-links,.nav-cta .btn-outline{display:none;}.bento{grid-template-columns:1fr;}.steps{grid-template-columns:1fr;}.modules-grid{grid-template-columns:repeat(2,1fr);}.footer-top{grid-template-columns:1fr;}.stats-grid{grid-template-columns:1fr 1fr;}.m-board{grid-template-columns:repeat(2,1fr);}.mockup-body{height:240px;}.m-sidebar{width:140px;}}
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <div class="nav-inner">
+    <a href="/" class="logo">
+      <div class="logo-icon"><svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
+      VEWIT
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#modules">Modules</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="/?action=login" class="btn btn-outline">Sign In</a>
+      <a href="/?action=register" class="btn btn-primary">Get Started Free</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEWIT — Team Collaboration Platform</div>
+    <h1 class="a2">The workspace your<br/>team <span class="blue">actually uses.</span></h1>
+    <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, Instant Meet, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
+    <div class="hero-actions a4">
+      <a href="/?action=register" class="btn btn-primary btn-xl">Get Started Free →</a>
+      <a href="/?action=login" class="btn btn-outline btn-xl">Sign In</a>
+    </div>
+    <p class="hero-note a4">✓ Free to start &nbsp;·&nbsp; <span>No credit card</span> &nbsp;·&nbsp; Up in 2 minutes</p>
+  </div>
+    <div class="hero-mockup a5">
+        <div style="display:flex;justify-content:center;gap:6px;margin-bottom:12px;">
+      <button onclick="showTab('dash')" id="tab-dash" style="padding:6px 16px;border-radius:8px;border:1.5px solid #2563eb;background:#2563eb;color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;">Dashboard</button>
+      <button onclick="showTab('proj')" id="tab-proj" style="padding:6px 16px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;">Projects</button>
+    </div>
+
+    <div class="mockup-frame" id="mock-dash">
+      <div class="mockup-topbar">
+        <div class="m-dot" style="background:#ff5f57"></div>
+        <div class="m-dot" style="background:#febc2e"></div>
+        <div class="m-dot" style="background:#28c840"></div>
+        <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app</span></div>
+      </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
+          <span style="font-size:.6rem;color:#94a3b8;background:#1e293b;padding:2px 8px;border-radius:100px;">No reminders today</span>
+          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">A</div>
+        </div>
+      </div>
+      <div class="mockup-body" style="height:320px;">
+        <div class="m-sidebar">
+          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">12 members</div></div></div>
+          <div class="m-sec">Workspace</div>
+          <div class="m-nav act">📊 Dashboard</div>
+          <div class="m-nav">📁 Projects</div>
+          <div class="m-nav">✅ Tasks</div>
+          <div class="m-nav">💬 Messages</div>
+          <div class="m-sec">Tools</div>
+          <div class="m-nav">📅 Timeline</div>
+          <div class="m-nav">🎫 Tickets</div>
+          <div class="m-nav">👩‍💻 Analytics</div>
+        </div>
+        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
+                    <div style="padding:10px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;">
+            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Dashboard <span style="font-size:.68rem;font-weight:400;color:#94a3b8;margin-left:4px;">Acme Corp Team Dashboard</span></div>
+          </div>
+                    <div style="margin:8px 10px;padding:8px 12px;background:#fff;border-radius:10px;border:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:24px;height:24px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;">P</div>
+              <div>
+                <div style="font-size:.75rem;font-weight:700;color:#0f172a;">Good day, Alex! 👋 <span style="background:#eff6ff;color:#2563eb;font-size:.6rem;padding:1px 7px;border-radius:100px;border:1px solid #bfdbfe;margin-left:3px;">Acme Corp</span></div>
+                <div style="font-size:.62rem;color:#64748b;">8 projects · 24 tasks · 6 members · 5 active tasks assigned to you</div>
+              </div>
+            </div>
+          </div>
+                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:0 10px 8px;">
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #2563eb;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">8</div><div style="font-size:.58rem;color:#64748b;">Total Projects</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #059669;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">24</div><div style="font-size:.58rem;color:#64748b;">Active Tasks</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #7c3aed;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">11</div><div style="font-size:.58rem;color:#64748b;">Completed</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #dc2626;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">0</div><div style="font-size:.58rem;color:#64748b;">Blocked</div></div>
+            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #d97706;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">5</div><div style="font-size:.58rem;color:#64748b;">My Tasks</div></div>
+          </div>
+                    <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;margin:0 10px;">
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Priority Split</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Critical</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">3</div></div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#f97316;"></div><div style="font-size:.6rem;color:#334155;flex:1;">High</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">9</div></div>
+              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#7c3aed;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Medium</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">8</div></div>
+              <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#2563eb;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Low</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">4</div></div>
+            </div>
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Project Progress</div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">E-commerce Platform</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">72%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:72%;background:#059669;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Mobile App Redesign</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">65%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:65%;background:#f59e0b;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">API Gateway v2</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">81%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:81%;background:#ef4444;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Customer Portal</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">90%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:90%;background:#2563eb;border-radius:2px;"></div></div></div>
+                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Analytics Dashboard</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">55%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:55%;background:#7c3aed;border-radius:2px;"></div></div></div>
+              </div>
+            </div>
+                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;">My Active Tasks</div><div style="font-size:.58rem;color:#ef4444;font-weight:600;">⚠ 1 overdue</div></div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #2563eb;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Review Q2 sprint plan</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">PLANNING</span><span style="font-size:.55rem;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;">HIGH</span></div></div>
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #7c3aed;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Fix auth token expiry bug</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;">CRITICAL</span></div></div>
+                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #059669;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Update API documentation</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">DEV</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup-frame" id="mock-proj" style="display:none;">
+      <div class="mockup-topbar">
+        <div class="m-dot" style="background:#ff5f57"></div>
+        <div class="m-dot" style="background:#febc2e"></div>
+        <div class="m-dot" style="background:#28c840"></div>
+        <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app/projects</span></div>
+      </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
+          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
+          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">P</div>
+        </div>
+      </div>
+      <div class="mockup-body" style="height:320px;">
+        <div class="m-sidebar">
+          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">4 members</div></div></div>
+          <div class="m-sec">Workspace</div>
+          <div class="m-nav">📊 Dashboard</div>
+          <div class="m-nav act">📁 Projects <span class="m-badge">12</span></div>
+          <div class="m-nav">✅ Tasks</div>
+          <div class="m-nav">💬 Messages</div>
+          <div class="m-sec">Tools</div>
+          <div class="m-nav">📅 Timeline</div>
+          <div class="m-nav">🎫 Tickets</div>
+          <div class="m-nav">👩‍💻 Analytics</div>
+        </div>
+        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
+          <div style="padding:8px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Projects <span style="font-size:.68rem;font-weight:400;color:#94a3b8;">8 projects · Acme Corp</span></div>
+            <div style="font-size:.62rem;color:#fff;background:#2563eb;padding:3px 9px;border-radius:6px;font-weight:600;">+ New Project</div>
+          </div>
+          <div style="padding:8px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;">
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">E-commerce Platform</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Next-gen shopping experience rebuild</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#059669;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Jan – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">72%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #f59e0b;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Mobile App Redesign</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">iOS & Android redesign with new UI</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#f59e0b;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">15 Feb – 15 May</span><span style="font-size:.58rem;color:#f59e0b;font-weight:600;">65%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #ef4444;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">API Gateway v2</div><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">High-performance REST & GraphQL gateway</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:78%;background:#ef4444;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 01 Aug</span><span style="font-size:.58rem;color:#ef4444;font-weight:600;">81%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #2563eb;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Customer Portal</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Self-service customer dashboard & billing</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:88%;background:#2563eb;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Feb – 31 Mar</span><span style="font-size:.58rem;color:#2563eb;font-weight:600;">90%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #7c3aed;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Analytics Dashboard</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Real-time KPI tracking and reporting</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:98%;background:#7c3aed;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">10 Jan – 30 Apr</span><span style="font-size:.58rem;color:#7c3aed;font-weight:600;">55%</span></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">DevOps Pipeline</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
+              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">CI/CD automation & infrastructure as code</div>
+              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
+              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:95%;background:#059669;border-radius:2px;"></div></div>
+              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">88%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+function showTab(t){
+  document.getElementById('mock-dash').style.display=t==='dash'?'block':'none';
+  document.getElementById('mock-proj').style.display=t==='proj'?'block':'none';
+  document.getElementById('tab-dash').style.background=t==='dash'?'#2563eb':'#fff';
+  document.getElementById('tab-dash').style.color=t==='dash'?'#fff':'#64748b';
+  document.getElementById('tab-dash').style.borderColor=t==='dash'?'#2563eb':'#e2e8f0';
+  document.getElementById('tab-proj').style.background=t==='proj'?'#2563eb':'#fff';
+  document.getElementById('tab-proj').style.color=t==='proj'?'#fff':'#64748b';
+  document.getElementById('tab-proj').style.borderColor=t==='proj'?'#2563eb':'#e2e8f0';
+}
+</script>
+
+<div class="ticker-wrap">
+  <div class="ticker">
+    <div class="ticker-item">📋 Smart Kanban Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📋 Smart Kanban Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stats-grid">
+    <div class="stat-item"><div class="stat-num">∞</div><div class="stat-lbl">Multi-tenant workspaces</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#7c3aed">11+</div><div class="stat-lbl">Built-in modules</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#059669">6</div><div class="stat-lbl">User roles</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#d97706">150MB</div><div class="stat-lbl">Max file upload</div></div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="centered">
+      <div class="sec-tag">Features</div>
+      <h2 class="sec-title">Everything your team needs</h2>
+      <p class="sec-sub">One platform replaces your task tracker, chat tool, ticketing system, and analytics dashboard.</p>
+    </div>
+    <div class="bento">
+      <div class="bc featured"><div class="b-ico">📋</div><h3>Smart Task Management</h3><p>Create, assign and track tasks with custom stage workflows, priorities, due dates and inline comments.</p><ul class="feat-list"><li>Custom stages: Backlog → Dev → Review → Done</li><li>Priority levels: Low, Medium, High, Critical</li><li>Inline comments & file attachments up to 150MB</li><li>Assignee management with avatar display</li></ul></div>
+      <div class="bc"><div class="b-ico">📁</div><h3>Project Workspaces</h3><p>Colour-coded projects with start & end dates, per-member access control, and live progress bars.</p><ul class="feat-list"><li>Start date + target date planning</li><li>Visual progress from task completion</li><li>Per-project team member access control</li></ul></div>
+      <div class="bc featured"><div class="b-ico">🤖</div><h3>AI Assistant</h3><p>Floating AI panel with full workspace context. Bring your own Anthropic API key.</p><ul class="feat-list"><li>Ask anything about tasks, projects & blockers</li><li>Smart EOD reports & sprint summaries</li><li>Bring your own API key (Anthropic)</li><li>Context-aware using live workspace data</li></ul></div>
+      <div class="bc span2"><div class="b-ico">📅</div><h3>Timeline Tracker <span class="role-badge">Admin / Manager</span></h3><p>Dual progress bars compare time elapsed against task completion % so you catch at-risk projects instantly. Auto health badges calculated from today's date.</p><ul class="feat-list"><li>Days spent & remaining — calculated from today</li><li>Health badges: On Track · At Risk · Needs Attention · Overdue</li><li>Filter by health status, sort by days remaining</li></ul></div>
+      <div class="bc"><div class="b-ico">👩‍💻</div><h3>Dev Productivity <span class="role-badge">Admin</span></h3><p>Full leaderboard with productivity score 0–100 per developer. Table + Chart views with drill-down.</p><ul class="feat-list"><li>Productivity score 0–100 auto-calculated</li><li>Table & chart view toggle</li><li>Drill into any developer's full task list</li></ul></div>
+      <div class="bc"><div class="b-ico">💬</div><h3>Messaging & DMs</h3><p>Per-project channels plus private one-on-one direct messages with unread badges.</p><ul class="feat-list"><li>Per-project message channels</li><li>Private direct messages</li><li>Start huddle directly from DMs</li></ul></div>
+      <div class="bc"><div class="b-ico">📞</div><h3>Instant Meet</h3><p>Instant in-app Instant Meet. Start from sidebar or DMs, invite mid-call.</p><ul class="feat-list"><li>One-click room creation</li><li>Invite participants mid-call</li><li>Mute/unmute controls</li></ul></div>
+      <div class="bc"><div class="b-ico">🎫</div><h3>Support Tickets</h3><p>Built-in bug tracking & support ticketing separate from project tasks.</p><ul class="feat-list"><li>Bug, feature-request & incident types</li><li>Status: Open · In Progress · Resolved</li><li>Threaded comments per ticket</li></ul></div>
+
+    </div>
+  </div>
+</section>
+
+<section id="modules" style="padding-top:0;background:#f8fafc;">
+  <div class="wrap centered" style="padding-top:60px;padding-bottom:60px;">
+    <div class="sec-tag">All Modules</div>
+    <h2 class="sec-title">11 modules, one platform</h2>
+    <p class="sec-sub">Every module shares data automatically — tasks flow into analytics, tickets link to projects, reminders fire to notifications.</p>
+    <div class="modules-grid">
+      <div class="mod-card"><div class="mod-ico">📋</div><div class="mod-n">Kanban Board</div><div class="mod-d">Kanban with custom stages</div></div>
+      <div class="mod-card"><div class="mod-ico">📁</div><div class="mod-n">Projects</div><div class="mod-d">Multi-project management</div></div>
+      <div class="mod-card"><div class="mod-ico">🤖</div><div class="mod-n">AI Assistant</div><div class="mod-d">Workspace-aware AI</div></div>
+      <div class="mod-card"><div class="mod-ico">📅</div><div class="mod-n">Timeline</div><div class="mod-d">Health tracking per project</div></div>
+      <div class="mod-card"><div class="mod-ico">👩‍💻</div><div class="mod-n">Dev Analytics</div><div class="mod-d">Productivity leaderboard</div></div>
+      <div class="mod-card"><div class="mod-ico">💬</div><div class="mod-n">Messaging</div><div class="mod-d">Per-project channels</div></div>
+      <div class="mod-card"><div class="mod-ico">✉️</div><div class="mod-n">Direct DMs</div><div class="mod-d">Private conversations</div></div>
+      <div class="mod-card"><div class="mod-ico">📞</div><div class="mod-n">Instant Meet</div><div class="mod-d">Instant voice rooms</div></div>
+      <div class="mod-card"><div class="mod-ico">🎫</div><div class="mod-n">Tickets</div><div class="mod-d">Bug & support tracking</div></div>
+      <div class="mod-card"><div class="mod-ico">⏰</div><div class="mod-n">Reminders</div><div class="mod-d">Per-task alerts</div></div>
+      <div class="mod-card"><div class="mod-ico">🔔</div><div class="mod-n">Notifications</div><div class="mod-d">Push, email & in-app</div></div>
+      <div class="mod-card" style="border-color:rgba(37,99,235,.12);background:rgba(37,99,235,.02);"><div class="mod-ico">⚙️</div><div class="mod-n">Settings</div><div class="mod-d">SMTP, AI key, invite codes</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap centered">
+    <div class="sec-tag">How it works</div>
+    <h2 class="sec-title">Up and running in 4 steps</h2>
+    <p class="sec-sub">No DevOps required. Create a workspace, configure it once, invite your team.</p>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><h3>Create Account</h3><p>Sign up and create a new workspace. An invite code is generated instantly.</p></div>
+      <div class="step"><div class="step-num">2</div><h3>Configure</h3><p>Add your AI API key, set up SMTP for email notifications, customise settings.</p></div>
+      <div class="step"><div class="step-num">3</div><h3>Invite Team</h3><p>Share the invite code. Members join instantly with their chosen role.</p></div>
+      <div class="step"><div class="step-num">4</div><h3>Ship Together</h3><p>Create projects, assign tasks, huddle, use AI, track timelines. Ship faster.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="wrap">
+    <div class="centered" style="margin-bottom:52px">
+      <div class="sec-tag">About VEWIT</div>
+      <h2 class="sec-title">One platform. Every tool your team needs.</h2>
+      <p class="sec-sub">Most engineering teams lose 2–3 hours a day switching between tools. VEWIT was built to end that — a single platform where planning, execution and communication happen together.</p>
+    </div>
+
+    <!-- Origin story / mission -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:56px;align-items:center">
+      <div>
+        <div class="sec-tag" style="margin-bottom:14px">Our mission</div>
+        <h3 style="font-size:clamp(20px,2.5vw,28px);font-weight:800;color:var(--tx);margin-bottom:16px;letter-spacing:-.02em;line-height:1.3">Replace the tool chaos with clarity</h3>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">The average team uses Jira for tasks, Slack for chat, Confluence for docs, Notion for planning and spreadsheets for tracking. Each switch breaks focus and loses context.</p>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">VEWIT puts your projects, tasks, direct messages, support tickets, timeline and analytics under one roof — with an AI assistant that understands <em>your actual work</em>, not just general knowledge.</p>
+        <p style="color:var(--tx2);font-size:15px;line-height:1.75">The result: less overhead, faster delivery, and a team that stays in sync without the noise.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">12+</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Built-in modules</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">6</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Access roles</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">AI</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Claude-powered</div>
+        </div>
+        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
+          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">PWA</div>
+          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Works on mobile</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Who it's for — role cards using landing theme -->
+    <div class="sec-tag centered" style="display:block;text-align:center;margin-bottom:12px">Who uses VEWIT</div>
+    <h3 style="text-align:center;font-size:clamp(18px,2.5vw,26px);font-weight:800;color:var(--tx);margin-bottom:32px;letter-spacing:-.02em">Built for every layer of your team</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:56px">
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">👑</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Admin</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Full workspace control — SMTP, AI keys, invite codes, roles and all settings</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🗂️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Manager</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Create and manage projects, assign tasks, view team analytics and productivity</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🏷️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Team Lead</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Lead sub-teams, assign work to members, track progress and unblock delivery</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">💻</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Developer</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Own tasks, track story points, log progress, DM teammates and use the AI assistant</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">🔍</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Tester</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Raise and manage tickets, link bugs to tasks, track resolution across sprints</p>
+      </div>
+      <div class="step" style="margin:0;text-align:left;padding:20px">
+        <div style="font-size:22px;margin-bottom:10px">👁️</div>
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Viewer</h3>
+        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Read-only visibility into projects, tasks and team progress — perfect for stakeholders</p>
+      </div>
+    </div>
+
+    <!-- VEWIT vs others comparison — premium redesign -->
+    <div class="centered" style="margin-bottom:40px">
+      <div class="sec-tag">VEWIT vs the alternatives</div>
+      <h3 style="font-size:clamp(20px,2.8vw,30px);font-weight:800;color:var(--tx);margin-top:12px;letter-spacing:-.03em;line-height:1.2">Stop paying for 5 tools when 1 does it all</h3>
+      <p style="color:var(--tx3);font-size:14px;margin-top:10px;max-width:520px;margin-left:auto;margin-right:auto">Every capability your team needs — built-in, not bolted on.</p>
+    </div>
+
+    <div style="overflow-x:auto;margin-bottom:64px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.07);border:1px solid var(--bd)">
+      <table style="width:100%;border-collapse:collapse;min-width:600px">
+
+        <!-- Header -->
+        <thead>
+          <tr>
+            <th style="padding:20px 24px;text-align:left;background:var(--sf);border-bottom:1px solid var(--bd);width:35%">
+              <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">Capability</span>
+            </th>
+            <!-- VEWIT column — highlighted -->
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:2px solid var(--ac);position:relative;width:21%">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="width:28px;height:28px;border-radius:8px;background:var(--ac);display:flex;align-items:center;justify-content:center;margin-bottom:2px">
+                  <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+                </div>
+                <span style="font-size:14px;font-weight:800;color:var(--tx);letter-spacing:-.01em">VEWIT</span>
+              </div>
+            </th>
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
+              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Jira + Slack</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
+            </th>
+            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
+              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Notion + Linear</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <!-- Row macro: cap | vewit | jira | notion -->
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📋</span>
+              Project &amp; task management
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💬</span>
+              Direct messaging
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">via Slack</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</span>
+              AI assistant (workspace-aware)
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
+                <span style="font-size:10px;color:#94a3b8">Partial</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🎫</span>
+              Support ticket system
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📅</span>
+              Timeline / Gantt view
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
+                <span style="font-size:10px;color:#94a3b8">Partial</span>
+              </div>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📊</span>
+              Developer productivity analytics
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔔</span>
+              Push notifications (desktop)
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
+            </td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--bd)">
+            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🏢</span>
+              Multi-workspace / multi-tenant
+            </td>
+            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Expensive</span>
+              </div>
+            </td>
+            <td style="text-align:center;padding:15px 24px">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
+                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+              </div>
+            </td>
+          </tr>
+          <!-- Pricing footer row -->
+          <tr style="background:var(--sf2)">
+            <td style="padding:18px 24px;font-size:13px;font-weight:700;color:var(--tx)">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:28px;height:28px;border-radius:8px;background:var(--ac3);border:1px solid var(--bd);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💰</span>
+                Monthly cost per user
+              </div>
+            </td>
+            <td style="text-align:center;background:linear-gradient(160deg,rgba(37,99,235,.12),rgba(37,99,235,.06));padding:18px 24px;border-top:2px solid var(--ac)">
+              <div style="font-size:18px;font-weight:800;color:var(--ac);line-height:1">Free</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px;font-weight:500">to get started</div>
+            </td>
+            <td style="text-align:center;padding:18px 24px">
+              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$15–30</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
+            </td>
+            <td style="text-align:center;padding:18px 24px">
+              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$16–20</div>
+              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Legend -->
+      <div style="display:flex;gap:20px;justify-content:flex-end;padding:14px 24px;border-top:1px solid var(--bd);background:var(--sf);border-radius:0 0 20px 20px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#dcfce7;font-size:10px">✓</span> Included
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fee2e2;font-size:9px;color:#ef4444">✕</span> Not available
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fef9c3;font-size:10px;color:#ca8a04">~</span> Partial / add-on
+        </div>
+      </div>
+    </div>
+
+    <!-- Security & tech stack -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:8px">
+      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
+        <div class="sec-tag" style="margin-bottom:16px">Security</div>
+        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Enterprise-grade security, zero config</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> bcrypt password hashing (12 rounds)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Optional OTP email verification per login</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Role-based access control (6 levels)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Session-based auth with 7-day persistence</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Workspace isolation — data never crosses tenants</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> HTTPS enforced via Railway + Let's Encrypt</div>
+        </div>
+      </div>
+      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
+        <div class="sec-tag" style="margin-bottom:16px">Technology</div>
+        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Modern stack, no dependencies to manage</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Python Flask backend — fast and lightweight</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> PostgreSQL database via pg8000 (pure Python)</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> React 18 frontend — no build step, instant load</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Anthropic Claude AI integration</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Web Push API for real-time desktop notifications</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Hosted on Railway — auto-deploy, zero downtime</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div class="wrap">
+    <div class="cta-box">
+      <h2>Ready to ship faster, together?</h2>
+      <p>Create your free workspace in under 2 minutes. No credit card required.</p>
+      <div class="cta-actions">
+        <a href="/?action=register" class="btn btn-primary btn-xl">🚀 Create Your Workspace</a>
+        <a href="/?action=login" class="btn btn-outline btn-xl">Sign In →</a>
+      </div>
+      <div class="trust-row">
+        <div class="trust-item"><span>✓</span> Free to start</div>
+        <div class="trust-item"><span>✓</span> No credit card</div>
+        <div class="trust-item"><span>✓</span> Multi-tenant</div>
+        <div class="trust-item"><span>✓</span> Hosted on Railway</div>
+        <div class="trust-item"><span>✓</span> bcrypt security</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" style="padding:90px 0;background:var(--bg);border-top:1px solid var(--bd)">
+  <div class="wrap">
+
+    <!-- Header -->
+    <div class="centered" style="margin-bottom:56px">
+      <div class="sec-tag">Get in touch</div>
+      <h2 class="sec-title" style="margin-top:12px">We'd love to hear from you</h2>
+      <p class="sec-sub">Have a question, want a demo, or need help getting started? Reach out — we respond within 24 hours.</p>
+    </div>
+
+    <!-- Main contact panel -->
+    <div style="background:var(--sf);border:1px solid var(--bd);border-radius:24px;overflow:hidden;display:grid;grid-template-columns:1fr 1.4fr">
+
+      <!-- Left — info panel -->
+      <div style="background:linear-gradient(160deg,#0f172a 0%,#1e3a5f 100%);padding:48px 40px;display:flex;flex-direction:column;gap:32px">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(37,99,235,.4);display:flex;align-items:center;justify-content:center">
+              <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+            </div>
+            <span style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-.02em">VEWIT</span>
+          </div>
+          <h3 style="font-size:22px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:10px">Let's build something great together</h3>
+          <p style="font-size:13px;color:#94a3b8;line-height:1.7">Whether you're a startup or an enterprise team, we're here to help you get more done with less friction.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:20px">
+
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌐</div>
+            <div>
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Website</div>
+              <a href="https://www.vewit.in" style="font-size:14px;color:#60a5fa;font-weight:600;text-decoration:none">www.vewit.in</a>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏰</div>
+            <div>
+              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Business hours</div>
+              <div style="font-size:14px;color:#cbd5e1;font-weight:500">Mon–Sat · 9 AM – 6 PM IST</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- What we can help with -->
+        <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:24px">
+          <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">We can help with</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Workspace setup &amp; onboarding</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Team migration from other tools</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Custom feature requests</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Enterprise &amp; team pricing</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Technical support &amp; bug reports</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right — direct email CTA -->
+      <div style="padding:52px 44px;background:var(--sf);display:flex;flex-direction:column;justify-content:center;gap:32px">
+
+        <div>
+          <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);padding:5px 14px;border-radius:100px;margin-bottom:18px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e"></span>
+            <span style="font-size:11px;font-weight:700;color:#2563eb;letter-spacing:.06em;text-transform:uppercase">We respond within 24 hours</span>
+          </div>
+          <h3 style="font-size:26px;font-weight:800;color:var(--tx);letter-spacing:-.03em;line-height:1.2;margin-bottom:12px">Reach us directly<br/>by email</h3>
+          <p style="font-size:14px;color:var(--tx3);line-height:1.7">No forms, no bots. Write to us directly and a real person will reply — usually within a few hours.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <a href="mailto:ceo@vewit.in?subject=Enquiry about VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#2563eb';this.style.background='rgba(37,99,235,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✉️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">General enquiries &amp; CEO</div>
+              <div style="font-size:15px;font-weight:700;color:#2563eb">ceo@vewit.in</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Partnerships · Demo · Enterprise</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+
+          <a href="mailto:support@vewit.in?subject=Support Request — VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#7c3aed';this.style.background='rgba(124,58,237,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🛠️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Technical support</div>
+              <div style="font-size:15px;font-weight:700;color:#7c3aed">support@vewit.in</div>
+              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Bugs · Feature requests · Help</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+          </a>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:16px 18px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px">
+          <span style="font-size:18px;flex-shrink:0;margin-top:1px">💡</span>
+          <p style="margin:0;font-size:12px;color:var(--tx2);line-height:1.65"><strong style="color:var(--tx)">Pro tip:</strong> Include your workspace name, team size and what you need — it helps us reply faster.</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<footer>
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>VEWIT</a>
+        <p>The all-in-one project management platform for engineering teams. AI-powered, multi-tenant, fully featured.</p>
+      </div>
+      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#about">About VEWIT</a></li><li><a href="#how">How it works</a></li></ul></div>
+      <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li><li><a href="#contact">Contact Us</a></li></ul></div>
+      <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-copy">© 2026 VEWIT — AI-Powered Team Collaboration</div>
+      <div class="footer-badges"><div class="fb">v4.0</div><div class="fb">PostgreSQL</div><div class="fb">AI-Powered</div><div class="fb">bcrypt</div></div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Scroll animations
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='translateY(0)';}});
+},{threshold:.08,rootMargin:'0px 0px -20px 0px'});
+document.querySelectorAll('.bc,.mod-card,.step').forEach((el,i)=>{
+  el.style.opacity='0';el.style.transform='translateY(16px)';
+  el.style.transition=`opacity .45s ${i*.045}s ease,transform .45s ${i*.045}s ease`;
+  observer.observe(el);
+});
+
+// Nav scroll
+const nav=document.getElementById('nav');
+window.addEventListener('scroll',()=>{
+  nav.style.background=window.scrollY>30?'rgba(255,255,255,0.97)':'rgba(255,255,255,0.88)';
+},{passive:true});
+
+</script>
+</body>
+</html>"""
 
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -4375,12 +4953,11 @@ class ErrorBoundary extends React.Component{
 }
 
 /* ─── AuthScreen — Professional Tech Design ───────────────────────────────── */
-
 function AuthScreen({onLogin}){
   const _initTab=(()=>{try{const p=new URLSearchParams(window.location.search);return p.get('action')==='register'?'register':'login';}catch{return 'login';}})();
   const _setTab=(t)=>{
     setTabRaw(t);
-    setEmail('');setPw('');setErr('');setName('');setWsName('');setInviteCode('');setSuccess(false);
+    setEmail('');setPw('');setErr('');setName('');setWsName('');setInviteCode('');
     try{history.replaceState(null,'','/?action='+t);}catch{}
   };
   const [tab,setTabRaw]=useState(_initTab);const setTab=_setTab;
@@ -4394,401 +4971,361 @@ function AuthScreen({onLogin}){
   const [showPw,setShowPw]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
-  const [success,setSuccess]=useState(false);
-  const [successMsg,setSuccessMsg]=useState('');
+  const [otpCode,setOtpCode]=useState(''); // kept for ref cleanup only
+  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()]; // kept to avoid ref errors
+  // TOTP / Google Authenticator state
   const [totpStep,setTotpStep]=useState(false);
   const [totpUserId,setTotpUserId]=useState('');
   const [totpUserName,setTotpUserName]=useState('');
   const [totpToken,setTotpToken]=useState('');
   const cvRef=useRef(null);
-  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
 
-  useEffect(()=>{ if(totpStep) setTotpToken(''); },[totpStep]);
+  useEffect(()=>{
+    if(totpStep)setTotpToken('');
+  },[totpStep]);
 
-  // Rich canvas animation — dark, colorful mesh
   useEffect(()=>{
     const cv=cvRef.current;if(!cv)return;
     const ctx=cv.getContext('2d');
     let id,frame=0;
     const resize=()=>{cv.width=cv.offsetWidth||700;cv.height=cv.offsetHeight||900;};
     resize();
-    const ro=new ResizeObserver(()=>resize());ro.observe(cv);
+    const ro=new ResizeObserver(()=>{resize();});ro.observe(cv);
 
-    const COLORS=[
-      [79,142,247],   // blue
-      [139,92,246],   // purple
-      [34,211,238],   // cyan
-      [52,211,153],   // green
-      [244,114,182],  // pink
-      [251,191,36],   // amber
-    ];
+    const waveConfigs=[
+      {spd:.00042,amp:.048,freq:2.2,ph:0, fill:'rgba(147,197,253,',stroke:'rgba(96,165,250,', base:.50}, {spd:.00031,amp:.040,freq:1.8,ph:2.0, fill:'rgba(96,165,250,', stroke:'rgba(59,130,246,', base:.56}, {spd:.00051,amp:.032,freq:2.7,ph:4.1, fill:'rgba(59,130,246,', stroke:'rgba(37,99,235,', base:.61}, {spd:.00024,amp:.026,freq:1.5,ph:1.2, fill:'rgba(37,99,235,', stroke:'rgba(29,78,216,', base:.66}, {spd:.00058,amp:.020,freq:3.1,ph:3.4, fill:'rgba(29,78,216,', stroke:'rgba(30,64,175,', base:.70}, ];
 
-    const orbs=COLORS.map((c,i)=>({
-      x:.1+Math.random()*.8, y:.1+Math.random()*.8,
-      vx:(Math.random()-.5)*.00018, vy:(Math.random()-.5)*.00015,
-      r:.28+Math.random()*.22, ph:i*1.05, sp:.003+Math.random()*.004,
-      c, a:.18+Math.random()*.14
-    }));
+    const pts=Array.from({length:28},()=>({
+      x:Math.random(),y:Math.random()*.5, vx:(Math.random()-.5)*.00012,vy:(Math.random()-.5)*.00010, r:.6+Math.random()*1.2,ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.008, }));
 
-    const pts=Array.from({length:32},()=>({
-      x:Math.random(), y:Math.random(),
-      vx:(Math.random()-.5)*.00014, vy:(Math.random()-.5)*.00012,
-      ph:Math.random()*Math.PI*2, sp:.005+Math.random()*.007,
-      ci:Math.floor(Math.random()*COLORS.length)
-    }));
+    const bubbles=Array.from({length:16},()=>({
+      x:Math.random(),y:.45+Math.random()*.45, r:1.5+Math.random()*4,vy:-.00025-Math.random()*.0003, ph:Math.random()*Math.PI*2,sp:.007+Math.random()*.005,a:.06+Math.random()*.10, }));
 
-    const sparks=Array.from({length:18},()=>({
-      x:Math.random(), y:Math.random(),
-      ph:Math.random()*Math.PI*2, sp:.012+Math.random()*.01,
-      sz:.4+Math.random()*1.0, ci:Math.floor(Math.random()*COLORS.length)
-    }));
+    const sparks=Array.from({length:24},()=>({
+      x:Math.random(),yb:.46+Math.random()*.18, ph:Math.random()*Math.PI*2,sp:.018+Math.random()*.014,sz:.6+Math.random()*1.2, }));
 
     const draw=()=>{
-      const W=cv.width, H=cv.height;
-      frame++; const t=frame*.016;
+      const W=cv.width,H=cv.height;
+      frame++;const t=frame*.016;
 
-      // Dark base gradient
-      const bg=ctx.createLinearGradient(0,0,W*.5,H);
-      bg.addColorStop(0,'#080c14');
-      bg.addColorStop(.5,'#0d1221');
-      bg.addColorStop(1,'#111827');
-      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+      const bg=ctx.createLinearGradient(0,0,0,H);
+      bg.addColorStop(0,'#ffffff');
+      bg.addColorStop(.30,'#f0f9ff');
+      bg.addColorStop(.52,'#dbeafe');
+      bg.addColorStop(.75,'#bfdbfe');
+      bg.addColorStop(1,'#93c5fd');
+      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-      // Floating color orbs
-      orbs.forEach(o=>{
-        o.x+=o.vx; o.y+=o.vy; o.ph+=o.sp;
-        if(o.x<-.1)o.x=1.1; if(o.x>1.1)o.x=-.1;
-        if(o.y<-.1)o.y=1.1; if(o.y>1.1)o.y=-.1;
-        const ox=o.x*W + Math.sin(o.ph*.7)*W*.06;
-        const oy=o.y*H + Math.cos(o.ph*.5)*H*.06;
-        const rr=o.r*Math.min(W,H);
-        const pulse=1+Math.sin(o.ph*2.1)*.12;
-        const g=ctx.createRadialGradient(ox,oy,0,ox,oy,rr*pulse);
-        const [r,g2,b]=o.c;
-        g.addColorStop(0,`rgba(${r},${g2},${b},${o.a})`);
-        g.addColorStop(.5,`rgba(${r},${g2},${b},${o.a*.35})`);
-        g.addColorStop(1,`rgba(${r},${g2},${b},0)`);
-        ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-      });
+      const sg=ctx.createRadialGradient(W*.78,H*.08,0,W*.78,H*.08,W*.5);
+      sg.addColorStop(0,'rgba(254,240,138,0.45)');
+      sg.addColorStop(.3,'rgba(253,224,71,0.15)');
+      sg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
 
-      // Particle nodes
-      ctx.save();
+      const ta=ctx.createRadialGradient(W*.5,0,0,W*.5,0,H*.55);
+      ta.addColorStop(0,'rgba(219,234,254,0.4)');
+      ta.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=ta;ctx.fillRect(0,0,W,H);
+
       pts.forEach(p=>{
-        p.x+=p.vx; p.y+=p.vy; p.ph+=p.sp;
-        if(p.x<0)p.x=1; if(p.x>1)p.x=0;
-        if(p.y<0)p.y=1; if(p.y>1)p.y=0;
-        const [r,g,b]=COLORS[p.ci];
-        const a=.12+Math.sin(p.ph)*.07;
-        ctx.beginPath(); ctx.arc(p.x*W,p.y*H,1.2,0,Math.PI*2);
-        ctx.fillStyle=`rgba(${r},${g},${b},${a})`; ctx.fill();
+        p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
+        if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=.5;if(p.y>.5)p.y=0;
+        const a=(.08+Math.sin(p.ph)*.06)*(1-p.y/.5);
+        ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
+        ctx.fillStyle='rgba(59,130,246,'+a+')';ctx.fill();
       });
 
-      // Connection lines
-      ctx.lineWidth=.5;
-      for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
-        const dx=(pts[i].x-pts[j].x)*W, dy=(pts[i].y-pts[j].y)*H;
+      ctx.lineWidth=.4;
+      for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
+        const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H;
         const d=Math.sqrt(dx*dx+dy*dy);
-        if(d<W*.13){
-          const [r,g,b]=COLORS[pts[i].ci];
-          const a=.06*(1-d/(W*.13));
-          ctx.strokeStyle=`rgba(${r},${g},${b},${a})`;
-          ctx.beginPath(); ctx.moveTo(pts[i].x*W,pts[i].y*H);
-          ctx.lineTo(pts[j].x*W,pts[j].y*H); ctx.stroke();
+        if(d<W*.14){
+          ctx.strokeStyle='rgba(147,197,253,'+(0.06*(1-d/(W*.14)))+')';
+          ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.stroke();
         }
       }
-      ctx.restore();
 
-      // Sparkles / stars
-      sparks.forEach(s=>{
-        s.ph+=s.sp;
-        const sx=s.x*W+Math.sin(s.ph*.3)*12;
-        const sy=s.y*H+Math.cos(s.ph*.4)*8;
-        const sa=(Math.sin(s.ph)+1)/2;
-        if(sa>.3){
-          const [r,g,b]=COLORS[s.ci];
-          const a=sa*.28;
-          ctx.save(); ctx.translate(sx,sy);
-          ctx.fillStyle=`rgba(${r},${g},${b},${a})`;
-          ctx.beginPath();
-          ctx.moveTo(0,-s.sz*2.0); ctx.lineTo(s.sz*.3,-s.sz*.3);
-          ctx.lineTo(s.sz*2.0,0);  ctx.lineTo(s.sz*.3,s.sz*.3);
-          ctx.lineTo(0,s.sz*2.0);  ctx.lineTo(-s.sz*.3,s.sz*.3);
-          ctx.lineTo(-s.sz*2.0,0); ctx.lineTo(-s.sz*.3,-s.sz*.3);
-          ctx.closePath(); ctx.fill(); ctx.restore();
+      const hy=H*.48;
+      const hl=ctx.createLinearGradient(0,hy,W,hy);
+      hl.addColorStop(0,'rgba(255,255,255,0)');hl.addColorStop(.3,'rgba(255,255,255,0.4)');
+      hl.addColorStop(.5,'rgba(219,234,254,0.6)');hl.addColorStop(.7,'rgba(255,255,255,0.4)');
+      hl.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=hl;ctx.fillRect(0,hy-1,W,3);
+
+      waveConfigs.forEach((w,wi)=>{
+        const ph=t*w.spd*1000+w.ph;
+        ctx.beginPath();ctx.moveTo(0,H);
+        for(let x=0;x<=W;x+=2){
+          const xn=x/W;
+          const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
+            +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)
+            +Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));
+          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+        }
+        ctx.lineTo(W,H);ctx.closePath();
+        ctx.fillStyle=w.fill+[.14,.12,.11,.10,.09][wi]+')';ctx.fill();
+        ctx.beginPath();
+        for(let x=0;x<=W;x+=2){
+          const xn=x/W;
+          const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
+            +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)
+            +Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));
+          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+        }
+        ctx.strokeStyle=w.stroke+[.07,.06,.06,.05,.05][wi]+')';ctx.lineWidth=1.1;ctx.stroke();
+        if(wi===0){
+          for(let fx=W*.04;fx<W;fx+=W*.09+Math.sin(fx*0.01)*W*.02){
+            const xn=fx/W;
+            const fy=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
+              +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3));
+            const fa=.10+Math.sin(t*.9+fx*.008)*.05;
+            const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,20+Math.sin(t+fx*.01)*5);
+            fg.addColorStop(0,'rgba(255,255,255,'+fa+')');fg.addColorStop(1,'rgba(255,255,255,0)');
+            ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(fx,fy,22,5,0,0,Math.PI*2);ctx.fill();
+          }
         }
       });
 
-      // Subtle grid lines
-      ctx.save();
-      ctx.strokeStyle='rgba(255,255,255,0.025)'; ctx.lineWidth=.5;
-      const gStep=Math.floor(W/8);
-      for(let x=0;x<W;x+=gStep){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-      for(let y=0;y<H;y+=gStep){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-      ctx.restore();
+      for(let rx=W*.02;rx<W;rx+=W*.065){
+        const ry=H*(.52+Math.sin(t*.35+rx*.008)*.05);
+        const ra=.03+Math.sin(t*.7+rx*.015)*.02;
+        const rg=ctx.createLinearGradient(rx,ry,rx+W*.05,ry);
+        rg.addColorStop(0,'rgba(255,255,255,0)');rg.addColorStop(.5,'rgba(255,255,255,'+ra+')');rg.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=rg;ctx.fillRect(rx,ry,W*.05,2);
+      }
+
+      bubbles.forEach(b=>{
+        b.y+=b.vy;b.ph+=b.sp;
+        if(b.y<.42)b.y=.5+Math.random()*.3;
+        const bx=b.x*W+Math.sin(b.ph)*6;
+        const by=b.y*H;
+        const ba=b.a*(0.4+Math.sin(b.ph)*.6);
+        ctx.beginPath();ctx.arc(bx,by,b.r,0,Math.PI*2);
+        ctx.strokeStyle='rgba(147,197,253,'+ba+')';ctx.lineWidth=.7;ctx.stroke();
+        ctx.beginPath();ctx.arc(bx-b.r*.3,by-b.r*.35,b.r*.28,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,'+(ba*.55)+')';ctx.fill();
+      });
+
+      sparks.forEach(s=>{
+        s.ph+=s.sp;
+        const sx=s.x*W+Math.sin(s.ph*.4)*10;
+        const sy=H*(s.yb+Math.sin(s.ph*.3)*.015);
+        const sa=(Math.sin(s.ph)+1)/2;
+        if(sa>.35){
+          const a=sa*.22;
+          ctx.save();ctx.translate(sx,sy);
+          ctx.fillStyle='rgba(255,255,255,'+a+')';
+          ctx.beginPath();
+          ctx.moveTo(0,-s.sz*2.2);ctx.lineTo(s.sz*.35,-s.sz*.35);ctx.lineTo(s.sz*2.2,0);
+          ctx.lineTo(s.sz*.35,s.sz*.35);ctx.lineTo(0,s.sz*2.2);ctx.lineTo(-s.sz*.35,s.sz*.35);
+          ctx.lineTo(-s.sz*2.2,0);ctx.lineTo(-s.sz*.35,-s.sz*.35);
+          ctx.closePath();ctx.fill();ctx.restore();
+        }
+      });
 
       id=requestAnimationFrame(draw);
     };
     draw();
-    return()=>{ ro.disconnect(); cancelAnimationFrame(id); };
+    return()=>{ro.disconnect();cancelAnimationFrame(id);};
   },[]);
 
   const go=async()=>{
-    setErr(''); setBusy(true); setSuccess(false);
+    setErr('');setBusy(true);
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
-      if(r.error){ setErr(r.error); setBusy(false); }
-      else if(r.totp_required){ setTotpUserId(r.user_id); setTotpUserName(r.name); setTotpStep(true); setTotpToken(''); setBusy(false); }
-      else{
-        setSuccess(true); setSuccessMsg('Welcome back, '+r.name+'!');
-        setTimeout(()=>onLogin(r), 1200);
-      }
+      if(r.error)setErr(r.error);
+      else if(r.totp_required){setTotpUserId(r.user_id);setTotpUserName(r.name);setTotpStep(true);setTotpToken('');}
+      else onLogin(r);
     } else {
-      if(!name||!email||!pw){ setErr('All fields required.'); setBusy(false); return; }
-      if(regMode==='create'&&!wsName){ setErr('Workspace name required.'); setBusy(false); return; }
-      if(regMode==='join'&&!inviteCode){ setErr('Invite code required.'); setBusy(false); return; }
+      if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
+      if(regMode==='create'&&!wsName){setErr('Workspace name required.');setBusy(false);return;}
+      if(regMode==='join'&&!inviteCode){setErr('Invite code required.');setBusy(false);return;}
       const r=await api.post('/api/auth/register',{mode:regMode,workspace_name:wsName,invite_code:inviteCode,name,email,password:pw,role});
-      if(r.error){ setErr(r.error); setBusy(false); }
-      else{
-        setSuccess(true); setSuccessMsg('Workspace ready! Signing you in…');
-        setTimeout(()=>onLogin(r), 1400);
-      }
+      if(r.error)setErr(r.error);else onLogin(r);
     }
+    setBusy(false);
   };
-
   const submitTotp=async()=>{
     const tok=totpToken.replace(/\s/g,'');
-    if(tok.length!==6){ setErr('Enter the 6-digit code from your authenticator app.'); return; }
-    setErr(''); setBusy(true);
+    if(tok.length!==6){setErr('Enter the 6-digit code from your authenticator app.');return;}
+    setErr('');setBusy(true);
     const r=await api.post('/api/auth/totp/verify',{user_id:totpUserId,token:tok});
-    if(r.error){ setErr(r.error); setTotpToken(''); setBusy(false); }
-    else{
-      setSuccess(true); setSuccessMsg('Identity verified! Welcome back.');
-      setTimeout(()=>onLogin(r), 1000);
-    }
+    if(r.error){setErr(r.error);setTotpToken('');}else onLogin(r);
+    setBusy(false);
   };
+  // OTP handlers removed — Google Authenticator is the only 2FA method
 
-  // ── Input styles (dark theme) ──
   const inp={
-    width:'100%', padding:'13px 16px', borderRadius:12, fontSize:14.5, outline:'none',
-    background:'rgba(255,255,255,0.06)', border:'1.5px solid rgba(255,255,255,0.12)',
-    color:'#f0f4ff', fontFamily:'inherit', transition:'border-color .2s,box-shadow .2s,background .2s',
-    boxSizing:'border-box', letterSpacing:'-.1px',
-  };
-  const inpFocus=(e)=>{ e.target.style.borderColor='rgba(79,142,247,0.7)'; e.target.style.background='rgba(79,142,247,0.08)'; e.target.style.boxShadow='0 0 0 3px rgba(79,142,247,0.15)'; };
-  const inpBlur=(e)=>{ e.target.style.borderColor='rgba(255,255,255,0.12)'; e.target.style.background='rgba(255,255,255,0.06)'; e.target.style.boxShadow='none'; };
-  const lbl={ display:'block', fontSize:11, fontWeight:700, letterSpacing:.8, textTransform:'uppercase', color:'rgba(168,180,204,0.8)', marginBottom:7 };
-
-  // ── Success overlay ──
-  if(success) return html`
-    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080c14',position:'fixed',inset:0,zIndex:9999}}>
-      <div style=${{textAlign:'center',animation:'authSuccessIn .5s cubic-bezier(.34,1.56,.64,1) both'}}>
-        <style>{'@keyframes authSuccessIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}} @keyframes checkDraw{from{stroke-dashoffset:60}to{stroke-dashoffset:0}} @keyframes ringPulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.8);opacity:0}}'}</style>
-        <div style=${{position:'relative',width:100,height:100,margin:'0 auto 28px'}}>
-          <div style=${{position:'absolute',inset:0,borderRadius:'50%',background:'rgba(52,211,153,0.12)',border:'2px solid rgba(52,211,153,0.4)',animation:'ringPulse 1s .3s ease-out both'}}></div>
-          <div style=${{position:'absolute',inset:0,borderRadius:'50%',background:'linear-gradient(135deg,rgba(52,211,153,0.2),rgba(79,142,247,0.2))',border:'2px solid rgba(52,211,153,0.5)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <svg width="44" height="44" viewBox="0 0 52 52" fill="none">
-              <circle cx="26" cy="26" r="25" stroke="rgba(52,211,153,0.5)" strokeWidth="2" fill="none"/>
-              <polyline points="14,27 22,35 38,18" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="60" strokeDashoffset="60" style="animation:checkDraw .5s .3s ease both;stroke-dashoffset:0"/>
-            </svg>
-          </div>
-        </div>
-        <div style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:26,fontWeight:800,color:'#f0f4ff',letterSpacing:'-1px',marginBottom:10}}>${successMsg}</div>
-        <div style=${{fontSize:14,color:'rgba(168,180,204,0.7)'}}>Taking you to your workspace…</div>
-        <div style=${{marginTop:24,width:180,height:3,background:'rgba(255,255,255,0.08)',borderRadius:3,overflow:'hidden',margin:'24px auto 0'}}>
-          <div style=${{height:'100%',background:'linear-gradient(90deg,#4f8ef7,#8b5cf6)',borderRadius:3,animation:'progressBar 1.2s ease both'}}></div>
-        </div>
-        <style>{'@keyframes progressBar{from{width:0}to{width:100%}}'}</style>
-      </div>
-    </div>`;
+    width:'100%',padding:'12px 15px',borderRadius:10,fontSize:14,outline:'none', background:'#f8fafc',border:'1.5px solid #e2e8f0',color:'#0f172a', fontFamily:'inherit',transition:'border-color .18s,box-shadow .18s',boxSizing:'border-box', };
+  const lbl={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07, textTransform:'uppercase',color:'#94a3b8',marginBottom:6};
 
   const leftPanel=html`
-    <div style=${{width:'48%',flexShrink:0,minHeight:'100vh',position:'relative',overflow:'hidden'}}>
-      <canvas ref=${cvRef} style=${{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'block'}}></canvas>
+    <div style=${{
+      width:'48%',flexShrink:0,minHeight:'100vh', position:'relative',overflow:'hidden', }}>
+      <canvas ref=${cvRef} style=${{
+        position:'absolute',top:0,left:0, width:'100%',height:'100%',display:'block', }}></canvas>
 
-      <!-- Logo overlay -->
-      <div style=${{position:'absolute',top:24,left:24,zIndex:10,display:'flex',alignItems:'center',gap:10}}>
-        <div style=${{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(79,142,247,0.4)'}}>
-          <svg width="18" height="18" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+      <div style=${{position:'absolute',top:24,left:24,zIndex:10,display:'flex',alignItems:'center',gap:9}}>
+        <div style=${{width:32,height:32,borderRadius:9,background:'white',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(59,130,246,0.2)'}}>
+          <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#1d4ed8"/><circle cx="32" cy="11" r="6" fill="#1d4ed8"/><circle cx="51" cy="43" r="6" fill="#1d4ed8"/><circle cx="13" cy="43" r="6" fill="#1d4ed8"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <span style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:16,color:'#f0f4ff',letterSpacing:'-0.5px'}}>VEWIT</span>
+        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>VEWIT</span>
       </div>
 
-      <!-- Center copy -->
-      <div style=${{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center',zIndex:10,pointerEvents:'none',width:'80%'}}>
-        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(79,142,247,0.15)',border:'1px solid rgba(79,142,247,0.3)',padding:'5px 14px',borderRadius:100,marginBottom:20,backdropFilter:'blur(8px)'}}>
-          <div style=${{width:5,height:5,borderRadius:'50%',background:'#34d399',boxShadow:'0 0 8px #34d399'}}></div>
-          <span style=${{fontSize:11,color:'#4f8ef7',fontWeight:700,letterSpacing:.05}}>AI-POWERED · FREE TO START</span>
+            <div style=${{
+        position:'absolute',top:'50%',left:'50%', transform:'translate(-50%,-50%)', textAlign:'center',zIndex:10,pointerEvents:'none', width:'80%', }}>
+        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(255,255,255,0.7)',border:'1px solid rgba(147,197,253,0.6)',padding:'5px 14px',borderRadius:100,marginBottom:18,backdropFilter:'blur(8px)'}}>
+          <div style=${{width:5,height:5,borderRadius:'50%',background:'#3b82f6'}}></div>
+          <span style=${{fontSize:11,color:'#1d4ed8',fontWeight:700,letterSpacing:.05}}>TEAM COLLABORATION · AI-POWERED</span>
         </div>
-        <h2 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:'clamp(1.6rem,2.8vw,2.2rem)',fontWeight:800,color:'#f0f4ff',lineHeight:1.15,marginBottom:14,letterSpacing:'-1.5px'}}>
+        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.5vw,2rem)',fontWeight:800,color:'#1e3a5f',lineHeight:1.2,marginBottom:10,letterSpacing:-.03}}>
           Where teams<br/>ship together
         </h2>
-        <p style=${{fontSize:13,color:'rgba(168,180,204,0.7)',lineHeight:1.75}}>
-          Projects · Tasks · AI Assistant<br/>Timeline · Tickets · Direct Messages
+        <p style=${{fontSize:13,color:'rgba(30,58,95,0.65)',lineHeight:1.7}}>
+          Tasks · AI assistant · Huddles<br/>Timeline · Tickets
         </p>
       </div>
 
-      <!-- Bottom feature pills -->
-      <div style=${{position:'absolute',bottom:28,left:0,right:0,display:'flex',justifyContent:'center',gap:7,flexWrap:'wrap',padding:'0 20px',zIndex:10}}>
-        ${['📋 Kanban','🤖 AI','📅 Timeline','📞 Meet','🎫 Tickets','📊 Analytics'].map(f=>html`
-          <div key=${f} style=${{background:'rgba(8,12,20,0.6)',border:'1px solid rgba(79,142,247,0.25)',backdropFilter:'blur(12px)',padding:'5px 12px',borderRadius:100,fontSize:11,fontWeight:600,color:'rgba(168,180,204,0.9)'}}>${f}</div>
+            <div style=${{
+        position:'absolute',bottom:28,left:0,right:0, display:'flex',justifyContent:'center',gap:8,flexWrap:'wrap', padding:'0 20px',zIndex:10, }}>
+        ${['📋 Tasks','🤖 AI','📅 Timeline','📞 Huddles','🎫 Tickets'].map(f=>html`
+          <div key=${f} style=${{
+            background:'rgba(255,255,255,0.72)', border:'1px solid rgba(147,197,253,0.5)', backdropFilter:'blur(8px)', padding:'5px 12px',borderRadius:100, fontSize:11,fontWeight:600,color:'#1d4ed8', }}>${f}</div>
         `)}
       </div>
     </div>`;
 
   const rightPanel=(child)=>html`
-    <div style=${{flex:1,minHeight:'100vh',background:'#0d1221',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 36px',overflowY:'auto',borderLeft:'1px solid rgba(255,255,255,0.06)'}}>
+    <div style=${{
+      flex:1,minHeight:'100vh',background:'#ffffff', display:'flex',alignItems:'center',justifyContent:'center', padding:'40px 36px',overflowY:'auto', borderLeft:'1px solid #f1f5f9', }}>
       <div style=${{width:'100%',maxWidth:400}}>
         ${child}
       </div>
     </div>`;
 
-  // TOTP step
   if(totpStep) return html`
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
         <div style=${{marginBottom:24}}>
-          <div style=${{width:56,height:56,borderRadius:16,background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:18,boxShadow:'0 6px 24px rgba(79,142,247,0.35)'}}>
+          <div style=${{width:56,height:56,borderRadius:16,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:18,boxShadow:'0 6px 20px rgba(29,78,216,0.3)'}}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1" fill="white"/></svg>
           </div>
-          <h2 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:24,fontWeight:800,color:'#f0f4ff',marginBottom:8,letterSpacing:'-1px'}}>Authenticator Code</h2>
-          <p style=${{fontSize:13.5,color:'rgba(168,180,204,0.8)',marginBottom:4,lineHeight:1.6}}>Hi <b style=${{color:'#4f8ef7'}}>${totpUserName}</b>, open your Google Authenticator app and enter the 6-digit code for <b>VEWIT</b>.</p>
+          <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,color:'#0f172a',marginBottom:8,letterSpacing:'-.3px'}}>Authenticator Code</h2>
+          <p style=${{fontSize:13,color:'#64748b',marginBottom:4,lineHeight:1.6}}>Hi <b style=${{color:'#1d4ed8'}}>${totpUserName}</b>, open your Google Authenticator app and enter the 6-digit code for <b>VEWIT</b>.</p>
         </div>
 
-        <div style=${{background:'rgba(79,142,247,0.08)',border:'1px solid rgba(79,142,247,0.2)',borderRadius:14,padding:'14px 16px',marginBottom:22,display:'flex',gap:12,alignItems:'center'}}>
+        <div style=${{background:'linear-gradient(135deg,#f0f9ff,#eff6ff)',border:'1px solid #bfdbfe',borderRadius:14,padding:'14px 16px',marginBottom:20,display:'flex',gap:12,alignItems:'center'}}>
           <div style=${{fontSize:28}}>📱</div>
-          <div style=${{fontSize:12.5,color:'rgba(168,180,204,0.85)',lineHeight:1.55}}>
-            Open <b style=${{color:'#f0f4ff'}}>Google Authenticator</b> or <b style=${{color:'#f0f4ff'}}>Authy</b> and find the <b style=${{color:'#4f8ef7'}}>VEWIT</b> entry.
+          <div style=${{fontSize:12,color:'#1e40af',lineHeight:1.5}}>
+            Open <b>Google Authenticator</b>, <b>Authy</b>, or any TOTP app and find the <b>VEWIT</b> entry.
           </div>
         </div>
 
         <div style=${{marginBottom:20}}>
-          <label style=${lbl}>6-Digit Code</label>
-          <input value=${totpToken}
+          <label style=${{display:'block',fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:.8,marginBottom:8}}>6-Digit Code</label>
+          <input
+            value=${totpToken}
             onInput=${e=>setTotpToken(e.target.value.replace(/\D/g,'').slice(0,6))}
             onKeyDown=${e=>e.key==='Enter'&&submitTotp()}
-            placeholder="000 000" maxLength=6 autoFocus
+            placeholder="000 000"
+            maxLength=6
+            autoFocus
             style=${{
-              width:'100%',height:64,borderRadius:14,textAlign:'center',
-              fontSize:30,fontWeight:800,fontFamily:'monospace',letterSpacing:10,
+              width:'100%',height:60,borderRadius:14,textAlign:'center',
+              fontSize:28,fontWeight:700,fontFamily:'monospace',letterSpacing:8,
               outline:'none',boxSizing:'border-box',
-              background:totpToken.length===6?'rgba(52,211,153,0.08)':'rgba(255,255,255,0.04)',
-              border:'2px solid '+(totpToken.length===6?'rgba(52,211,153,0.6)':'rgba(255,255,255,0.12)'),
-              color:'#f0f4ff',transition:'all .2s',
-              boxShadow:totpToken.length===6?'0 0 0 4px rgba(52,211,153,0.15)':'none'
+              background:totpToken.length===6?'#eff6ff':'#f8fafc',
+              border:'2px solid '+(totpToken.length===6?'#2563eb':'#e2e8f0'),
+              color:'#0f172a',transition:'all .15s',
+              boxShadow:totpToken.length===6?'0 0 0 4px rgba(37,99,235,0.12)':'none'
             }}/>
         </div>
 
-        ${err?html`<div style=${{display:'flex',alignItems:'center',gap:8,padding:'11px 14px',background:'rgba(244,114,182,0.08)',borderRadius:10,border:'1px solid rgba(244,114,182,0.2)',marginBottom:14}}><span style=${{fontSize:14}}>⚠️</span><span style=${{fontSize:13,color:'#f472b6'}}>${err}</span></div>`:null}
+        ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca',marginBottom:14}}>${err}</div>`:null}
 
         <button onClick=${submitTotp} disabled=${busy||totpToken.length!==6}
           style=${{
-            width:'100%',height:52,borderRadius:14,border:'none',fontFamily:"'Bricolage Grotesque',inherit",
-            background:totpToken.length===6?'linear-gradient(135deg,#4f8ef7,#8b5cf6)':'rgba(255,255,255,0.06)',
-            color:totpToken.length===6?'#fff':'rgba(168,180,204,0.4)',
+            width:'100%',height:50,borderRadius:12,border:'none',fontFamily:'inherit',
+            background:totpToken.length===6?'linear-gradient(135deg,#1d4ed8,#2563eb)':'#e2e8f0',
+            color:totpToken.length===6?'#fff':'#94a3b8',
             fontSize:15,fontWeight:700,cursor:totpToken.length===6?'pointer':'default',
-            transition:'all .2s',marginBottom:16,letterSpacing:'-.3px',
-            boxShadow:totpToken.length===6?'0 6px 24px rgba(79,142,247,0.4)':'none'
+            transition:'all .18s',marginBottom:16,
+            boxShadow:totpToken.length===6?'0 6px 20px rgba(29,78,216,0.35)':'none'
           }}>
-          ${busy?'Verifying…':'Verify & Sign In →'}
+          ${busy?'Verifying...':'Verify & Sign In →'}
         </button>
 
         <div style=${{textAlign:'center'}}>
           <button onClick=${()=>{setTotpStep(false);setTotpToken('');setErr('');}}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(168,180,204,0.5)',fontSize:12.5,fontFamily:'inherit',transition:'color .2s'}}
-            onMouseEnter=${e=>e.target.style.color='rgba(168,180,204,0.9)'}
-            onMouseLeave=${e=>e.target.style.color='rgba(168,180,204,0.5)'}>
+            style=${{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:12,fontFamily:'inherit',textDecoration:'underline'}}>
             ← Back to login
           </button>
         </div>
       `)}
     </div>`;
 
-  // Main login/register panel
   return html`
-    <style>
-      @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
-      .auth-input:focus{border-color:rgba(79,142,247,0.7)!important;background:rgba(79,142,247,0.08)!important;box-shadow:0 0 0 3px rgba(79,142,247,0.15)!important}
-      .auth-btn-main{background:linear-gradient(135deg,#4f8ef7,#8b5cf6);color:#fff;box-shadow:0 6px 24px rgba(79,142,247,0.35)}
-      .auth-btn-main:hover:not(:disabled){transform:translateY(-2px) scale(1.02);box-shadow:0 10px 36px rgba(79,142,247,0.5)}
-      .auth-btn-main:active:not(:disabled){transform:translateY(0)}
-      .auth-btn-main:disabled{background:rgba(255,255,255,0.06);color:rgba(168,180,204,0.3);box-shadow:none;cursor:not-allowed}
-    </style>
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
-
-        <!-- Logo -->
-        <div style=${{display:'flex',alignItems:'center',gap:9,marginBottom:32}}>
-          <div style=${{width:30,height:30,borderRadius:8,background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 3px 12px rgba(79,142,247,0.4)'}}>
-            <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+                <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:28}}>
+          <div style=${{width:28,height:28,borderRadius:7,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
+            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:16,color:'#f0f4ff',letterSpacing:'-.5px'}}>VEWIT</span>
+          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>VEWIT</span>
         </div>
 
-        <!-- Heading -->
-        <h1 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:'clamp(1.6rem,2.4vw,2rem)',fontWeight:800,color:'#f0f4ff',marginBottom:8,letterSpacing:'-1.5px',lineHeight:1.1}}>
-          ${tab==='login'?'Welcome back 👋':'Create your account'}
+                <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.2vw,1.85rem)',fontWeight:800,color:'#0f172a',marginBottom:6,letterSpacing:-.03,lineHeight:1.15}}>
+          ${tab==='login'?'Welcome back':'Create account'}
         </h1>
-        <p style=${{fontSize:14,color:'rgba(168,180,204,0.65)',marginBottom:26,lineHeight:1.6}}>
+        <p style=${{fontSize:13.5,color:'#64748b',marginBottom:24,lineHeight:1.6}}>
           ${tab==='login'?'Sign in to your VEWIT workspace':'Set up your workspace and start shipping'}
         </p>
 
-        <!-- Tab switcher -->
-        <div style=${{display:'flex',background:'rgba(255,255,255,0.04)',borderRadius:12,padding:3,marginBottom:24,border:'1px solid rgba(255,255,255,0.06)'}}>
+                <div style=${{display:'flex',background:'#f1f5f9',borderRadius:11,padding:3,marginBottom:22}}>
           ${['login','register'].map(tp=>html`
             <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
-              style=${{flex:1,height:37,fontSize:13.5,fontWeight:700,border:'none',cursor:'pointer',borderRadius:10,fontFamily:'inherit',transition:'all .2s',letterSpacing:'-.2px',
-              background:tab===tp?'rgba(79,142,247,0.2)':'transparent',
-              color:tab===tp?'#4f8ef7':'rgba(168,180,204,0.5)',
-              boxShadow:tab===tp?'0 1px 8px rgba(79,142,247,0.2)':'none'}}>
+              style=${{flex:1,height:35,fontSize:13,fontWeight:600,border:'none',cursor:'pointer', borderRadius:9,fontFamily:'inherit',transition:'all .16s', background:tab===tp?'#ffffff':'transparent', color:tab===tp?'#0f172a':'#94a3b8', boxShadow:tab===tp?'0 1px 4px rgba(0,0,0,0.08)':'none'}}>
               ${tp==='login'?'Sign In':'Create Account'}
             </button>`)}
         </div>
 
-        <!-- Register mode switcher -->
         ${tab==='register'?html`
-          <div style=${{display:'flex',background:'rgba(255,255,255,0.03)',borderRadius:10,padding:3,marginBottom:18,border:'1px solid rgba(255,255,255,0.05)'}}>
-            ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,l])=>html`
+          <div style=${{display:'flex',background:'#f1f5f9',borderRadius:9,padding:3,marginBottom:16}}>
+            ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
               <button key=${m} onClick=${()=>setRegMode(m)}
-                style=${{flex:1,height:31,fontSize:11.5,fontWeight:700,border:'none',cursor:'pointer',borderRadius:8,fontFamily:'inherit',transition:'all .2s',
-                background:regMode===m?'rgba(255,255,255,0.08)':'transparent',
-                color:regMode===m?'#f0f4ff':'rgba(168,180,204,0.4)'}}>
-                ${l}
+                style=${{flex:1,height:29,fontSize:11,fontWeight:600,border:'none',cursor:'pointer', borderRadius:7,fontFamily:'inherit',transition:'all .16s', background:regMode===m?'#ffffff':'transparent', color:regMode===m?'#374151':'#94a3b8', boxShadow:regMode===m?'0 1px 3px rgba(0,0,0,0.07)':'none'}}>
+                ${lbl}
               </button>`)}
           </div>
           ${regMode==='create'?html`
-            <div style=${{marginBottom:15,animation:'slideDown .25s ease both'}}>
-              <label style=${lbl}>Workspace Name</label>
-              <input class="auth-input" style=${{...inp}} placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/>
-            </div>`:null}
+            <div style=${{marginBottom:14}}><label style=${lbl}>Workspace Name</label>
+              <input style=${inp} placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
           ${regMode==='join'?html`
-            <div style=${{marginBottom:15,padding:'14px 16px',background:'rgba(79,142,247,0.06)',borderRadius:12,border:'1px solid rgba(79,142,247,0.15)',animation:'slideDown .25s ease both'}}>
+            <div style=${{marginBottom:14,padding:'12px 14px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe'}}>
               <label style=${lbl}>Invite Code</label>
-              <input class="auth-input" style=${{...inp,fontFamily:'monospace',letterSpacing:5,fontSize:17,textAlign:'center',background:'rgba(255,255,255,0.05)'}}
+              <input style=${{...inp,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center',background:'#fff'}}
                 placeholder="XXXXXXXX" value=${inviteCode}
                 onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
             </div>`:null}`:null}
 
-        <!-- Form fields -->
-        <div style=${{display:'flex',flexDirection:'column',gap:14}}>
+        <div style=${{display:'flex',flexDirection:'column',gap:13}}>
           ${tab==='register'?html`
             <div><label style=${lbl}>Full Name</label>
-              <input class="auth-input" style=${inp} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
+              <input style=${inp} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
 
           <div><label style=${lbl}>Email Address</label>
-            <input class="auth-input" style=${inp} type="email" placeholder="you@company.com" value=${email} autoComplete="username"
+            <input style=${inp} type="email" placeholder="you@company.com" value=${email} autoComplete="username"
               onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
 
           <div><label style=${lbl}>Password</label>
             <div style=${{position:'relative'}}>
-              <input class="auth-input" style=${{...inp,paddingRight:46}} type=${showPw?'text':'password'}
+              <input style=${{...inp,paddingRight:42}} type=${showPw?'text':'password'}
                 placeholder="••••••••••" value=${pw} autoComplete="current-password"
                 onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
               <button onClick=${()=>setShowPw(!showPw)}
-                style=${{position:'absolute',right:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(168,180,204,0.5)',fontSize:15,padding:0,lineHeight:1,transition:'color .2s'}}
-                onMouseEnter=${e=>e.target.style.color='rgba(168,180,204,0.9)'}
-                onMouseLeave=${e=>e.target.style.color='rgba(168,180,204,0.5)'}>
+                style=${{position:'absolute',right:13,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:14,padding:0,lineHeight:1}}>
                 ${showPw?'🙈':'👁'}
               </button>
             </div>
@@ -4796,50 +5333,31 @@ function AuthScreen({onLogin}){
 
           ${tab==='register'?html`
             <div><label style=${lbl}>Role</label>
-              <select style=${{...inp,cursor:'pointer',paddingRight:36,background:"rgba(255,255,255,0.06) url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a8b4cc' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\") no-repeat right 12px center"}}
-                value=${role} onChange=${e=>setRole(e.target.value)}>
-                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r} style=${{background:'#111827'}}>${r}</option>`)}
+              <select style=${{...inp,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
+                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
               </select></div>`:null}
 
-          <!-- Error -->
           ${err?html`
-            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'11px 14px',background:'rgba(244,114,182,0.07)',borderRadius:10,border:'1px solid rgba(244,114,182,0.2)',animation:'slideDown .2s ease both'}}>
-              <span style=${{fontSize:14}}>⚠️</span>
-              <span style=${{fontSize:13,color:'#f472b6'}}>${err}</span>
+            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'10px 13px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca'}}>
+              <span style=${{fontSize:13}}>⚠️</span>
+              <span style=${{fontSize:13,color:'#dc2626'}}>${err}</span>
             </div>`:null}
 
-          <!-- Submit -->
-          <button class="auth-btn-main" onClick=${go} disabled=${busy}
-            style=${{height:50,borderRadius:14,border:'none',cursor:busy?'default':'pointer',fontFamily:"'Bricolage Grotesque',inherit",fontSize:15,fontWeight:800,transition:'all .2s',marginTop:2,letterSpacing:'-.3px',background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',color:'#fff',boxShadow:'0 6px 24px rgba(79,142,247,0.35)'}}>
-            ${busy?'Please wait…':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace →':'Join Workspace →')}
+          <button onClick=${go} disabled=${busy}
+            style=${{height:46,borderRadius:10,border:'none',cursor:busy?'default':'pointer', fontFamily:'inherit', background:busy?'#bfdbfe':'#2563eb', color:busy?'#93c5fd':'#ffffff', fontSize:14,fontWeight:700,letterSpacing:.01, transition:'all .18s',marginTop:2, boxShadow:busy?'none':'0 4px 14px rgba(37,99,235,0.3),inset 0 1px 0 rgba(255,255,255,0.15)'}}>
+            ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
           </button>
         </div>
 
-        <!-- Switch link -->
-        <p style=${{fontSize:13,color:'rgba(168,180,204,0.5)',marginTop:20,textAlign:'center'}}>
+        <p style=${{fontSize:12.5,color:'#94a3b8',marginTop:18,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to VEWIT? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#4f8ef7',cursor:'pointer',fontSize:13,fontWeight:700,padding:'0 0 0 2px',fontFamily:'inherit',transition:'opacity .2s'}}>Create an account</button>`
-            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');try{history.replaceState(null,'','/?action=login');}catch{}}} style=${{background:'none',border:'none',color:'#4f8ef7',cursor:'pointer',fontSize:13,fontWeight:700,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
+            ?html`New to VEWIT? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
+            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');try{history.replaceState(null,'','/?action=login');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
-
-        <!-- Contact links -->
-        <div style=${{marginTop:28,padding:'14px 16px',background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.05)',borderRadius:12,textAlign:'center'}}>
-          <div style=${{fontSize:11,color:'rgba(168,180,204,0.4)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.06em',fontWeight:600}}>Need Help?</div>
-          <div style=${{display:'flex',justifyContent:'center',gap:18,flexWrap:'wrap'}}>
-            <a href="mailto:support@vewit.in" style=${{fontSize:12,color:'rgba(79,142,247,0.7)',textDecoration:'none',transition:'color .2s'}}
-              onMouseEnter=${e=>e.target.style.color='#4f8ef7'} onMouseLeave=${e=>e.target.style.color='rgba(79,142,247,0.7)'}>
-              🛟 support@vewit.in
-            </a>
-            <a href="mailto:ceo@vewit.in" style=${{fontSize:12,color:'rgba(79,142,247,0.7)',textDecoration:'none',transition:'color .2s'}}
-              onMouseEnter=${e=>e.target.style.color='#4f8ef7'} onMouseLeave=${e=>e.target.style.color='rgba(79,142,247,0.7)'}>
-              🤝 ceo@vewit.in
-            </a>
-          </div>
-        </div>
-
       `)}
     </div>`;
 }
+
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
 function SidebarCallsList({cu,onJoin,currentRoomId}){
   const [calls,setCalls]=useState([]);
