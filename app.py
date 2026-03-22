@@ -9257,171 +9257,406 @@ function WorkspaceSettings({cu,onReload}){
 
 
 /* ─── Calendar View ──────────────────────────────────────────────────────── */
-function CalendarView({tasks,projects,cu,reload}){
+function CalendarView({tasks,projects,cu,users,reload}){
   const [cur,setCur]=useState(()=>new Date());
   const [selDate,setSelDate]=useState(null);
-  const [showQuickAdd,setShowQuickAdd]=useState(false);
-  const [quickTitle,setQuickTitle]=useState('');
-  const [quickProject,setQuickProject]=useState('');
-  const [quickPriority,setQuickPriority]=useState('medium');
+  const [viewMode,setViewMode]=useState('month'); // month|week
+  const [colorBy,setColorBy]=useState('stage');   // stage|priority
+  const [filterAssignee,setFilterAssignee]=useState('');
+  // Add-task form
+  const [showAdd,setShowAdd]=useState(false);
+  const [addTitle,setAddTitle]=useState('');
+  const [addDesc,setAddDesc]=useState('');
+  const [addProject,setAddProject]=useState('');
+  const [addPriority,setAddPriority]=useState('medium');
+  const [addStage,setAddStage]=useState('backlog');
+  const [addAssignee,setAddAssignee]=useState('');
+  const [addDue,setAddDue]=useState('');
   const [saving,setSaving]=useState(false);
-  const year=cur.getFullYear(),month=cur.getMonth();
-  const firstDay=new Date(year,month,1).getDay();
-  const daysInMonth=new Date(year,month+1,0).getDate();
-  const monthName=cur.toLocaleString('default',{month:'long',year:'numeric'});
+
+  const year=cur.getFullYear(), month=cur.getMonth();
   const today=new Date().toISOString().slice(0,10);
 
+  // Filter tasks
+  const visibleTasks=safe(tasks).filter(t=>!filterAssignee||t.assignee===filterAssignee);
+
   const tasksByDate={};
-  safe(tasks).forEach(t=>{
+  visibleTasks.forEach(t=>{
     if(!t.due)return;
     const d=t.due.slice(0,10);
     if(!tasksByDate[d])tasksByDate[d]=[];
     tasksByDate[d].push(t);
   });
 
-  const STAGE_COLOR={backlog:'#64748b',planning:'#7c3aed',inprogress:'#0891b2',review:'#d97706',testing:'#0e7490',completed:'#15803d',blocked:'#b91c1c'};
+  const STAGE_COLOR={backlog:'#64748b',planning:'#8b5cf6',inprogress:'#0ea5e9',review:'#f59e0b',testing:'#06b6d4',completed:'#22c55e',blocked:'#ef4444'};
+  const STAGE_BG  ={backlog:'#64748b18',planning:'#8b5cf618',inprogress:'#0ea5e918',review:'#f59e0b18',testing:'#06b6d418',completed:'#22c55e18',blocked:'#ef444418'};
   const PRIO_COLOR={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
+  const PRIO_BG   ={critical:'#ef444418',high:'#f9731618',medium:'#eab30818',low:'#22c55e18'};
 
-  const selectDay=(dateStr)=>{
-    setSelDate(prev=>prev===dateStr?null:dateStr);
-    setShowQuickAdd(false);
-    setQuickTitle('');
+  const getColor=(t)=>colorBy==='priority'?(PRIO_COLOR[t.priority]||'#64748b'):(STAGE_COLOR[t.stage]||'#64748b');
+  const getBg   =(t)=>colorBy==='priority'?(PRIO_BG[t.priority]||'#64748b18'):(STAGE_BG[t.stage]||'#64748b18');
+
+  // Month stats
+  const total=visibleTasks.length;
+  const overdue=visibleTasks.filter(t=>t.due&&t.due<today&&t.stage!=='completed').length;
+  const dueThisWeek=(()=>{
+    const now=new Date(),start=new Date(now);start.setDate(now.getDate()-now.getDay());
+    const end=new Date(start);end.setDate(start.getDate()+6);
+    const s=start.toISOString().slice(0,10),e=end.toISOString().slice(0,10);
+    return visibleTasks.filter(t=>t.due&&t.due>=s&&t.due<=e&&t.stage!=='completed').length;
+  })();
+  const completedThisMonth=visibleTasks.filter(t=>{
+    if(t.stage!=='completed'||!t.due)return false;
+    const d=new Date(t.due);return d.getFullYear()===year&&d.getMonth()===month;
+  }).length;
+
+  // Week view helpers
+  const getWeekDates=()=>{
+    const d=new Date(cur);d.setDate(d.getDate()-d.getDay());
+    return Array.from({length:7},(_,i)=>{const x=new Date(d);x.setDate(d.getDate()+i);return x.toISOString().slice(0,10);});
   };
 
-  const quickAdd=async()=>{
-    if(!quickTitle.trim()||!selDate)return;
+  const openAdd=(dateStr)=>{
+    setAddDue(dateStr||selDate||today);
+    setAddTitle('');setAddDesc('');setAddProject('');
+    setAddPriority('medium');setAddStage('backlog');setAddAssignee('');
+    setShowAdd(true);
+  };
+
+  const submitAdd=async()=>{
+    if(!addTitle.trim())return;
     setSaving(true);
-    await api.post('/api/tasks',{title:quickTitle.trim(),due:selDate,project:quickProject,priority:quickPriority,stage:'backlog'});
-    setSaving(false);
-    setQuickTitle('');
-    setShowQuickAdd(false);
+    await api.post('/api/tasks',{
+      title:addTitle.trim(),description:addDesc,due:addDue,
+      project:addProject,priority:addPriority,stage:addStage,assignee:addAssignee
+    });
+    setSaving(false);setShowAdd(false);setAddTitle('');
     reload();
   };
 
-  const dayTasks=selDate?(tasksByDate[selDate]||[]):[];
+  const selTasks=selDate?(tasksByDate[selDate]||[]):[];
+  const uMap={};safe(users||[]).forEach(u=>uMap[u.id]=u);
+  const pMap={};safe(projects).forEach(p=>pMap[p.id]=p);
 
-  return html`<div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-    <!-- Header -->
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-      <div style=${{display:'flex',alignItems:'center',gap:14}}>
-        <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📅 Calendar</h2>
-        <span style=${{fontSize:15,fontWeight:600,color:'var(--tx2)'}}>${monthName}</span>
+  // ── Month grid ──────────────────────────────────────────────────────────────
+  const renderMonthGrid=()=>{
+    const firstDay=new Date(year,month,1).getDay();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const prevDays=new Date(year,month,0).getDate();
+    return html`
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',flex:1,borderLeft:'1px solid var(--bd)',borderTop:'1px solid var(--bd)'}}>
+        ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(d=>html`
+          <div key=${d} style=${{padding:'8px 12px',borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',background:'var(--sf2)',fontSize:11,fontWeight:700,color:'var(--tx3)',letterSpacing:'.07em',textTransform:'uppercase'}}>${d}</div>`)}
+        ${Array.from({length:firstDay}).map((_,i)=>{
+          const day=prevDays-firstDay+i+1;
+          return html`<div key=${'p'+i} style=${{minHeight:110,borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',padding:'8px 10px',background:'var(--sf2)',opacity:.45}}>
+            <span style=${{fontSize:13,color:'var(--tx3)'}}>${day}</span>
+          </div>`;
+        })}
+        ${Array.from({length:daysInMonth}).map((_,i)=>{
+          const day=i+1;
+          const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const dayT=tasksByDate[dateStr]||[];
+          const isToday=dateStr===today;
+          const isSel=selDate===dateStr;
+          const isWeekend=new Date(dateStr+'T12:00:00').getDay()%6===0;
+          const hasOverdue=dayT.some(t=>t.stage!=='completed'&&dateStr<today);
+          return html`
+            <div key=${day}
+              onClick=${()=>setSelDate(isSel?null:dateStr)}
+              style=${{
+                minHeight:110,borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',
+                padding:'8px 10px',cursor:'pointer',position:'relative',
+                background:isSel?'rgba(37,99,235,0.07)':isWeekend?'var(--sf2)':'var(--bg)',
+                outline:isSel?'2px solid var(--ac)':'none',outlineOffset:'-2px',
+                transition:'background .1s'
+              }}>
+              <!-- Day number -->
+              <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}>
+                <span style=${{
+                  fontSize:13,fontWeight:isToday?800:400,lineHeight:1,
+                  width:24,height:24,display:'flex',alignItems:'center',justifyContent:'center',
+                  borderRadius:'50%',
+                  background:isToday?'var(--ac)':'transparent',
+                  color:isToday?'#fff':'var(--tx)'
+                }}>${day}</span>
+                ${hasOverdue?html`<span title="Overdue tasks" style=${{width:6,height:6,borderRadius:'50%',background:'#ef4444',display:'inline-block'}}></span>`:null}
+              </div>
+              <!-- Task pills -->
+              ${dayT.slice(0,3).map(t=>html`
+                <div key=${t.id} title=${t.title}
+                  style=${{
+                    fontSize:11,padding:'2px 7px',borderRadius:3,marginBottom:2,lineHeight:1.5,
+                    background:getBg(t),color:getColor(t),fontWeight:600,
+                    whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',
+                    borderLeft:'2px solid '+getColor(t)
+                  }}>${t.title}</div>`)}
+              ${dayT.length>3?html`<div style=${{fontSize:10,color:'var(--tx3)',fontWeight:600,padding:'1px 7px'}}>+${dayT.length-3} more</div>`:null}
+              <!-- Hover add hint -->
+              ${!dayT.length?html`<div style=${{position:'absolute',bottom:6,right:8,fontSize:11,color:'var(--tx3)',opacity:.3}}>click to view</div>`:null}
+            </div>`;
+        })}
+        ${(()=>{
+          const totalCells=firstDay+daysInMonth;
+          const rem=(7-totalCells%7)%7;
+          return Array.from({length:rem}).map((_,i)=>html`
+            <div key=${'n'+i} style=${{minHeight:110,borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',padding:'8px 10px',background:'var(--sf2)',opacity:.45}}>
+              <span style=${{fontSize:13,color:'var(--tx3)'}}>${i+1}</span>
+            </div>`);
+        })()}
+      </div>`;
+  };
+
+  // ── Week grid ───────────────────────────────────────────────────────────────
+  const renderWeekGrid=()=>{
+    const weekDates=getWeekDates();
+    const HOURS=Array.from({length:24},(_,i)=>i);
+    return html`
+      <div style=${{display:'grid',gridTemplateColumns:'60px repeat(7,1fr)',flex:1,overflowY:'auto',borderLeft:'1px solid var(--bd)',borderTop:'1px solid var(--bd)'}}>
+        <div style=${{borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}></div>
+        ${weekDates.map(d=>{
+          const isToday=d===today;const isSel=selDate===d;
+          const dt=new Date(d+'T12:00:00');
+          return html`<div key=${d} style=${{padding:'8px 4px',borderRight:'1px solid var(--bd)',borderBottom:'1px solid var(--bd)',textAlign:'center',background:isToday?'rgba(37,99,235,0.05)':isSel?'rgba(37,99,235,0.04)':'var(--sf2)',cursor:'pointer',outline:isSel?'2px solid var(--ac)':'none',outlineOffset:'-2px'}} onClick=${()=>setSelDate(isSel?null:d)}>
+            <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em'}}>${dt.toLocaleDateString('en-US',{weekday:'short'})}</div>
+            <div style=${{fontSize:18,fontWeight:isToday?800:500,color:isToday?'var(--ac)':'var(--tx)',lineHeight:1.2}}>${dt.getDate()}</div>
+            ${(tasksByDate[d]||[]).length?html`<div style=${{fontSize:10,color:'var(--ac)',fontWeight:700}}>${(tasksByDate[d]||[]).length}t</div>`:null}
+          </div>`;
+        })}
+        ${HOURS.map(h=>html`
+          <div key=${'h'+h} style=${{padding:'4px 6px',borderRight:'1px solid var(--bd)',borderBottom:'1px solid rgba(0,0,0,.05)',fontSize:10,color:'var(--tx3)',fontWeight:600,textAlign:'right',lineHeight:'28px',background:'var(--sf2)'}}>${h===0?'12 AM':h<12?h+' AM':h===12?'12 PM':(h-12)+' PM'}</div>
+          ${weekDates.map(d=>html`
+            <div key=${d+'h'+h} style=${{minHeight:28,borderRight:'1px solid var(--bd)',borderBottom:'1px solid rgba(0,0,0,.05)',padding:'2px 4px',background:d===today?'rgba(37,99,235,0.02)':'transparent',cursor:'pointer'}} onClick=${()=>{setSelDate(d);openAdd(d);}}>
+              ${h===9?(tasksByDate[d]||[]).slice(0,1).map(t=>html`
+                <div key=${t.id} style=${{fontSize:10,padding:'2px 5px',borderRadius:3,background:getBg(t),color:getColor(t),fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',borderLeft:'2px solid '+getColor(t)}}>${t.title}</div>`):null}
+            </div>`)}
+        `)}
+      </div>`;
+  };
+
+  // ── Add Task modal ──────────────────────────────────────────────────────────
+  const AddTaskModal=()=>html`
+    <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1200,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(2px)'}}
+      onClick=${e=>{if(e.target===e.currentTarget)setShowAdd(false);}}>
+      <div style=${{background:'var(--sf)',borderRadius:16,width:'min(480px,92vw)',boxShadow:'0 24px 64px rgba(0,0,0,.3)',border:'1px solid var(--bd)',overflow:'hidden'}}>
+        <!-- Modal header -->
+        <div style=${{padding:'18px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <div style=${{fontWeight:700,fontSize:16,color:'var(--tx)'}}>New Task</div>
+            <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>Due: ${addDue?new Date(addDue+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):''}</div>
+          </div>
+          <button onClick=${()=>setShowAdd(false)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:20,lineHeight:1,padding:'4px 8px',borderRadius:6}}>✕</button>
+        </div>
+        <!-- Form body -->
+        <div style=${{padding:'20px',display:'flex',flexDirection:'column',gap:14}}>
+          <div>
+            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Task Title <span style=${{color:'#ef4444'}}>*</span></label>
+            <input class="inp" autoFocus placeholder="What needs to be done?" value=${addTitle}
+              onInput=${e=>setAddTitle(e.target.value)}
+              onKeyDown=${e=>{if(e.key==='Enter'&&addTitle.trim())submitAdd();}}
+              style=${{width:'100%',height:40,fontSize:14,fontWeight:500}}/>
+          </div>
+          <div>
+            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Description</label>
+            <textarea class="inp" placeholder="Add more details (optional)…" value=${addDesc}
+              onInput=${e=>setAddDesc(e.target.value)}
+              style=${{width:'100%',height:72,fontSize:13,resize:'none',lineHeight:1.5}}></textarea>
+          </div>
+          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <div>
+              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Project</label>
+              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addProject} onChange=${e=>setAddProject(e.target.value)}>
+                <option value="">No project</option>
+                ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
+              </select>
+            </div>
+            <div>
+              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Assignee</label>
+              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addAssignee} onChange=${e=>setAddAssignee(e.target.value)}>
+                <option value="">Unassigned</option>
+                ${safe(users||[]).map(u=>html`<option value=${u.id}>${u.name}</option>`)}
+              </select>
+            </div>
+            <div>
+              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Priority</label>
+              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addPriority} onChange=${e=>setAddPriority(e.target.value)}>
+                <option value="low">🟢 Low</option>
+                <option value="medium">🟡 Medium</option>
+                <option value="high">🟠 High</option>
+                <option value="critical">🔴 Critical</option>
+              </select>
+            </div>
+            <div>
+              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Stage</label>
+              <select class="inp" style=${{width:'100%',height:36,fontSize:13}} value=${addStage} onChange=${e=>setAddStage(e.target.value)}>
+                <option value="backlog">Backlog</option>
+                <option value="planning">Planning</option>
+                <option value="inprogress">In Progress</option>
+                <option value="review">Review</option>
+                <option value="testing">Testing</option>
+              </select>
+            </div>
+            <div>
+              <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:5}}>Due Date</label>
+              <input class="inp" type="date" value=${addDue} onChange=${e=>setAddDue(e.target.value)} style=${{width:'100%',height:36,fontSize:13}}/>
+            </div>
+          </div>
+        </div>
+        <!-- Footer -->
+        <div style=${{padding:'14px 20px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button class="btn bg" style=${{fontSize:13}} onClick=${()=>setShowAdd(false)}>Cancel</button>
+          <button class="btn bp" style=${{fontSize:13,minWidth:100}} onClick=${submitAdd} disabled=${saving||!addTitle.trim()}>
+            ${saving?html`<span class="spin"></span>`:null} ${saving?'Adding…':'Add Task'}
+          </button>
+        </div>
       </div>
-      <div style=${{display:'flex',gap:6}}>
-        <button class="btn bg" style=${{fontSize:13,padding:'5px 12px'}} onClick=${()=>setCur(new Date(year,month-1,1))}>‹</button>
-        <button class="btn bg" style=${{fontSize:13,padding:'5px 12px'}} onClick=${()=>{setCur(new Date());setSelDate(today);}}>Today</button>
-        <button class="btn bg" style=${{fontSize:13,padding:'5px 12px'}} onClick=${()=>setCur(new Date(year,month+1,1))}>›</button>
+    </div>`;
+
+  return html`<div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'var(--bg)'}}>
+
+    ${showAdd?html`<${AddTaskModal}/>`:null}
+
+    <!-- ── Top bar ──────────────────────────────────────────────────────── -->
+    <div style=${{display:'flex',alignItems:'center',gap:12,padding:'12px 20px',borderBottom:'1px solid var(--bd)',flexShrink:0,flexWrap:'wrap',gap:8}}>
+      <!-- Nav -->
+      <div style=${{display:'flex',alignItems:'center',gap:6}}>
+        <button onClick=${()=>setCur(new Date(year,month-1,1))} style=${{background:'none',border:'1px solid var(--bd)',borderRadius:7,width:30,height:30,cursor:'pointer',color:'var(--tx)',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+        <button onClick=${()=>setCur(new Date(year,month+1,1))} style=${{background:'none',border:'1px solid var(--bd)',borderRadius:7,width:30,height:30,cursor:'pointer',color:'var(--tx)',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
+        <h2 style=${{margin:'0 6px',fontSize:17,fontWeight:700,color:'var(--tx)',whiteSpace:'nowrap'}}>${cur.toLocaleString('default',{month:'long',year:'numeric'})}</h2>
+        <button onClick=${()=>{setCur(new Date());setSelDate(today);}} style=${{fontSize:12,padding:'4px 12px',border:'1px solid var(--bd)',borderRadius:7,cursor:'pointer',background:'transparent',color:'var(--tx)',fontWeight:600}}>Today</button>
+      </div>
+
+      <!-- Stats pills -->
+      <div style=${{display:'flex',gap:6,marginLeft:8,flexWrap:'wrap'}}>
+        ${[
+          {label:'Total',val:total,c:'#64748b'},
+          {label:'Due this week',val:dueThisWeek,c:'#f59e0b'},
+          {label:'Overdue',val:overdue,c:'#ef4444'},
+          {label:'Done this month',val:completedThisMonth,c:'#22c55e'},
+        ].map(s=>html`
+          <div key=${s.label} style=${{display:'flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:99,border:'1px solid '+s.c+'44',background:s.c+'11',fontSize:12,fontWeight:600,color:s.c}}>
+            <span style=${{fontWeight:800}}>${s.val}</span> ${s.label}
+          </div>`)}
+      </div>
+
+      <!-- Controls -->
+      <div style=${{display:'flex',gap:6,marginLeft:'auto',alignItems:'center',flexWrap:'wrap'}}>
+        <!-- Assignee filter -->
+        <select class="inp" style=${{height:30,fontSize:12,width:130}} value=${filterAssignee} onChange=${e=>setFilterAssignee(e.target.value)}>
+          <option value="">All members</option>
+          ${safe(users||[]).map(u=>html`<option value=${u.id}>${u.name}</option>`)}
+        </select>
+        <!-- Color by -->
+        <select class="inp" style=${{height:30,fontSize:12,width:120}} value=${colorBy} onChange=${e=>setColorBy(e.target.value)}>
+          <option value="stage">Color by Stage</option>
+          <option value="priority">Color by Priority</option>
+        </select>
+        <!-- View toggle -->
+        <div style=${{display:'flex',background:'var(--sf2)',borderRadius:8,border:'1px solid var(--bd)',overflow:'hidden'}}>
+          ${[['month','Month'],['week','Week']].map(([v,l])=>html`
+            <button key=${v} onClick=${()=>setViewMode(v)} style=${{
+              border:'none',cursor:'pointer',fontSize:12,fontWeight:600,padding:'5px 12px',
+              background:viewMode===v?'var(--ac)':'transparent',color:viewMode===v?'#fff':'var(--tx2)',
+              transition:'all .12s'
+            }}>${l}</button>`)}
+        </div>
+        <!-- Add button -->
+        <button class="btn bp" style=${{fontSize:12,padding:'5px 14px',height:30}} onClick=${()=>openAdd(selDate||today)}>+ New Task</button>
       </div>
     </div>
 
+    <!-- ── Main area ────────────────────────────────────────────────────── -->
     <div style=${{display:'flex',flex:1,overflow:'hidden'}}>
-      <!-- Calendar Grid -->
-      <div style=${{flex:1,overflowY:'auto',padding:'16px 20px'}}>
-        <!-- Day headers -->
-        <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:2}}>
-          ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>html`
-            <div key=${d} style=${{textAlign:'center',fontSize:11,fontWeight:700,color:'var(--tx3)',padding:'6px 0',letterSpacing:'.06em'}}>${d}</div>`)}
-        </div>
-        <!-- Day cells -->
-        <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
-          ${Array.from({length:firstDay}).map((_,i)=>html`
-            <div key=${'e'+i} style=${{minHeight:80,background:'var(--sf2)',borderRadius:6,opacity:.3}}></div>`)}
-          ${Array.from({length:daysInMonth}).map((_,i)=>{
-            const day=i+1;
-            const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-            const dayT=tasksByDate[dateStr]||[];
-            const isToday=dateStr===today;
-            const isSel=selDate===dateStr;
-            const hasOverdue=dayT.some(t=>t.stage!=='completed'&&dateStr<today);
-            return html`
-              <div key=${day}
-                onClick=${()=>selectDay(dateStr)}
-                style=${{
-                  minHeight:80,borderRadius:8,padding:'6px 7px',cursor:'pointer',
-                  background:isSel?'rgba(37,99,235,0.12)':isToday?'rgba(37,99,235,0.05)':'var(--sf)',
-                  border:isSel?'2px solid var(--ac)':isToday?'2px solid rgba(37,99,235,0.35)':'2px solid var(--bd)',
-                  transition:'all .12s',position:'relative',
-                  boxShadow:isSel?'0 0 0 3px rgba(37,99,235,0.15)':'none'
-                }}>
-                <div style=${{
-                  fontSize:13,fontWeight:isToday?800:500,marginBottom:4,lineHeight:1,
-                  color:isToday?'var(--ac)':isSel?'var(--ac)':'var(--tx)'
-                }}>${day}</div>
-                ${dayT.slice(0,2).map(t=>html`
-                  <div key=${t.id} title=${t.title} style=${{
-                    fontSize:10,padding:'2px 5px',borderRadius:3,marginBottom:2,
-                    background:(STAGE_COLOR[t.stage]||'#3b82f6')+'25',
-                    color:STAGE_COLOR[t.stage]||'#3b82f6',fontWeight:600,
-                    whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',lineHeight:1.4
-                  }}>${t.title}</div>`)}
-                ${dayT.length>2?html`<div style=${{fontSize:9,color:'var(--tx3)',fontWeight:600}}>+${dayT.length-2} more</div>`:null}
-                ${!dayT.length?html`<div style=${{position:'absolute',bottom:5,right:6,fontSize:10,color:'var(--tx3)',opacity:.4}}>+</div>`:null}
-              </div>`;
-          })}
-        </div>
-        <!-- Legend -->
-        <div style=${{display:'flex',gap:14,marginTop:14,flexWrap:'wrap'}}>
-          ${Object.entries(STAGE_COLOR).map(([s,c])=>html`
-            <div key=${s} style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--tx3)'}}>
-              <div style=${{width:8,height:8,borderRadius:2,background:c}}></div>${s}
-            </div>`)}
-        </div>
+
+      <!-- Calendar grid -->
+      <div style=${{flex:1,overflowY:'auto',display:'flex',flexDirection:'column'}}>
+        ${viewMode==='month'?renderMonthGrid():renderWeekGrid()}
       </div>
 
-      <!-- Side panel — selected date detail -->
+      <!-- ── Side panel ──────────────────────────────────────────────── -->
       ${selDate?html`
-        <div style=${{width:300,borderLeft:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
-          <!-- Date header -->
-          <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-            <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${new Date(selDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
-            <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${dayTasks.length} task${dayTasks.length!==1?'s':''} due</div>
+        <div style=${{width:300,borderLeft:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0,background:'var(--sf)'}}>
+          <!-- Panel header -->
+          <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexShrink:0}}>
+            <div>
+              <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${new Date(selDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+              <div style=${{fontSize:12,color:'var(--tx3)',marginTop:3}}>
+                ${selTasks.length?selTasks.length+' task'+(selTasks.length!==1?'s':'')+' due':'No tasks due'}
+                ${selTasks.filter(t=>t.stage==='completed').length?html` · <span style=${{color:'#22c55e',fontWeight:600}}>${selTasks.filter(t=>t.stage==='completed').length} done</span>`:null}
+              </div>
+            </div>
+            <!-- Close button -->
+            <button onClick=${()=>setSelDate(null)} title="Close panel"
+              style=${{background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,width:28,height:28,cursor:'pointer',color:'var(--tx2)',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:8}}>✕</button>
           </div>
+
+          <!-- Progress bar if tasks exist -->
+          ${selTasks.length?html`
+            <div style=${{padding:'8px 16px 0',flexShrink:0}}>
+              <div style=${{display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--tx3)',marginBottom:3}}>
+                <span>Completion</span>
+                <span>${Math.round((selTasks.filter(t=>t.stage==='completed').length/selTasks.length)*100)}%</span>
+              </div>
+              <div style=${{height:3,background:'var(--sf2)',borderRadius:99}}>
+                <div style=${{height:3,borderRadius:99,background:'#22c55e',width:Math.round((selTasks.filter(t=>t.stage==='completed').length/selTasks.length)*100)+'%',transition:'width .3s'}}></div>
+              </div>
+            </div>`:null}
+
           <!-- Task list -->
           <div style=${{flex:1,overflowY:'auto',padding:'10px 12px'}}>
-            ${dayTasks.length?dayTasks.map(t=>html`
-              <div key=${t.id} style=${{padding:'9px 10px',borderRadius:8,background:'var(--sf)',border:'1px solid var(--bd)',marginBottom:7}}>
-                <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',marginBottom:4,lineHeight:1.35}}>${t.title}</div>
-                <div style=${{display:'flex',gap:5,flexWrap:'wrap'}}>
-                  <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:(STAGE_COLOR[t.stage]||'#888')+'22',color:STAGE_COLOR[t.stage]||'#888',fontWeight:700}}>${t.stage}</span>
-                  <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:(PRIO_COLOR[t.priority]||'#888')+'22',color:PRIO_COLOR[t.priority]||'#888',fontWeight:600}}>${t.priority}</span>
-                </div>
-              </div>`):
-            html`<div style=${{textAlign:'center',padding:'30px 0',color:'var(--tx3)'}}>
-              <div style=${{fontSize:28,marginBottom:8}}>📋</div>
-              <div style=${{fontSize:13}}>No tasks due</div>
-            </div>`}
+            ${selTasks.length?selTasks.map(t=>{
+              const assignee=uMap[t.assignee];
+              const proj=pMap[t.project];
+              return html`
+                <div key=${t.id} style=${{padding:'10px 12px',borderRadius:10,background:'var(--bg)',border:'1px solid var(--bd)',marginBottom:8,borderLeft:'3px solid '+getColor(t)}}>
+                  <div style=${{display:'flex',alignItems:'flex-start',gap:6,marginBottom:6}}>
+                    <div style=${{flex:1,fontSize:13,fontWeight:600,color:t.stage==='completed'?'var(--tx3)':'var(--tx)',lineHeight:1.3,textDecoration:t.stage==='completed'?'line-through':'none'}}>${t.title}</div>
+                    ${assignee?html`<div title=${assignee.name} style=${{width:22,height:22,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>${assignee.name.slice(0,2).toUpperCase()}</div>`:null}
+                  </div>
+                  ${proj?html`<div style=${{fontSize:10,color:proj.color||'var(--ac)',fontWeight:600,marginBottom:4}}>${proj.name}</div>`:null}
+                  <div style=${{display:'flex',gap:4,flexWrap:'wrap'}}>
+                    <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:getBg(t),color:getColor(t),fontWeight:700}}>${t.stage}</span>
+                    <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:(PRIO_BG[t.priority]||'#eee'),color:(PRIO_COLOR[t.priority]||'#888'),fontWeight:600}}>${t.priority}</span>
+                    ${t.pct>0?html`<span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:'var(--sf2)',color:'var(--tx3)',fontWeight:600}}>${t.pct}%</span>`:null}
+                  </div>
+                </div>`;
+            }):html`
+              <div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'32px 0',color:'var(--tx3)'}}>
+                <div style=${{fontSize:36,marginBottom:10}}>📭</div>
+                <div style=${{fontSize:14,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>No tasks due</div>
+                <div style=${{fontSize:12,textAlign:'center',lineHeight:1.5}}>Click "+ New Task" to schedule something here</div>
+              </div>`}
           </div>
-          <!-- Quick add task -->
+
+          <!-- Add task footer -->
           <div style=${{borderTop:'1px solid var(--bd)',padding:'12px 14px',flexShrink:0}}>
-            ${!showQuickAdd?html`
-              <button class="btn bp" style=${{width:'100%',fontSize:13}} onClick=${()=>setShowQuickAdd(true)}>+ Add Task on ${selDate.slice(5)}</button>`:
-            html`<div style=${{display:'flex',flexDirection:'column',gap:7}}>
-              <input class="inp" autoFocus placeholder="Task title…" value=${quickTitle}
-                onInput=${e=>setQuickTitle(e.target.value)}
-                onKeyDown=${e=>{if(e.key==='Enter')quickAdd();if(e.key==='Escape')setShowQuickAdd(false);}}
-                style=${{height:34,fontSize:13}}/>
-              <div style=${{display:'flex',gap:6}}>
-                <select class="inp" style=${{flex:1,height:30,fontSize:12}} value=${quickProject} onChange=${e=>setQuickProject(e.target.value)}>
-                  <option value="">No project</option>
-                  ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
-                </select>
-                <select class="inp" style=${{width:90,height:30,fontSize:12}} value=${quickPriority} onChange=${e=>setQuickPriority(e.target.value)}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-              <div style=${{display:'flex',gap:6}}>
-                <button class="btn bp" style=${{flex:1,fontSize:12}} onClick=${quickAdd} disabled=${saving||!quickTitle.trim()}>${saving?'Adding…':'Add Task'}</button>
-                <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setShowQuickAdd(false)}>Cancel</button>
-              </div>
-            </div>`}
+            <button class="btn bp" style=${{width:'100%',fontSize:13,height:36,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}
+              onClick=${()=>openAdd(selDate)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Task on ${new Date(selDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+            </button>
           </div>
         </div>`:null}
     </div>
+
+    <!-- ── Legend ───────────────────────────────────────────────────────── -->
+    <div style=${{padding:'8px 20px',borderTop:'1px solid var(--bd)',display:'flex',gap:14,flexWrap:'wrap',flexShrink:0,background:'var(--sf)'}}>
+      ${colorBy==='stage'?Object.entries(STAGE_COLOR).map(([s,c])=>html`
+        <div key=${s} style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--tx3)'}}>
+          <div style=${{width:10,height:10,borderRadius:2,background:c}}></div>${s}
+        </div>`):
+      Object.entries(PRIO_COLOR).map(([p,c])=>html`
+        <div key=${p} style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--tx3)'}}>
+          <div style=${{width:10,height:10,borderRadius:'50%',background:c}}></div>${p}
+        </div>`)}
+      <div style=${{marginLeft:'auto',fontSize:11,color:'var(--tx3)',display:'flex',alignItems:'center',gap:4}}>
+        <div style=${{width:6,height:6,borderRadius:'50%',background:'#ef4444'}}></div> overdue indicator
+      </div>
+    </div>
   </div>`;
 }
+
+
 /* ─── Kanban Board View ──────────────────────────────────────────────────── */
 function KanbanView({tasks,projects,users,cu,reload}){
   const STAGES=['backlog','planning','inprogress','review','testing','completed','blocked'];
@@ -11289,7 +11524,7 @@ function App(){
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
             ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
-            ${baseView==='calendar'?html`<${CalendarView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='calendar'?html`<${CalendarView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load}/>`:null}
             ${baseView==='docs'?html`<${DocsView} projects=${scopedProjects} cu=${cu}/>`:null}
             ${baseView==='sprints'?html`<${SprintsView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
             </div>
