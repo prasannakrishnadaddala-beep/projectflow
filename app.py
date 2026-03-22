@@ -198,6 +198,22 @@ def _otp_cleanup():
 
 _threading.Thread(target=_otp_cleanup, daemon=True).start()
 
+def _background_scheduler():
+    """Run periodic background jobs: recurring tasks, digest emails."""
+    import time as _t
+    _last_digest = 0
+    while True:
+        _t.sleep(3600)  # check every hour
+        try: _spawn_recurring_tasks()
+        except: pass
+        now = _t.time()
+        if now - _last_digest >= 86400:  # daily digest
+            try: _run_digest()
+            except: pass
+            _last_digest = now
+
+_threading.Thread(target=_background_scheduler, daemon=True).start()
+
 def generate_otp():
     """Generate a 6-digit OTP."""
     return str(secrets.randbelow(900000) + 100000)  # always 6 digits
@@ -640,6 +656,84 @@ def init_db():
         try: db.execute("ALTER TABLE tasks ADD COLUMN task_type TEXT DEFAULT 'task'")
         except: pass
         try: db.execute("ALTER TABLE tasks ADD COLUMN labels TEXT DEFAULT '[]'")
+        except: pass
+        # ── New feature migrations ─────────────────────────────────────────────
+        try: db.execute("ALTER TABLE tasks ADD COLUMN recurring TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN recur_parent TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN depends_on TEXT DEFAULT '[]'")
+        except: pass
+        try: db.execute("ALTER TABLE tasks ADD COLUMN time_logged INTEGER DEFAULT 0")
+        except: pass
+        try: db.execute("ALTER TABLE projects ADD COLUMN budget REAL DEFAULT 0")
+        except: pass
+        try: db.execute("ALTER TABLE projects ADD COLUMN budget_spent REAL DEFAULT 0")
+        except: pass
+        try: db.execute("ALTER TABLE workspaces ADD COLUMN white_label_name TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE workspaces ADD COLUMN white_label_logo TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE workspaces ADD COLUMN referral_code TEXT DEFAULT ''")
+        except: pass
+        try: db.execute("ALTER TABLE workspaces ADD COLUMN digest_enabled INTEGER DEFAULT 0")
+        except: pass
+        try: db.execute("ALTER TABLE workspaces ADD COLUMN digest_frequency TEXT DEFAULT 'daily'")
+        except: pass
+        try: db.execute("ALTER TABLE users ADD COLUMN is_guest INTEGER DEFAULT 0")
+        except: pass
+        try: db.execute("ALTER TABLE users ADD COLUMN guest_projects TEXT DEFAULT '[]'")
+        except: pass
+        try:
+            db.executescript("""
+            CREATE TABLE IF NOT EXISTS time_logs (
+                id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
+                user_id TEXT, description TEXT, minutes INTEGER DEFAULT 0,
+                logged_date TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS docs (
+                id TEXT PRIMARY KEY, workspace_id TEXT, project_id TEXT,
+                title TEXT, content TEXT, author TEXT,
+                created TEXT, updated TEXT, is_public INTEGER DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS goals (
+                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT,
+                description TEXT, owner TEXT, status TEXT DEFAULT 'active',
+                progress INTEGER DEFAULT 0, due TEXT, created TEXT,
+                team_id TEXT DEFAULT '');
+            CREATE TABLE IF NOT EXISTS goal_krs (
+                id TEXT PRIMARY KEY, goal_id TEXT, workspace_id TEXT,
+                title TEXT, target REAL DEFAULT 100, current REAL DEFAULT 0,
+                unit TEXT DEFAULT '%', created TEXT);
+            CREATE TABLE IF NOT EXISTS custom_fields (
+                id TEXT PRIMARY KEY, workspace_id TEXT, entity_type TEXT DEFAULT 'task',
+                name TEXT, field_type TEXT DEFAULT 'text',
+                options TEXT DEFAULT '[]', created TEXT);
+            CREATE TABLE IF NOT EXISTS custom_field_values (
+                id TEXT PRIMARY KEY, workspace_id TEXT, field_id TEXT,
+                entity_id TEXT, value TEXT, updated TEXT);
+            CREATE TABLE IF NOT EXISTS task_templates (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
+                description TEXT, priority TEXT DEFAULT 'medium',
+                stage TEXT DEFAULT 'backlog', labels TEXT DEFAULT '[]',
+                subtasks TEXT DEFAULT '[]', created TEXT);
+            CREATE TABLE IF NOT EXISTS webhooks_config (
+                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
+                url TEXT, events TEXT DEFAULT '[]',
+                secret TEXT, active INTEGER DEFAULT 1, created TEXT);
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+                name TEXT, key_hash TEXT, key_prefix TEXT,
+                scopes TEXT DEFAULT '[]', last_used TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+                action TEXT, entity_type TEXT, entity_id TEXT,
+                details TEXT, ip TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS sprints (
+                id TEXT PRIMARY KEY, workspace_id TEXT, project_id TEXT,
+                name TEXT, goal TEXT, status TEXT DEFAULT 'planning',
+                start_date TEXT, end_date TEXT, velocity INTEGER DEFAULT 0, created TEXT);
+            CREATE TABLE IF NOT EXISTS referrals (
+                id TEXT PRIMARY KEY, referrer_ws TEXT, referred_ws TEXT, created TEXT);
+            """)
         except: pass
         try: db.execute("""CREATE TABLE IF NOT EXISTS subtasks (
             id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
@@ -1307,7 +1401,8 @@ def update_task(tid):
         if comments_val is None: comments_val=json.loads(t["comments"] or "[]")
         db.execute("""UPDATE tasks SET title=?,description=?,project=?,assignee=?,
                       priority=?,stage=?,due=?,pct=?,comments=?,team_id=?,
-                      story_points=?,task_type=?,labels=?,sprint=? WHERE id=? AND workspace_id=?""",
+                      story_points=?,task_type=?,labels=?,sprint=?,
+                      recurring=?,depends_on=? WHERE id=? AND workspace_id=?""",
                    (d.get("title",t["title"]),d.get("description",t["description"]),
                     d.get("project",t["project"]),d.get("assignee",t["assignee"]),
                     d.get("priority",t["priority"]),d.get("stage",t["stage"]),
@@ -1318,6 +1413,8 @@ def update_task(tid):
                     d.get("task_type",tf("task_type","task")),
                     labels_val,
                     d.get("sprint",tf("sprint","")),
+                    d.get("recurring",tf("recurring","")),
+                    json.dumps(d.get("depends_on",json.loads(t.get("depends_on") or "[]"))),
                     tid,wid()))
         if d.get("stage") and d["stage"]!=old_stage:
             base_ts2=int(datetime.now().timestamp()*1000)
@@ -2152,6 +2249,605 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
 
     return jsonify({"message":clean_text,"actions":action_results,"raw":ai_text})
 
+
+# ── Audit log helper ──────────────────────────────────────────────────────────
+def audit(db, action, entity_type='', entity_id='', details=''):
+    try:
+        aid = f"al{int(__import__('time').time()*1000)}"
+        ip = request.remote_addr or ''
+        db.execute("INSERT INTO audit_logs VALUES (?,?,?,?,?,?,?,?,?)",
+                   (aid, wid(), session.get('user_id',''), action, entity_type, entity_id, details, ip, ts()))
+    except: pass
+
+# ── Time Tracking ─────────────────────────────────────────────────────────────
+@app.route("/api/time-logs", methods=["GET"])
+@login_required
+def get_time_logs():
+    task_id = request.args.get("task_id","")
+    with get_db() as db:
+        if task_id:
+            rows = db.execute("SELECT tl.*,u.name as user_name FROM time_logs tl LEFT JOIN users u ON tl.user_id=u.id WHERE tl.workspace_id=? AND tl.task_id=? ORDER BY tl.created DESC",(wid(),task_id)).fetchall()
+        else:
+            rows = db.execute("SELECT tl.*,u.name as user_name FROM time_logs tl LEFT JOIN users u ON tl.user_id=u.id WHERE tl.workspace_id=? ORDER BY tl.created DESC LIMIT 200",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/time-logs", methods=["POST"])
+@login_required
+def create_time_log():
+    d = request.json or {}
+    if not d.get("task_id"): return jsonify({"error":"task_id required"}),400
+    if not d.get("minutes",0): return jsonify({"error":"minutes required"}),400
+    with get_db() as db:
+        lid = f"tl{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO time_logs VALUES (?,?,?,?,?,?,?,?)",
+                   (lid,wid(),d["task_id"],session["user_id"],d.get("description",""),
+                    int(d["minutes"]),d.get("logged_date",ts()[:10]),ts()))
+        db.execute("UPDATE tasks SET time_logged=COALESCE(time_logged,0)+? WHERE id=? AND workspace_id=?",
+                   (int(d["minutes"]),d["task_id"],wid()))
+        audit(db,"time_log","task",d["task_id"],f"{d['minutes']}min logged")
+        return jsonify({"ok":True,"id":lid})
+
+@app.route("/api/time-logs/<lid>", methods=["DELETE"])
+@login_required
+def delete_time_log(lid):
+    with get_db() as db:
+        row = db.execute("SELECT * FROM time_logs WHERE id=? AND workspace_id=?",(lid,wid())).fetchone()
+        if not row: return jsonify({"error":"Not found"}),404
+        db.execute("UPDATE tasks SET time_logged=MAX(0,COALESCE(time_logged,0)-?) WHERE id=? AND workspace_id=?",
+                   (row["minutes"],row["task_id"],wid()))
+        db.execute("DELETE FROM time_logs WHERE id=?",(lid,))
+        return jsonify({"ok":True})
+
+# ── Task Dependencies ─────────────────────────────────────────────────────────
+@app.route("/api/tasks/<tid>/dependencies", methods=["GET"])
+@login_required
+def get_task_deps(tid):
+    with get_db() as db:
+        task = db.execute("SELECT depends_on FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
+        if not task: return jsonify([])
+        dep_ids = json.loads(task["depends_on"] or "[]")
+        deps = []
+        for did in dep_ids:
+            t = db.execute("SELECT id,title,stage,priority FROM tasks WHERE id=?",(did,)).fetchone()
+            if t: deps.append(dict(t))
+        return jsonify(deps)
+
+@app.route("/api/tasks/<tid>/dependencies", methods=["POST"])
+@login_required
+def add_task_dep(tid):
+    d = request.json or {}
+    dep_id = d.get("dep_id","")
+    if not dep_id: return jsonify({"error":"dep_id required"}),400
+    if dep_id == tid: return jsonify({"error":"Cannot depend on self"}),400
+    with get_db() as db:
+        task = db.execute("SELECT depends_on FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
+        if not task: return jsonify({"error":"Task not found"}),404
+        deps = json.loads(task["depends_on"] or "[]")
+        if dep_id not in deps: deps.append(dep_id)
+        db.execute("UPDATE tasks SET depends_on=? WHERE id=? AND workspace_id=?",(json.dumps(deps),tid,wid()))
+        return jsonify({"ok":True,"depends_on":deps})
+
+@app.route("/api/tasks/<tid>/dependencies/<dep_id>", methods=["DELETE"])
+@login_required
+def remove_task_dep(tid,dep_id):
+    with get_db() as db:
+        task = db.execute("SELECT depends_on FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
+        if not task: return jsonify({"error":"Not found"}),404
+        deps = [x for x in json.loads(task["depends_on"] or "[]") if x != dep_id]
+        db.execute("UPDATE tasks SET depends_on=? WHERE id=? AND workspace_id=?",(json.dumps(deps),tid,wid()))
+        return jsonify({"ok":True})
+
+# ── Recurring Tasks ───────────────────────────────────────────────────────────
+@app.route("/api/tasks/<tid>/recurring", methods=["PUT"])
+@login_required
+def set_recurring(tid):
+    d = request.json or {}
+    pattern = d.get("pattern","") # daily|weekly|monthly|""
+    with get_db() as db:
+        db.execute("UPDATE tasks SET recurring=? WHERE id=? AND workspace_id=?",(pattern,tid,wid()))
+        return jsonify({"ok":True})
+
+def _spawn_recurring_tasks():
+    """Run periodically to create recurring task instances."""
+    try:
+        with get_db() as db:
+            now_date = datetime.utcnow().date()
+            tasks = db.execute("SELECT * FROM tasks WHERE recurring!='' AND recurring IS NOT NULL").fetchall()
+            for t in tasks:
+                pattern = t["recurring"]
+                if not pattern: continue
+                last_due = t["due"] or t["created"][:10]
+                try: last_dt = datetime.strptime(last_due[:10],"%Y-%m-%d").date()
+                except: continue
+                if pattern=="daily": next_dt = last_dt + timedelta(days=1)
+                elif pattern=="weekly": next_dt = last_dt + timedelta(weeks=1)
+                elif pattern=="monthly":
+                    m = last_dt.month+1 if last_dt.month<12 else 1
+                    y = last_dt.year if last_dt.month<12 else last_dt.year+1
+                    next_dt = last_dt.replace(year=y,month=m)
+                else: continue
+                if next_dt <= now_date:
+                    existing = db.execute("SELECT id FROM tasks WHERE recur_parent=? AND due=?",(t["id"],str(next_dt))).fetchone()
+                    if not existing:
+                        new_id = next_task_id(db, t["workspace_id"])
+                        db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                   (new_id,t["workspace_id"],t["title"],t["description"],t["project"],
+                                    t["assignee"],t["priority"],"backlog",ts(),str(next_dt),0,"[]",
+                                    t.get("team_id",""),t["id"],0,"","task","[]"))
+                        db.execute("UPDATE tasks SET due=?,recurring=? WHERE id=? AND workspace_id=?",
+                                   (str(next_dt),pattern,t["id"],t["workspace_id"]))
+    except Exception as e:
+        print(f"Recurring tasks error: {e}")
+
+# ── Docs / Wiki ───────────────────────────────────────────────────────────────
+@app.route("/api/docs", methods=["GET"])
+@login_required
+def get_docs():
+    project_id = request.args.get("project_id","")
+    with get_db() as db:
+        if project_id:
+            rows = db.execute("SELECT d.*,u.name as author_name FROM docs d LEFT JOIN users u ON d.author=u.id WHERE d.workspace_id=? AND d.project_id=? ORDER BY d.updated DESC",(wid(),project_id)).fetchall()
+        else:
+            rows = db.execute("SELECT d.*,u.name as author_name FROM docs d LEFT JOIN users u ON d.author=u.id WHERE d.workspace_id=? ORDER BY d.updated DESC",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/docs", methods=["POST"])
+@login_required
+def create_doc():
+    d = request.json or {}
+    if not d.get("title"): return jsonify({"error":"Title required"}),400
+    with get_db() as db:
+        did = f"doc{int(__import__('time').time()*1000)}"
+        now = ts()
+        db.execute("INSERT INTO docs VALUES (?,?,?,?,?,?,?,?,?)",
+                   (did,wid(),d.get("project_id",""),d["title"],d.get("content",""),
+                    session["user_id"],now,now,0))
+        audit(db,"create","doc",did,d["title"])
+        return jsonify({"ok":True,"id":did})
+
+@app.route("/api/docs/<did>", methods=["PUT"])
+@login_required
+def update_doc(did):
+    d = request.json or {}
+    with get_db() as db:
+        doc = db.execute("SELECT * FROM docs WHERE id=? AND workspace_id=?",(did,wid())).fetchone()
+        if not doc: return jsonify({"error":"Not found"}),404
+        db.execute("UPDATE docs SET title=?,content=?,project_id=?,is_public=?,updated=? WHERE id=?",
+                   (d.get("title",doc["title"]),d.get("content",doc["content"]),
+                    d.get("project_id",doc["project_id"]),int(d.get("is_public",doc["is_public"])),ts(),did))
+        return jsonify({"ok":True})
+
+@app.route("/api/docs/<did>", methods=["DELETE"])
+@login_required
+def delete_doc(did):
+    with get_db() as db:
+        db.execute("DELETE FROM docs WHERE id=? AND workspace_id=?",(did,wid()))
+        return jsonify({"ok":True})
+
+# ── Goals / OKRs ──────────────────────────────────────────────────────────────
+@app.route("/api/goals", methods=["GET"])
+@login_required
+def get_goals():
+    with get_db() as db:
+        goals = db.execute("SELECT g.*,u.name as owner_name FROM goals g LEFT JOIN users u ON g.owner=u.id WHERE g.workspace_id=? ORDER BY g.created DESC",(wid(),)).fetchall()
+        result = []
+        for g in goals:
+            krs = db.execute("SELECT * FROM goal_krs WHERE goal_id=?",(g["id"],)).fetchall()
+            gd = dict(g); gd["krs"] = [dict(k) for k in krs]
+            result.append(gd)
+        return jsonify(result)
+
+@app.route("/api/goals", methods=["POST"])
+@login_required
+def create_goal():
+    d = request.json or {}
+    if not d.get("title"): return jsonify({"error":"Title required"}),400
+    with get_db() as db:
+        gid = f"g{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO goals VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (gid,wid(),d["title"],d.get("description",""),
+                    d.get("owner",session["user_id"]),"active",0,d.get("due",""),ts(),d.get("team_id","")))
+        for kr in d.get("krs",[]):
+            kid = f"kr{int(__import__('time').time()*1000)}{secrets.token_hex(2)}"
+            db.execute("INSERT INTO goal_krs VALUES (?,?,?,?,?,?,?,?)",
+                       (kid,gid,wid(),kr.get("title",""),kr.get("target",100),0,kr.get("unit","%"),ts()))
+        return jsonify({"ok":True,"id":gid})
+
+@app.route("/api/goals/<gid>", methods=["PUT"])
+@login_required
+def update_goal(gid):
+    d = request.json or {}
+    with get_db() as db:
+        g = db.execute("SELECT * FROM goals WHERE id=? AND workspace_id=?",(gid,wid())).fetchone()
+        if not g: return jsonify({"error":"Not found"}),404
+        # Auto-calc progress from KRs
+        krs = db.execute("SELECT * FROM goal_krs WHERE goal_id=?",(gid,)).fetchall()
+        if krs:
+            pct = sum(min(100,int((k["current"]/k["target"])*100)) if k["target"]>0 else 0 for k in krs) // len(krs)
+        else: pct = d.get("progress",g["progress"])
+        db.execute("UPDATE goals SET title=?,description=?,status=?,progress=?,due=?,owner=? WHERE id=?",
+                   (d.get("title",g["title"]),d.get("description",g["description"]),
+                    d.get("status",g["status"]),pct,d.get("due",g["due"]),
+                    d.get("owner",g["owner"]),gid))
+        # Update KRs
+        for kr in d.get("krs",[]):
+            if kr.get("id"):
+                db.execute("UPDATE goal_krs SET current=?,title=?,target=?,unit=? WHERE id=?",
+                           (kr.get("current",0),kr.get("title",""),kr.get("target",100),kr.get("unit","%"),kr["id"]))
+        return jsonify({"ok":True})
+
+@app.route("/api/goals/<gid>", methods=["DELETE"])
+@login_required
+def delete_goal(gid):
+    with get_db() as db:
+        db.execute("DELETE FROM goal_krs WHERE goal_id=?",(gid,))
+        db.execute("DELETE FROM goals WHERE id=? AND workspace_id=?",(gid,wid()))
+        return jsonify({"ok":True})
+
+# ── Custom Fields ─────────────────────────────────────────────────────────────
+@app.route("/api/custom-fields", methods=["GET"])
+@login_required
+def get_custom_fields():
+    entity = request.args.get("entity","task")
+    with get_db() as db:
+        rows = db.execute("SELECT * FROM custom_fields WHERE workspace_id=? AND entity_type=? ORDER BY created",(wid(),entity)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/custom-fields", methods=["POST"])
+@login_required
+def create_custom_field():
+    d = request.json or {}
+    if not d.get("name"): return jsonify({"error":"Name required"}),400
+    with get_db() as db:
+        fid = f"cf{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO custom_fields VALUES (?,?,?,?,?,?,?)",
+                   (fid,wid(),d.get("entity_type","task"),d["name"],
+                    d.get("field_type","text"),json.dumps(d.get("options",[])),ts()))
+        return jsonify({"ok":True,"id":fid})
+
+@app.route("/api/custom-fields/<fid>", methods=["DELETE"])
+@login_required
+def delete_custom_field(fid):
+    with get_db() as db:
+        db.execute("DELETE FROM custom_field_values WHERE field_id=?",(fid,))
+        db.execute("DELETE FROM custom_fields WHERE id=? AND workspace_id=?",(fid,wid()))
+        return jsonify({"ok":True})
+
+@app.route("/api/custom-field-values/<entity_id>", methods=["GET"])
+@login_required
+def get_cfv(entity_id):
+    with get_db() as db:
+        rows = db.execute("SELECT cfv.*,cf.name,cf.field_type FROM custom_field_values cfv JOIN custom_fields cf ON cfv.field_id=cf.id WHERE cfv.workspace_id=? AND cfv.entity_id=?",(wid(),entity_id)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/custom-field-values", methods=["POST"])
+@login_required
+def set_cfv():
+    d = request.json or {}
+    with get_db() as db:
+        existing = db.execute("SELECT id FROM custom_field_values WHERE workspace_id=? AND field_id=? AND entity_id=?",(wid(),d["field_id"],d["entity_id"])).fetchone()
+        if existing:
+            db.execute("UPDATE custom_field_values SET value=?,updated=? WHERE id=?",(d.get("value",""),ts(),existing["id"]))
+        else:
+            vid = f"cfv{int(__import__('time').time()*1000)}"
+            db.execute("INSERT INTO custom_field_values VALUES (?,?,?,?,?,?)",(vid,wid(),d["field_id"],d["entity_id"],d.get("value",""),ts()))
+        return jsonify({"ok":True})
+
+# ── Task Templates ────────────────────────────────────────────────────────────
+@app.route("/api/task-templates", methods=["GET"])
+@login_required
+def get_task_templates():
+    with get_db() as db:
+        rows = db.execute("SELECT * FROM task_templates WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/task-templates", methods=["POST"])
+@login_required
+def create_task_template():
+    d = request.json or {}
+    if not d.get("name"): return jsonify({"error":"Name required"}),400
+    with get_db() as db:
+        tid = f"tt{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO task_templates VALUES (?,?,?,?,?,?,?,?,?)",
+                   (tid,wid(),d["name"],d.get("description",""),d.get("priority","medium"),
+                    d.get("stage","backlog"),json.dumps(d.get("labels",[])),
+                    json.dumps(d.get("subtasks",[])),ts()))
+        return jsonify({"ok":True,"id":tid})
+
+@app.route("/api/task-templates/<tid>", methods=["DELETE"])
+@login_required
+def delete_task_template(tid):
+    with get_db() as db:
+        db.execute("DELETE FROM task_templates WHERE id=? AND workspace_id=?",(tid,wid()))
+        return jsonify({"ok":True})
+
+# ── Sprints ───────────────────────────────────────────────────────────────────
+@app.route("/api/sprints", methods=["GET"])
+@login_required
+def get_sprints():
+    project_id = request.args.get("project_id","")
+    with get_db() as db:
+        if project_id:
+            rows = db.execute("SELECT * FROM sprints WHERE workspace_id=? AND project_id=? ORDER BY created DESC",(wid(),project_id)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM sprints WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
+        result = []
+        for s in rows:
+            sd = dict(s)
+            tasks_in_sprint = db.execute("SELECT id,title,stage,story_points FROM tasks WHERE workspace_id=? AND sprint=?",(wid(),s["id"])).fetchall()
+            sd["tasks"] = [dict(t) for t in tasks_in_sprint]
+            sd["total_points"] = sum(t["story_points"] or 0 for t in tasks_in_sprint)
+            sd["done_points"] = sum(t["story_points"] or 0 for t in tasks_in_sprint if t["stage"]=="completed")
+            result.append(sd)
+        return jsonify(result)
+
+@app.route("/api/sprints", methods=["POST"])
+@login_required
+def create_sprint():
+    d = request.json or {}
+    if not d.get("name"): return jsonify({"error":"Name required"}),400
+    with get_db() as db:
+        sid = f"sp{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO sprints VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (sid,wid(),d.get("project_id",""),d["name"],d.get("goal",""),
+                    "planning",d.get("start_date",""),d.get("end_date",""),0,ts()))
+        return jsonify({"ok":True,"id":sid})
+
+@app.route("/api/sprints/<sid>", methods=["PUT"])
+@login_required
+def update_sprint(sid):
+    d = request.json or {}
+    with get_db() as db:
+        s = db.execute("SELECT * FROM sprints WHERE id=? AND workspace_id=?",(sid,wid())).fetchone()
+        if not s: return jsonify({"error":"Not found"}),404
+        db.execute("UPDATE sprints SET name=?,goal=?,status=?,start_date=?,end_date=? WHERE id=?",
+                   (d.get("name",s["name"]),d.get("goal",s["goal"]),d.get("status",s["status"]),
+                    d.get("start_date",s["start_date"]),d.get("end_date",s["end_date"]),sid))
+        if d.get("task_ids"):
+            db.execute("UPDATE tasks SET sprint='' WHERE workspace_id=? AND sprint=?",(wid(),sid))
+            for task_id in d["task_ids"]:
+                db.execute("UPDATE tasks SET sprint=? WHERE id=? AND workspace_id=?",(sid,task_id,wid()))
+        return jsonify({"ok":True})
+
+@app.route("/api/sprints/<sid>", methods=["DELETE"])
+@login_required
+def delete_sprint(sid):
+    with get_db() as db:
+        db.execute("UPDATE tasks SET sprint='' WHERE workspace_id=? AND sprint=?",(wid(),sid))
+        db.execute("DELETE FROM sprints WHERE id=? AND workspace_id=?",(sid,wid()))
+        return jsonify({"ok":True})
+
+# ── Webhooks ──────────────────────────────────────────────────────────────────
+def fire_webhooks(db, event, payload):
+    try:
+        hooks = db.execute("SELECT * FROM webhooks_config WHERE workspace_id=? AND active=1",(wid(),)).fetchall()
+        for h in hooks:
+            events = json.loads(h["events"] or "[]")
+            if event not in events and "*" not in events: continue
+            body = json.dumps({"event":event,"workspace_id":wid(),"data":payload}).encode()
+            req = urllib.request.Request(h["url"],data=body,method="POST",
+                headers={"Content-Type":"application/json","X-VEWIT-Event":event,"X-VEWIT-Secret":h["secret"] or ""})
+            try:
+                with urllib.request.urlopen(req,timeout=5) as r: pass
+            except: pass
+    except: pass
+
+@app.route("/api/webhooks", methods=["GET"])
+@login_required
+def get_webhooks():
+    with get_db() as db:
+        rows = db.execute("SELECT id,name,url,events,active,created FROM webhooks_config WHERE workspace_id=?",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/webhooks", methods=["POST"])
+@login_required
+def create_webhook():
+    d = request.json or {}
+    if not d.get("url"): return jsonify({"error":"URL required"}),400
+    with get_db() as db:
+        wh_id = f"wh{int(__import__('time').time()*1000)}"
+        secret = secrets.token_hex(16)
+        db.execute("INSERT INTO webhooks_config VALUES (?,?,?,?,?,?,?,?)",
+                   (wh_id,wid(),d.get("name","Webhook"),d["url"],
+                    json.dumps(d.get("events",["*"])),secret,1,ts()))
+        return jsonify({"ok":True,"id":wh_id,"secret":secret})
+
+@app.route("/api/webhooks/<wh_id>", methods=["PUT"])
+@login_required
+def update_webhook(wh_id):
+    d = request.json or {}
+    with get_db() as db:
+        h = db.execute("SELECT * FROM webhooks_config WHERE id=? AND workspace_id=?",(wh_id,wid())).fetchone()
+        if not h: return jsonify({"error":"Not found"}),404
+        db.execute("UPDATE webhooks_config SET name=?,url=?,events=?,active=? WHERE id=?",
+                   (d.get("name",h["name"]),d.get("url",h["url"]),
+                    json.dumps(d.get("events",json.loads(h["events"] or "[]"))),
+                    int(d.get("active",h["active"])),wh_id))
+        return jsonify({"ok":True})
+
+@app.route("/api/webhooks/<wh_id>", methods=["DELETE"])
+@login_required
+def delete_webhook(wh_id):
+    with get_db() as db:
+        db.execute("DELETE FROM webhooks_config WHERE id=? AND workspace_id=?",(wh_id,wid()))
+        return jsonify({"ok":True})
+
+# ── API Keys ──────────────────────────────────────────────────────────────────
+@app.route("/api/api-keys", methods=["GET"])
+@login_required
+def get_api_keys():
+    with get_db() as db:
+        rows = db.execute("SELECT id,name,key_prefix,scopes,last_used,created FROM api_keys WHERE workspace_id=? AND user_id=?",(wid(),session["user_id"])).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/api-keys", methods=["POST"])
+@login_required
+def create_api_key():
+    d = request.json or {}
+    raw_key = f"vwt_{secrets.token_hex(24)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    prefix = raw_key[:12]
+    with get_db() as db:
+        kid = f"ak{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO api_keys VALUES (?,?,?,?,?,?,?,?,?)",
+                   (kid,wid(),session["user_id"],d.get("name","My API Key"),
+                    key_hash,prefix,json.dumps(d.get("scopes",["read"])),None,ts()))
+        return jsonify({"ok":True,"key":raw_key,"id":kid,"prefix":prefix})
+
+@app.route("/api/api-keys/<kid>", methods=["DELETE"])
+@login_required
+def delete_api_key(kid):
+    with get_db() as db:
+        db.execute("DELETE FROM api_keys WHERE id=? AND workspace_id=? AND user_id=?",(kid,wid(),session["user_id"]))
+        return jsonify({"ok":True})
+
+# ── Audit Logs ────────────────────────────────────────────────────────────────
+@app.route("/api/audit-logs", methods=["GET"])
+@login_required
+def get_audit_logs():
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
+        rows = db.execute("SELECT al.*,u.name as user_name FROM audit_logs al LEFT JOIN users u ON al.user_id=u.id WHERE al.workspace_id=? ORDER BY al.created DESC LIMIT 500",(wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+# ── Guest access ──────────────────────────────────────────────────────────────
+@app.route("/api/guests", methods=["POST"])
+@login_required
+def invite_guest():
+    d = request.json or {}
+    email = d.get("email","").strip().lower()
+    if not email: return jsonify({"error":"Email required"}),400
+    project_ids = d.get("project_ids",[])
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
+        existing = db.execute("SELECT id FROM users WHERE email=? AND workspace_id=?",(email,wid())).fetchone()
+        if existing: return jsonify({"error":"User already exists"}),400
+        uid = f"g{int(__import__('time').time()*1000)}"
+        raw_pw = secrets.token_hex(8)
+        db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?)",
+                   (uid,wid(),d.get("name",email.split("@")[0]),email,
+                    hash_pw(raw_pw),"Viewer","G","#64748b",ts()))
+        db.execute("UPDATE users SET is_guest=1,guest_projects=? WHERE id=?",(json.dumps(project_ids),uid))
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        body = f"<p>You've been invited as a guest to <b>{ws['name'] if ws else 'VEWIT'}</b>.</p><p>Email: {email}<br>Password: {raw_pw}</p><p>Login at your VEWIT workspace.</p>"
+        threading.Thread(target=send_email,args=(email,"Guest Invitation — VEWIT",body,wid()),daemon=True).start()
+        return jsonify({"ok":True,"id":uid,"temp_password":raw_pw})
+
+# ── Referral System ───────────────────────────────────────────────────────────
+@app.route("/api/referral", methods=["GET"])
+@login_required
+def get_referral():
+    with get_db() as db:
+        ws = db.execute("SELECT referral_code FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        code = ws["referral_code"] if ws and ws["referral_code"] else ""
+        if not code:
+            code = secrets.token_hex(6).upper()
+            db.execute("UPDATE workspaces SET referral_code=? WHERE id=?",(code,wid()))
+        count = db.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_ws=?",(wid(),)).fetchone()
+        return jsonify({"code":code,"referrals":count["cnt"] if count else 0})
+
+@app.route("/api/referral/use", methods=["POST"])
+def use_referral():
+    d = request.json or {}
+    code = d.get("code","").strip().upper()
+    ws_id = d.get("workspace_id","")
+    if not code or not ws_id: return jsonify({"error":"Missing params"}),400
+    with get_db() as db:
+        referrer = db.execute("SELECT id FROM workspaces WHERE referral_code=?",(code,)).fetchone()
+        if not referrer: return jsonify({"error":"Invalid code"}),404
+        if referrer["id"] == ws_id: return jsonify({"error":"Cannot self-refer"}),400
+        existing = db.execute("SELECT id FROM referrals WHERE referred_ws=?",(ws_id,)).fetchone()
+        if existing: return jsonify({"ok":True,"already":True})
+        rid = f"ref{int(__import__('time').time()*1000)}"
+        db.execute("INSERT INTO referrals VALUES (?,?,?,?)",(rid,referrer["id"],ws_id,ts()))
+        return jsonify({"ok":True})
+
+# ── Email Digest ──────────────────────────────────────────────────────────────
+def _send_digest_for_workspace(ws):
+    try:
+        with get_db() as db:
+            tasks = db.execute("SELECT * FROM tasks WHERE workspace_id=?",(ws["id"],)).fetchall()
+            users = db.execute("SELECT * FROM users WHERE workspace_id=?",(ws["id"],)).fetchall()
+            by_stage = {}
+            for t in tasks:
+                by_stage.setdefault(t["stage"],[]).append(t)
+            rows_html = ""
+            for stage, items in by_stage.items():
+                rows_html += f"<tr><td style='padding:8px;border-bottom:1px solid #e2e8f0'><b>{stage.title()}</b></td><td style='padding:8px;border-bottom:1px solid #e2e8f0'>{len(items)}</td></tr>"
+            overdue = [t for t in tasks if t.get("due") and t["due"]<datetime.utcnow().strftime("%Y-%m-%d") and t.get("stage")!="completed"]
+            overdue_html = "".join(f"<li>{t['title']} (due {t['due']})</li>" for t in overdue[:5])
+            body = f"""<h2>VEWIT Daily Digest — {ws['name']}</h2>
+            <h3>Task Summary</h3><table border='0' cellpadding='0' cellspacing='0'>{rows_html}</table>
+            {"<h3>⚠️ Overdue Tasks</h3><ul>"+overdue_html+"</ul>" if overdue else ""}
+            <p><small>Unsubscribe in Workspace Settings → Digest.</small></p>"""
+            for u in users:
+                if u.get("email"):
+                    send_email(u["email"],f"Daily Digest — {ws['name']}",body,ws["id"])
+    except Exception as e:
+        print(f"Digest error for {ws.get('id')}: {e}")
+
+def _run_digest():
+    try:
+        with get_db() as db:
+            workspaces = db.execute("SELECT * FROM workspaces WHERE digest_enabled=1").fetchall()
+            for ws in workspaces:
+                threading.Thread(target=_send_digest_for_workspace,args=(dict(ws),),daemon=True).start()
+    except Exception as e:
+        print(f"Digest runner error: {e}")
+
+# ── Budget Tracking ───────────────────────────────────────────────────────────
+@app.route("/api/projects/<pid>/budget", methods=["GET"])
+@login_required
+def get_project_budget(pid):
+    with get_db() as db:
+        p = db.execute("SELECT budget,budget_spent FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
+        if not p: return jsonify({"error":"Not found"}),404
+        logs = db.execute("SELECT * FROM time_logs WHERE workspace_id=? AND task_id IN (SELECT id FROM tasks WHERE project=? AND workspace_id=?)",(wid(),pid,wid())).fetchall()
+        return jsonify({"budget":p["budget"] or 0,"budget_spent":p["budget_spent"] or 0,"time_logged_minutes":sum(l["minutes"] for l in logs)})
+
+@app.route("/api/projects/<pid>/budget", methods=["PUT"])
+@login_required
+def update_project_budget(pid):
+    d = request.json or {}
+    with get_db() as db:
+        db.execute("UPDATE projects SET budget=?,budget_spent=? WHERE id=? AND workspace_id=?",
+                   (d.get("budget",0),d.get("budget_spent",0),pid,wid()))
+        return jsonify({"ok":True})
+
+# ── Public status page ────────────────────────────────────────────────────────
+@app.route("/status/<invite_code>")
+def public_status(invite_code):
+    with get_db() as db:
+        ws = db.execute("SELECT * FROM workspaces WHERE invite_code=?",(invite_code,)).fetchone()
+        if not ws: return "Workspace not found",404
+        projects = db.execute("SELECT id,name,color,progress FROM projects WHERE workspace_id=?",(ws["id"],)).fetchall()
+        tasks = db.execute("SELECT stage,COUNT(*) as cnt FROM tasks WHERE workspace_id=? GROUP BY stage",(ws["id"],)).fetchall()
+        stage_counts = {t["stage"]:t["cnt"] for t in tasks}
+        proj_html = "".join(f"<div style='padding:12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px'><div style='display:flex;justify-content:space-between'><b>{p['name']}</b><span>{p['progress']}%</span></div><div style='height:6px;background:#e2e8f0;border-radius:3px;margin-top:6px'><div style='height:6px;background:{p['color'] or '#3b82f6'};border-radius:3px;width:{p['progress']}%'></div></div></div>" for p in projects)
+        stage_html = "".join(f"<span style='padding:4px 10px;background:#f1f5f9;border-radius:99px;font-size:13px;margin-right:6px'>{s}: <b>{c}</b></span>" for s,c in stage_counts.items())
+        return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>{ws['name']} — Status</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#1e293b}}</style></head>
+        <body><h1>🟢 {ws['name']} — Project Status</h1><p style="color:#64748b">Live status page · Updated in real time</p>
+        <h2>Tasks by Stage</h2><div style="margin-bottom:20px">{stage_html}</div>
+        <h2>Projects</h2>{proj_html or '<p>No projects yet.</p>'}
+        </body></html>"""
+
+# ── White-label settings ──────────────────────────────────────────────────────
+@app.route("/api/workspace/white-label", methods=["PUT"])
+@login_required
+def update_white_label():
+    d = request.json or {}
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin",): return jsonify({"error":"Forbidden"}),403
+        db.execute("UPDATE workspaces SET white_label_name=?,white_label_logo=? WHERE id=?",
+                   (d.get("name",""),d.get("logo",""),wid()))
+        return jsonify({"ok":True})
+
+
 # ── Export ────────────────────────────────────────────────────────────────────
 @app.route("/api/export/csv")
 @login_required
@@ -2425,12 +3121,12 @@ def about_page():
 <title>About VEWIT — AI-Powered Team Collaboration Platform</title>
 <link rel="icon" type="image/png" href="/icon-192.png"/>
 <link rel="shortcut icon" href="/favicon.ico"/>
-<meta name="description" content="Learn about VEWIT — AI-powered team collaboration for project management, task tracking, direct messages, support tickets &amp; developer productivity."/>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
 <meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
-<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+<meta name="robots" content="index, follow"/>
 <link rel="canonical" href="https://www.vewit.in/about"/>
 <meta property="og:title" content="About VEWIT — AI-Powered Team Collaboration"/>
-<meta property="og:description" content="VEWIT — AI-powered team collaboration for project management, task tracking, direct messages, support tickets &amp; analytics. Free to start."/>
+<meta property="og:description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, tickets and analytics all in one place."/>
 <meta property="og:url" content="https://www.vewit.in/about"/>
 <meta property="og:type" content="website"/>
 <script type="application/ld+json">
@@ -2757,17 +3453,19 @@ Sitemap: https://www.vewit.in/sitemap.xml"""
 @app.route("/tasks")
 @app.route("/messages")
 @app.route("/dm")
-@app.route("/dashboard")
-@app.route("/projects")
-@app.route("/tasks")
-@app.route("/messages")
-@app.route("/dm")
 @app.route("/tickets")
 @app.route("/timeline")
 @app.route("/reminders")
 @app.route("/settings")
 @app.route("/team")
 @app.route("/productivity")
+@app.route("/calendar")
+@app.route("/kanban")
+@app.route("/docs")
+@app.route("/goals")
+@app.route("/sprints")
+@app.route("/integrations")
+@app.route("/audit")
 def app_page(**kwargs):
     """Serve the SPA for all clean URLs — JS picks up the path and sets the view."""
     return HTML
@@ -2786,7 +3484,7 @@ LANDING_HTML = """<!DOCTYPE html>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>VEWIT — AI-Powered Project Management &amp; Team Collaboration Platform</title>
-<meta name="description" content="VEWIT — AI-powered team collaboration. Manage projects, tasks, messages, tickets &amp; analytics in one platform. Free to start, no credit card required."/>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timeline tracking and developer productivity — all in one place. Free to start."/>
 <meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
 <meta name="author" content="VEWIT"/>
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
@@ -2803,13 +3501,14 @@ LANDING_HTML = """<!DOCTYPE html>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:description" content="Manage projects, tasks, direct messages, support tickets &amp; analytics — all in one AI-powered platform. Free to start, no credit card required."/>
+<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
 <meta property="og:site_name" content="VEWIT"/>
 <meta property="og:locale" content="en_IN"/>
 <meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
 <meta property="og:image:width" content="512"/>
 <meta property="og:image:height" content="512"/>
 <meta property="og:image:alt" content="VEWIT — AI-Powered Team Collaboration Platform"/>
+<meta property="og:site_name" content="VEWIT"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
 <meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
@@ -4969,9 +5668,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const NAV_ICONS={
     dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'kanban', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'goals', label:'Goals & OKRs'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'integrations', label:'Integrations'}, {id:'audit', label:'Audit Log'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'kanban', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'goals', label:'Goals & OKRs'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -5319,6 +6018,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [loadingSubtasks,setLoadingSubtasks]=useState(false);
   // Jira fields
   const [storyPoints,setStoryPoints]=useState((task&&task.story_points)||0);
+  const [recurring,setRecurring]=useState((task&&task.recurring)||'');
   const [taskType,setTaskType]=useState((task&&task.task_type)||'task');
   const [taskLabels,setTaskLabels]=useState(()=>{const r=task&&task.labels;if(!r)return[];if(Array.isArray(r))return r;try{return JSON.parse(r)||[];}catch{return [];}});
   const [newLabel,setNewLabel]=useState('');
@@ -5376,7 +6076,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
     if(isEdit&&canUpdateStage&&!canEditTask){
       payload={stage,pct};
     } else {
-      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId,story_points:storyPoints,task_type:taskType,labels:taskLabels,sprint};
+      payload={title:title.trim(),description:desc,project:pid,assignee:ass,priority:pri,stage,due,pct,comments:cmts,team_id:teamId,story_points:storyPoints,task_type:taskType,labels:taskLabels,sprint,recurring};
     }
     if(task&&task.id)payload.id=task.id;
     const result=await onSave(payload);
@@ -5432,9 +6132,9 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
         </div>
         ${isEdit?html`
           <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:14,width:'fit-content',flexWrap:'wrap'}}>
-            ${['details','subtasks','comments','files'].map(t=>html`
+            ${['details','subtasks','comments','files','time','deps'].map(t=>html`
               <button key=${t} class=${'tb'+(tab===t?' act':'')} onClick=${()=>setTab(t)} style=${{fontSize:11}}>
-                ${t==='details'?'Details':t==='subtasks'?html`Subtasks${subtasks.length>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${subtasks.filter(s=>s.done).length}/${subtasks.length}</span>`:''}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
+                ${t==='details'?'Details':t==='subtasks'?html`Subtasks${subtasks.length>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${subtasks.filter(s=>s.done).length}/${subtasks.length}</span>`:''}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):t==='time'?'⏱ Time':t==='deps'?'🔗 Deps':'Files'}
               </button>`)}
           </div>`:null}
 
@@ -5602,6 +6302,15 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                   ${[0,1,2,3,5,8,13,21].map(p=>html`<option key=${p} value=${p}>${p===0?'—':p+' pt'+(p>1?'s':'')}</option>`)}
                 </select>
               </div>
+              <div style=${{flex:1,minWidth:140}}>
+                <label class="lbl">Recurring</label>
+                <select class="sel" value=${recurring} onChange=${async e=>{setRecurring(e.target.value);if(isEdit)await api.put(`/api/tasks/${task.id}/recurring`,{pattern:e.target.value});}} disabled=${!canEditTask}>
+                  <option value="">Not recurring</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
             </div>
             <!-- Labels -->
             <div>
@@ -5653,6 +6362,8 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
             </div>
           </div>`:null}
         ${tab==='files'&&isEdit?html`<${FileAttachments} taskId=${task.id} readOnly=${cu&&cu.role==='Viewer'}/>`:null}
+        ${tab==='time'&&isEdit?html`<${TimeTracker} taskId=${task.id} cu=${cu}/>`:null}
+        ${tab==='deps'&&isEdit?html`<${TaskDepsPanel} taskId=${task.id} allTasks=${[]}/>`:null}
       </div>
     </div>`;
 }
@@ -8415,6 +9126,28 @@ function WorkspaceSettings({cu,onReload}){
         </div>
       </div>
 
+      <${ReferralPanel}/>
+
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:16}}>
+        <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:10}}>🏷 White Label</div>
+        <div style=${{display:'grid',gap:8}}>
+          <div style=${{display:'flex',flexDirection:'column',gap:4}}>
+            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)'}}>Custom Platform Name</label>
+            <input class="inp" id="wl_name" placeholder="e.g. MyTeam Hub" style=${{height:34,fontSize:13}}/>
+          </div>
+          <div style=${{display:'flex',flexDirection:'column',gap:4}}>
+            <label style=${{fontSize:12,fontWeight:600,color:'var(--tx2)'}}>Logo URL</label>
+            <input class="inp" id="wl_logo" placeholder="https://..." style=${{height:34,fontSize:13}}/>
+          </div>
+          <button class="btn bg" style=${{fontSize:12,width:'fit-content'}} onClick=${async()=>{
+            const name=document.getElementById('wl_name')?.value||'';
+            const logo=document.getElementById('wl_logo')?.value||'';
+            await api.put('/api/workspace/white-label',{name,logo});
+            alert('White label settings saved!');
+          }}>Save White Label</button>
+        </div>
+      </div>
+
       <div style=${{display:'flex',gap:10,justifyContent:'flex-end'}}>
         <button class="btn bp" onClick=${save} disabled=${saving}>
           ${saving?html`<span class="spin"></span>`:saved?'✓ Saved!':'Save Settings'}
@@ -8423,6 +9156,613 @@ function WorkspaceSettings({cu,onReload}){
     </div>
   </div>`;
 }
+
+
+/* ─── Calendar View ──────────────────────────────────────────────────────── */
+function CalendarView({tasks,projects,cu,onSetReminder,reload}){
+  const [cur,setCur]=useState(()=>new Date());
+  const [sel,setSel]=useState(null);
+  const year=cur.getFullYear(),month=cur.getMonth();
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const monthName=cur.toLocaleString('default',{month:'long'});
+  const tasksByDate={};
+  safe(tasks).forEach(t=>{
+    if(!t.due)return;
+    const d=t.due.slice(0,10);
+    if(!tasksByDate[d])tasksByDate[d]=[];
+    tasksByDate[d].push(t);
+  });
+  const today=new Date().toISOString().slice(0,10);
+  const prev=()=>setCur(new Date(year,month-1,1));
+  const next=()=>setCur(new Date(year,month+1,1));
+  const STAGE_COLOR={backlog:'#64748b',planning:'#7c3aed',inprogress:'#0891b2',review:'#d97706',testing:'#0e7490',completed:'#15803d',blocked:'#b91c1c'};
+  return html`<div style=${{flex:1,overflow:'auto',padding:'20px 24px'}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <div style=${{display:'flex',alignItems:'center',gap:12}}>
+        <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📅 Calendar</h2>
+        <span style=${{fontSize:16,fontWeight:600,color:'var(--tx2)'}}>${monthName} ${year}</span>
+      </div>
+      <div style=${{display:'flex',gap:8}}>
+        <button class="btn bg" onClick=${prev}>‹ Prev</button>
+        <button class="btn bg" onClick=${()=>setCur(new Date())}>Today</button>
+        <button class="btn bg" onClick=${next}>Next ›</button>
+      </div>
+    </div>
+    <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1,background:'var(--bd)',borderRadius:10,overflow:'hidden',border:'1px solid var(--bd)'}}>
+      ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>html`
+        <div key=${d} style=${{background:'var(--sf2)',padding:'8px 0',textAlign:'center',fontSize:11,fontWeight:700,color:'var(--tx2)',letterSpacing:'.05em'}}>${d}</div>`)}
+      ${Array.from({length:firstDay}).map((_,i)=>html`<div key=${'e'+i} style=${{background:'var(--bg)',minHeight:90}}></div>`)}
+      ${Array.from({length:daysInMonth}).map((_,i)=>{
+        const day=i+1;
+        const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const dayTasks=tasksByDate[dateStr]||[];
+        const isToday=dateStr===today;
+        const isSel=sel===dateStr;
+        return html`
+          <div key=${day} onClick=${()=>setSel(isSel?null:dateStr)}
+            style=${{background:isSel?'rgba(var(--ac-rgb,37,99,235),0.08)':isToday?'rgba(37,99,235,0.05)':'var(--bg)',minHeight:90,padding:'6px 8px',cursor:'pointer',transition:'background .12s',borderTop:isToday?'2px solid var(--ac)':isSel?'2px solid var(--ac)':'2px solid transparent'}}>
+            <div style=${{fontSize:12,fontWeight:isToday?700:500,color:isToday?'var(--ac)':'var(--tx)',marginBottom:3}}>${day}</div>
+            ${dayTasks.slice(0,3).map(t=>html`
+              <div key=${t.id} title=${t.title}
+                style=${{fontSize:10,padding:'2px 5px',borderRadius:4,marginBottom:2,background:(STAGE_COLOR[t.stage]||'#3b82f6')+'22',color:STAGE_COLOR[t.stage]||'#3b82f6',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                ${t.title}</div>`)}
+            ${dayTasks.length>3?html`<div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>+${dayTasks.length-3} more</div>`:null}
+          </div>`;
+      })}
+    </div>
+    ${sel&&tasksByDate[sel]?html`
+      <div style=${{marginTop:16,padding:16,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10}}>
+        <div style=${{fontWeight:700,color:'var(--tx)',marginBottom:8}}>${sel} — ${tasksByDate[sel].length} task(s)</div>
+        ${tasksByDate[sel].map(t=>html`
+          <div key=${t.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--bd)'}}>
+            <span style=${{fontSize:10,padding:'2px 6px',borderRadius:4,background:(STAGE_COLOR[t.stage]||'#3b82f6')+'22',color:STAGE_COLOR[t.stage]||'#3b82f6',fontWeight:700,minWidth:64,textAlign:'center'}}>${t.stage}</span>
+            <span style=${{flex:1,fontSize:13,color:'var(--tx)'}}>${t.title}</span>
+            <span style=${{fontSize:11,color:'var(--tx3)'}}>${t.priority}</span>
+          </div>`)}
+      </div>`:null}
+  </div>`;
+}
+
+/* ─── Kanban Board View ──────────────────────────────────────────────────── */
+function KanbanView({tasks,projects,users,cu,reload}){
+  const STAGES=['backlog','planning','inprogress','review','testing','completed','blocked'];
+  const STAGE_LABELS={backlog:'Backlog',planning:'Planning',inprogress:'In Progress',review:'Review',testing:'Testing',completed:'Completed',blocked:'Blocked'};
+  const STAGE_COLORS={backlog:'#64748b',planning:'#7c3aed',inprogress:'#0891b2',review:'#d97706',testing:'#0e7490',completed:'#15803d',blocked:'#b91c1c'};
+  const [drag,setDrag]=useState(null);
+  const [filter,setFilter]=useState('');
+  const filtered=safe(tasks).filter(t=>!filter||t.title.toLowerCase().includes(filter.toLowerCase())||(t.assignee&&users.find(u=>u.id===t.assignee)?.name?.toLowerCase().includes(filter.toLowerCase())));
+  const byStage={};STAGES.forEach(s=>byStage[s]=filtered.filter(t=>t.stage===s));
+  const moveTask=async(taskId,newStage)=>{
+    await api.put(`/api/tasks/${taskId}`,{stage:newStage});
+    reload();
+  };
+  const onDrop=async(stage)=>{
+    if(drag&&drag!==stage)await moveTask(drag.taskId,stage);
+    setDrag(null);
+  };
+  const uMap={};safe(users).forEach(u=>uMap[u.id]=u);
+  const pMap={};safe(projects).forEach(p=>pMap[p.id]=p);
+  const PRIO_DOT={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
+  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',padding:'16px 20px 0'}}>
+    <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🗂 Kanban Board</h2>
+      <input class="inp" placeholder="Filter tasks…" value=${filter} onInput=${e=>setFilter(e.target.value)}
+        style=${{width:200,height:32,fontSize:13}}/>
+      <span style=${{fontSize:12,color:'var(--tx3)',marginLeft:'auto'}}>${filtered.length} tasks</span>
+    </div>
+    <div style=${{display:'flex',gap:10,overflowX:'auto',flex:1,paddingBottom:16}}>
+      ${STAGES.map(stage=>html`
+        <div key=${stage}
+          onDragOver=${e=>{e.preventDefault();}}
+          onDrop=${()=>onDrop(stage)}
+          style=${{minWidth:230,maxWidth:260,flex:'0 0 240px',background:'var(--sf2)',borderRadius:10,display:'flex',flexDirection:'column',border:'1px solid var(--bd)',overflow:'hidden'}}>
+          <div style=${{padding:'10px 12px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:6}}>
+            <div style=${{width:8,height:8,borderRadius:'50%',background:STAGE_COLORS[stage]}}></div>
+            <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1}}>${STAGE_LABELS[stage]}</span>
+            <span style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',background:'var(--bg)',borderRadius:99,padding:'1px 7px',border:'1px solid var(--bd)'}}>${byStage[stage].length}</span>
+          </div>
+          <div style=${{flex:1,overflowY:'auto',padding:'8px 8px 4px'}}>
+            ${byStage[stage].map(t=>{
+              const u=uMap[t.assignee];
+              const p=pMap[t.project];
+              return html`
+                <div key=${t.id} draggable=${true}
+                  onDragStart=${()=>setDrag({taskId:t.id,fromStage:stage})}
+                  onDragEnd=${()=>setDrag(null)}
+                  style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'10px 10px 8px',marginBottom:7,cursor:'grab',transition:'box-shadow .12s',userSelect:'none'}}>
+                  ${p?html`<div style=${{fontSize:10,color:p.color||'var(--ac)',fontWeight:600,marginBottom:3}}>${p.name}</div>`:null}
+                  <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',marginBottom:6,lineHeight:1.35}}>${t.title}</div>
+                  <div style=${{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                    ${t.priority?html`<span style=${{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,color:PRIO_DOT[t.priority]||'#888',fontWeight:600}}><span style=${{width:6,height:6,borderRadius:'50%',background:PRIO_DOT[t.priority]||'#888',display:'inline-block'}}></span>${t.priority}</span>`:null}
+                    ${t.due?html`<span style=${{fontSize:10,color:'var(--tx3)'}}>${t.due.slice(5)}</span>`:null}
+                    ${u?html`<span style=${{fontSize:10,background:'var(--ac)',color:'#fff',borderRadius:99,padding:'1px 6px',marginLeft:'auto'}}>${u.name.slice(0,2).toUpperCase()}</span>`:null}
+                  </div>
+                </div>`;
+            })}
+          </div>
+        </div>`)}
+    </div>
+  </div>`;
+}
+
+/* ─── Docs / Wiki View ───────────────────────────────────────────────────── */
+function DocsView({projects,cu}){
+  const [docs,setDocs]=useState([]);
+  const [sel,setSel]=useState(null);
+  const [editing,setEditing]=useState(false);
+  const [form,setForm]=useState({title:'',content:'',project_id:'',is_public:false});
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState('');
+  const load=async()=>{setLoading(true);const r=await api.get('/api/docs');setDocs(r||[]);setLoading(false);};
+  useEffect(()=>{load();},[]);
+  const save=async()=>{
+    if(sel?.id){await api.put(`/api/docs/${sel.id}`,form);}
+    else{const r=await api.post('/api/docs',form);if(r?.id){setSel({...form,id:r.id});}}
+    load();setEditing(false);
+  };
+  const del=async(id)=>{if(!confirm('Delete this doc?'))return;await api.del(`/api/docs/${id}`);setSel(null);load();};
+  const filtered=docs.filter(d=>!search||d.title.toLowerCase().includes(search.toLowerCase()));
+  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+    <div style=${{display:'flex',alignItems:'center',gap:12,padding:'16px 20px',borderBottom:'1px solid var(--bd)'}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📄 Docs & Wiki</h2>
+      <input class="inp" placeholder="Search docs…" value=${search} onInput=${e=>setSearch(e.target.value)} style=${{width:180,height:32,fontSize:13,marginLeft:'auto'}}/>
+      <button class="btn bp" onClick=${()=>{setSel(null);setForm({title:'',content:'',project_id:'',is_public:false});setEditing(true);}}>+ New Doc</button>
+    </div>
+    <div style=${{display:'flex',flex:1,overflow:'hidden'}}>
+      <div style=${{width:240,borderRight:'1px solid var(--bd)',overflowY:'auto',padding:12}}>
+        ${loading?html`<div class="tx3-11" style=${{textAlign:'center',marginTop:20}}>Loading…</div>`:null}
+        ${filtered.map(d=>html`
+          <div key=${d.id} onClick=${()=>{setSel(d);setForm({title:d.title,content:d.content||'',project_id:d.project_id||'',is_public:!!d.is_public});setEditing(false);}}
+            style=${{padding:'8px 10px',borderRadius:7,cursor:'pointer',marginBottom:4,background:sel?.id===d.id?'rgba(37,99,235,0.1)':'transparent',border:sel?.id===d.id?'1px solid rgba(37,99,235,0.3)':'1px solid transparent'}}>
+            <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>${d.title}</div>
+            <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${d.author_name||''} · ${(d.updated||'').slice(0,10)}</div>
+          </div>`)}
+        ${!loading&&!filtered.length?html`<div style=${{fontSize:13,color:'var(--tx3)',textAlign:'center',marginTop:24}}>No docs yet</div>`:null}
+      </div>
+      <div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+        ${editing?html`
+          <div style=${{maxWidth:760}}>
+            <input class="inp" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})}
+              placeholder="Document title…" style=${{width:'100%',fontSize:18,fontWeight:700,marginBottom:12,height:44}}/>
+            <div style=${{display:'flex',gap:10,marginBottom:12}}>
+              <select class="inp" style=${{flex:1,height:34}} value=${form.project_id} onChange=${e=>setForm({...form,project_id:e.target.value})}>
+                <option value="">No project</option>
+                ${projects.map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+              </select>
+              <label style=${{display:'flex',alignItems:'center',gap:6,fontSize:13,color:'var(--tx2)',cursor:'pointer'}}>
+                <input type="checkbox" checked=${form.is_public} onChange=${e=>setForm({...form,is_public:e.target.checked})}/> Public
+              </label>
+            </div>
+            <textarea class="inp" value=${form.content} onInput=${e=>setForm({...form,content:e.target.value})}
+              placeholder="Write your doc in plain text or Markdown…"
+              style=${{width:'100%',minHeight:320,fontSize:14,lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}></textarea>
+            <div style=${{display:'flex',gap:8,marginTop:12}}>
+              <button class="btn bp" onClick=${save}>Save</button>
+              <button class="btn bg" onClick=${()=>{setEditing(false);if(!sel)setSel(null);}}>Cancel</button>
+            </div>
+          </div>`:
+        sel?html`
+          <div style=${{maxWidth:760}}>
+            <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}>
+              <h1 style=${{fontSize:22,fontWeight:700,color:'var(--tx)',margin:0}}>${sel.title}</h1>
+              <div style=${{display:'flex',gap:8}}>
+                <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setEditing(true)}>✏️ Edit</button>
+                <button class="btn br" style=${{fontSize:12}} onClick=${()=>del(sel.id)}>🗑</button>
+              </div>
+            </div>
+            <div style=${{fontSize:12,color:'var(--tx3)',marginBottom:20}}>
+              By ${sel.author_name||''} · ${(sel.updated||'').slice(0,10)}
+              ${sel.is_public?html`<span style=${{marginLeft:8,background:'rgba(21,128,61,0.15)',color:'#15803d',padding:'1px 7px',borderRadius:99,fontWeight:600}}>Public</span>`:null}
+            </div>
+            <div style=${{fontSize:15,color:'var(--tx)',lineHeight:1.75,whiteSpace:'pre-wrap'}}>${sel.content||'(empty)'}</div>
+          </div>`:
+        html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx3)'}}>
+          <div style=${{fontSize:40,marginBottom:12}}>📄</div>
+          <div style=${{fontSize:15,fontWeight:600}}>Select a doc or create a new one</div>
+        </div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ─── Goals / OKRs View ──────────────────────────────────────────────────── */
+function GoalsView({cu,users}){
+  const [goals,setGoals]=useState([]);
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({title:'',description:'',due:'',owner:cu?.id||'',krs:[{title:'',target:100,unit:'%'}]});
+  const [expand,setExpand]=useState({});
+  const load=async()=>{const r=await api.get('/api/goals');setGoals(r||[]);};
+  useEffect(()=>{load();},[]);
+  const addKr=()=>setForm({...form,krs:[...form.krs,{title:'',target:100,unit:'%'}]});
+  const save=async()=>{
+    await api.post('/api/goals',form);setShowAdd(false);
+    setForm({title:'',description:'',due:'',owner:cu?.id||'',krs:[{title:'',target:100,unit:'%'}]});
+    load();
+  };
+  const updateKr=async(gid,kr)=>{await api.put(`/api/goals/${gid}`,{krs:[kr]});load();};
+  const delGoal=async(gid)=>{if(!confirm('Delete goal?'))return;await api.del(`/api/goals/${gid}`);load();};
+  const STATUS_COLOR={active:'#0891b2',completed:'#15803d',paused:'#d97706'};
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🎯 Goals & OKRs</h2>
+      <button class="btn bp" onClick=${()=>setShowAdd(true)}>+ Add Goal</button>
+    </div>
+    ${showAdd?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
+        <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <input class="inp" placeholder="Goal title…" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})} style=${{height:36,fontSize:14}}/>
+          <input class="inp" type="date" value=${form.due} onChange=${e=>setForm({...form,due:e.target.value})} style=${{height:36}}/>
+        </div>
+        <textarea class="inp" placeholder="Description…" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{width:'100%',height:60,marginBottom:10,fontSize:13,resize:'none'}}></textarea>
+        <div style=${{marginBottom:8,fontWeight:600,fontSize:12,color:'var(--tx2)'}}>KEY RESULTS</div>
+        ${form.krs.map((kr,i)=>html`
+          <div key=${i} style=${{display:'flex',gap:8,marginBottom:6}}>
+            <input class="inp" placeholder="Key result…" value=${kr.title} onInput=${e=>{const krs=[...form.krs];krs[i]={...krs[i],title:e.target.value};setForm({...form,krs});}} style=${{flex:1,height:32,fontSize:13}}/>
+            <input class="inp" type="number" placeholder="Target" value=${kr.target} onInput=${e=>{const krs=[...form.krs];krs[i]={...krs[i],target:+e.target.value};setForm({...form,krs});}} style=${{width:80,height:32}}/>
+            <input class="inp" placeholder="Unit" value=${kr.unit} onInput=${e=>{const krs=[...form.krs];krs[i]={...krs[i],unit:e.target.value};setForm({...form,krs});}} style=${{width:60,height:32}}/>
+          </div>`)}
+        <div style=${{display:'flex',gap:8,marginTop:8}}>
+          <button class="btn bg" style=${{fontSize:12}} onClick=${addKr}>+ KR</button>
+          <button class="btn bp" style=${{marginLeft:'auto'}} onClick=${save}>Save Goal</button>
+          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
+        </div>
+      </div>`:null}
+    ${goals.map(g=>html`
+      <div key=${g.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,marginBottom:14,overflow:'hidden'}}>
+        <div style=${{padding:'14px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:10}} onClick=${()=>setExpand({...expand,[g.id]:!expand[g.id]})}>
+          <div style=${{flex:1}}>
+            <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${g.title}</div>
+            ${g.description?html`<div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${g.description}</div>`:null}
+          </div>
+          <span style=${{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:99,background:(STATUS_COLOR[g.status]||'#888')+'22',color:STATUS_COLOR[g.status]||'#888'}}>${g.status}</span>
+          <div style=${{textAlign:'right',minWidth:60}}>
+            <div style=${{fontSize:18,fontWeight:800,color:'var(--ac)'}}>${g.progress}%</div>
+            <div style=${{fontSize:10,color:'var(--tx3)'}}>${g.due?'Due '+g.due:''}</div>
+          </div>
+          <div style=${{width:24,textAlign:'center',color:'var(--tx3)'}}>${expand[g.id]?'▲':'▼'}</div>
+        </div>
+        <div style=${{height:4,background:'var(--sf2)'}}>
+          <div style=${{height:4,width:g.progress+'%',background:'var(--ac)',transition:'width .5s',borderRadius:2}}></div>
+        </div>
+        ${expand[g.id]?html`
+          <div style=${{padding:'12px 16px'}}>
+            ${(g.krs||[]).map(kr=>html`
+              <div key=${kr.id} style=${{marginBottom:12}}>
+                <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style=${{fontSize:13,color:'var(--tx)',fontWeight:500}}>${kr.title}</span>
+                  <span style=${{fontSize:12,color:'var(--tx3)'}}>${kr.current}/${kr.target} ${kr.unit}</span>
+                </div>
+                <div style=${{display:'flex',alignItems:'center',gap:8}}>
+                  <div style=${{flex:1,height:6,background:'var(--sf2)',borderRadius:3}}>
+                    <div style=${{height:6,width:Math.min(100,(kr.current/kr.target)*100)+'%',background:'var(--ac)',borderRadius:3,transition:'width .5s'}}></div>
+                  </div>
+                  <input type="number" class="inp" value=${kr.current} style=${{width:70,height:26,fontSize:12,padding:'2px 6px'}}
+                    onChange=${async e=>{await api.put(`/api/goals/${g.id}`,{krs:[{...kr,current:+e.target.value}]});load();}}/>
+                </div>
+              </div>`)}
+            <div style=${{display:'flex',gap:8,marginTop:8}}>
+              <select class="inp" style=${{height:28,fontSize:12}} onChange=${async e=>{await api.put(`/api/goals/${g.id}`,{status:e.target.value});load();}}>
+                ${['active','completed','paused'].map(s=>html`<option value=${s} selected=${g.status===s}>${s}</option>`)}
+              </select>
+              <button class="btn br" style=${{fontSize:11,height:28,padding:'0 10px'}} onClick=${()=>delGoal(g.id)}>Delete</button>
+            </div>
+          </div>`:null}
+      </div>`)}
+  </div>`;
+}
+
+/* ─── Sprints View ───────────────────────────────────────────────────────── */
+function SprintsView({tasks,projects,cu,reload}){
+  const [sprints,setSprints]=useState([]);
+  const [form,setForm]=useState({name:'',goal:'',project_id:'',start_date:'',end_date:''});
+  const [showAdd,setShowAdd]=useState(false);
+  const [expand,setExpand]=useState({});
+  const load=async()=>{const r=await api.get('/api/sprints');setSprints(r||[]);};
+  useEffect(()=>{load();},[]);
+  const save=async()=>{await api.post('/api/sprints',form);setShowAdd(false);setForm({name:'',goal:'',project_id:'',start_date:'',end_date:''});load();};
+  const STATUS_COLOR={planning:'#7c3aed',active:'#0891b2',completed:'#15803d',cancelled:'#b91c1c'};
+  const unassigned=safe(tasks).filter(t=>!t.sprint);
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>🏃 Sprints</h2>
+      <button class="btn bp" onClick=${()=>setShowAdd(true)}>+ New Sprint</button>
+    </div>
+    ${showAdd?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
+        <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <input class="inp" placeholder="Sprint name (e.g. Sprint 1)…" value=${form.name} onInput=${e=>setForm({...form,name:e.target.value})} style=${{height:36}}/>
+          <select class="inp" style=${{height:36}} value=${form.project_id} onChange=${e=>setForm({...form,project_id:e.target.value})}>
+            <option value="">All projects</option>
+            ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
+          </select>
+          <input class="inp" type="date" placeholder="Start" value=${form.start_date} onChange=${e=>setForm({...form,start_date:e.target.value})} style=${{height:36}}/>
+          <input class="inp" type="date" placeholder="End" value=${form.end_date} onChange=${e=>setForm({...form,end_date:e.target.value})} style=${{height:36}}/>
+        </div>
+        <input class="inp" placeholder="Sprint goal…" value=${form.goal} onInput=${e=>setForm({...form,goal:e.target.value})} style=${{width:'100%',height:36,marginBottom:10}}/>
+        <div style=${{display:'flex',gap:8}}>
+          <button class="btn bp" onClick=${save}>Create Sprint</button>
+          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
+        </div>
+      </div>`:null}
+    ${sprints.map(s=>html`
+      <div key=${s.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,marginBottom:14,overflow:'hidden'}}>
+        <div style=${{padding:'14px 16px',display:'flex',alignItems:'center',gap:10,cursor:'pointer'}} onClick=${()=>setExpand({...expand,[s.id]:!expand[s.id]})}>
+          <div style=${{flex:1}}>
+            <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${s.name}</div>
+            ${s.goal?html`<div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${s.goal}</div>`:null}
+          </div>
+          <span style=${{fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:99,background:(STATUS_COLOR[s.status]||'#888')+'22',color:STATUS_COLOR[s.status]||'#888'}}>${s.status}</span>
+          <div style=${{textAlign:'right',fontSize:12,color:'var(--tx3)'}}>
+            <div>${s.done_points||0}/${s.total_points||0} pts</div>
+            <div>${s.start_date?s.start_date.slice(5):''} – ${s.end_date?s.end_date.slice(5):''}</div>
+          </div>
+          <div style=${{width:24,textAlign:'center',color:'var(--tx3)'}}>${expand[s.id]?'▲':'▼'}</div>
+        </div>
+        ${s.total_points>0?html`<div style=${{height:4,background:'var(--sf2)'}}>
+          <div style=${{height:4,width:Math.round((s.done_points/s.total_points)*100)+'%',background:'#15803d',transition:'width .5s'}}></div>
+        </div>`:null}
+        ${expand[s.id]?html`
+          <div style=${{padding:'10px 16px 14px'}}>
+            <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:8}}>TASKS IN SPRINT</div>
+            ${(s.tasks||[]).map(t=>html`
+              <div key=${t.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid var(--bd)'}}>
+                <span style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace'}}>${t.id}</span>
+                <span style=${{flex:1,fontSize:13,color:'var(--tx)'}}>${t.title}</span>
+                <span style=${{fontSize:11,color:'var(--tx3)'}}>${t.story_points||0}pts</span>
+                <span style=${{fontSize:10,padding:'2px 6px',borderRadius:4,background:'var(--sf2)',color:'var(--tx3)'}}>${t.stage}</span>
+              </div>`)}
+            <div style=${{display:'flex',gap:8,marginTop:12}}>
+              <select class="inp" style=${{height:28,fontSize:12}} onChange=${async e=>{await api.put(`/api/sprints/${s.id}`,{status:e.target.value});load();}}>
+                ${['planning','active','completed','cancelled'].map(st=>html`<option value=${st} selected=${s.status===st}>${st}</option>`)}
+              </select>
+              <button class="btn br" style=${{fontSize:11,height:28,padding:'0 10px'}} onClick=${async()=>{if(!confirm('Delete sprint?'))return;await api.del(`/api/sprints/${s.id}`);load();}}>Delete</button>
+            </div>
+          </div>`:null}
+      </div>`)}
+  </div>`;
+}
+
+/* ─── API Keys View ──────────────────────────────────────────────────────── */
+function APIKeysView({cu}){
+  const [keys,setKeys]=useState([]);
+  const [newKey,setNewKey]=useState(null);
+  const [form,setForm]=useState({name:'',scopes:['read']});
+  const [loading,setLoading]=useState(false);
+  const load=async()=>{const r=await api.get('/api/api-keys');setKeys(r||[]);};
+  useEffect(()=>{load();},[]);
+  const create=async()=>{
+    setLoading(true);
+    const r=await api.post('/api/api-keys',form);
+    if(r?.key){setNewKey(r.key);load();}
+    setLoading(false);
+  };
+  const del=async(kid)=>{if(!confirm('Revoke this key?'))return;await api.del(`/api/api-keys/${kid}`);load();};
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:720}}>
+    <h2 style=${{margin:'0 0 6px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔑 API Keys</h2>
+    <p style=${{fontSize:13,color:'var(--tx3)',marginBottom:20}}>Use API keys to access VEWIT data from external tools or scripts.</p>
+    ${newKey?html`
+      <div style=${{background:'rgba(21,128,61,0.08)',border:'1px solid rgba(21,128,61,0.3)',borderRadius:10,padding:16,marginBottom:20}}>
+        <div style=${{fontWeight:700,color:'#15803d',marginBottom:6}}>✅ Key created — copy it now, it won't be shown again</div>
+        <div style=${{fontFamily:'monospace',fontSize:13,wordBreak:'break-all',background:'var(--sf)',padding:10,borderRadius:7,border:'1px solid var(--bd)'}}>${newKey}</div>
+        <button class="btn bg" style=${{marginTop:8,fontSize:12}} onClick=${()=>{navigator.clipboard?.writeText(newKey);alert('Copied!');}}>Copy</button>
+        <button class="btn bg" style=${{marginTop:8,marginLeft:8,fontSize:12}} onClick=${()=>setNewKey(null)}>Close</button>
+      </div>`:null}
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:20}}>
+      <div style=${{fontWeight:600,fontSize:14,color:'var(--tx)',marginBottom:10}}>Create new API key</div>
+      <div style=${{display:'flex',gap:8,alignItems:'center'}}>
+        <input class="inp" placeholder="Key name (e.g. CI/CD integration)" value=${form.name}
+          onInput=${e=>setForm({...form,name:e.target.value})} style=${{flex:1,height:34,fontSize:13}}/>
+        <button class="btn bp" onClick=${create} disabled=${loading||!form.name}>${loading?'Creating…':'Create Key'}</button>
+      </div>
+    </div>
+    ${keys.length?html`
+      <div style=${{fontWeight:600,fontSize:13,color:'var(--tx2)',marginBottom:8}}>YOUR KEYS</div>
+      ${keys.map(k=>html`
+        <div key=${k.id} style=${{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,marginBottom:8}}>
+          <div style=${{fontFamily:'monospace',fontSize:13,color:'var(--ac)',fontWeight:700}}>${k.key_prefix}…</div>
+          <div style=${{flex:1}}>
+            <div style=${{fontWeight:600,fontSize:13,color:'var(--tx)'}}>${k.name}</div>
+            <div style=${{fontSize:11,color:'var(--tx3)'}}>Created ${(k.created||'').slice(0,10)}${k.last_used?' · Last used '+(k.last_used||'').slice(0,10):' · Never used'}</div>
+          </div>
+          <button class="btn br" style=${{fontSize:12}} onClick=${()=>del(k.id)}>Revoke</button>
+        </div>`)}`:
+      html`<div style=${{fontSize:13,color:'var(--tx3)',textAlign:'center',padding:24}}>No API keys yet</div>`}
+  </div>`;
+}
+
+/* ─── Webhooks View ──────────────────────────────────────────────────────── */
+function WebhooksView({cu}){
+  const [hooks,setHooks]=useState([]);
+  const [form,setForm]=useState({name:'',url:'',events:['*']});
+  const [showAdd,setShowAdd]=useState(false);
+  const EVENTS=['task.created','task.updated','task.completed','project.created','ticket.created','comment.added','*'];
+  const load=async()=>{const r=await api.get('/api/webhooks');setHooks(r||[]);};
+  useEffect(()=>{load();},[]);
+  const save=async()=>{await api.post('/api/webhooks',form);setShowAdd(false);setForm({name:'',url:'',events:['*']});load();};
+  const del=async(id)=>{if(!confirm('Delete webhook?'))return;await api.del(`/api/webhooks/${id}`);load();};
+  const toggleEvent=ev=>{const evs=form.events.includes(ev)?form.events.filter(e=>e!==ev):[...form.events,ev];setForm({...form,events:evs});};
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px',maxWidth:720}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <div>
+        <h2 style=${{margin:'0 0 4px',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔗 Webhooks</h2>
+        <p style=${{margin:0,fontSize:13,color:'var(--tx3)'}}>Get HTTP POST notifications when events happen in VEWIT.</p>
+      </div>
+      <button class="btn bp" onClick=${()=>setShowAdd(true)}>+ Add Webhook</button>
+    </div>
+    ${showAdd?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:20,marginBottom:20}}>
+        <div style=${{display:'grid',gridTemplateColumns:'1fr 2fr',gap:10,marginBottom:12}}>
+          <input class="inp" placeholder="Name" value=${form.name} onInput=${e=>setForm({...form,name:e.target.value})} style=${{height:34}}/>
+          <input class="inp" placeholder="https://your-server.com/webhook" value=${form.url} onInput=${e=>setForm({...form,url:e.target.value})} style=${{height:34}}/>
+        </div>
+        <div style=${{fontWeight:600,fontSize:12,color:'var(--tx2)',marginBottom:6}}>EVENTS</div>
+        <div style=${{display:'flex',flexWrap:'wrap',gap:6,marginBottom:12}}>
+          ${EVENTS.map(ev=>html`
+            <label key=${ev} style=${{display:'flex',alignItems:'center',gap:5,fontSize:12,cursor:'pointer',padding:'4px 8px',borderRadius:6,border:'1px solid var(--bd)',background:form.events.includes(ev)?'rgba(37,99,235,0.1)':'transparent'}}>
+              <input type="checkbox" checked=${form.events.includes(ev)} onChange=${()=>toggleEvent(ev)}/>${ev}
+            </label>`)}
+        </div>
+        <div style=${{display:'flex',gap:8}}>
+          <button class="btn bp" onClick=${save} disabled=${!form.url}>Save</button>
+          <button class="btn bg" onClick=${()=>setShowAdd(false)}>Cancel</button>
+        </div>
+      </div>`:null}
+    ${hooks.map(h=>html`
+      <div key=${h.id} style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'14px 16px',marginBottom:10,display:'flex',gap:10,alignItems:'center'}}>
+        <div style=${{width:8,height:8,borderRadius:'50%',background:h.active?'#15803d':'#64748b',flexShrink:0}}></div>
+        <div style=${{flex:1}}>
+          <div style=${{fontWeight:600,fontSize:13,color:'var(--tx)'}}>${h.name||h.url}</div>
+          <div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',marginTop:2}}>${h.url}</div>
+          <div style=${{marginTop:4,display:'flex',gap:4,flexWrap:'wrap'}}>
+            ${(JSON.parse(h.events||'[]')).map(ev=>html`<span key=${ev} style=${{fontSize:10,padding:'1px 6px',background:'var(--sf2)',borderRadius:4,color:'var(--tx3)'}}>${ev}</span>`)}
+          </div>
+        </div>
+        <button class="btn br" style=${{fontSize:12}} onClick=${()=>del(h.id)}>Delete</button>
+      </div>`)}
+    ${!hooks.length?html`<div style=${{fontSize:13,color:'var(--tx3)',textAlign:'center',padding:24}}>No webhooks yet</div>`:null}
+  </div>`;
+}
+
+/* ─── Audit Log View ─────────────────────────────────────────────────────── */
+function AuditLogView({cu}){
+  const [logs,setLogs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const load=async()=>{setLoading(true);const r=await api.get('/api/audit-logs');setLogs(r||[]);setLoading(false);};
+  useEffect(()=>{load();},[]);
+  const ACTION_COLOR={create:'#15803d',update:'#0891b2',delete:'#b91c1c',login:'#7c3aed',time_log:'#d97706'};
+  return html`<div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📋 Audit Log</h2>
+      <button class="btn bg" onClick=${load}>Refresh</button>
+    </div>
+    ${loading?html`<div class="tx3-11" style=${{textAlign:'center',padding:40}}>Loading…</div>`:null}
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,overflow:'hidden'}}>
+      ${logs.map((l,i)=>html`
+        <div key=${l.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderBottom:i<logs.length-1?'1px solid var(--bd)':'none'}}>
+          <span style=${{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:4,background:(ACTION_COLOR[l.action]||'#888')+'22',color:ACTION_COLOR[l.action]||'#888',minWidth:52,textAlign:'center'}}>${l.action}</span>
+          <span style=${{fontSize:12,color:'var(--tx)',flex:1}}>${l.user_name||l.user_id} · ${l.entity_type} ${l.entity_id} · ${l.details||''}</span>
+          <span style=${{fontSize:11,color:'var(--tx3)',flexShrink:0}}>${(l.created||'').slice(0,16).replace('T',' ')}</span>
+        </div>`)}
+      ${!loading&&!logs.length?html`<div style=${{padding:24,textAlign:'center',fontSize:13,color:'var(--tx3)'}}>No audit logs yet</div>`:null}
+    </div>
+  </div>`;
+}
+
+/* ─── Time Tracker Panel (embedded in task detail) ───────────────────────── */
+function TimeTracker({taskId,cu}){
+  const [logs,setLogs]=useState([]);
+  const [form,setForm]=useState({minutes:'',description:'',logged_date:new Date().toISOString().slice(0,10)});
+  const [running,setRunning]=useState(false);
+  const [elapsed,setElapsed]=useState(0);
+  const [startTime,setStartTime]=useState(null);
+  const load=async()=>{const r=await api.get(`/api/time-logs?task_id=${taskId}`);setLogs(r||[]);};
+  useEffect(()=>{load();},[taskId]);
+  useEffect(()=>{
+    if(!running)return;
+    const id=setInterval(()=>setElapsed(Math.floor((Date.now()-startTime)/1000)),1000);
+    return()=>clearInterval(id);
+  },[running,startTime]);
+  const startTimer=()=>{setStartTime(Date.now());setRunning(true);setElapsed(0);};
+  const stopTimer=async()=>{
+    const mins=Math.max(1,Math.round(elapsed/60));
+    setRunning(false);
+    await api.post('/api/time-logs',{task_id:taskId,minutes:mins,description:'Timer session',logged_date:form.logged_date});
+    load();
+  };
+  const addManual=async()=>{
+    if(!form.minutes)return;
+    await api.post('/api/time-logs',{task_id:taskId,...form,minutes:+form.minutes});
+    setForm({minutes:'',description:'',logged_date:new Date().toISOString().slice(0,10)});
+    load();
+  };
+  const total=logs.reduce((s,l)=>s+l.minutes,0);
+  const fmt=m=>`${Math.floor(m/60)}h ${m%60}m`;
+  return html`<div style=${{marginTop:12}}>
+    <div style=${{fontWeight:700,fontSize:12,color:'var(--tx2)',marginBottom:8}}>TIME TRACKING</div>
+    <div style=${{display:'flex',gap:8,marginBottom:10,alignItems:'center'}}>
+      ${running?html`
+        <span style=${{fontSize:16,fontWeight:700,color:'var(--ac)',fontFamily:'monospace'}}>${String(Math.floor(elapsed/3600)).padStart(2,'0')}:${String(Math.floor((elapsed%3600)/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}</span>
+        <button class="btn br" style=${{fontSize:12}} onClick=${stopTimer}>⏹ Stop & Log</button>`:
+      html`<button class="btn bp" style=${{fontSize:12}} onClick=${startTimer}>▶ Start Timer</button>`}
+      <span style=${{fontSize:12,color:'var(--tx3)',marginLeft:'auto'}}>Total: <b>${fmt(total)}</b></span>
+    </div>
+    <div style=${{display:'flex',gap:6,marginBottom:10}}>
+      <input class="inp" type="number" placeholder="Minutes" value=${form.minutes} onInput=${e=>setForm({...form,minutes:e.target.value})} style=${{width:80,height:30,fontSize:12}}/>
+      <input class="inp" placeholder="What did you work on?" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{flex:1,height:30,fontSize:12}}/>
+      <button class="btn bg" style=${{fontSize:12,height:30,padding:'0 10px'}} onClick=${addManual}>Log</button>
+    </div>
+    ${logs.slice(0,5).map(l=>html`
+      <div key=${l.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderBottom:'1px solid var(--bd)',fontSize:12}}>
+        <span style=${{color:'var(--ac)',fontWeight:600,minWidth:48}}>${fmt(l.minutes)}</span>
+        <span style=${{flex:1,color:'var(--tx2)'}}>${l.description||'—'}</span>
+        <span style=${{color:'var(--tx3)'}}>${(l.logged_date||'').slice(5)}</span>
+        <button style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:13}} onClick=${async()=>{await api.del(`/api/time-logs/${l.id}`);load();}}>✕</button>
+      </div>`)}
+  </div>`;
+}
+
+/* ─── Task Dependencies Panel ────────────────────────────────────────────── */
+function TaskDepsPanel({taskId,allTasks}){
+  const [deps,setDeps]=useState([]);
+  const [selDep,setSelDep]=useState('');
+  const load=async()=>{const r=await api.get(`/api/tasks/${taskId}/dependencies`);setDeps(r||[]);};
+  useEffect(()=>{load();},[taskId]);
+  const add=async()=>{if(!selDep)return;await api.post(`/api/tasks/${taskId}/dependencies`,{dep_id:selDep});setSelDep('');load();};
+  const rem=async(depId)=>{await api.del(`/api/tasks/${taskId}/dependencies/${depId}`);load();};
+  const available=safe(allTasks).filter(t=>t.id!==taskId&&!deps.find(d=>d.id===t.id));
+  return html`<div style=${{marginTop:12}}>
+    <div style=${{fontWeight:700,fontSize:12,color:'var(--tx2)',marginBottom:8}}>DEPENDENCIES (BLOCKED BY)</div>
+    ${deps.map(d=>html`
+      <div key=${d.id} style=${{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+        <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:'var(--sf2)',color:'var(--tx3)',fontFamily:'monospace'}}>${d.id}</span>
+        <span style=${{flex:1,fontSize:12,color:d.stage==='completed'?'#15803d':'var(--tx)'}}>${d.title}</span>
+        <span style=${{fontSize:10,color:d.stage==='completed'?'#15803d':'#d97706',fontWeight:600}}>${d.stage==='completed'?'✓ Done':'Pending'}</span>
+        <button style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)'}} onClick=${()=>rem(d.id)}>✕</button>
+      </div>`)}
+    <div style=${{display:'flex',gap:6,marginTop:6}}>
+      <select class="inp" style=${{flex:1,height:28,fontSize:12}} value=${selDep} onChange=${e=>setSelDep(e.target.value)}>
+        <option value="">Add dependency…</option>
+        ${available.map(t=>html`<option value=${t.id}>${t.id} – ${t.title}</option>`)}
+      </select>
+      <button class="btn bg" style=${{fontSize:12,height:28,padding:'0 10px'}} onClick=${add}>Add</button>
+    </div>
+  </div>`;
+}
+
+/* ─── Integrations Dashboard View ────────────────────────────────────────── */
+function IntegrationsView({cu}){
+  const [tab,setTab]=useState('webhooks');
+  return html`<div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+    <div style=${{display:'flex',alignItems:'center',gap:0,padding:'14px 20px',borderBottom:'1px solid var(--bd)'}}>
+      <h2 style=${{margin:'0 16px 0 0',fontSize:20,fontWeight:700,color:'var(--tx)'}}>🔌 Integrations</h2>
+      ${[['webhooks','Webhooks'],['apikeys','API Keys']].map(([id,lbl])=>html`
+        <button key=${id} class="btn ${tab===id?'bp':'bg'}" style=${{fontSize:13,marginRight:6}} onClick=${()=>setTab(id)}>${lbl}</button>`)}
+    </div>
+    <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+      ${tab==='webhooks'?html`<${WebhooksView} cu=${cu}/>`:null}
+      ${tab==='apikeys'?html`<${APIKeysView} cu=${cu}/>`:null}
+    </div>
+  </div>`;
+}
+
+/* ─── Referral Panel (for settings) ─────────────────────────────────────── */
+function ReferralPanel(){
+  const [data,setData]=useState(null);
+  const load=async()=>{const r=await api.get('/api/referral');setData(r);};
+  useEffect(()=>{load();},[]);
+  if(!data)return null;
+  const url=`${window.location.origin}/register?ref=${data.code}`;
+  return html`<div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:16,marginBottom:16}}>
+    <div style=${{fontWeight:700,fontSize:14,color:'var(--tx)',marginBottom:6}}>🎁 Referral Program</div>
+    <div style=${{fontSize:13,color:'var(--tx2)',marginBottom:10}}>Invite others and grow your network. You've referred <b>${data.referrals}</b> workspace(s).</div>
+    <div style=${{display:'flex',gap:8,alignItems:'center'}}>
+      <input class="inp" readOnly value=${url} style=${{flex:1,fontSize:12,height:32}}/>
+      <button class="btn bp" style=${{fontSize:12}} onClick=${()=>{navigator.clipboard?.writeText(url);alert('Copied!');}}>Copy</button>
+    </div>
+  </div>`;
+}
+
 
 /* ─── AIAssistant floating panel ──────────────────────────────────────────── */
 function AIAssistant({cu,projects,tasks,users}){
@@ -9077,7 +10417,7 @@ function HuddleCall(){return null;}
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','kanban','docs','goals','sprints','integrations','audit'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -9112,7 +10452,9 @@ function App(){
     dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',
     messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
     timeline:'Timeline Tracker',reminders:'Reminders',
-    settings:'Settings',team:'Team Management',productivity:'Dev Productivity'
+    settings:'Settings',team:'Team Management',productivity:'Dev Productivity',
+    calendar:'Calendar',kanban:'Kanban Board',docs:'Docs & Wiki',
+    goals:'Goals & OKRs',sprints:'Sprints',integrations:'Integrations',audit:'Audit Log'
   };
   const _setView=useCallback((v)=>{
     setView(v);
@@ -9599,6 +10941,13 @@ function App(){
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
             ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
+            ${baseView==='calendar'?html`<${CalendarView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='kanban'?html`<${KanbanView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='docs'?html`<${DocsView} projects=${scopedProjects} cu=${cu}/>`:null}
+            ${baseView==='goals'?html`<${GoalsView} cu=${cu} users=${scopedUsers}/>`:null}
+            ${baseView==='sprints'?html`<${SprintsView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='integrations'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${IntegrationsView} cu=${cu}/>`:null}
+            ${baseView==='audit'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${AuditLogView} cu=${cu}/>`:null}
             </div>
           <//>
         </div>
