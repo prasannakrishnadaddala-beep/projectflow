@@ -6390,7 +6390,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
                   marginBottom:1
                 }}
                 onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.12)';e.currentTarget.style.color='#93c5fd';}}}
-                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}>\n                <span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}}>${NAV_ICONS[it.id]||null}</span dangerouslySetInnerHTML={{__html:NAV_ICONS[it.id]||''}}></span>
+                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}>\n                <span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}} dangerouslySetInnerHTML=${{__html:NAV_ICONS[it.id]||''}}></span>
                 ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
                 ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{minWidth:16,height:16,borderRadius:8,background:'#06b6d4',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
               </button>`):null}
@@ -6403,7 +6403,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
           style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(203,213,225,0.65)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
           onMouseEnter=${e=>{e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}
           onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.65)';}}>
-          <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}} dangerouslySetInnerHTML={{__html:themeIcon}}></span>
+          <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}} dangerouslySetInnerHTML=${{__html:themeIcon}}></span>
           ${!col?html`<span style=${{fontSize:12}}>${dark?'Light Mode':'Dark Mode'}</span>`:null}
         </button>
         ${(cu&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead'))?html`
