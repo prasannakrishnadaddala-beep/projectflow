@@ -2425,12 +2425,12 @@ def about_page():
 <title>About VEWIT — AI-Powered Team Collaboration Platform</title>
 <link rel="icon" type="image/png" href="/icon-192.png"/>
 <link rel="shortcut icon" href="/favicon.ico"/>
-<meta name="description" content="VEWIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
+<meta name="description" content="Learn about VEWIT — AI-powered team collaboration for project management, task tracking, direct messages, support tickets &amp; developer productivity."/>
 <meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
-<meta name="robots" content="index, follow"/>
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
 <link rel="canonical" href="https://www.vewit.in/about"/>
 <meta property="og:title" content="About VEWIT — AI-Powered Team Collaboration"/>
-<meta property="og:description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, tickets and analytics all in one place."/>
+<meta property="og:description" content="VEWIT — AI-powered team collaboration for project management, task tracking, direct messages, support tickets &amp; analytics. Free to start."/>
 <meta property="og:url" content="https://www.vewit.in/about"/>
 <meta property="og:type" content="website"/>
 <script type="application/ld+json">
@@ -2786,7 +2786,7 @@ LANDING_HTML = """<!DOCTYPE html>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>VEWIT — AI-Powered Project Management &amp; Team Collaboration Platform</title>
-<meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timeline tracking and developer productivity — all in one place. Free to start."/>
+<meta name="description" content="VEWIT — AI-powered team collaboration. Manage projects, tasks, messages, tickets &amp; analytics in one platform. Free to start, no credit card required."/>
 <meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
 <meta name="author" content="VEWIT"/>
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
@@ -2803,14 +2803,13 @@ LANDING_HTML = """<!DOCTYPE html>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
+<meta property="og:description" content="Manage projects, tasks, direct messages, support tickets &amp; analytics — all in one AI-powered platform. Free to start, no credit card required."/>
 <meta property="og:site_name" content="VEWIT"/>
 <meta property="og:locale" content="en_IN"/>
 <meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
 <meta property="og:image:width" content="512"/>
 <meta property="og:image:height" content="512"/>
 <meta property="og:image:alt" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:site_name" content="VEWIT"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
 <meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
