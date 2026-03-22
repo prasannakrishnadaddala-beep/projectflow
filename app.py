@@ -3308,6 +3308,52 @@ def time_report():
         return jsonify([dict(r) for r in rows])
 
 
+
+# ── Mentions ──────────────────────────────────────────────────────────────────
+@app.route("/api/mentions", methods=["GET"])
+@login_required
+def get_mentions():
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT n.*,u.name as sender_name FROM notifications n LEFT JOIN users u ON n.sender_id=u.id "
+            "WHERE n.workspace_id=? AND n.user_id=? AND n.type='mention' ORDER BY n.ts DESC LIMIT 50",
+            (wid(),session["user_id"])).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+
+# ── Pinned Messages ───────────────────────────────────────────────────────────
+@app.route("/api/messages/<mid>/pin", methods=["POST"])
+@login_required
+def pin_message(mid):
+    with get_db() as db:
+        cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        if not cu or cu["role"] not in ("Admin","Manager","TeamLead"):
+            return jsonify({"error":"Forbidden"}),403
+        try: db.execute("ALTER TABLE messages ADD COLUMN pinned INTEGER DEFAULT 0")
+        except: pass
+        db.execute("UPDATE messages SET pinned=1 WHERE id=? AND workspace_id=?",(mid,wid()))
+        return jsonify({"ok":True})
+
+@app.route("/api/messages/<mid>/unpin", methods=["POST"])
+@login_required
+def unpin_message(mid):
+    with get_db() as db:
+        db.execute("UPDATE messages SET pinned=0 WHERE id=? AND workspace_id=?",(mid,wid()))
+        return jsonify({"ok":True})
+
+@app.route("/api/projects/<pid>/pinned-messages", methods=["GET"])
+@login_required
+def get_pinned_messages(pid):
+    with get_db() as db:
+        try: db.execute("ALTER TABLE messages ADD COLUMN pinned INTEGER DEFAULT 0")
+        except: pass
+        rows = db.execute(
+            "SELECT m.*,u.name as sender_name FROM messages m LEFT JOIN users u ON m.sender=u.id "
+            "WHERE m.workspace_id=? AND m.project=? AND m.pinned=1 ORDER BY m.ts DESC",
+            (wid(),pid)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+
 # ── Budget Tracking ───────────────────────────────────────────────────────────
 @app.route("/api/projects/<pid>/budget", methods=["GET"])
 @login_required
@@ -6048,9 +6094,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const NAV_ICONS={
     dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'risk', label:'Risk Predictor'}, {id:'timereport', label:'Time Report'}, {id:'forms', label:'Forms & Intake'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'goals', label:'Goals & OKRs'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'risk', label:'Risk Predictor'}, {id:'timereport', label:'Time Report'}, {id:'forms', label:'Forms & Intake'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'codereview', label:'Code Review'}, {id:'timereport', label:'Time Report'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'goals', label:'Goals & OKRs'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'announcements', label:'Announcements'}, {id:'standup', label:'AI Standup'}, {id:'codereview', label:'Code Review'}, {id:'timereport', label:'Time Report'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -6364,6 +6410,7 @@ const TYPE_BG={task:'rgba(29,78,216,0.10)',story:'rgba(21,128,61,0.10)',bug:'rgb
 const TYPE_BORDER={task:'rgba(29,78,216,0.2)',story:'rgba(21,128,61,0.2)',bug:'rgba(185,28,28,0.2)',epic:'rgba(109,40,217,0.2)',spike:'rgba(180,83,9,0.2)'};
 
 function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSetReminder,teams,activeTeam}){
+  const [showTemplates,setShowTemplates]=useState(false);
   const [title,setTitle]=useState((task&&task.title)||'');
   const [desc,setDesc]=useState((task&&task.description)||'');
   const [pid,setPid]=useState((task&&task.project)||defaultPid||(projects[0]&&projects[0].id)||'');
@@ -6635,6 +6682,8 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
               <button class="btn bg" onClick=${onClose}>${isEdit&&!canEditTask&&!canUpdateStage?'Close':'Cancel'}</button>
               ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
               ${(!isEdit||canEditTask||canUpdateStage)?html`<button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>`:null}
+              ${!isEdit?html`<button class="btn bg" style=${{fontSize:12}} onClick=${()=>setShowTemplates(true)}>📋 Templates</button>`:null}
+              ${showTemplates?html`<${TaskTemplatesPanel} cu=${cu} onClose=${()=>setShowTemplates(false)} onApply=${t=>{setTitle(t.name);setPri(t.priority);setStage(t.stage);setDesc(t.description||'');}}/>`:null}
             </div>
           </div>`:null}
 
@@ -7589,6 +7638,8 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 
 /* ─── Dashboard ───────────────────────────────────────────────────────────── */
 function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
+  const [hideOnboarding,setHideOnboarding]=useState(()=>{try{return localStorage.getItem('vw_onboarding_done')==='1';}catch{return false;}});
+  const dismissOnboarding=()=>{try{localStorage.setItem('vw_onboarding_done','1');}catch{}setHideOnboarding(true);};
   const t=safe(tasks);const p=safe(projects);const u=safe(users);
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const [teamDropOpen,setTeamDropOpen]=useState(false);
@@ -7623,6 +7674,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'}, ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
+      ${!hideOnboarding?html`<${OnboardingChecklist} cu=${cu} projects=${projects} users=${users} setView=${onNav} onDismiss=${dismissOnboarding}/>`:null}
       <div style=${{padding:'10px 14px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:10}}>
         <${Av} u=${cu} size=${32}/>
         <div style=${{flex:1,minWidth:0}}>
@@ -8213,6 +8265,8 @@ function MsgReactions({msgId,msgType,cu,users}){
 }
 
 function MessagesView({projects,users,cu,tasks}){
+  const [showPinned,setShowPinned]=useState(false);
+  const [hovMsg,setHovMsg]=useState(null);
   const [allProjects,setAllProjects]=useState(safe(projects));
   const [lastMsgTs,setLastMsgTs]=useState({});
   const [stableOrder,setStableOrder]=useState(null); // null = not yet fetched
@@ -8541,7 +8595,12 @@ function MessagesView({projects,users,cu,tasks}){
                 ${!isMe?html`<${Av} u=${s} size=${25}/>`:null}
                 <div style=${{display:'flex',flexDirection:'column',gap:3,alignItems:isMe?'flex-end':'flex-start',maxWidth:'65%'}}>
                   ${!isMe?html`<span style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginLeft:2}}>${(s&&s.name)||'?'}</span>`:null}
-                  <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5, background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)', border:isMe?'none':'1px solid var(--bd)', borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
+                  <div style=${{position:'relative'}} onMouseEnter=${()=>setHovMsg(m.id)} onMouseLeave=${()=>setHovMsg(null)}>
+                    <div style=${{padding:'9px 13px',borderRadius:12,fontSize:13,lineHeight:1.5, background:isMe?'var(--ac)':'var(--sf2)',color:isMe?'var(--ac-tx)':'var(--tx)', border:isMe?'none':'1px solid var(--bd)', borderBottomRightRadius:isMe?3:12,borderBottomLeftRadius:isMe?12:3}}>${m.content}</div>
+                    ${hovMsg===m.id&&cu&&['Admin','Manager','TeamLead'].includes(cu.role)?html`
+                      <button onClick=${async()=>{await api.post('/api/messages/'+m.id+'/pin',{});}} title="Pin message"
+                        style=${{position:'absolute',top:-8,right:isMe?'auto':-8,left:isMe?-8:'auto',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:6,padding:'2px 5px',fontSize:11,cursor:'pointer',color:'var(--tx3)',zIndex:10}}>📌</button>`:null}
+                  </div>
                   <${MsgReactions} msgId=${m.id} msgType="channel" cu=${cu} users=${users}/>
                   <span class="mono-10">${timeStr}</span>
                 </div>
@@ -8554,10 +8613,12 @@ function MessagesView({projects,users,cu,tasks}){
         </div>`:null}
       </div>
 
-            <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
-        <input class="inp" style=${{flex:1}} placeholder=${'Message in #'+((sp&&sp.name)||'...')} value=${txt}
-          onInput=${e=>setTxt(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}/>
-        <button class="btn bp" style=${{padding:'8px 14px',fontSize:12}} onClick=${send}>➤</button>
+            <div style=${{padding:'10px 14px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0,alignItems:'flex-end'}}>
+        <${MentionInput} value=${txt} onChange=${setTxt} users=${users} cu=${cu}
+          placeholder=${'Message in #'+((sp&&sp.name)||'… (@mention)')}
+          onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}
+          style=${{height:36,fontSize:13}}/>
+        <button class="btn bp" style=${{padding:'8px 14px',fontSize:12,flexShrink:0}} onClick=${send}>➤</button>
       </div>
     </div>
   </div>`;
@@ -11146,6 +11207,209 @@ function TOTPSetupPanel({cu}){
 /* ─── Goals & OKRs (re-enabled with role gating) ────────────────────────── */
 
 
+
+/* ─── Onboarding Checklist ───────────────────────────────────────────────── */
+function OnboardingChecklist({cu,projects,users,setView,onDismiss}){
+  const steps=[
+    {id:'project',label:'Create your first project',done:projects&&projects.length>0,action:()=>setView('projects'),btn:'Create Project'},
+    {id:'task',label:'Add a task to the board',done:projects&&projects.length>0,action:()=>setView('tasks'),btn:'Go to Board'},
+    {id:'invite',label:'Invite a team member',done:users&&users.length>1,action:()=>setView('team'),btn:'Invite Team'},
+    {id:'aikey',label:'Add your Anthropic AI key',done:false,action:()=>setView('settings'),btn:'Open Settings'},
+    {id:'2fa',label:'Enable 2FA for your account',done:false,action:()=>setView('settings'),btn:'Setup 2FA'},
+  ];
+  const done=steps.filter(s=>s.done).length;
+  const pct=Math.round((done/steps.length)*100);
+  if(done===steps.length){return null;}
+  return html`
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 18px',marginBottom:14}}>
+      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <div style=${{fontWeight:700,fontSize:13,color:'var(--tx)'}}>🚀 Get started with VEWIT</div>
+        <div style=${{display:'flex',alignItems:'center',gap:10}}>
+          <span style=${{fontSize:11,color:'var(--tx3)'}}>${done}/${steps.length} done</span>
+          <button onClick=${onDismiss} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:14,padding:'0 4px'}}>✕</button>
+        </div>
+      </div>
+      <div style=${{height:4,background:'var(--sf2)',borderRadius:99,marginBottom:12}}>
+        <div style=${{height:4,width:pct+'%',background:'var(--ac)',borderRadius:99,transition:'width .4s'}}></div>
+      </div>
+      <div style=${{display:'flex',flexDirection:'column',gap:7}}>
+        ${steps.map(s=>html`
+          <div key=${s.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'7px 10px',borderRadius:8,background:s.done?'rgba(21,128,61,0.06)':'var(--sf2)',border:'1px solid '+(s.done?'rgba(21,128,61,0.2)':'var(--bd)')}}>
+            <div style=${{width:18,height:18,borderRadius:'50%',border:'2px solid '+(s.done?'#15803d':'var(--tx3)'),background:s.done?'#15803d':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              ${s.done?html`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>`:null}
+            </div>
+            <span style=${{flex:1,fontSize:12,fontWeight:500,color:s.done?'var(--tx3)':'var(--tx)',textDecoration:s.done?'line-through':'none'}}>${s.label}</span>
+            ${!s.done?html`<button class="btn bp" style=${{fontSize:11,padding:'3px 10px',height:24}} onClick=${s.action}>${s.btn}</button>`:null}
+          </div>`)}
+      </div>
+    </div>`;
+}
+
+
+
+/* ─── @Mentions autocomplete ─────────────────────────────────────────────── */
+function MentionInput({value,onChange,onKeyDown,users,placeholder,style,cu}){
+  const [show,setShow]=useState(false);
+  const [query,setQuery]=useState('');
+  const [filtered,setFiltered]=useState([]);
+  const [selIdx,setSelIdx]=useState(0);
+  const ref=useRef(null);
+
+  const handleInput=e=>{
+    const v=e.target.value;
+    onChange(v);
+    const at=v.lastIndexOf('@');
+    if(at>=0&&(at===0||v[at-1]===' ')){
+      const q=v.slice(at+1);
+      if(!q.includes(' ')){
+        const f=safe(users||[]).filter(u=>u.name.toLowerCase().includes(q.toLowerCase())&&u.id!==cu?.id);
+        setFiltered(f.slice(0,6));setQuery(q);setSelIdx(0);
+        setShow(f.length>0);return;
+      }
+    }
+    setShow(false);
+  };
+
+  const pick=(u)=>{
+    const v=value;
+    const at=v.lastIndexOf('@');
+    const newVal=v.slice(0,at)+'@'+u.name+' ';
+    onChange(newVal);setShow(false);
+    ref.current?.focus();
+  };
+
+  const handleKey=e=>{
+    if(show){
+      if(e.key==='ArrowDown'){e.preventDefault();setSelIdx(i=>Math.min(i+1,filtered.length-1));}
+      else if(e.key==='ArrowUp'){e.preventDefault();setSelIdx(i=>Math.max(i-1,0));}
+      else if(e.key==='Enter'&&filtered[selIdx]){e.preventDefault();pick(filtered[selIdx]);return;}
+      else if(e.key==='Escape'){setShow(false);}
+    }
+    onKeyDown&&onKeyDown(e);
+  };
+
+  return html`<div style=${{position:'relative',flex:1}}>
+    <input ref=${ref} class="inp" value=${value} placeholder=${placeholder||'Message… (@ to mention)'}
+      onInput=${handleInput} onKeyDown=${handleKey} style=${style||{}}/>
+    ${show?html`
+      <div style=${{position:'absolute',bottom:'100%',left:0,right:0,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,boxShadow:'0 8px 32px rgba(0,0,0,.18)',zIndex:200,overflow:'hidden',marginBottom:4}}>
+        ${filtered.map((u,i)=>html`
+          <div key=${u.id} onMouseDown=${()=>pick(u)}
+            style=${{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',cursor:'pointer',background:i===selIdx?'var(--ac3)':'transparent'}}>
+            <div style=${{width:24,height:24,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>${u.name.slice(0,2).toUpperCase()}</div>
+            <div>
+              <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>${u.name}</div>
+              <div style=${{fontSize:10,color:'var(--tx3)'}}>${u.role}</div>
+            </div>
+          </div>`)}
+      </div>`:null}
+  </div>`;
+}
+
+/* ─── Pinned Messages Panel ──────────────────────────────────────────────── */
+function PinnedMessagesPanel({projectId,cu,onClose}){
+  const [pins,setPins]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const load=async()=>{
+    setLoading(true);
+    const r=await api.get(`/api/projects/${projectId}/pinned-messages`);
+    setPins(r||[]);setLoading(false);
+  };
+  useEffect(()=>{if(projectId)load();},[projectId]);
+  const canPin=cu&&['Admin','Manager','TeamLead'].includes(cu.role);
+  const unpin=async(id)=>{
+    await api.post(`/api/messages/${id}/unpin`,{});load();
+  };
+  return html`<div style=${{width:300,borderLeft:'1px solid var(--bd)',background:'var(--sf)',display:'flex',flexDirection:'column',flexShrink:0}}>
+    <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div style=${{fontWeight:700,fontSize:13,color:'var(--tx)',display:'flex',alignItems:'center',gap:6}}>
+        <span style=${{fontSize:14}}>📌</span> Pinned Messages
+      </div>
+      <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:16}}>✕</button>
+    </div>
+    <div style=${{flex:1,overflowY:'auto',padding:'10px 12px'}}>
+      ${loading?html`<div style=${{textAlign:'center',padding:20,color:'var(--tx3)',fontSize:12}}>Loading…</div>`:null}
+      ${!loading&&!pins.length?html`<div style=${{textAlign:'center',padding:24,color:'var(--tx3)'}}>
+        <div style=${{fontSize:28,marginBottom:8}}>📌</div>
+        <div style=${{fontSize:12}}>No pinned messages yet</div>
+        ${canPin?html`<div style=${{fontSize:11,marginTop:4,color:'var(--tx3)'}}>Hover a message and click pin</div>`:null}
+      </div>`:null}
+      ${pins.map(p=>html`
+        <div key=${p.id} style=${{padding:'10px 12px',borderRadius:9,background:'var(--bg)',border:'1px solid var(--bd)',marginBottom:8}}>
+          <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+            <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)'}}>${p.sender_name||'?'}</span>
+            <div style=${{display:'flex',gap:6,alignItems:'center'}}>
+              <span style=${{fontSize:10,color:'var(--tx3)'}}>${(p.ts||'').slice(0,10)}</span>
+              ${canPin?html`<button onClick=${()=>unpin(p.id)} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:11,padding:'0 2px'}}>Unpin</button>`:null}
+            </div>
+          </div>
+          <div style=${{fontSize:12,color:'var(--tx)',lineHeight:1.5}}>${p.content}</div>
+        </div>`)}
+    </div>
+  </div>`;
+}
+
+/* ─── Task Templates Panel ───────────────────────────────────────────────── */
+function TaskTemplatesPanel({onApply,onClose,cu}){
+  const [templates,setTemplates]=useState([]);
+  const [showCreate,setShowCreate]=useState(false);
+  const [form,setForm]=useState({name:'',description:'',priority:'medium',stage:'backlog',labels:[],subtasks:[]});
+  const [saving,setSaving]=useState(false);
+  const load=async()=>{const r=await api.get('/api/task-templates');setTemplates(r||[]);};
+  useEffect(()=>{load();},[]);
+  const save=async()=>{
+    if(!form.name)return;setSaving(true);
+    await api.post('/api/task-templates',form);setSaving(false);setShowCreate(false);load();
+  };
+  const del=async(id)=>{if(!confirm('Delete template?'))return;await api.del(`/api/task-templates/${id}`);load();};
+  const PRIO_COLOR={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
+  return html`<div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1100,display:'flex',alignItems:'center',justifyContent:'center'}}
+    onClick=${e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div style=${{background:'var(--sf)',borderRadius:16,width:'min(520px,94vw)',maxHeight:'80vh',display:'flex',flexDirection:'column',border:'1px solid var(--bd)',boxShadow:'0 24px 64px rgba(0,0,0,.25)'}}>
+      <div style=${{padding:'16px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>📋 Task Templates</div>
+        <div style=${{display:'flex',gap:8}}>
+          <button class="btn bp" style=${{fontSize:12}} onClick=${()=>setShowCreate(p=>!p)}>+ Create</button>
+          <button onClick=${onClose} style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18}}>✕</button>
+        </div>
+      </div>
+      ${showCreate?html`
+        <div style=${{padding:'14px 20px',borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
+          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+            <input class="inp" placeholder="Template name…" value=${form.name} onInput=${e=>setForm({...form,name:e.target.value})} style=${{height:32,fontSize:13,gridColumn:'span 2'}}/>
+            <select class="inp" style=${{height:32,fontSize:12}} value=${form.priority} onChange=${e=>setForm({...form,priority:e.target.value})}>
+              ${['critical','high','medium','low'].map(p=>html`<option value=${p}>${p}</option>`)}
+            </select>
+            <select class="inp" style=${{height:32,fontSize:12}} value=${form.stage} onChange=${e=>setForm({...form,stage:e.target.value})}>
+              ${['backlog','planning','inprogress','review','testing'].map(s=>html`<option value=${s}>${s}</option>`)}
+            </select>
+          </div>
+          <textarea class="inp" placeholder="Description (optional)…" value=${form.description} onInput=${e=>setForm({...form,description:e.target.value})} style=${{width:'100%',height:52,fontSize:12,resize:'none',marginBottom:8}}></textarea>
+          <div style=${{display:'flex',gap:8}}>
+            <button class="btn bp" style=${{fontSize:12}} onClick=${save} disabled=${saving||!form.name}>${saving?'Saving…':'Save Template'}</button>
+            <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setShowCreate(false)}>Cancel</button>
+          </div>
+        </div>`:null}
+      <div style=${{flex:1,overflowY:'auto',padding:'10px 14px'}}>
+        ${templates.map(t=>html`
+          <div key=${t.id} style=${{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:9,background:'var(--bg)',border:'1px solid var(--bd)',marginBottom:8}}>
+            <div style=${{flex:1}}>
+              <div style=${{fontWeight:600,fontSize:13,color:'var(--tx)',marginBottom:3}}>${t.name}</div>
+              <div style=${{display:'flex',gap:5}}>
+                <span style=${{fontSize:10,padding:'1px 6px',borderRadius:3,background:(PRIO_COLOR[t.priority]||'#888')+'18',color:PRIO_COLOR[t.priority]||'#888',fontWeight:600}}>${t.priority}</span>
+                <span style=${{fontSize:10,padding:'1px 6px',borderRadius:3,background:'var(--sf2)',color:'var(--tx3)'}}>${t.stage}</span>
+              </div>
+            </div>
+            <button class="btn bp" style=${{fontSize:11,padding:'4px 12px'}} onClick=${()=>{onApply(t);onClose();}}>Use</button>
+            <button class="btn br" style=${{fontSize:11,padding:'4px 8px'}} onClick=${()=>del(t.id)}>Del</button>
+          </div>`)}
+        ${!templates.length?html`<div style=${{textAlign:'center',padding:24,color:'var(--tx3)'}}><div style=${{fontSize:28,marginBottom:8}}>📋</div><div style=${{fontSize:12}}>No templates yet — create one above</div></div>`:null}
+      </div>
+    </div>
+  </div>`;
+}
+
+
 /* ─── AIAssistant floating panel ──────────────────────────────────────────── */
 function AIAssistant({cu,projects,tasks,users}){
   const [open,setOpen]=useState(false);const [msgs,setMsgs]=useState([]);const [input,setInput]=useState('');const [busy,setBusy]=useState(false);const ref=useRef(null);const iref=useRef(null);
@@ -11799,7 +12063,7 @@ function HuddleCall(){return null;}
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','docs','sprints','announcements','standup','codereview','risk','timereport','forms'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','docs','sprints','goals','announcements','standup','codereview','risk','timereport','forms'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -11835,7 +12099,7 @@ function App(){
     messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
     timeline:'Timeline Tracker',reminders:'Reminders',
     settings:'Settings',team:'Team Management',productivity:'Dev Productivity',
-    calendar:'Calendar',docs:'Docs & Wiki',sprints:'Sprints',tasks:'Kanban Board',
+    calendar:'Calendar',docs:'Docs & Wiki',sprints:'Sprints',goals:'Goals & OKRs',tasks:'Kanban Board',
     announcements:'Announcements',standup:'AI Standup',codereview:'Code Review',
     risk:'Risk Predictor',timereport:'Time Report',forms:'Forms & Intake'
   };
@@ -11892,6 +12156,7 @@ function App(){
   const [dmUnread,setDmUnread]=useState([]);
   const [globalSearch,setGlobalSearch]=useState('');
   const [showGlobalSearch,setShowGlobalSearch]=useState(false);
+  const [searchFilters,setSearchFilters]=useState({type:'all',assignee:'',priority:''});
   const [searchSubtasks,setSearchSubtasks]=useState([]);const [wsName,setWsName]=useState('');const [wsDmEnabled,setWsDmEnabled]=useState(true);const [dmTargetUser,setDmTargetUser]=useState(null);
   const [onlineUsers,setOnlineUsers]=useState(new Set());
 
@@ -12328,6 +12593,7 @@ function App(){
             ${baseView==='calendar'?html`<${CalendarView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load}/>`:null}
             ${baseView==='docs'?html`<${DocsView} projects=${scopedProjects} cu=${cu}/>`:null}
             ${baseView==='sprints'?html`<${SprintsView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
+            ${baseView==='goals'?html`<${GoalsView} cu=${cu} users=${scopedUsers}/>`:null}
             ${baseView==='announcements'?html`<${AnnouncementsView} cu=${cu}/>`:null}
             ${baseView==='standup'?html`<${StandupView} cu=${cu} users=${scopedUsers}/>`:null}
             ${baseView==='codereview'&&cu&&cu.role!=='Viewer'?html`<${CodeReviewView} cu=${cu}/>`:null}
@@ -12349,11 +12615,30 @@ function App(){
           <div style=${{display:'flex',alignItems:'center',gap:10,padding:'14px 18px',borderBottom:'1px solid var(--bd)'}}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input autoFocus class="inp" style=${{border:'none',background:'transparent',fontSize:16,flex:1,height:28,outline:'none',color:'var(--tx)'}}
-              placeholder="Search by ID (T-xxx, tkt-xxx) or name... (Ctrl+K)"
+              placeholder="Search tasks, tickets, projects… (Ctrl+K)"
               value=${globalSearch}
               onInput=${e=>setGlobalSearch(e.target.value)}
               onKeyDown=${e=>{if(e.key==='Escape')setShowGlobalSearch(false);}}/>
             <span style=${{fontSize:10,color:'var(--tx3)',background:'var(--sf2)',padding:'2px 6px',borderRadius:5,border:'1px solid var(--bd)'}}>ESC</span>
+          </div>
+          <!-- Filter chips -->
+          <div style=${{display:'flex',gap:6,padding:'8px 14px',borderBottom:'1px solid var(--bd)',flexWrap:'wrap',alignItems:'center'}}>
+            <span style=${{fontSize:10,fontWeight:600,color:'var(--tx3)'}}>Type:</span>
+            ${['all','task','ticket','project'].map(t=>html`
+              <button key=${t} onClick=${()=>setSearchFilters(f=>({...f,type:t}))}
+                style=${{fontSize:11,padding:'2px 9px',borderRadius:99,border:'1px solid var(--bd)',cursor:'pointer',
+                  background:searchFilters.type===t?'var(--ac)':'transparent',
+                  color:searchFilters.type===t?'#fff':'var(--tx3)',fontWeight:searchFilters.type===t?700:400,transition:'all .12s'}}>
+                ${t}
+              </button>`)}
+            <span style=${{fontSize:10,fontWeight:600,color:'var(--tx3)',marginLeft:6}}>Priority:</span>
+            ${['','critical','high','medium','low'].map(p=>html`
+              <button key=${p||'any'} onClick=${()=>setSearchFilters(f=>({...f,priority:p}))}
+                style=${{fontSize:11,padding:'2px 9px',borderRadius:99,border:'1px solid var(--bd)',cursor:'pointer',
+                  background:searchFilters.priority===p?'var(--ac)':'transparent',
+                  color:searchFilters.priority===p?'#fff':'var(--tx3)',fontWeight:searchFilters.priority===p?700:400,transition:'all .12s'}}>
+                ${p||'any'}
+              </button>`)}
           </div>
           <!-- Results -->
           <div style=${{maxHeight:400,overflowY:'auto'}}>
@@ -12372,8 +12657,9 @@ function App(){
   </div>
 `;
               const results=[];
+              const sf=searchFilters||{type:'all',priority:''};
               // Search tasks by ID or title
-              safe(data.tasks).forEach(t=>{
+              if(sf.type==='all'||sf.type==='task') safe(data.tasks).forEach(t=>{
                 if(!t||!t.id||!t.title)return;
                 const tid=(t.id||'').toLowerCase();
                 const ttl=(t.title||'').toLowerCase();
@@ -12383,7 +12669,7 @@ function App(){
                 }
               });
               // Search tickets by ID, title, or description
-              safe(data.tickets||[]).forEach(t=>{
+              if(sf.type==='all'||sf.type==='ticket') safe(data.tickets||[]).forEach(t=>{
                 const tStr=(t.id+' '+(t.title||'')+' '+(t.description||'')).toLowerCase();
                 if(tStr.includes(q)){
                   const tColors={bug:'#b91c1c',feature:'#1d4ed8',improvement:'#0e7490',task:'#15803d',question:'#6d28d9'};
@@ -12394,7 +12680,7 @@ function App(){
               // Search subtasks by title
               // (subtasks fetched lazily — skip for global search)
               // Search projects
-              safe(data.projects).forEach(p=>{
+              if(sf.type==='all'||sf.type==='project') safe(data.projects).forEach(p=>{
                 if(!p||!p.id||!p.name)return;
                 if(p.id.toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q)){
                   results.push({type:'project',id:p.id,title:p.name,sub:'Project',color:p.color||'#1d4ed8',bg:'rgba(29,78,216,0.06)',item:p,nav:'projects'});
@@ -12405,8 +12691,9 @@ function App(){
                 if(!s||!s.id)return;
                 results.push({type:'subtask',id:s.id.slice(0,12),title:s.title||'',sub:'↳ '+(s.task_title||'Task'),color:'#475569',bg:'rgba(71,85,105,0.10)',item:s,nav:'tasks'});
               });
-              if(!results.length)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>No results for "${q}"</div>`;
-              return results.slice(0,15).map((r,i)=>html`
+              const filteredResults=sf.priority?results.filter(r=>!r.item?.priority||r.item.priority===sf.priority):results;
+              if(!filteredResults.length)return html`<div style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:13}}>No results for "${q}"</div>`;
+              return filteredResults.slice(0,15).map((r,i)=>html`
                 <div key=${i}
                   onClick=${()=>{
                     setShowGlobalSearch(false);
