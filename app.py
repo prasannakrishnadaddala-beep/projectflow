@@ -522,7 +522,8 @@ def init_db():
                 otp_enabled INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, email TEXT,
-                password TEXT, role TEXT, avatar TEXT, color TEXT, created TEXT);
+                password TEXT, role TEXT, avatar TEXT, color TEXT, created TEXT,
+                two_fa_enabled INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT, description TEXT,
                 owner TEXT, members TEXT DEFAULT '[]', start_date TEXT,
@@ -580,36 +581,34 @@ def init_db():
                 id TEXT PRIMARY KEY, user_id TEXT, workspace_id TEXT,
                 endpoint TEXT UNIQUE, p256dh TEXT, auth TEXT, created TEXT);
         """)
-        try: db.execute('''CREATE TABLE IF NOT EXISTS teams (
-            id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
-            lead_id TEXT, member_ids TEXT DEFAULT '[]', created TEXT)''')
-        except: pass
-        try: db.executescript('''
-            CREATE TABLE IF NOT EXISTS teams (
-                id TEXT PRIMARY KEY, workspace_id TEXT, name TEXT,
-                lead_id TEXT, member_ids TEXT DEFAULT '[]', created TEXT);
-            CREATE TABLE IF NOT EXISTS tickets (
-                id TEXT PRIMARY KEY, workspace_id TEXT, title TEXT, description TEXT,
-                type TEXT DEFAULT 'bug', priority TEXT DEFAULT 'medium',
-                status TEXT DEFAULT 'open', assignee TEXT, reporter TEXT,
-                project TEXT, tags TEXT DEFAULT '[]', created TEXT, updated TEXT);
-            CREATE TABLE IF NOT EXISTS ticket_comments (
-                id TEXT PRIMARY KEY, workspace_id TEXT, ticket_id TEXT,
-                user_id TEXT, content TEXT, created TEXT);
-        ''')
-        except: pass
-        try: db.execute("ALTER TABLE projects ADD COLUMN team_id TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE tickets ADD COLUMN team_id TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE users ADD COLUMN avatar_data TEXT")
-        except: pass
-        try: db.execute("ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''")
-        except: pass
+        # ── Consolidated migrations (safe — each wrapped in try/except) ──────
+        for stmt in [
+            "ALTER TABLE projects ADD COLUMN team_id TEXT DEFAULT ''",
+            "ALTER TABLE tickets ADD COLUMN team_id TEXT DEFAULT ''",
+            "ALTER TABLE tasks ADD COLUMN team_id TEXT DEFAULT ''",
+            "ALTER TABLE messages ADD COLUMN is_system INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN avatar_data TEXT",
+            "ALTER TABLE users ADD COLUMN plain_password TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN two_fa_enabled INTEGER DEFAULT 0",
+            "ALTER TABLE tasks ADD COLUMN parent_id TEXT DEFAULT ''",
+            "ALTER TABLE tasks ADD COLUMN story_points INTEGER DEFAULT 0",
+            "ALTER TABLE tasks ADD COLUMN sprint TEXT DEFAULT ''",
+            "ALTER TABLE tasks ADD COLUMN task_type TEXT DEFAULT 'task'",
+            "ALTER TABLE tasks ADD COLUMN labels TEXT DEFAULT '[]'",
+            "ALTER TABLE workspaces ADD COLUMN otp_enabled INTEGER DEFAULT 0",
+            "ALTER TABLE workspaces ADD COLUMN dm_enabled INTEGER DEFAULT 1",
+            "ALTER TABLE workspaces ADD COLUMN smtp_server TEXT",
+            "ALTER TABLE workspaces ADD COLUMN smtp_port INTEGER DEFAULT 587",
+            "ALTER TABLE workspaces ADD COLUMN smtp_username TEXT",
+            "ALTER TABLE workspaces ADD COLUMN smtp_password TEXT",
+            "ALTER TABLE workspaces ADD COLUMN from_email TEXT",
+            "ALTER TABLE workspaces ADD COLUMN email_enabled INTEGER DEFAULT 1",
+            "ALTER TABLE call_rooms ADD COLUMN invited_users TEXT DEFAULT '[]'",
+            "ALTER TABLE notifications ADD COLUMN sender_id TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT ''",
+        ]:
+            try: db.execute(stmt)
+            except: pass
         try:
             corrupted = db.execute("SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%%' OR (length(avatar) > 10 AND avatar !~ '^[A-Z]{1,2}$')").fetchall()
             for row in corrupted:
@@ -621,37 +620,9 @@ def init_db():
                     db.execute("UPDATE users SET avatar=? WHERE id=?", (initials, uid))
         except Exception as e:
             print(f"Avatar cleanup migration error: {e}")
-        try: db.execute("ALTER TABLE workspaces ADD COLUMN otp_enabled INTEGER DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE workspaces ADD COLUMN dm_enabled INTEGER DEFAULT 1")
-        except: pass
-        try: db.execute("ALTER TABLE call_rooms ADD COLUMN invited_users TEXT DEFAULT '[]'")
-        except: pass
-        try: db.execute("ALTER TABLE notifications ADD COLUMN sender_id TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN parent_id TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN story_points INTEGER DEFAULT 0")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN sprint TEXT DEFAULT ''")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN task_type TEXT DEFAULT 'task'")
-        except: pass
-        try: db.execute("ALTER TABLE tasks ADD COLUMN labels TEXT DEFAULT '[]'")
-        except: pass
         try: db.execute("""CREATE TABLE IF NOT EXISTS subtasks (
             id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
             title TEXT, done INTEGER DEFAULT 0, assignee TEXT DEFAULT '', created TEXT)""")
-        except: pass
-        try:
-            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_server TEXT")
-            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_port INTEGER DEFAULT 587")
-            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_username TEXT")
-            db.execute("ALTER TABLE workspaces ADD COLUMN smtp_password TEXT")
-            db.execute("ALTER TABLE workspaces ADD COLUMN from_email TEXT")
-            db.execute("ALTER TABLE workspaces ADD COLUMN email_enabled INTEGER DEFAULT 1")
         except: pass
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
@@ -675,7 +646,8 @@ def _seed_demo(db, ws_id):
         ("u4","David Kim",   "david@dev.io",hash_pw("pass123"),"Developer","DK","#d97706"),
         ("u5","Eva Wilson",  "eva@dev.io",  hash_pw("pass123"),"Viewer",   "EW","#dc2626"),
     ]:
-        try: db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",(u[0],ws_id,*u[1:],ts(),None))
+        try: db.execute("INSERT INTO users(id,workspace_id,name,email,password,role,avatar,color,created,two_fa_enabled) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (u[0],ws_id,u[1],u[2],u[3],u[4],u[5],u[6],ts(),0))
         except: pass
     for p in [
         ("p1","E-Commerce Platform",   "Modern e-commerce with payment integration & inventory.",       "u1",'["u1","u2","u3","u4"]',"2025-01-15","2025-06-30",65,"#7c3aed"),
@@ -744,9 +716,12 @@ def login():
             except Exception: pass
         ws = db.execute("SELECT * FROM workspaces WHERE id=?",(u["workspace_id"],)).fetchone()
         otp_enabled = ws and ws.get("otp_enabled", 0)
-        if otp_enabled:
-            smtp_ok = ws.get("smtp_username") and ws.get("smtp_password")
-            if smtp_ok:
+        user_2fa = u.get("two_fa_enabled", 0)
+        should_send_otp = otp_enabled or user_2fa
+        if should_send_otp:
+            smtp_ok = ws and ws.get("smtp_username") and ws.get("smtp_password")
+            resend_ok = bool(os.environ.get("RESEND_API_KEY"))
+            if smtp_ok or resend_ok:
                 import time as _time
                 code = generate_otp()
                 with _otp_lock:
@@ -818,6 +793,44 @@ def resend_otp():
     if sent:
         return jsonify({"ok": True, "message": "New OTP sent to your email."})
     return jsonify({"error":"Failed to send email. Check SMTP settings."}),500
+
+@app.route("/api/auth/toggle-2fa",methods=["POST"])
+@login_required
+def toggle_user_2fa():
+    """Toggle 2FA for the current user (self) or for a target user (admin only)."""
+    d = request.json or {}
+    target_id = d.get("user_id", session["user_id"])
+    enabled = bool(d.get("enabled", False))
+    with get_db() as db:
+        caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        if target_id != session["user_id"] and (not caller or caller["role"] != "Admin"):
+            return jsonify({"error": "Only admins can change 2FA for other users"}), 403
+        # Check SMTP is configured before enabling
+        if enabled:
+            ws = db.execute("SELECT smtp_username, smtp_password, otp_enabled FROM workspaces WHERE id=?", (wid(),)).fetchone()
+            resend_ok = bool(os.environ.get("RESEND_API_KEY"))
+            smtp_ok = ws and ws["smtp_username"] and ws["smtp_password"]
+            if not resend_ok and not smtp_ok:
+                return jsonify({"error": "Email not configured. Set up SMTP or Resend API key in Settings first."}), 400
+        db.execute("UPDATE users SET two_fa_enabled=? WHERE id=? AND workspace_id=?",
+                   (1 if enabled else 0, target_id, wid()))
+        u = db.execute("SELECT * FROM users WHERE id=?", (target_id,)).fetchone()
+        result = dict(u) if u else {}
+        result.pop("password", None)
+        result.pop("avatar_data", None)
+        return jsonify(result)
+
+@app.route("/api/auth/2fa-status")
+@login_required
+def get_2fa_status():
+    """Return 2FA status for all users (admin) or just current user."""
+    with get_db() as db:
+        caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        if caller and caller["role"] == "Admin":
+            rows = db.execute("SELECT id, name, email, role, two_fa_enabled FROM users WHERE workspace_id=? ORDER BY name", (wid(),)).fetchall()
+        else:
+            rows = db.execute("SELECT id, name, email, role, two_fa_enabled FROM users WHERE id=?", (session["user_id"],)).fetchall()
+        return jsonify([dict(r) for r in rows])
 
 @app.route("/api/auth/logout",methods=["POST"])
 def logout(): session.clear(); return jsonify({"ok":True})
@@ -2152,7 +2165,108 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
 
     return jsonify({"message":clean_text,"actions":action_results,"raw":ai_text})
 
-# ── Export ────────────────────────────────────────────────────────────────────
+@app.route("/api/ai/generate-docs",methods=["POST"])
+@login_required
+def ai_generate_docs():
+    """Generate project documentation or architecture diagram using AI."""
+    d = request.json or {}
+    doc_type = d.get("type", "documentation")  # 'documentation' or 'architecture'
+    project_id = d.get("project_id", "")
+    extra_context = d.get("context", "")
+
+    with get_db() as db:
+        ws = db.execute("SELECT * FROM workspaces WHERE id=?", (wid(),)).fetchone()
+        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
+        if not api_key:
+            return jsonify({"error": "NO_KEY", "message": "Configure your Anthropic API key in Settings."}), 400
+
+        if project_id:
+            projects = db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?", (project_id, wid())).fetchall()
+            tasks = db.execute("SELECT t.*, u.name as assignee_name FROM tasks t LEFT JOIN users u ON t.assignee=u.id WHERE t.project=? AND t.workspace_id=?", (project_id, wid())).fetchall()
+        else:
+            projects = db.execute("SELECT * FROM projects WHERE workspace_id=?", (wid(),)).fetchall()
+            tasks = db.execute("SELECT t.*, u.name as assignee_name FROM tasks t LEFT JOIN users u ON t.assignee=u.id WHERE t.workspace_id=?", (wid(),)).fetchall()
+
+        users = db.execute("SELECT id,name,role FROM users WHERE workspace_id=?", (wid(),)).fetchall()
+        teams = db.execute("SELECT * FROM teams WHERE workspace_id=?", (wid(),)).fetchall()
+
+    proj_ctx = "\n".join([f"## {p['name']}\n- ID: {p['id']}\n- Description: {p['description'] or 'N/A'}\n- Target: {p['target_date'] or 'N/A'}\n- Progress: {p['progress']}%" for p in projects])
+    task_ctx = "\n".join([f"- [{t['id']}] {t['title']} | Stage: {t['stage']} | Priority: {t['priority']} | Assignee: {t.get('assignee_name','Unassigned')} | Progress: {t['pct']}%" for t in tasks])
+    user_ctx = "\n".join([f"- {u['name']} ({u['role']})" for u in users])
+    team_ctx = "\n".join([f"- {t['name']}" for t in teams]) or "No teams"
+
+    if doc_type == "architecture":
+        prompt = f"""You are a technical documentation expert. Based on the following project data from VEWIT, generate a comprehensive architecture diagram using Mermaid.js syntax.
+
+WORKSPACE: {ws['name'] if ws else 'Unknown'}
+PROJECTS:
+{proj_ctx or 'No projects'}
+TASKS:
+{task_ctx[:2000] or 'No tasks'}
+TEAMS:
+{team_ctx}
+MEMBERS:
+{user_ctx}
+
+{('Additional context: ' + extra_context) if extra_context else ''}
+
+Generate a Mermaid diagram that shows:
+1. The project structure and relationships
+2. Team assignments and workflow stages
+3. Key task flows and dependencies
+
+Start with the diagram type (flowchart LR, graph TD, etc.) and wrap it in triple backticks with 'mermaid' language tag.
+After the diagram, provide a brief explanation of the architecture.
+Keep the diagram clean and not too complex — focus on the most important relationships."""
+    else:
+        prompt = f"""You are a technical documentation expert. Based on the following project data from VEWIT, generate professional project documentation in Markdown format.
+
+WORKSPACE: {ws['name'] if ws else 'Unknown'}
+PROJECTS:
+{proj_ctx or 'No projects'}
+TASKS (summary):
+{task_ctx[:3000] or 'No tasks'}
+TEAM:
+{user_ctx}
+
+{('Additional context: ' + extra_context) if extra_context else ''}
+
+Generate comprehensive documentation including:
+1. **Executive Summary** — project overview and goals
+2. **Project Scope** — what's included and excluded
+3. **Team Structure** — roles and responsibilities
+4. **Current Status** — progress per project with key metrics
+5. **Task Breakdown** — organized by stage/priority
+6. **Timeline** — key milestones and deadlines
+7. **Risks & Blockers** — any blocked or overdue tasks
+8. **Next Steps** — recommended immediate actions
+
+Format with proper Markdown headings, tables where appropriate, and clear sections. Be professional and concise."""
+
+    try:
+        req_data = json.dumps({
+            "model": "claude-sonnet-4-5",
+            "max_tokens": 3000,
+            "messages": [{"role": "user", "content": prompt}]
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=req_data, method="POST",
+            headers={"Content-Type": "application/json", "x-api-key": api_key, "anthropic-version": "2023-06-01"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read().decode())
+            content = result["content"][0]["text"]
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        if e.code == 401:
+            return jsonify({"error": "INVALID_KEY", "message": "Invalid API key."}), 400
+        return jsonify({"error": "API_ERROR", "message": f"API error: {body[:200]}"}), 500
+    except Exception as e:
+        return jsonify({"error": "NETWORK_ERROR", "message": str(e)}), 500
+
+    return jsonify({"content": content, "type": doc_type, "projects": [p["name"] for p in projects]})
+
+
 @app.route("/api/export/csv")
 @login_required
 def export_csv():
@@ -2514,7 +2628,7 @@ footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:
     </div>
     <div class="feat">
       <div class="feat-icon">✅</div>
-      <h3>Smart Task Board</h3>
+      <h3>Smart Kanban Board</h3>
       <p>Kanban-style task board with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders. Assign tasks to specific team members with role-based access.</p>
     </div>
     <div class="feat">
@@ -2822,7 +2936,7 @@ LANDING_HTML = """<!DOCTYPE html>
 "operatingSystem":"Web, PWA, iOS, Android",
 "offers":{"@type":"Offer","price":"0","priceCurrency":"INR","availability":"https://schema.org/InStock"},
 "aggregateRating":{"@type":"AggregateRating","ratingValue":"5","reviewCount":"1"},
-"featureList":["AI-Powered Project Management","Kanban Task Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"],
+"featureList":["AI-Powered Project Management","Kanban Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"],
 "screenshot":"https://www.vewit.in/icon-512.png",
 "softwareVersion":"4.0",
 "releaseNotes":"AI assistant, multi-workspace support, push notifications"}
@@ -3232,7 +3346,7 @@ function showTab(t){
 
 <div class="ticker-wrap">
   <div class="ticker">
-    <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📋 Smart Kanban Boards <span class="ticker-sep">·</span></div>
     <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
     <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
     <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
@@ -3242,7 +3356,7 @@ function showTab(t){
     <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
     <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
     <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📋 Smart Task Boards <span class="ticker-sep">·</span></div>
+    <div class="ticker-item">📋 Smart Kanban Boards <span class="ticker-sep">·</span></div>
     <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
     <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
     <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
@@ -3291,7 +3405,7 @@ function showTab(t){
     <h2 class="sec-title">11 modules, one platform</h2>
     <p class="sec-sub">Every module shares data automatically — tasks flow into analytics, tickets link to projects, reminders fire to notifications.</p>
     <div class="modules-grid">
-      <div class="mod-card"><div class="mod-ico">📋</div><div class="mod-n">Task Board</div><div class="mod-d">Kanban with custom stages</div></div>
+      <div class="mod-card"><div class="mod-ico">📋</div><div class="mod-n">Kanban Board</div><div class="mod-d">Kanban with custom stages</div></div>
       <div class="mod-card"><div class="mod-ico">📁</div><div class="mod-n">Projects</div><div class="mod-d">Multi-project management</div></div>
       <div class="mod-card"><div class="mod-ico">🤖</div><div class="mod-n">AI Assistant</div><div class="mod-d">Workspace-aware AI</div></div>
       <div class="mod-card"><div class="mod-ico">📅</div><div class="mod-n">Timeline</div><div class="mod-d">Health tracking per project</div></div>
@@ -3968,10 +4082,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --sf2:#f1f5f9;
   --sf3:#e2e8f0;
   --bd:rgba(15,23,42,0.12);
-  --bd2:rgba(15,23,42,0.08);
+  --bd2:rgba(15,23,42,0.07);
   --tx:#0a0f1e;
   --tx2:#1e293b;
-  --tx3:#475569;
+  --tx3:#64748b;
   --sb:#0f172a;
   --sb2:#1e293b;
   --sb3:#334155;
@@ -3990,8 +4104,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --pu:#6d28d9;
   --or:#c2410c;
   --pk:#be185d;
-  --sh:0 1px 3px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.07);
-  --sh2:0 4px 16px rgba(0,0,0,0.12),0 8px 32px rgba(0,0,0,0.08);
+  --sh:0 1px 3px rgba(15,23,42,0.08),0 4px 12px rgba(15,23,42,0.06);
+  --sh2:0 4px 24px rgba(15,23,42,0.10),0 12px 40px rgba(15,23,42,0.07);
   --sh3:0 0 0 1px var(--bd);
 }
 
@@ -4002,10 +4116,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --sf2:#f1f5f9;
   --sf3:#e2e8f0;
   --bd:rgba(15,23,42,0.12);
-  --bd2:rgba(15,23,42,0.08);
+  --bd2:rgba(15,23,42,0.07);
   --tx:#0a0f1e;
   --tx2:#1e293b;
-  --tx3:#475569;
+  --tx3:#64748b;
   --sb:#0f172a;
   --sb2:#1e293b;
   --sb3:#334155;
@@ -4024,21 +4138,21 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --pu:#6d28d9;
   --or:#c2410c;
   --pk:#be185d;
-  --sh:0 1px 3px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.07);
-  --sh2:0 4px 16px rgba(0,0,0,.10),0 8px 32px rgba(0,0,0,.07);
+  --sh:0 1px 3px rgba(15,23,42,0.08),0 4px 12px rgba(15,23,42,0.06);
+  --sh2:0 4px 24px rgba(15,23,42,0.10),0 12px 40px rgba(15,23,42,0.07);
   --sh3:0 0 0 1px var(--bd);
 }
 /* === DARK THEME — .dm class === */
 .dm{
   --bg:#0d1117;
   --sf:#161b22;
-  --sf2:#21262d;
+  --sf2:#1c2230;
   --sf3:#2d333b;
   --bd:rgba(255,255,255,0.08);
   --bd2:rgba(255,255,255,0.05);
   --tx:#e6edf3;
-  --tx2:#8b949e;
-  --tx3:#484f58;
+  --tx2:#94a3b8;
+  --tx3:#4b5563;
   --sb:#0d1117;
   --sb2:#161b22;
   --sb3:#21262d;
@@ -4057,8 +4171,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --pu:#bc8cff;
   --or:#ffa657;
   --pk:#ff7eb3;
-  --sh:0 1px 3px rgba(0,0,0,0.4),0 2px 8px rgba(0,0,0,0.3);
-  --sh2:0 4px 16px rgba(0,0,0,0.5),0 8px 32px rgba(0,0,0,0.4);
+  --sh:0 1px 3px rgba(0,0,0,0.4),0 4px 12px rgba(0,0,0,0.3);
+  --sh2:0 4px 24px rgba(0,0,0,0.5),0 12px 40px rgba(0,0,0,0.4);
   --sh3:0 0 0 1px rgba(255,255,255,0.08);
 }
 
@@ -4072,12 +4186,12 @@ input[type=date]{color-scheme:dark}
 input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.45;filter:invert(1)}
 .lm input[type=date]::-webkit-calendar-picker-indicator{filter:none;opacity:.5}
 
-.card{background:var(--sf);border-radius:18px;padding:18px;border:1px solid var(--bd2);transition:border-color .15s}
-.card:hover{border-color:var(--bd)}
+.card{background:var(--sf);border-radius:16px;padding:18px;border:1px solid var(--bd2);transition:border-color .15s,box-shadow .15s;box-shadow:var(--sh)}
+.card:hover{border-color:var(--bd);box-shadow:var(--sh2)}
 
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:100px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .14s;white-space:nowrap;line-height:1;font-family:inherit;letter-spacing:.01em}
 .bp{background:var(--ac);color:var(--ac-tx)!important}
-.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 3px 14px rgba(170,255,0,.3)}
+.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(29,78,216,.35)}
 .bp:active{transform:translateY(0)}
 .bp:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .bg{background:transparent;color:var(--tx2)!important;border:1px solid var(--bd)}
@@ -4961,6 +5075,43 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────────── */
+/* ─── PersonalTwoFAToggle — shown in profile panel for all users ─────────── */
+function PersonalTwoFAToggle({cu,setCu}){
+  const [enabled,setEnabled]=useState(()=>!!(cu&&cu.two_fa_enabled));
+  const [saving,setSaving]=useState(false);
+  const [msg,setMsg]=useState('');
+
+  const toggle=async()=>{
+    setSaving(true);setMsg('');
+    const r=await api.post('/api/auth/toggle-2fa',{enabled:!enabled});
+    setSaving(false);
+    if(r.error){setMsg(r.error);return;}
+    const newVal=!!r.two_fa_enabled;
+    setEnabled(newVal);
+    setCu&&setCu(prev=>({...prev,two_fa_enabled:newVal?1:0}));
+    setMsg(newVal?'✓ 2FA enabled for your account':'2FA disabled');
+    setTimeout(()=>setMsg(''),3000);
+  };
+
+  return html`
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+      <div style=${{flex:1}}>
+        <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+          🔐 Two-Factor Auth
+          ${enabled?html`<span style=${{fontSize:9,padding:'1px 6px',borderRadius:4,background:'rgba(74,222,128,0.15)',color:'#4ade80',fontFamily:'monospace',fontWeight:700}}>ON</span>`:null}
+        </div>
+        <div style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.4}}>
+          ${enabled?'Email code required at login':'Add extra login security'}
+        </div>
+        ${msg?html`<div style=${{fontSize:10,color:msg.startsWith('✓')?'var(--gn)':'var(--rd)',marginTop:3}}>${msg}</div>`:null}
+      </div>
+      <div style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:3,flexShrink:0}}>
+        ${saving?html`<span class="spin" style=${{width:18,height:18,borderWidth:2}}></span>`:
+          html`<${ToggleSwitch} checked=${enabled} onChange=${toggle} acColor="#4ade80"/>`}
+      </div>
+    </div>`;
+}
+
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true,onlineUsers=new Set()}){
   const inCall=false; // Google Meet handles calls externally
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
@@ -4968,11 +5119,13 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const baseView=(view||'dashboard').split(':')[0];
 
   const NAV_ICONS={
-    dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
+    dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+    'ai-docs':    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="10" cy="13" r="2"/><path d="M20 21l-4.35-4.35"/></svg>`,
+  };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -4985,7 +5138,14 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
 
   return html`
     <aside style=${{
-      width:W,minWidth:W,maxWidth:W, background:'#0f172a', display:'flex',flexDirection:'column', height:'100vh',flexShrink:0,overflow:'visible', borderRight:'1px solid rgba(37,99,235,0.15)', transition:'width .2s ease,min-width .2s ease,max-width .2s ease', position:'relative'
+      width:W,minWidth:W,maxWidth:W,
+      background:'linear-gradient(180deg,#0c1425 0%,#0f172a 100%)',
+      display:'flex',flexDirection:'column',
+      height:'100vh',flexShrink:0,overflow:'visible',
+      borderRight:'1px solid rgba(37,99,235,0.2)',
+      transition:'width .2s ease,min-width .2s ease,max-width .2s ease',
+      position:'relative',
+      boxShadow:'2px 0 24px rgba(0,0,0,0.25)'
     }}>
 
             <div style=${{
@@ -5010,12 +5170,20 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
             title=${col?it.label:''}
             onClick=${()=>setView(it.id)}
             style=${{
-              display:'flex',alignItems:'center', gap:col?0:10, width:'100%', padding:col?'10px 0':'9px 10px', borderRadius:9,border:'none',cursor:'pointer', background:baseView===it.id?'rgba(37,99,235,0.18)':'transparent', color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)', fontSize:12,fontWeight:baseView===it.id?700:500, transition:'all .12s',textAlign:'left', borderLeft:baseView===it.id&&!col?'2px solid var(--ac)':'2px solid transparent', justifyContent:col?'center':'flex-start', position:'relative'
+              display:'flex',alignItems:'center', gap:col?0:10, width:'100%', padding:col?'10px 0':'9px 10px', borderRadius:9,border:'none',cursor:'pointer',
+              background:baseView===it.id?'rgba(37,99,235,0.22)':'transparent',
+              color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)',
+              fontSize:12,fontWeight:baseView===it.id?700:500,
+              transition:'all .12s',textAlign:'left',
+              borderLeft:baseView===it.id&&!col?'2px solid #60a5fa':'2px solid transparent',
+              justifyContent:col?'center':'flex-start', position:'relative',
+              boxShadow:baseView===it.id?'inset 0 0 0 1px rgba(96,165,250,0.12)':'none'
             }}
-            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
-            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.45)';}}}>
-            <span style=${{flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center',opacity:.85}}>${NAV_ICONS[it.id]||null}</span>
+            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.12)';e.currentTarget.style.color='#93c5fd';}}}
+            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.75)';}}}>
+            <span style=${{flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center',opacity:baseView===it.id?1:.8}}>${NAV_ICONS[it.id]||null}</span>
             ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
+            ${it.badge&&!col?html`<span style=${{fontSize:8,fontWeight:800,padding:'1px 5px',borderRadius:4,background:'linear-gradient(135deg,#2563eb,#7c3aed)',color:'#fff',letterSpacing:'.04em',flexShrink:0}}>${it.badge}</span>`:null}
             ${it.id==='notifs'&&unread>0?html`<span style=${{
               position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--rd)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
             }}>${unread>9?'9+':unread}</span>`:null}
@@ -5181,13 +5349,13 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
               </div>
             </div>
             ${showProfile?html`
-              <div style=${{position:'fixed',top:60,right:16,width:290,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:18,boxShadow:'0 8px 40px rgba(0,0,0,.15)',zIndex:9500,overflow:'hidden'}}>
-                <div style=${{padding:'20px 16px',background:'linear-gradient(135deg,rgba(170,255,0,.12),rgba(184,224,32,.04))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
+              <div style=${{position:'fixed',top:60,right:16,width:300,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:18,boxShadow:'0 8px 40px rgba(0,0,0,.18)',zIndex:9500,overflow:'hidden'}}>
+                <div style=${{padding:'20px 16px',background:'linear-gradient(135deg,rgba(29,78,216,.10),rgba(124,58,237,.05))',borderBottom:'1px solid var(--bd)',display:'flex',flexDirection:'column',alignItems:'center',gap:10}}>
                   <div style=${{position:'relative',cursor:'pointer'}} title="Click to change photo"
                     onClick=${e=>{e.stopPropagation();prImgRef.current&&prImgRef.current.click();}}>
                     ${(cu.avatar_data&&cu.avatar_data.startsWith('data:image'))?
                       html`<img src=${cu.avatar_data} style=${{width:68,height:68,borderRadius:'50%',objectFit:'cover',border:'3px solid var(--ac)',display:'block'}}/>`:
-                      html`<div style=${{width:68,height:68,borderRadius:'50%',background:cu.color||'#aaff00',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:700,color:'#fff',border:'3px solid var(--ac)'}}>${cu.avatar||'?'}</div>`}
+                      html`<div style=${{width:68,height:68,borderRadius:'50%',background:cu.color||'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:700,color:'#fff',border:'3px solid var(--ac)',boxShadow:'0 4px 16px rgba(29,78,216,.3)'}}>${cu.avatar||'?'}</div>`}
                     <div style=${{position:'absolute',bottom:2,right:2,width:22,height:22,borderRadius:'50%',background:'var(--ac)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,border:'2px solid var(--sf)',color:'#fff',pointerEvents:'none'}}>📷</div>
                   </div>
                   <input ref=${prImgRef} type="file" accept="image/*" style=${{display:'none'}} onChange=${async e=>{
@@ -5211,9 +5379,12 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                   <div style=${{textAlign:'center',width:'100%'}}>
                     <div style=${{fontSize:15,fontWeight:700,color:'var(--tx)',marginBottom:2}}>${cu.name}</div>
                     <div style=${{fontSize:11,color:'var(--tx3)',fontFamily:'monospace',marginBottom:4,wordBreak:'break-all'}}>${cu.email}</div>
-                    <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(170,255,0,.15)',color:'var(--ac2)',textTransform:'uppercase'}}>${cu&&cu.role||''}</span>
+                    <span style=${{display:'inline-block',padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,fontFamily:'monospace',background:'rgba(29,78,216,.12)',color:'var(--ac)',textTransform:'uppercase'}}>${cu&&cu.role||''}</span>
                     ${uploadMsg?html`<div style=${{marginTop:8,fontSize:11,color:uploadMsg.startsWith('✓')?'var(--gn)':'var(--rd)',fontFamily:'monospace'}}>${uploadMsg}</div>`:null}
                   </div>
+                </div>
+                <div style=${{padding:'12px 14px',borderBottom:'1px solid var(--bd)'}}>
+                  <${PersonalTwoFAToggle} cu=${cu} setCu=${setCu}/>
                 </div>
                 <div style=${{padding:'10px 12px'}}>
                   <p style=${{fontSize:10,color:'var(--tx3)',textAlign:'center',marginBottom:8,fontFamily:'monospace'}}>Click avatar to change profile photo</p>
@@ -8173,6 +8344,126 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
     </div>`;
 }
 
+/* ─── Reusable ToggleSwitch ───────────────────────────────────────────────── */
+function ToggleSwitch({checked,onChange,acColor}){
+  const ac=acColor||'var(--ac)';
+  return html`
+    <div onClick=${onChange} style=${{
+      width:44,height:24,borderRadius:100,
+      background:checked?ac:'rgba(255,255,255,0.1)',
+      border:checked?'1px solid '+ac:'1px solid var(--bd)',
+      position:'relative',cursor:'pointer',transition:'all .2s',flexShrink:0
+    }}>
+      <div style=${{
+        position:'absolute',top:2,left:checked?'22px':'2px',
+        width:18,height:18,borderRadius:'50%',
+        background:checked?'#fff':'var(--tx3)',
+        transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
+      }}></div>
+    </div>`;
+}
+
+/* ─── TwoFASettingsCard ───────────────────────────────────────────────────── */
+function TwoFASettingsCard({otpEnabled,setOtpEnabled,smtpUsername,cu}){
+  const [userTfaList,setUserTfaList]=useState([]);
+  const [loadingTfa,setLoadingTfa]=useState(false);
+  const [togglingId,setTogglingId]=useState(null);
+  const isAdmin=cu&&cu.role==='Admin';
+
+  useEffect(()=>{
+    if(!isAdmin)return;
+    setLoadingTfa(true);
+    api.get('/api/auth/2fa-status').then(d=>{
+      if(Array.isArray(d))setUserTfaList(d);
+      setLoadingTfa(false);
+    }).catch(()=>setLoadingTfa(false));
+  },[isAdmin]);
+
+  const toggleUserTfa=async(userId,currentVal)=>{
+    setTogglingId(userId);
+    const r=await api.post('/api/auth/toggle-2fa',{user_id:userId,enabled:!currentVal});
+    if(r.error){alert(r.error);}
+    else{setUserTfaList(prev=>prev.map(u=>u.id===userId?{...u,two_fa_enabled:r.two_fa_enabled}:u));}
+    setTogglingId(null);
+  };
+
+  const emailOk=smtpUsername||!!window.__resendConfigured;
+
+  return html`
+    <div class="card" style=${{marginBottom:16}}>
+      <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16,marginBottom:16}}>
+        <div style=${{flex:1}}>
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🔐 Two-Factor Authentication (2FA)</h3>
+          <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>
+            ${isAdmin?'Force 2FA for all workspace members (workspace-wide), or enable it per-user below.':'Enable 2FA for your own account. A 6-digit code will be emailed on every login.'}
+          </p>
+          ${isAdmin?html`
+            <div style=${{padding:'9px 13px',background:otpEnabled?'rgba(29,78,216,0.08)':'rgba(255,255,255,0.02)',borderRadius:9,
+              border:otpEnabled?'1px solid rgba(29,78,216,0.25)':'1px solid var(--bd)',fontSize:12,color:'var(--tx2)',marginBottom:8}}>
+              <div style=${{display:'flex',alignItems:'center',gap:6,marginBottom:otpEnabled?4:0}}>
+                <span>${otpEnabled?'🔒':'🔓'}</span>
+                <span style=${{fontWeight:700,color:otpEnabled?'#60a5fa':'var(--tx2)'}}>
+                  Workspace-wide OTP: ${otpEnabled?'ENFORCED for all users':'OFF (per-user settings apply)'}
+                </span>
+              </div>
+              ${otpEnabled?html`<div class="tx3-11">📧 All users get a 6-digit email code on every login · Overrides per-user settings</div>`:null}
+            </div>`:null}
+          ${!emailOk?html`<div style=${{padding:'7px 12px',background:'rgba(239,68,68,0.07)',borderRadius:8,border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:'#f87171',marginBottom:8}}>
+            ⚠️ Email not configured. Set up SMTP or Resend API in Settings before enabling 2FA.
+          </div>`:null}
+        </div>
+        ${isAdmin?html`
+          <div style=${{flexShrink:0,paddingTop:4,display:'flex',flexDirection:'column',alignItems:'center',gap:5}}>
+            <${ToggleSwitch} checked=${otpEnabled} onChange=${()=>setOtpEnabled(!otpEnabled)} acColor="#2563eb"/>
+            <span style=${{fontSize:10,fontWeight:600,color:otpEnabled?'#60a5fa':'var(--tx3)'}}>${otpEnabled?'Enforced':'Off'}</span>
+          </div>`:null}
+      </div>
+
+      ${isAdmin?html`
+        <div>
+          <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+            Per-User 2FA
+            <span style=${{fontSize:10,fontWeight:400,color:'var(--tx3)',textTransform:'none',letterSpacing:0,fontStyle:'italic'}}>
+              — individual override when workspace OTP is off
+            </span>
+          </div>
+          ${loadingTfa?html`<div style=${{textAlign:'center',padding:'16px 0',color:'var(--tx3)',fontSize:12}}><span class="spin"></span></div>`:null}
+          ${!loadingTfa&&userTfaList.length>0?html`
+            <div style=${{borderRadius:10,border:'1px solid var(--bd)',overflow:'hidden'}}>
+              ${userTfaList.map((u,i)=>html`
+                <div key=${u.id} style=${{
+                  display:'flex',alignItems:'center',gap:12,padding:'10px 14px',
+                  background:i%2===0?'transparent':'rgba(255,255,255,0.02)',
+                  borderBottom:i<userTfaList.length-1?'1px solid var(--bd)':'none',
+                  opacity:togglingId===u.id?.6:1,transition:'opacity .2s'
+                }}>
+                  <div style=${{width:30,height:30,borderRadius:'50%',background:u.color||'#2563eb',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    fontSize:11,fontWeight:700,color:'#fff',flexShrink:0}}>
+                    ${(u.name||'?').slice(0,2).toUpperCase()}
+                  </div>
+                  <div style=${{flex:1,minWidth:0}}>
+                    <div style=${{fontSize:12,fontWeight:600,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                      ${u.name} ${u.id===cu.id?html`<span style=${{fontSize:9,color:'var(--ac)',background:'var(--ac3)',padding:'1px 5px',borderRadius:3,fontFamily:'monospace'}}>YOU</span>`:null}
+                    </div>
+                    <div style=${{fontSize:10,color:'var(--tx3)'}}>${u.email}</div>
+                  </div>
+                  <div style=${{fontSize:10,padding:'2px 8px',borderRadius:100,fontWeight:600,
+                    background:u.two_fa_enabled?'rgba(34,197,94,0.1)':'rgba(255,255,255,0.05)',
+                    color:u.two_fa_enabled?'#4ade80':'var(--tx3)',
+                    border:'1px solid '+(u.two_fa_enabled?'rgba(74,222,128,0.3)':'var(--bd)')}}>
+                    ${u.two_fa_enabled?'2FA ON':'2FA OFF'}
+                  </div>
+                  <${ToggleSwitch}
+                    checked=${!!u.two_fa_enabled}
+                    onChange=${()=>toggleUserTfa(u.id,!!u.two_fa_enabled)}
+                    acColor="#4ade80"/>
+                </div>`)}
+            </div>`:null}
+        </div>`:null}
+    </div>`;
+}
+
 /* ─── WorkspaceSettings ───────────────────────────────────────────────────── */
 function WorkspaceSettings({cu,onReload}){
   const [ws,setWs]=useState(null);const [wsName,setWsName]=useState('');const [aiKey,setAiKey]=useState('');const [showKey,setShowKey]=useState(false);const [saving,setSaving]=useState(false);const [saved,setSaved]=useState(false);
@@ -8352,37 +8643,7 @@ function WorkspaceSettings({cu,onReload}){
         </div>
       </div>
 
-      <div class="card" style=${{marginBottom:16}}>
-        <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16}}>
-          <div style=${{flex:1}}>
-            <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🔐 Two-Factor Login (OTP)</h3>
-            <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:8}}>When enabled, all workspace members must verify their identity with a 6-digit code sent to their email after entering their password. Requires SMTP to be configured above.</p>
-            <div style=${{padding:'9px 13px',background:otpEnabled?'rgba(170,255,0,0.06)':'rgba(255,255,255,0.02)',borderRadius:9,border:otpEnabled?'1px solid rgba(170,255,0,0.2)':'1px solid var(--bd)',fontSize:12,color:'var(--tx2)',display:'flex',flexDirection:'column',gap:5}}>
-              <div style=${{display:'flex',alignItems:'center',gap:6}}>
-                <span>${otpEnabled?'✅':'⬜'}</span>
-                <span style=${{fontWeight:600,color:otpEnabled?'var(--ac)':'var(--tx2)'}}>OTP is ${otpEnabled?'ENABLED':'DISABLED'}</span>
-              </div>
-              ${otpEnabled?html`<div class="tx3-11">📧 A 6-digit code will be emailed to each user on every login · Code expires in 10 minutes · Resend available after 60s</div>`:null}
-              ${!otpEnabled?html`<div class="tx3-11">Users log in with email + password only. Enable OTP to add email verification on every login.</div>`:null}
-            </div>
-            ${otpEnabled&&!smtpUsername?html`<div style=${{marginTop:8,padding:'7px 12px',background:'rgba(239,68,68,0.07)',borderRadius:8,border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:'#f87171'}}>⚠️ Warning: SMTP is not configured. OTP emails will fail. Configure SMTP above before enabling OTP.</div>`:null}
-          </div>
-          <div style=${{flexShrink:0,paddingTop:4}}>
-            <label style=${{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
-              <div onClick=${()=>setOtpEnabled(!otpEnabled)} style=${{
-                width:44,height:24,borderRadius:100, background:otpEnabled?'var(--ac)':'rgba(255,255,255,0.1)', border:otpEnabled?'1px solid var(--ac)':'1px solid var(--bd)', position:'relative',cursor:'pointer',transition:'all .2s', flexShrink:0
-              }}>
-                <div style=${{
-                  position:'absolute',top:2, left:otpEnabled?'22px':'2px', width:18,height:18,borderRadius:'50%', background:otpEnabled?'#040506':'var(--tx3)', transition:'left .2s', boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
-                }}></div>
-              </div>
-              <span style=${{fontSize:12,fontWeight:600,color:otpEnabled?'var(--ac)':'var(--tx3)'}}>
-                ${otpEnabled?'On':'Off'}
-              </span>
-            </label>
-          </div>
-        </div>
-      </div>
+      <${TwoFASettingsCard} otpEnabled=${otpEnabled} setOtpEnabled=${setOtpEnabled} smtpUsername=${smtpUsername} cu=${cu}/>
 
             <div class="card" style=${{marginBottom:0}}>
         <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:16}}>
@@ -8399,19 +8660,9 @@ function WorkspaceSettings({cu,onReload}){
               </div>
             </div>
           </div>
-          <div style=${{flexShrink:0,paddingTop:4}}>
-            <label style=${{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
-              <div onClick=${()=>setDmEnabled(!dmEnabled)} style=${{
-                width:44,height:24,borderRadius:100, background:dmEnabled?'var(--ac)':'rgba(255,255,255,0.1)', border:dmEnabled?'1px solid var(--ac)':'1px solid var(--bd)', position:'relative',cursor:'pointer',transition:'all .2s', flexShrink:0
-              }}>
-                <div style=${{
-                  position:'absolute',top:2, left:dmEnabled?'22px':'2px', width:18,height:18,borderRadius:'50%', background:dmEnabled?'#fff':'var(--tx3)', transition:'left .2s', boxShadow:'0 1px 4px rgba(0,0,0,0.4)'
-                }}></div>
-              </div>
-              <span style=${{fontSize:12,fontWeight:600,color:dmEnabled?'var(--ac)':'var(--tx3)'}}>
-                ${dmEnabled?'On':'Off'}
-              </span>
-            </label>
+          <div style=${{flexShrink:0,paddingTop:4,display:'flex',flexDirection:'column',alignItems:'center',gap:5}}>
+            <${ToggleSwitch} checked=${dmEnabled} onChange=${()=>setDmEnabled(!dmEnabled)}/>
+            <span style=${{fontSize:10,fontWeight:600,color:dmEnabled?'var(--ac)':'var(--tx3)'}}>${dmEnabled?'On':'Off'}</span>
           </div>
         </div>
       </div>
@@ -8423,6 +8674,174 @@ function WorkspaceSettings({cu,onReload}){
       </div>
     </div>
   </div>`;
+}
+
+/* ─── AiDocsView ──────────────────────────────────────────────────────────── */
+function AiDocsView({cu,projects,tasks,users}){
+  const [docType,setDocType]=useState('documentation');
+  const [projectId,setProjectId]=useState('');
+  const [extraCtx,setExtraCtx]=useState('');
+  const [generating,setGenerating]=useState(false);
+  const [result,setResult]=useState(null);
+  const [err,setErr]=useState('');
+  const [copied,setCopied]=useState(false);
+  const [mermaidSrc,setMermaidSrc]=useState('');
+  const outputRef=useRef(null);
+
+  const generate=async()=>{
+    setGenerating(true);setErr('');setResult(null);setMermaidSrc('');
+    const r=await api.post('/api/ai/generate-docs',{type:docType,project_id:projectId,context:extraCtx});
+    setGenerating(false);
+    if(r.error){setErr(r.message||r.error);return;}
+    setResult(r.content);
+    if(docType==='architecture'){
+      const m=r.content.match(/```mermaid\s*([\s\S]*?)```/);
+      if(m)setMermaidSrc(m[1].trim());
+    }
+    setTimeout(()=>{if(outputRef.current)outputRef.current.scrollIntoView({behavior:'smooth'});},100);
+  };
+
+  const copyContent=()=>{
+    if(!result)return;
+    navigator.clipboard&&navigator.clipboard.writeText(result);
+    setCopied(true);setTimeout(()=>setCopied(false),2000);
+  };
+
+  const downloadContent=()=>{
+    if(!result)return;
+    const blob=new Blob([result],{type:'text/markdown'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=docType==='architecture'?'architecture.md':'documentation.md';
+    a.click();
+  };
+
+  // Simple markdown renderer for the output
+  const renderMarkdown=(md)=>{
+    if(!md)return '';
+    return md
+      .replace(/^### (.+)$/gm,'<h3 style="font-size:14px;font-weight:700;color:var(--tx);margin:16px 0 6px">$1</h3>')
+      .replace(/^## (.+)$/gm,'<h2 style="font-size:16px;font-weight:800;color:var(--tx);margin:20px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bd)">$1</h2>')
+      .replace(/^# (.+)$/gm,'<h1 style="font-size:20px;font-weight:800;color:var(--tx);margin:0 0 16px">$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong style="color:var(--tx);font-weight:700">$1</strong>')
+      .replace(/`([^`]+)`/g,'<code style="font-family:monospace;font-size:11px;background:var(--sf2);padding:2px 6px;border-radius:4px;color:var(--ac)">$1</code>')
+      .replace(/^- (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:3px 0;padding-left:4px">$1</li>')
+      .replace(/(<li[^>]*>.*<\/li>\n?)+/g,'<ul style="margin:6px 0 10px 16px;padding:0">$&</ul>')
+      .replace(/\n\n/g,'<br/><br/>')
+      .replace(/\n/g,'<br/>');
+  };
+
+  const DOC_TYPES=[
+    {id:'documentation',icon:'📄',label:'Project Documentation',desc:'Full markdown docs — scope, status, team, tasks, risks'},
+    {id:'architecture',icon:'🏗️',label:'Architecture Diagram',desc:'Mermaid.js diagram of your project structure & flows'},
+  ];
+
+  return html`
+    <div class="fi" style=${{height:'100%',overflowY:'auto',background:'var(--bg)'}}>
+      <div style=${{maxWidth:860,margin:'0 auto',padding:'24px 28px'}}>
+
+        <!-- Header -->
+        <div style=${{marginBottom:28}}>
+          <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:8}}>
+            <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 16px rgba(29,78,216,0.3)'}}>🤖</div>
+            <div>
+              <h1 style=${{fontSize:20,fontWeight:800,color:'var(--tx)',letterSpacing:'-.4px',margin:0}}>AI Documentation</h1>
+              <p style=${{fontSize:12,color:'var(--tx3)',margin:0}}>Generate professional docs & architecture diagrams from your project data</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Config card -->
+        <div class="card" style=${{marginBottom:20}}>
+          <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',marginBottom:14}}>⚙️ Configure</h3>
+
+          <!-- Doc type selector -->
+          <div style=${{marginBottom:16}}>
+            <label class="lbl">Output Type</label>
+            <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              ${DOC_TYPES.map(t=>html`
+                <div key=${t.id} onClick=${()=>setDocType(t.id)}
+                  style=${{
+                    padding:'12px 14px',borderRadius:11,cursor:'pointer',transition:'all .15s',
+                    border:'2px solid '+(docType===t.id?'var(--ac)':'var(--bd)'),
+                    background:docType===t.id?'var(--ac4)':'var(--sf2)',
+                  }}>
+                  <div style=${{fontSize:18,marginBottom:5}}>${t.icon}</div>
+                  <div style=${{fontSize:12,fontWeight:700,color:docType===t.id?'var(--ac)':'var(--tx)',marginBottom:3}}>${t.label}</div>
+                  <div style=${{fontSize:11,color:'var(--tx3)',lineHeight:1.4}}>${t.desc}</div>
+                </div>`)}
+            </div>
+          </div>
+
+          <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+            <div>
+              <label class="lbl">Project (optional — all if blank)</label>
+              <select class="sel" value=${projectId} onChange=${e=>setProjectId(e.target.value)}>
+                <option value="">— All projects —</option>
+                ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Extra context (optional)</label>
+              <input class="inp" placeholder="e.g. focus on backend architecture..." value=${extraCtx}
+                onInput=${e=>setExtraCtx(e.target.value)}/>
+            </div>
+          </div>
+
+          ${err?html`<div style=${{padding:'9px 13px',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:9,fontSize:12,color:'#f87171',marginBottom:12}}>${err}</div>`:null}
+
+          <button class="btn bp" onClick=${generate} disabled=${generating} style=${{width:'100%',justifyContent:'center',padding:'11px'}}>
+            ${generating?html`<span class="spin" style=${{marginRight:8}}></span>`:html`<span style=${{marginRight:6}}>${docType==='architecture'?'🏗️':'📄'}</span>`}
+            ${generating?'Generating...':docType==='architecture'?'Generate Architecture Diagram':'Generate Documentation'}
+          </button>
+        </div>
+
+        <!-- Result -->
+        ${result?html`
+          <div ref=${outputRef}>
+            <!-- Action bar -->
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:8}}>
+                <span style=${{color:'var(--ac)'}}>✓</span>
+                ${docType==='architecture'?'Architecture Diagram':'Documentation'} generated
+              </div>
+              <div style=${{display:'flex',gap:8}}>
+                <button class="btn bg" style=${{fontSize:12}} onClick=${copyContent}>${copied?'✓ Copied':'📋 Copy'}</button>
+                <button class="btn bg" style=${{fontSize:12}} onClick=${downloadContent}>⬇ Download .md</button>
+                <button class="btn brd" style=${{fontSize:12}} onClick=${()=>{setResult(null);setMermaidSrc('');}}>✕ Clear</button>
+              </div>
+            </div>
+
+            <!-- Mermaid diagram live render -->
+            ${mermaidSrc?html`
+              <div class="card" style=${{marginBottom:16}}>
+                <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:12}}>🏗️ Architecture Diagram</div>
+                <div style=${{background:'var(--sf2)',borderRadius:10,padding:'16px',border:'1px solid var(--bd)',overflowX:'auto'}}>
+                  <pre style=${{fontFamily:'monospace',fontSize:12,color:'var(--tx2)',margin:0,whiteSpace:'pre-wrap',lineHeight:1.6}}>${mermaidSrc}</pre>
+                </div>
+                <div style=${{marginTop:10,padding:'8px 12px',background:'rgba(29,78,216,0.06)',borderRadius:8,border:'1px solid rgba(29,78,216,0.15)',fontSize:11,color:'var(--tx3)'}}>
+                  💡 Copy this code to <b style=${{color:'var(--tx2)'}}>mermaid.live</b> or any Mermaid-compatible tool to render the interactive diagram.
+                </div>
+              </div>`:null}
+
+            <!-- Full markdown content -->
+            <div class="card">
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:14}}>📄 Full Output</div>
+              <div style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.7}}
+                dangerouslySetInnerHTML=${{__html:renderMarkdown(result)}}>
+              </div>
+            </div>
+          </div>`:null}
+
+        ${generating?html`
+          <div class="card" style=${{textAlign:'center',padding:'40px 20px'}}>
+            <div style=${{width:48,height:48,border:'3px solid var(--bd)',borderTop:'3px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite',margin:'0 auto 16px'}}></div>
+            <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)',marginBottom:6}}>AI is analyzing your workspace...</div>
+            <div style=${{fontSize:12,color:'var(--tx3)'}}>This usually takes 10–30 seconds depending on project size</div>
+          </div>`:null}
+
+      </div>
+    </div>`;
 }
 
 /* ─── AIAssistant floating panel ──────────────────────────────────────────── */
@@ -9078,7 +9497,7 @@ function HuddleCall(){return null;}
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','ai-docs'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -9094,7 +9513,7 @@ function App(){
   useEffect(()=>{
     try{
       const p=window.location.pathname.replace(/^\//, '').split('/')[0].trim();
-      const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity'};
+      const VIEW_T={dashboard:'Dashboard',projects:'Projects',tasks:'Kanban Board',messages:'Channels',dm:'Direct Messages',tickets:'Tickets',timeline:'Timeline Tracker',reminders:'Reminders',settings:'Settings',team:'Team Management',productivity:'Dev Productivity'};
       if(p&&VIEW_T[p]) document.title='VEWIT — '+VIEW_T[p]+' | AI-Powered Team Collaboration';
       else document.title='VEWIT — AI-Powered Team Collaboration Platform';
     }catch(e){}
@@ -9110,10 +9529,11 @@ function App(){
   });
   // Keep browser URL in sync with current view
   const VIEW_TITLES={
-    dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',
+    dashboard:'Dashboard',projects:'Projects',tasks:'Kanban Board',
     messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
     timeline:'Timeline Tracker',reminders:'Reminders',
-    settings:'Settings',team:'Team Management',productivity:'Dev Productivity'
+    settings:'Settings',team:'Team Management',productivity:'Dev Productivity',
+    'ai-docs':'AI Documentation'
   };
   const _setView=useCallback((v)=>{
     setView(v);
@@ -9529,7 +9949,7 @@ function App(){
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Task Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, };
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, 'ai-docs':{title:'AI Documentation',sub:'Generate docs & architecture diagrams'}, };
 
   const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
@@ -9600,6 +10020,7 @@ function App(){
             ${baseView==='settings'&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead')?html`<${WorkspaceSettings} cu=${cu} onReload=${load}/>`:null}
             ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
+            ${baseView==='ai-docs'?html`<${AiDocsView} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users}/>`:null}
             </div>
           <//>
         </div>
