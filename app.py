@@ -156,12 +156,38 @@ app.config.update(
     MAX_CONTENT_LENGTH=150*1024*1024)
 CORS(app, supports_credentials=True)
 
+@app.after_request
+def add_headers(response):
+    """Add performance and security headers to every response."""
+    # Cache API responses briefly to reduce duplicate requests
+    if request.path.startswith('/api/'):
+        if request.method == 'GET':
+            # Short cache for list endpoints — 5s prevents stampede on navigation
+            response.headers['Cache-Control'] = 'private, max-age=5'
+        else:
+            response.headers['Cache-Control'] = 'no-store'
+    # Security headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
+
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#aaff00"]
 
 def get_db(autocommit=False):
-    conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
-    conn.autocommit = autocommit  # pg8000 supports autocommit property
-    return _DB(conn)
+    """Get DB connection with retry logic for transient connection errors."""
+    import time as _t
+    last_err = None
+    for attempt in range(3):
+        try:
+            conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+            conn.autocommit = autocommit
+            return _DB(conn)
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                _t.sleep(0.2 * (attempt + 1))  # 200ms, 400ms backoff
+    raise RuntimeError(f"DB connection failed after 3 attempts: {last_err}")
 def hash_pw(p):
     """Hash password with bcrypt (falls back to sha256 for legacy check)."""
     try:
@@ -774,6 +800,54 @@ def init_db():
             db.execute("ALTER TABLE workspaces ADD COLUMN from_email TEXT")
             db.execute("ALTER TABLE workspaces ADD COLUMN email_enabled INTEGER DEFAULT 1")
         except: pass
+        # ── Performance indexes — critical for unlimited scale ─────────────
+        try:
+            db.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_tasks_workspace ON tasks(workspace_id);
+            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_created ON tasks(workspace_id, created DESC);
+            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_stage ON tasks(workspace_id, stage);
+            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_assignee ON tasks(workspace_id, assignee);
+            CREATE INDEX IF NOT EXISTS idx_tasks_workspace_project ON tasks(workspace_id, project);
+            CREATE INDEX IF NOT EXISTS idx_tasks_team ON tasks(workspace_id, team_id);
+            CREATE INDEX IF NOT EXISTS idx_tasks_sprint ON tasks(workspace_id, sprint);
+            CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(workspace_id, due);
+            CREATE INDEX IF NOT EXISTS idx_projects_workspace ON projects(workspace_id);
+            CREATE INDEX IF NOT EXISTS idx_projects_team ON projects(workspace_id, team_id);
+            CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(workspace_id, owner);
+            CREATE INDEX IF NOT EXISTS idx_tickets_workspace ON tickets(workspace_id);
+            CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(workspace_id, status);
+            CREATE INDEX IF NOT EXISTS idx_tickets_assignee ON tickets(workspace_id, assignee);
+            CREATE INDEX IF NOT EXISTS idx_tickets_team ON tickets(workspace_id, team_id);
+            CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(workspace_id, project, ts DESC);
+            CREATE INDEX IF NOT EXISTS idx_dm_recipient ON direct_messages(workspace_id, recipient, read);
+            CREATE INDEX IF NOT EXISTS idx_dm_sender ON direct_messages(workspace_id, sender);
+            CREATE INDEX IF NOT EXISTS idx_notifs_user ON notifications(workspace_id, user_id, read);
+            CREATE INDEX IF NOT EXISTS idx_notifs_created ON notifications(workspace_id, user_id, ts DESC);
+            CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(workspace_id, task_id);
+            CREATE INDEX IF NOT EXISTS idx_files_task ON files(workspace_id, task_id);
+            CREATE INDEX IF NOT EXISTS idx_files_project ON files(workspace_id, project_id);
+            CREATE INDEX IF NOT EXISTS idx_time_logs_task ON time_logs(workspace_id, task_id);
+            CREATE INDEX IF NOT EXISTS idx_time_logs_user ON time_logs(workspace_id, user_id, logged_date);
+            CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(workspace_id, user_id, fired);
+            CREATE INDEX IF NOT EXISTS idx_teams_workspace ON teams(workspace_id);
+            CREATE INDEX IF NOT EXISTS idx_docs_workspace ON docs(workspace_id, project_id);
+            CREATE INDEX IF NOT EXISTS idx_audit_workspace ON audit_logs(workspace_id, created DESC);
+            CREATE INDEX IF NOT EXISTS idx_reactions_msg ON message_reactions(workspace_id, message_id);
+            CREATE INDEX IF NOT EXISTS idx_threads_parent ON message_threads(workspace_id, parent_id);
+            CREATE INDEX IF NOT EXISTS idx_sprints_project ON sprints(workspace_id, project_id);
+            CREATE INDEX IF NOT EXISTS idx_goals_workspace ON goals(workspace_id, status);
+            CREATE INDEX IF NOT EXISTS idx_users_workspace ON users(workspace_id);
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            CREATE INDEX IF NOT EXISTS idx_tasks_due_stage ON tasks(workspace_id, due, stage);
+            CREATE INDEX IF NOT EXISTS idx_tasks_assignee_stage ON tasks(workspace_id, assignee, stage);
+            CREATE INDEX IF NOT EXISTS idx_projects_members ON projects(workspace_id, members);
+            CREATE INDEX IF NOT EXISTS idx_msg_thread_parent ON message_threads(workspace_id, parent_id, ts);
+            CREATE INDEX IF NOT EXISTS idx_reactions_user ON message_reactions(workspace_id, user_id, message_id);
+            CREATE INDEX IF NOT EXISTS idx_ann_workspace ON announcements(workspace_id, pinned, created DESC);
+            CREATE INDEX IF NOT EXISTS idx_intake_forms ON intake_forms(workspace_id, active);
+            """)
+        except Exception as e:
+            print(f"Index creation: {e}")
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
             legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
@@ -846,6 +920,30 @@ def login_required(f):
     return d
 
 def wid(): return session.get("workspace_id","")
+
+# Lightweight in-memory workspace settings cache (TTL=60s per workspace)
+import time as _time_mod
+_ws_cache = {}
+_ws_cache_ttl = {}
+def get_ws_cached(ws_id):
+    """Return cached workspace settings, refreshing every 60s."""
+    now = _time_mod.time()
+    if ws_id in _ws_cache and now - _ws_cache_ttl.get(ws_id,0) < 60:
+        return _ws_cache[ws_id]
+    try:
+        with get_db() as db:
+            ws = db.execute("SELECT * FROM workspaces WHERE id=?",(ws_id,)).fetchone()
+            if ws:
+                _ws_cache[ws_id] = dict(ws)
+                _ws_cache_ttl[ws_id] = now
+                return _ws_cache[ws_id]
+    except: pass
+    return None
+
+def invalidate_ws_cache(ws_id):
+    """Call after updating workspace settings."""
+    _ws_cache.pop(ws_id, None)
+    _ws_cache_ttl.pop(ws_id, None)
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/api/auth/login",methods=["POST"])
@@ -1062,6 +1160,7 @@ def update_workspace():
     with get_db() as db:
         if "name" in d: db.execute("UPDATE workspaces SET name=? WHERE id=?",(d["name"],wid()))
         if "ai_api_key" in d: db.execute("UPDATE workspaces SET ai_api_key=? WHERE id=?",(d["ai_api_key"],wid()))
+        invalidate_ws_cache(wid())
         if "smtp_server" in d: db.execute("UPDATE workspaces SET smtp_server=? WHERE id=?",(d["smtp_server"],wid()))
         if "smtp_port" in d: db.execute("UPDATE workspaces SET smtp_port=? WHERE id=?",(d["smtp_port"],wid()))
         if "smtp_username" in d: db.execute("UPDATE workspaces SET smtp_username=? WHERE id=?",(d["smtp_username"],wid()))
@@ -1124,19 +1223,17 @@ def test_email():
 @login_required
 def get_users():
     with get_db() as db:
-        rows = db.execute("SELECT * FROM users WHERE workspace_id=? ORDER BY name",(wid(),)).fetchall()
-        caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
-        caller_role = caller["role"] if caller else "Developer"
-        can_see_passwords = caller_role in ("Admin", "Manager")
-        users = []
-        for r in rows:
-            u = dict(r)
-            u.pop('avatar_data', None)
-            u.pop('password', None)
-            if not can_see_passwords:
-                u.pop('plain_password', None)  # only Admin/Manager can see passwords
-            users.append(u)
-        return jsonify(users)
+        caller = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
+        can_see_pw = (caller["role"] if caller else "") in ("Admin","Manager")
+        # Never return password hash or avatar_data blob; conditionally return plain_password
+        rows = db.execute(
+            "SELECT id,workspace_id,name,email,role,avatar,color,created,"
+            "COALESCE(last_active,'') as last_active,"
+            "COALESCE(is_guest,0) as is_guest "
+            + (", COALESCE(plain_password,'') as plain_password " if can_see_pw else "")
+            + "FROM users WHERE workspace_id=? ORDER BY name",
+            (wid(),)).fetchall()
+        return jsonify([dict(r) for r in rows])
 
 @app.route("/api/users",methods=["POST"])
 @login_required
@@ -1211,15 +1308,23 @@ def get_projects_last_messages():
 @login_required
 def get_projects():
     team_id = request.args.get("team_id","")
+    page    = max(1, int(request.args.get("page","1") or 1))
+    limit   = min(200, max(10, int(request.args.get("limit","200") or 200)))
+    offset  = (page-1)*limit
     with get_db() as db:
+        cols = "id,workspace_id,name,description,owner,members,start_date,target_date,progress,color,created,team_id,COALESCE(budget,0) as budget,COALESCE(budget_spent,0) as budget_spent"
         if team_id:
             rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC",
-                (wid(), team_id)).fetchall()
+                "SELECT "+cols+" FROM projects WHERE workspace_id=? AND team_id=? ORDER BY created DESC LIMIT ? OFFSET ?",
+                (wid(), team_id, limit, offset)).fetchall()
+            total = db.execute("SELECT COUNT(*) as cnt FROM projects WHERE workspace_id=? AND team_id=?",
+                               (wid(),team_id)).fetchone()["cnt"]
         else:
             rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id=? ORDER BY created DESC", (wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
+                "SELECT "+cols+" FROM projects WHERE workspace_id=? ORDER BY created DESC LIMIT ? OFFSET ?",
+                (wid(), limit, offset)).fetchall()
+            total = db.execute("SELECT COUNT(*) as cnt FROM projects WHERE workspace_id=?",(wid(),)).fetchone()["cnt"]
+        return jsonify({"items":[dict(r) for r in rows],"total":total,"page":page,"limit":limit})
 
 @app.route("/api/projects",methods=["POST"])
 @login_required
@@ -1311,32 +1416,61 @@ def bulk_assign_team():
 @app.route("/api/tasks")
 @login_required
 def get_tasks():
-    team_id = request.args.get("team_id","")
+    team_id  = request.args.get("team_id","")
+    stage    = request.args.get("stage","")
+    assignee = request.args.get("assignee","")
+    project  = request.args.get("project","")
+    priority = request.args.get("priority","")
+    page     = max(1, int(request.args.get("page","1") or 1))
+    limit    = min(500, max(10, int(request.args.get("limit","500") or 500)))
+    offset   = (page-1)*limit
     with get_db() as db:
+        where  = ["t.workspace_id=?"]
+        params = [wid()]
         if team_id:
             team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
             member_ids = json.loads(team["member_ids"] if team else "[]")
-            team_projects = db.execute(
-                "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
-            proj_ids = [p["id"] for p in team_projects]
-            all_tasks = db.execute(
-                "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
-            proj_set = set(proj_ids)
-            mem_set = set(member_ids)
-            filtered = [t for t in all_tasks if
-                (t["team_id"] and t["team_id"]==team_id) or
-                (t["assignee"] and t["assignee"] in mem_set) or
-                (t["project"] and t["project"] in proj_set)]
-            return jsonify([dict(r) for r in filtered])
-        return jsonify([dict(r) for r in db.execute(
-            "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
+            proj_ids   = [p["id"] for p in db.execute(
+                "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()]
+            if proj_ids and member_ids:
+                ph_p = ",".join("?"*len(proj_ids))
+                ph_m = ",".join("?"*len(member_ids))
+                where.append("(t.team_id=? OR t.project IN("+ph_p+") OR t.assignee IN("+ph_m+"))")
+                params += [team_id] + proj_ids + member_ids
+            elif proj_ids:
+                ph_p = ",".join("?"*len(proj_ids))
+                where.append("(t.team_id=? OR t.project IN("+ph_p+"))")
+                params += [team_id] + proj_ids
+            elif member_ids:
+                ph_m = ",".join("?"*len(member_ids))
+                where.append("(t.team_id=? OR t.assignee IN("+ph_m+"))")
+                params += [team_id] + member_ids
+            else:
+                where.append("t.team_id=?")
+                params.append(team_id)
+        if stage:    where.append("t.stage=?");    params.append(stage)
+        if assignee: where.append("t.assignee=?"); params.append(assignee)
+        if project:  where.append("t.project=?");  params.append(project)
+        if priority: where.append("t.priority=?"); params.append(priority)
+        where_sql = " AND ".join(where)
+        cols = ("t.id,t.workspace_id,t.title,t.description,t.project,t.assignee,"
+                "t.priority,t.stage,t.created,t.due,t.pct,t.comments,t.team_id,"
+                "t.parent_id,t.story_points,t.sprint,t.task_type,t.labels,"
+                "t.recurring,t.recur_parent,t.depends_on,"
+                "COALESCE(t.time_logged,0) as time_logged")
+        rows = db.execute(
+            "SELECT "+cols+" FROM tasks t WHERE "+where_sql+" ORDER BY t.created DESC LIMIT ? OFFSET ?",
+            params+[limit,offset]).fetchall()
+        total_row = db.execute("SELECT COUNT(*) as cnt FROM tasks t WHERE "+where_sql, params).fetchone()
+        total_count = total_row["cnt"] if total_row else 0
+        return jsonify({"items":[dict(r) for r in rows],"total":total_count,"page":page,"limit":limit,"pages":max(1,(total_count+limit-1)//limit)})
 
 def next_task_id(db, ws):
-    import time
-    base = int(time.time() * 1000)
-    row=db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=?",(ws,)).fetchone()
-    count=row['cnt'] if row else 0
-    return f"T-{count+1:03d}-{base % 10000}"
+    """Race-condition-free ID using high-res timestamp + random suffix."""
+    import time, random
+    ts_ms = int(time.time() * 1000)
+    rand3 = random.randint(100,999)
+    return f"T-{ts_ms % 10000000:07d}-{rand3}"
 
 @app.route("/api/tasks",methods=["POST"])
 @login_required
@@ -1627,11 +1761,28 @@ def del_file(fid):
 @app.route("/api/messages")
 @login_required
 def get_messages():
-    project=request.args.get("project","")
+    project = request.args.get("project","")
+    limit   = min(200, int(request.args.get("limit","100") or 100))
+    before  = request.args.get("before","")
+    if not project: return jsonify([])
     with get_db() as db:
-        rows=db.execute("SELECT * FROM messages WHERE project=? AND workspace_id=? ORDER BY ts",
-                        (project,wid())).fetchall()
-        return jsonify([dict(r) for r in rows])
+        if before:
+            rows=db.execute(
+                "SELECT m.id,m.workspace_id,m.sender,m.project,m.content,m.ts,"
+                "COALESCE(m.is_system,0) as is_system,COALESCE(m.pinned,0) as pinned,"
+                "u.name as sender_name,u.avatar as sender_avatar,u.color as sender_color "
+                "FROM messages m LEFT JOIN users u ON m.sender=u.id "
+                "WHERE m.project=? AND m.workspace_id=? AND m.ts<? "
+                "ORDER BY m.ts DESC LIMIT ?",(project,wid(),before,limit)).fetchall()
+        else:
+            rows=db.execute(
+                "SELECT m.id,m.workspace_id,m.sender,m.project,m.content,m.ts,"
+                "COALESCE(m.is_system,0) as is_system,COALESCE(m.pinned,0) as pinned,"
+                "u.name as sender_name,u.avatar as sender_avatar,u.color as sender_color "
+                "FROM messages m LEFT JOIN users u ON m.sender=u.id "
+                "WHERE m.project=? AND m.workspace_id=? "
+                "ORDER BY m.ts DESC LIMIT ?",(project,wid(),limit)).fetchall()
+        return jsonify(list(reversed([dict(r) for r in rows])))
 
 @app.route("/api/messages",methods=["POST"])
 @login_required
@@ -1646,12 +1797,17 @@ def send_message():
         project_row=db.execute("SELECT name FROM projects WHERE id=? AND workspace_id=?",(d.get("project",""),wid())).fetchone()
         proj_name=project_row["name"] if project_row else "a project"
         preview=d.get("content","")[:60]+("..." if len(d.get("content",""))>60 else "")
-        members=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
+        # Only notify project members, not entire workspace
+        try:
+            proj_members_row = db.execute("SELECT members FROM projects WHERE id=? AND workspace_id=?",(d.get("project",""),wid())).fetchone()
+            proj_member_ids = json.loads(proj_members_row["members"] if proj_members_row and proj_members_row["members"] else "[]")
+        except: proj_member_ids = []
         base_ts=int(datetime.now().timestamp()*1000)
-        for i,m in enumerate(members):
+        for i,uid in enumerate(proj_member_ids):
+            if uid == session["user_id"]: continue
             nid=f"n{base_ts+i}"
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",m["id"],0,ts()))
+                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",uid,0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()))
 
 # ── Direct Messages ───────────────────────────────────────────────────────────
@@ -1840,26 +1996,38 @@ def team_dashboard(tid):
 @app.route("/api/tickets", methods=["GET"])
 @login_required
 def get_tickets():
-    status=request.args.get("status","")
-    team_id=request.args.get("team_id","")
+    status   = request.args.get("status","")
+    team_id  = request.args.get("team_id","")
+    assignee = request.args.get("assignee","")
+    page     = max(1, int(request.args.get("page","1") or 1))
+    limit    = min(200, max(10, int(request.args.get("limit","100") or 100)))
+    offset   = (page-1)*limit
     with get_db() as db:
+        where  = ["t.workspace_id=?"]
+        params = [wid()]
         if team_id:
-            team=db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
-            member_ids=json.loads(team["member_ids"] if team else "[]")
-            team_projs=db.execute("SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
-            proj_ids=[p["id"] for p in team_projs]
-            all_rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
-            mem_set=set(member_ids); proj_set=set(proj_ids)
-            rows=[r for r in all_rows if
-                (r["team_id"] if "team_id" in r.keys() else "")==team_id or
-                (r["assignee"] and r["assignee"] in mem_set) or
-                (r["project"] and r["project"] in proj_set)]
-            if status: rows=[r for r in rows if r["status"]==status]
-        elif status:
-            rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? AND status=? ORDER BY created DESC",(wid(),status)).fetchall()
-        else:
-            rows=db.execute("SELECT * FROM tickets WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
-        return jsonify([dict(r) for r in rows])
+            team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,wid())).fetchone()
+            member_ids = json.loads(team["member_ids"] if team else "[]")
+            proj_ids   = [p["id"] for p in db.execute(
+                "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()]
+            if proj_ids and member_ids:
+                ph_p=",".join("?"*len(proj_ids)); ph_m=",".join("?"*len(member_ids))
+                where.append("(t.team_id=? OR t.project IN("+ph_p+") OR t.assignee IN("+ph_m+"))")
+                params += [team_id]+proj_ids+member_ids
+            elif proj_ids:
+                where.append("(t.team_id=? OR t.project IN("+",".join("?"*len(proj_ids))+"))")
+                params += [team_id]+proj_ids
+            else:
+                where.append("t.team_id=?"); params.append(team_id)
+        if status:   where.append("t.status=?");   params.append(status)
+        if assignee: where.append("t.assignee=?"); params.append(assignee)
+        where_sql = " AND ".join(where)
+        rows  = db.execute(
+            "SELECT t.*,u.name as reporter_name FROM tickets t LEFT JOIN users u ON t.reporter=u.id "
+            "WHERE "+where_sql+" ORDER BY t.created DESC LIMIT ? OFFSET ?",
+            params+[limit,offset]).fetchall()
+        total = db.execute("SELECT COUNT(*) as cnt FROM tickets t WHERE "+where_sql,params).fetchone()["cnt"]
+        return jsonify({"items":[dict(r) for r in rows],"total":total,"page":page,"limit":limit})
 
 @app.route("/api/tickets", methods=["POST"])
 @login_required
@@ -2833,7 +3001,7 @@ def get_audit_logs():
     with get_db() as db:
         cu = db.execute("SELECT role FROM users WHERE id=?",(session["user_id"],)).fetchone()
         if not cu or cu["role"] not in ("Admin","Manager"): return jsonify({"error":"Forbidden"}),403
-        rows = db.execute("SELECT al.*,u.name as user_name FROM audit_logs al LEFT JOIN users u ON al.user_id=u.id WHERE al.workspace_id=? ORDER BY al.created DESC LIMIT 500",(wid(),)).fetchall()
+        rows = db.execute("SELECT al.*,u.name as user_name FROM audit_logs al LEFT JOIN users u ON al.user_id=u.id WHERE al.workspace_id=? ORDER BY al.created DESC LIMIT 100",(wid(),)).fetchall()
         return jsonify([dict(r) for r in rows])
 
 # ── Guest access ──────────────────────────────────────────────────────────────
@@ -3380,6 +3548,85 @@ def get_pinned_messages(pid):
             "WHERE m.workspace_id=? AND m.project=? AND m.pinned=1 ORDER BY m.ts DESC",
             (wid(),pid)).fetchall()
         return jsonify([dict(r) for r in rows])
+
+
+
+# ── Dashboard summary — fast counts, no full data loads ──────────────────────
+@app.route("/api/dashboard/summary")
+@login_required
+def dashboard_summary():
+    """Returns counts and lightweight summary — frontend uses this for Dashboard view."""
+    team_id = request.args.get("team_id","")
+    with get_db() as db:
+        ws_id = wid()
+        uid   = session["user_id"]
+        today = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
+
+        if team_id:
+            # Get team project IDs and member IDs
+            team = db.execute("SELECT member_ids FROM teams WHERE id=? AND workspace_id=?",(team_id,ws_id)).fetchone()
+            member_ids = json.loads(team["member_ids"] if team else "[]")
+            proj_rows  = db.execute("SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(ws_id,team_id)).fetchall()
+            proj_ids   = [p["id"] for p in proj_rows]
+            task_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=?",(ws_id,team_id)).fetchone()["cnt"]
+            active_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND stage NOT IN ('completed','backlog')",(ws_id,team_id)).fetchone()["cnt"]
+            done_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND stage='completed'",(ws_id,team_id)).fetchone()["cnt"]
+            blocked_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND stage='blocked'",(ws_id,team_id)).fetchone()["cnt"]
+            overdue_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND team_id=? AND due<? AND stage!='completed'",(ws_id,team_id,today)).fetchone()["cnt"]
+        else:
+            task_count    = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=?",(ws_id,)).fetchone()["cnt"]
+            active_count  = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND stage NOT IN ('completed','backlog')",(ws_id,)).fetchone()["cnt"]
+            done_count    = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND stage='completed'",(ws_id,)).fetchone()["cnt"]
+            blocked_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND stage='blocked'",(ws_id,)).fetchone()["cnt"]
+            overdue_count = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND due<? AND stage!='completed'",(ws_id,today)).fetchone()["cnt"]
+
+        proj_count   = db.execute("SELECT COUNT(*) as cnt FROM projects WHERE workspace_id=?",(ws_id,)).fetchone()["cnt"]
+        member_count = db.execute("SELECT COUNT(*) as cnt FROM users WHERE workspace_id=?",(ws_id,)).fetchone()["cnt"]
+        open_tickets = db.execute("SELECT COUNT(*) as cnt FROM tickets WHERE workspace_id=? AND status='open'",(ws_id,)).fetchone()["cnt"]
+        my_tasks     = db.execute("SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND assignee=? AND stage!='completed'",(ws_id,uid)).fetchone()["cnt"]
+        my_tickets   = db.execute("SELECT COUNT(*) as cnt FROM tickets WHERE workspace_id=? AND assignee=? AND status NOT IN ('closed','resolved')",(ws_id,uid)).fetchone()["cnt"]
+        unread_notifs = db.execute("SELECT COUNT(*) as cnt FROM notifications WHERE workspace_id=? AND user_id=? AND read=0",(ws_id,uid)).fetchone()["cnt"]
+
+        # Recent activity - last 5 completed tasks
+        recent = db.execute(
+            "SELECT t.id,t.title,t.stage,t.priority,u.name as assignee_name "
+            "FROM tasks t LEFT JOIN users u ON t.assignee=u.id "
+            "WHERE t.workspace_id=? ORDER BY t.created DESC LIMIT 8",(ws_id,)).fetchall()
+
+        # Priority breakdown
+        priority_counts = {p:db.execute(
+            "SELECT COUNT(*) as cnt FROM tasks WHERE workspace_id=? AND priority=? AND stage!='completed'",(ws_id,p)).fetchone()["cnt"]
+            for p in ["critical","high","medium","low"]}
+
+        return jsonify({
+            "tasks":       {"total":task_count,"active":active_count,"done":done_count,"blocked":blocked_count,"overdue":overdue_count},
+            "projects":    proj_count,
+            "members":     member_count,
+            "tickets":     {"open":open_tickets},
+            "my":          {"tasks":my_tasks,"tickets":my_tickets},
+            "unread":      unread_notifs,
+            "priority":    priority_counts,
+            "recent":      [dict(r) for r in recent],
+        })
+
+# ── Lightweight poll endpoint — only fetch what changed ──────────────────────
+@app.route("/api/poll")
+@login_required
+def poll():
+    """Lightweight polling — returns only unread notification count + DM count.
+    Frontend polls this every 15s instead of re-fetching all data."""
+    with get_db() as db:
+        uid = session["user_id"]
+        ws  = wid()
+        unread_notifs = db.execute(
+            "SELECT COUNT(*) as cnt FROM notifications WHERE workspace_id=? AND user_id=? AND read=0",(ws,uid)).fetchone()["cnt"]
+        unread_dm = db.execute(
+            "SELECT sender, COUNT(*) as cnt FROM direct_messages WHERE workspace_id=? AND recipient=? AND read=0 GROUP BY sender",(ws,uid)).fetchall()
+        return jsonify({
+            "notif_count": unread_notifs,
+            "dm_unread":   [{"sender":r["sender"],"cnt":r["cnt"]} for r in unread_dm],
+            "ts":          __import__("time").time()
+        })
 
 
 # ── Budget Tracking ───────────────────────────────────────────────────────────
@@ -5449,6 +5696,127 @@ function PB({p}){
 function Prog({pct,color}){
   return html`<div class="prog"><div class="progf" style=${{width:Math.min(100,Math.max(0,pct||0))+'%',background:color||'var(--ac)'}}></div></div>`;
 }
+
+/* ─── Shared hooks & utilities ─────────────────────────────────────────────── */
+
+// usePagedApi — generic paginated data fetcher
+function usePagedApi(url, deps=[]){
+  const [items,setItems]=useState([]);
+  const [total,setTotal]=useState(0);
+  const [loading,setLoading]=useState(false);
+  const [page,setPage]=useState(1);
+  const load=useCallback(async(p=1)=>{
+    if(!url)return;
+    setLoading(true);
+    try{
+      const sep=url.includes('?')?'&':'?';
+      const r=await api.get(url+sep+'page='+p);
+      if(r?.items){setItems(p===1?r.items:[...items,...r.items]);setTotal(r.total||0);}
+      else if(Array.isArray(r)){setItems(r);setTotal(r.length);}
+    }catch(e){}
+    setLoading(false);
+  },[url]);
+  useEffect(()=>{setPage(1);load(1);},[url,...deps]);
+  const loadMore=()=>{const next=page+1;setPage(next);load(next);};
+  const hasMore=items.length<total;
+  return {items,total,loading,load:()=>load(1),loadMore,hasMore};
+}
+
+// useDebouncedValue — debounce a frequently changing value
+function useDebouncedValue(value, delay=300){
+  const [dv,setDv]=useState(value);
+  useEffect(()=>{const t=setTimeout(()=>setDv(value),delay);return()=>clearTimeout(t);},[value,delay]);
+  return dv;
+}
+
+// safeJSON — safely parse JSON with a default
+function safeJSON(str, def=[]){
+  try{return JSON.parse(str||JSON.stringify(def));}catch{return def;}
+}
+
+// fmtMins — format minutes as "2h 15m"
+function fmtMins(m){
+  if(!m||m===0)return '0m';
+  const h=Math.floor(m/60);const min=m%60;
+  return h>0?(min>0?h+'h '+min+'m':h+'h'):min+'m';
+}
+
+// fmtDate — human-friendly relative date
+function fmtDate(dateStr){
+  if(!dateStr)return '';
+  const d=new Date(dateStr);const now=new Date();
+  const diff=Math.floor((now-d)/86400000);
+  if(diff===0)return 'Today';if(diff===1)return 'Yesterday';
+  if(diff<7)return diff+'d ago';
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+
+// Priority colors — single source of truth used across all components
+const PRIO_COLOR={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
+const PRIO_BG   ={critical:'rgba(239,68,68,.1)',high:'rgba(249,115,22,.1)',medium:'rgba(234,179,8,.1)',low:'rgba(34,197,94,.1)'};
+const STAGE_COLOR={backlog:'#64748b',planning:'#8b5cf6',inprogress:'#0ea5e9',review:'#f59e0b',testing:'#06b6d4',completed:'#22c55e',blocked:'#ef4444'};
+const STAGE_BG   ={backlog:'rgba(100,116,139,.1)',planning:'rgba(139,92,246,.1)',inprogress:'rgba(14,165,233,.1)',review:'rgba(245,158,11,.1)',testing:'rgba(6,182,212,.1)',completed:'rgba(34,197,94,.1)',blocked:'rgba(239,68,68,.1)'};
+
+// PriorityBadge — reusable priority pill
+function PriorityBadge({priority,size=10}){
+  if(!priority)return null;
+  return html`<span style=${{fontSize:size,padding:'1px 6px',borderRadius:3,fontWeight:700,
+    background:PRIO_BG[priority]||'rgba(100,116,139,.1)',
+    color:PRIO_COLOR[priority]||'#64748b'}}>${priority}</span>`;
+}
+
+// StageBadge — reusable stage pill
+function StageBadge({stage,size=10}){
+  if(!stage)return null;
+  const lbl={backlog:'Backlog',planning:'Planning',inprogress:'In Progress',review:'Review',testing:'Testing',completed:'Done',blocked:'Blocked'};
+  return html`<span style=${{fontSize:size,padding:'1px 6px',borderRadius:3,fontWeight:700,
+    background:STAGE_BG[stage]||'rgba(100,116,139,.1)',
+    color:STAGE_COLOR[stage]||'#64748b'}}>${lbl[stage]||stage}</span>`;
+}
+
+// EmptyState — reusable empty state component
+function EmptyState({icon='📭',title,sub,action,actionLabel}){
+  return html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'48px 24px',color:'var(--tx3)',textAlign:'center',gap:10}}>
+    <div style=${{fontSize:40}}>${icon}</div>
+    <div style=${{fontSize:15,fontWeight:600,color:'var(--tx2)'}}>${title}</div>
+    ${sub?html`<div style=${{fontSize:13,maxWidth:280,lineHeight:1.6}}>${sub}</div>`:null}
+    ${action?html`<button class="btn bp" style=${{fontSize:13,marginTop:6}} onClick=${action}>${actionLabel||'Get started'}</button>`:null}
+  </div>`;
+}
+
+// LoadingSpinner — reusable loader
+function LoadingSpinner({size=20,message=''}){
+  return html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,padding:32,color:'var(--tx3)'}}>
+    <div style=${{width:size,height:size,border:'2px solid var(--bd)',borderTop:'2px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite'}}></div>
+    ${message?html`<div style=${{fontSize:12}}>${message}</div>`:null}
+  </div>`;
+}
+
+// TaskCard — reusable task card for Kanban + list views
+function TaskCard({task,users,projects,onClick,compact=false}){
+  const u=safe(users||[]).find(x=>x.id===task.assignee);
+  const p=safe(projects||[]).find(x=>x.id===task.project);
+  return html`<div onClick=${onClick}
+    style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,
+      padding:compact?'7px 10px':'10px 12px',cursor:'pointer',transition:'all .12s',
+      borderLeft:'2px solid '+(STAGE_COLOR[task.stage]||'#64748b')}}
+    onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.boxShadow='0 2px 12px rgba(37,99,235,.08)';}}
+    onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.boxShadow='none';}}>
+    ${p&&!compact?html`<div style=${{fontSize:10,color:p.color||'var(--ac)',fontWeight:600,marginBottom:3}}>${p.name}</div>`:null}
+    <div style=${{fontSize:compact?12:13,fontWeight:600,color:'var(--tx)',lineHeight:1.35,marginBottom:5}}>${task.title}</div>
+    <div style=${{display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
+      <${StageBadge} stage=${task.stage}/>
+      <${PriorityBadge} priority=${task.priority}/>
+      ${task.due?html`<span style=${{fontSize:10,color:task.due<new Date().toISOString().slice(0,10)&&task.stage!=='completed'?'#ef4444':'var(--tx3)'}}>📅 ${task.due.slice(5)}</span>`:null}
+      ${u?html`<span style=${{marginLeft:'auto',width:20,height:20,borderRadius:'50%',background:'var(--ac)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}} title=${u.name}>${u.name.slice(0,2).toUpperCase()}</span>`:null}
+    </div>
+    ${task.pct>0&&!compact?html`<div style=${{height:2,background:'var(--sf2)',borderRadius:1,marginTop:6}}>
+      <div style=${{height:2,width:task.pct+'%',background:task.pct===100?'#22c55e':'var(--ac)',borderRadius:1,transition:'width .3s'}}></div>
+    </div>`:null}
+  </div>`;
+}
+
+
 class ErrorBoundary extends React.Component{
   constructor(p){super(p);this.state={err:null,info:null};}
   static getDerivedStateFromError(e){return{err:e};}
@@ -9779,7 +10147,7 @@ function CalendarView({tasks,projects,cu,users,reload}){
 
   const STAGE_COLOR={backlog:'#64748b',planning:'#8b5cf6',inprogress:'#0ea5e9',review:'#f59e0b',testing:'#06b6d4',completed:'#22c55e',blocked:'#ef4444'};
   const STAGE_BG  ={backlog:'#64748b18',planning:'#8b5cf618',inprogress:'#0ea5e918',review:'#f59e0b18',testing:'#06b6d418',completed:'#22c55e18',blocked:'#ef444418'};
-  const PRIO_COLOR={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
+  // (uses shared PRIO_COLOR/STAGE_COLOR from globals)
   const PRIO_BG   ={critical:'#ef444418',high:'#f9731618',medium:'#eab30818',low:'#22c55e18'};
 
   const getColor=(t)=>colorBy==='priority'?(PRIO_COLOR[t.priority]||'#64748b'):(STAGE_COLOR[t.stage]||'#64748b');
@@ -12380,9 +12748,9 @@ function App(){
     // Fire immediately on mount
     fetchPresence(); // fetch current online users right away (don't wait for beat)
     beat();          // then beat + fetch again
-    const beatId=setInterval(beat,15000);
+    const beatId=setInterval(beat,30000); // Heartbeat every 30s
     window.addEventListener('focus',()=>{beat();});
-    const presId=setInterval(fetchPresence,8000);
+    const presId=setInterval(fetchPresence,20000); // Presence check every 20s
     return()=>{clearInterval(beatId);clearInterval(presId);};
   },[cu]);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
@@ -12432,13 +12800,17 @@ function App(){
     if(!cu)return;
     const tCtx=overrideTeamCtx!==undefined?overrideTeamCtx:teamCtx;
     try{
-      const projUrl=tCtx?'/api/projects?team_id='+tCtx:'/api/projects';
-      const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
+      const projUrl=tCtx?'/api/projects?team_id='+tCtx+'&limit=200':'/api/projects?limit=200';
+      const taskUrl=tCtx?'/api/tasks?team_id='+tCtx+'&limit=500':'/api/tasks?limit=500';
+      const ticketUrl=tCtx?'/api/tickets?team_id='+tCtx+'&limit=100':'/api/tickets?limit=100';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw,ticketsRaw]=await Promise.all([
-        api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'),api.get('/api/tickets'), ]);
+        api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'),api.get(ticketUrl), ]);
       const teams=Array.isArray(teamsRaw)?teamsRaw:[];
-      const tickets=Array.isArray(ticketsRaw)?ticketsRaw:[];
-      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams,tickets});
+      const ticketItems=ticketsRaw?.items||ticketsRaw||[];
+      const tickets=Array.isArray(ticketItems)?ticketItems:[];
+      const projectItems=projects?.items||projects||[];
+      const taskItems=tasks?.items||tasks||[];
+      setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projectItems)?projectItems:[],tasks:Array.isArray(taskItems)?taskItems:[],notifs:Array.isArray(notifs)?notifs:[],teams,tickets});
       setDmUnread(Array.isArray(dmu)?dmu:[]);
       if(ws&&ws.name)setWsName(ws.name);
       if(ws)setWsDmEnabled(ws.dm_enabled!==0);
@@ -12481,22 +12853,40 @@ function App(){
     prevTeamCtxRef.current=teamCtx;
     setTeamLoading(true);
     setView('dashboard'); // always go to dashboard on team switch
-    setData(prev=>({...prev,projects:[],tasks:[]}));
+    setData(prev=>({...prev,projects:[],tasks:[],tickets:[]}));
     load(teamCtx).finally(()=>setTeamLoading(false));
   },[teamCtx,cu]);
   useEffect(()=>{
     if(!cu)return;
+    // Lightweight poll every 15s — only fetch counts, not full data
+    // Full reload triggered by explicit user actions or team switch
     const id=setInterval(async()=>{
+      try{
+        const r=await api.get('/api/poll');
+        if(r&&!r.error){
+          // Update DM unread counts from poll
+          if(Array.isArray(r.dm_unread)) setDmUnread(r.dm_unread);
+          // If there are new notifications, refresh notifications only
+          if(r.notif_count>0){
+            const notifs=await api.get('/api/notifications');
+            if(Array.isArray(notifs)) setData(prev=>({...prev,notifs}));
+          }
+        }
+      }catch(e){}
+    },15000);
+    // Full data refresh every 5 minutes (in case of external changes)
+    const fullId=setInterval(async()=>{
       try{
         const projUrl=teamCtx?'/api/projects?team_id='+teamCtx:'/api/projects';
         const taskUrl=teamCtx?'/api/tasks?team_id='+teamCtx:'/api/tasks';
-        const [projects,tasks]=await Promise.all([api.get(projUrl),api.get(taskUrl)]);
-        if(Array.isArray(projects)&&Array.isArray(tasks)){
-          setData(prev=>({...prev,projects,tasks}));
+        const [pr,tk]=await Promise.all([api.get(projUrl),api.get(taskUrl)]);
+        const pi=pr?.items||pr||[]; const ti=tk?.items||tk||[];
+        if(Array.isArray(pi)&&Array.isArray(ti)){
+          setData(prev=>({...prev,projects:pi,tasks:ti}));
         }
       }catch(e){}
-    },30000);
-    return()=>clearInterval(id);
+    },300000); // 5 min
+    return()=>{clearInterval(id);clearInterval(fullId);};
   },[cu,teamCtx]);
   useEffect(()=>{
     document.body.className=dark?'dm':'';
@@ -13008,7 +13398,7 @@ def download_js():
                 with open(path,"wb") as f: f.write(r.read())
             print(" ✓")
         except Exception as e:
-            print(f" ✗ ({e})"); all_ok=False
+            print(f" ✗ ({e}) — will use CDN fallback"); all_ok=False
     return all_ok
 
 def open_browser(port):
