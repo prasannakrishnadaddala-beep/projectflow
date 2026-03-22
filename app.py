@@ -1306,14 +1306,12 @@ def get_workspace():
 @login_required
 def update_workspace():
     d=request.json or {}
-    # Fields that are boolean flags get cast to 0/1
     bool_fields={"email_enabled","otp_enabled","dm_enabled"}
-    # Allowed fields to update
     allowed={"name","ai_api_key","smtp_server","smtp_port","smtp_username","smtp_password","from_email","email_enabled","otp_enabled","dm_enabled"}
-    updates=[(f, (1 if d[f] else 0) if f in bool_fields else d[f]) for f in allowed if f in d]
+    updates=[(f,(1 if d[f] else 0) if f in bool_fields else d[f]) for f in allowed if f in d]
     with get_db() as db:
-        for field, val in updates:
-            db.execute(f"UPDATE workspaces SET {field}=? WHERE id=?",(val, wid()))
+        for field,val in updates:
+            db.execute(f"UPDATE workspaces SET {field}=? WHERE id=?",(val,wid()))
         ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
         return jsonify(dict(ws))
 
@@ -4634,7 +4632,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --sh3:0 0 0 1px var(--bd);
 }
 
-/* === LIGHT THEME — Apple-inspired clean light mode === */
+/* === LIGHT THEME — Apple-inspired === */
 .lm{
   --bg:#f5f5f7;
   --sf:#ffffff;
@@ -4667,7 +4665,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   --sh2:0 8px 30px rgba(0,0,0,0.10),0 20px 60px rgba(0,0,0,0.07);
   --sh3:0 0 0 1px var(--bd);
 }
-/* === DARK THEME — Apple-inspired premium dark mode === */
+/* === DARK THEME — Apple-inspired === */
 .dm{
   --bg:#000000;
   --sf:#1c1c1e;
@@ -4745,7 +4743,7 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .nb.act svg{stroke:var(--ac-tx)!important}
 
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(14px)}
-.mo{background:var(--sf);border-radius:22px;padding:26px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto;box-shadow:var(--sh2);border:1px solid var(--bd2)}
+.mo{background:var(--sf);border-radius:24px;padding:28px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto;box-shadow:var(--sh2);border:1px solid var(--bd2)}
 .mo-xl{max-width:920px}
 
 .tkc{background:var(--sf);border-radius:16px;padding:14px;cursor:pointer;transition:all .16s;border:1px solid var(--bd2)}
@@ -9422,8 +9420,7 @@ function WorkspaceSettings({cu,onReload}){
   </div>`;
 }
 
-
-/* ─── AiDocsView ── Apple-inspired full redesign ─────────────────────────── */
+/* ─── AiDocsView ──────────────────────────────────────────────────────────── */
 function AiDocsView({cu,projects,tasks,users}){
   const [docType,setDocType]=useState('documentation');
   const [projectId,setProjectId]=useState('');
@@ -9436,40 +9433,27 @@ function AiDocsView({cu,projects,tasks,users}){
   const [copied,setCopied]=useState(false);
   const [mermaidSrc,setMermaidSrc]=useState('');
   const [history,setHistory]=useState([]);
-  const [activeTab,setActiveTab]=useState('rendered'); // 'rendered' | 'raw' | 'diagram'
-
-  const DOC_TYPES=[
-    {id:'documentation',icon:'📋',label:'Project Docs',color:'#0a84ff',bg:'rgba(10,132,255,0.12)'},
-    {id:'architecture',icon:'🏗',label:'Architecture',color:'#bf5af2',bg:'rgba(191,90,242,0.12)'},
-    {id:'technical',icon:'⚙️',label:'Tech Spec',color:'#30d158',bg:'rgba(48,209,88,0.12)'},
-    {id:'api',icon:'🔌',label:'API Docs',color:'#ff9f0a',bg:'rgba(255,159,10,0.12)'},
-  ];
-
-  const AUDIENCE_OPTS=[
-    {id:'technical',label:'Developers',icon:'👨‍💻'},
-    {id:'business',label:'Business',icon:'💼'},
-    {id:'both',label:'Mixed',icon:'🤝'},
-  ];
-
-  const QUICK_PROMPTS=[
-    {label:'SaaS Platform',icon:'🚀',text:'Multi-tenant SaaS for project management. Python Flask backend, React frontend, PostgreSQL. REST APIs for tasks, users, projects. Role-based access: Admin, Manager, Developer, Tester. JWT + 2FA auth. Deployed on Railway.'},
-    {label:'Mobile App',icon:'📱',text:'Cross-platform mobile app for team collaboration. Real-time chat, task management, file sharing, push notifications. React Native with Node.js backend and Firebase.'},
-    {label:'Microservices',icon:'⚡',text:'Microservices with API gateway, auth service, user service, notification service, and data pipeline. Docker, Kubernetes, event-driven with Kafka.'},
-    {label:'Data Platform',icon:'📊',text:'Analytics platform with ETL pipelines, data warehouse, ML model serving, interactive dashboards. Python, Apache Spark, PostgreSQL, and React.'},
-  ];
+  const outputRef=useRef(null);
 
   const generate=async()=>{
-    if(!description.trim()&&!projectId){setErr('Please describe your project or select one above.');return;}
-    setGenerating(true);setErr('');setResult(null);setMermaidSrc('');setActiveTab('rendered');
-    const r=await api.post('/api/ai/generate-docs',{type:docType,project_id:projectId,context:description.trim(),tech_stack:techStack.trim(),audience});
+    if(!description.trim()&&!projectId){setErr('Please describe your project or select a project.');return;}
+    setGenerating(true);setErr('');setResult(null);setMermaidSrc('');
+    const r=await api.post('/api/ai/generate-docs',{
+      type:docType,
+      project_id:projectId,
+      context:description.trim(),
+      tech_stack:techStack.trim(),
+      audience
+    });
     setGenerating(false);
     if(r.error){setErr(r.message||r.error);return;}
     setResult(r.content);
-    const mm=/```mermaid\s*([\s\S]*?)```/g;let m;const diags=[];
-    while((m=mm.exec(r.content))!==null)diags.push(m[1].trim());
-    if(diags.length>0){setMermaidSrc(diags[0]);setActiveTab('diagram');}
-    const projName=(safe(projects).find(p=>p.id===projectId)||{name:'All Projects'}).name;
-    setHistory(h=>[{type:docType,label:DOC_TYPES.find(d=>d.id===docType)?.icon+' '+projName,ts:new Date().toLocaleTimeString(),content:r.content},...h].slice(0,6));
+    const diagrams=[];
+    const mermaidRegex=/```mermaid\s*([\s\S]*?)```/g;
+    let m;while((m=mermaidRegex.exec(r.content))!==null)diagrams.push(m[1].trim());
+    if(diagrams.length>0)setMermaidSrc(diagrams[0]);
+    setHistory(h=>[{type:docType,title:(safe(projects).find(p=>p.id===projectId)||{name:'All Projects'}).name,ts:new Date().toLocaleTimeString(),content:r.content},...h].slice(0,8));
+    setTimeout(()=>{if(outputRef.current)outputRef.current.scrollIntoView({behavior:'smooth'});},100);
   };
 
   const copyContent=()=>{
@@ -9480,370 +9464,276 @@ function AiDocsView({cu,projects,tasks,users}){
 
   const downloadContent=()=>{
     if(!result)return;
-    const names={architecture:'architecture-diagram',technical:'technical-spec',api:'api-reference',documentation:'project-docs'};
+    const ext=docType==='architecture'?'architecture':docType==='technical'?'technical-spec':'documentation';
     const blob=new Blob([result],{type:'text/markdown'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-    a.download=(names[docType]||'docs')+'.md';a.click();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=ext+'.md';a.click();
   };
 
-  // Renders markdown to styled HTML
   const renderMarkdown=(md)=>{
     if(!md)return '';
-    // Strip mermaid blocks from rendered view (show in diagram tab)
-    let h=md.replace(/```mermaid[\s\S]*?```/g,'<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(191,90,242,0.08);border:1px solid rgba(191,90,242,0.2);border-radius:12px;color:var(--pu);font-size:12px;font-weight:600;margin:10px 0">🏗 Mermaid diagram available in the Diagram tab</div>');
-    h=h
-      .replace(/```(\w*)\n([\s\S]*?)```/g,(_, lang, code)=>`<div style="position:relative;margin:14px 0"><div style="position:absolute;top:0;right:0;background:var(--sf3);color:var(--tx3);font-size:9px;font-weight:700;padding:3px 9px;border-radius:0 10px 0 8px;letter-spacing:.5px;text-transform:uppercase">${lang||'code'}</div><pre style="background:var(--sf2);border:1px solid var(--bd);border-radius:12px;padding:16px 16px 14px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--tx2);line-height:1.7;margin:0">${code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre></div>`)
-      .replace(/^#### (.+)$/gm,'<h4 style="font-size:13px;font-weight:700;color:var(--tx2);margin:14px 0 4px;letter-spacing:-.1px">$1</h4>')
-      .replace(/^### (.+)$/gm,'<h3 style="font-size:15px;font-weight:700;color:var(--tx);margin:20px 0 6px;letter-spacing:-.2px">$1</h3>')
-      .replace(/^## (.+)$/gm,'<h2 style="font-size:18px;font-weight:800;color:var(--tx);margin:28px 0 10px;padding-bottom:10px;border-bottom:1px solid var(--bd);letter-spacing:-.3px;display:flex;align-items:center;gap:8px">$1</h2>')
-      .replace(/^# (.+)$/gm,'<h1 style="font-size:24px;font-weight:800;color:var(--tx);margin:0 0 20px;letter-spacing:-.5px;line-height:1.2">$1</h1>')
-      .replace(/\*\*(.+?)\*\*/g,'<strong style="color:var(--tx);font-weight:700">$1</strong>')
-      .replace(/\*(.+?)\*/g,'<em style="color:var(--tx2);font-style:italic">$1</em>')
-      .replace(/`([^`\n]+)`/g,'<code style="font-family:monospace;font-size:11px;background:var(--sf2);padding:2px 7px;border-radius:6px;color:var(--ac);border:1px solid var(--bd);white-space:nowrap">$1</code>')
-      .replace(/^\|(.+)\|$/gm,(row)=>{
-        const cells=row.split('|').filter(c=>c.trim()!=='');
-        if(cells.some(c=>/^[-: ]+$/.test(c.trim())))return '';
-        return '<tr>'+cells.map((c,i)=>`<td style="padding:9px 14px;border-bottom:1px solid var(--bd);font-size:12.5px;color:${i===0?'var(--tx)':'var(--tx2)'};font-weight:${i===0?600:400}">${c.trim()}</td>`).join('')+'</tr>';
-      })
-      .replace(/(<tr>[\s\S]*?<\/tr>)/g,(rows)=>`<div style="overflow-x:auto;margin:12px 0;border-radius:12px;border:1px solid var(--bd);overflow:hidden"><table style="width:100%;border-collapse:collapse">${rows}</table></div>`)
-      .replace(/^- \[x\] (.+)$/gm,'<div style="display:flex;align-items:flex-start;gap:10px;margin:5px 0;padding:6px 10px;background:rgba(48,209,88,0.06);border-radius:8px"><span style="color:var(--gn);font-size:13px;margin-top:1px;flex-shrink:0">✓</span><span style="font-size:13px;color:var(--tx2);text-decoration:line-through;line-height:1.5">$1</span></div>')
-      .replace(/^- \[ \] (.+)$/gm,'<div style="display:flex;align-items:flex-start;gap:10px;margin:5px 0;padding:6px 10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)"><span style="color:var(--tx3);font-size:13px;margin-top:1px;flex-shrink:0">○</span><span style="font-size:13px;color:var(--tx2);line-height:1.5">$1</span></div>')
-      .replace(/^- (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:5px 0;line-height:1.6;padding-left:2px">$1</li>')
-      .replace(/^(\d+)\. (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:5px 0;line-height:1.6;padding-left:2px"><span style="color:var(--ac);font-weight:700;margin-right:4px">$1.</span>$2</li>')
-      .replace(/(<li[^>]*>[\s\S]*?<\/li>\n?)+/g,'<ul style="margin:8px 0 14px 18px;padding:0">$&</ul>')
-      .replace(/^> (.+)$/gm,'<blockquote style="border-left:3px solid var(--ac);margin:14px 0;padding:12px 18px;background:var(--ac4);border-radius:0 10px 10px 0;font-size:13px;color:var(--tx2);line-height:1.6">$1</blockquote>')
-      .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--bd);margin:24px 0">')
-      .replace(/\n\n/g,'</p><p style="font-size:13.5px;color:var(--tx2);line-height:1.8;margin:0 0 12px">')
-      .replace(/\n/g,'<br>');
+    let h=md;
+    h=h.replace(/```mermaid[\s\S]*?```/g,'<div style="padding:12px 16px;background:var(--ac4);border:1px solid var(--ac3);border-radius:12px;color:var(--ac);font-size:12px;font-weight:600;margin:10px 0">Architecture diagram — see Diagram tab below</div>');
+    h=h.replace(/```(\w*)\n([\s\S]*?)```/g,function(m,lang,code){var safe=code.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");return '<div style="position:relative;margin:14px 0"><div style="position:absolute;top:0;right:0;background:var(--sf3);color:var(--tx3);font-size:9px;font-weight:700;padding:3px 9px;border-radius:0 10px 0 8px;text-transform:uppercase;letter-spacing:.5px">'+(lang||"code")+'</div><pre style="background:var(--sf2);border:1px solid var(--bd);border-radius:12px;padding:16px;overflow-x:auto;font-family:monospace;font-size:12px;color:var(--tx2);line-height:1.7;margin:0">'+safe+'</pre></div>';});
+    h=h.replace(/^#### (.+)$/gm,'<h4 style="font-size:13px;font-weight:700;color:var(--tx2);margin:14px 0 4px">$1</h4>');
+    h=h.replace(/^### (.+)$/gm,'<h3 style="font-size:15px;font-weight:700;color:var(--tx);margin:20px 0 6px">$1</h3>');
+    h=h.replace(/^## (.+)$/gm,'<h2 style="font-size:18px;font-weight:800;color:var(--tx);margin:28px 0 10px;padding-bottom:10px;border-bottom:1px solid var(--bd)">$1</h2>');
+    h=h.replace(/^# (.+)$/gm,'<h1 style="font-size:24px;font-weight:800;color:var(--tx);margin:0 0 20px;letter-spacing:-.5px">$1</h1>');
+    h=h.replace(/\*\*(.+?)\*\*/g,'<strong style="color:var(--tx);font-weight:700">$1</strong>');
+    h=h.replace(/\*(.+?)\*/g,'<em style="color:var(--tx2)">$1</em>');
+    h=h.replace(/`([^`\n]+)`/g,'<code style="font-family:monospace;font-size:11px;background:var(--sf2);padding:2px 7px;border-radius:6px;color:var(--ac);border:1px solid var(--bd)">$1</code>');
+    h=h.replace(/^\|(.+)\|$/gm,function(row){var cells=row.split("|").filter(function(c){return c.trim()!=="";});if(cells.some(function(c){return /^[-: ]+$/.test(c.trim());}))return "";return "<tr>"+cells.map(function(c,i){return '<td style="padding:9px 14px;border-bottom:1px solid var(--bd);font-size:13px;'+(i===0?"color:var(--tx);font-weight:600":"color:var(--tx2)")+'">'+c.trim()+"</td>";}).join("")+"</tr>";});
+    h=h.replace(/(<tr>[\s\S]*?<\/tr>)+/g,function(rows){return '<div style="overflow-x:auto;margin:12px 0;border-radius:12px;border:1px solid var(--bd);overflow:hidden"><table style="width:100%;border-collapse:collapse">'+rows+"</table></div>";});
+    h=h.replace(/^- \[x\] (.+)$/gm,'<div style="display:flex;align-items:flex-start;gap:10px;margin:5px 0;padding:6px 10px;background:rgba(48,209,88,0.06);border-radius:8px"><span style="color:var(--gn);flex-shrink:0">&#x2713;</span><span style="font-size:13px;color:var(--tx2);text-decoration:line-through;line-height:1.5">$1</span></div>');
+    h=h.replace(/^- \[ \] (.+)$/gm,'<div style="display:flex;align-items:flex-start;gap:10px;margin:5px 0;padding:6px 10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)"><span style="color:var(--tx3);flex-shrink:0">&#x25CB;</span><span style="font-size:13px;color:var(--tx2);line-height:1.5">$1</span></div>');
+    h=h.replace(/^- (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:5px 0;line-height:1.6">$1</li>');
+    h=h.replace(/^(\d+)\. (.+)$/gm,'<li style="font-size:13px;color:var(--tx2);margin:5px 0;line-height:1.6"><b style="color:var(--ac);margin-right:4px">$1.</b>$2</li>');
+    h=h.replace(/(<li[\s\S]*?<\/li>\n?)+/g,'<ul style="margin:8px 0 14px 18px;padding:0">$&</ul>');
+    h=h.replace(/^> (.+)$/gm,'<blockquote style="border-left:3px solid var(--ac);margin:14px 0;padding:12px 18px;background:var(--ac4);border-radius:0 10px 10px 0;font-size:13px;color:var(--tx2);line-height:1.6">$1</blockquote>');
+    h=h.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--bd);margin:24px 0">');
+    h=h.replace(/\n\n/g,'</p><p style="font-size:13.5px;color:var(--tx2);line-height:1.8;margin:0 0 12px">');
+    h=h.replace(/\n/g,'<br>');
     return '<p style="font-size:13.5px;color:var(--tx2);line-height:1.8;margin:0 0 12px">'+h+'</p>';
   };
 
-  const activeDT=DOC_TYPES.find(d=>d.id===docType)||DOC_TYPES[0];
-  const statItems=[
-    {label:'Projects',val:safe(projects).length,color:'var(--ac)'},
-    {label:'Tasks',val:safe(tasks).length,color:'var(--cy)'},
-    {label:'Members',val:safe(users).length,color:'var(--gn)'},
-    {label:'Active',val:safe(tasks).filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length,color:'var(--am)'},
+  const DOC_TYPES=[
+    {id:'documentation',icon:'📋',label:'Project Documentation',desc:'Executive summary, scope, team structure, task status, risks & next steps',color:'#2563eb'},
+    {id:'architecture',icon:'🏗️',label:'Architecture Diagram',desc:'Mermaid.js system diagram showing components, flows & dependencies',color:'#7c3aed'},
+    {id:'technical',icon:'⚙️',label:'Technical Specification',desc:'API design, data models, tech stack details, integration points',color:'#059669'},
+    {id:'api',icon:'🔌',label:'API Documentation',desc:'Endpoint reference, request/response schemas, authentication, examples',color:'#b45309'},
+  ];
+
+  const AUDIENCE_OPTS=[
+    {id:'technical',label:'Technical Team',icon:'👨‍💻'},
+    {id:'business',label:'Business / Stakeholders',icon:'💼'},
+    {id:'both',label:'Mixed Audience',icon:'🤝'},
   ];
 
   return html`
-    <div style=${{height:'100%',display:'flex',flexDirection:'column',background:'var(--bg)',overflow:'hidden'}}>
+    <div class="fi" style=${{height:'100%',overflowY:'auto',background:'var(--bg)'}}>
+      <div style=${{maxWidth:920,margin:'0 auto',padding:'24px 28px'}}>
 
-      <!-- ── Hero Header ──────────────────────────────────────────────── -->
-      <div style=${{
-        flexShrink:0,padding:'22px 28px 20px',
-        background:'linear-gradient(135deg,var(--sf) 0%,var(--sf2) 100%)',
-        borderBottom:'1px solid var(--bd)',
-        position:'relative',overflow:'hidden'
-      }}>
-        <!-- Subtle glow orbs -->
-        <div style=${{position:'absolute',top:-40,right:80,width:200,height:200,background:'radial-gradient(circle,rgba(10,132,255,0.12) 0%,transparent 70%)',pointerEvents:'none'}}></div>
-        <div style=${{position:'absolute',top:-20,right:240,width:140,height:140,background:'radial-gradient(circle,rgba(191,90,242,0.09) 0%,transparent 70%)',pointerEvents:'none'}}></div>
-        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',gap:16,flexWrap:'wrap'}}>
-          <div style=${{display:'flex',alignItems:'center',gap:16}}>
-            <div style=${{
-              width:48,height:48,borderRadius:14,flexShrink:0,
-              background:'linear-gradient(135deg,#0a84ff,#bf5af2)',
-              display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,
-              boxShadow:'0 4px 20px rgba(10,132,255,0.35)'
-            }}>✦</div>
+        <!-- Header -->
+        <div style=${{marginBottom:24,display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+          <div style=${{display:'flex',alignItems:'center',gap:14}}>
+            <div style=${{width:52,height:52,borderRadius:16,background:'linear-gradient(135deg,#0a84ff,#bf5af2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,boxShadow:'0 6px 20px rgba(10,132,255,0.35)',flexShrink:0}}>&#x2736;</div>
             <div>
-              <div style=${{fontSize:20,fontWeight:800,color:'var(--tx)',letterSpacing:'-.5px',lineHeight:1}}>AI Documentation Studio</div>
-              <div style=${{fontSize:12,color:'var(--tx3)',marginTop:4,lineHeight:1.4}}>Describe your project — get professional docs, diagrams &amp; specs in seconds</div>
+              <h1 style=${{fontSize:22,fontWeight:800,color:'var(--tx)',letterSpacing:'-.5px',margin:0}}>AI Documentation Studio</h1>
+              <p style=${{fontSize:12,color:'var(--tx3)',margin:'3px 0 0',lineHeight:1.5}}>Describe your project — AI generates professional docs, diagrams &amp; specs</p>
             </div>
           </div>
-          <!-- History pills -->
           ${history.length>0?html`
-            <div style=${{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-              <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:600,letterSpacing:.5,textTransform:'uppercase'}}>Recent</span>
+            <div style=${{display:'flex',gap:6,alignItems:'center'}}>
+              <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:600}}>HISTORY:</span>
               ${history.slice(0,4).map((h,i)=>html`
-                <button key=${i} class="btn bg" style=${{padding:'5px 11px',fontSize:11,borderRadius:980}}
-                  onClick=${()=>{setResult(h.content);const dd=/```mermaid\s*([\s\S]*?)```/g;let mm;const ds=[];while((mm=dd.exec(h.content))!==null)ds.push(mm[1].trim());setMermaidSrc(ds[0]||'');setActiveTab(ds[0]?'diagram':'rendered');}}>
-                  ${h.label.slice(0,18)}
+                <button key=${i} class="btn bg" style=${{padding:'3px 9px',fontSize:10}} onClick=${()=>setResult(h.content)} title=${h.title}>
+                  ${h.type==='architecture'?'🏗️':h.type==='technical'?'⚙️':h.type==='api'?'🔌':'📋'} ${h.title.slice(0,14)}
                 </button>`)}
             </div>`:null}
         </div>
-        <!-- Doc type strip -->
-        <div style=${{display:'flex',gap:6,marginTop:18,flexWrap:'wrap'}}>
-          ${DOC_TYPES.map(t=>html`
-            <button key=${t.id} onClick=${()=>setDocType(t.id)}
-              style=${{
-                display:'flex',alignItems:'center',gap:7,padding:'8px 16px',borderRadius:980,border:'1.5px solid',cursor:'pointer',
-                fontSize:12,fontWeight:600,fontFamily:'inherit',transition:'all .18s cubic-bezier(.25,.46,.45,.94)',
-                borderColor:docType===t.id?t.color:'var(--bd)',
-                background:docType===t.id?t.bg:'transparent',
-                color:docType===t.id?t.color:'var(--tx3)',
-                transform:docType===t.id?'translateY(-1px)':'none',
-                boxShadow:docType===t.id?`0 4px 14px ${t.color}30`:'none'
-              }}>
-              <span>${t.icon}</span><span>${t.label}</span>
-            </button>`)}
-          <!-- Workspace mini-stats -->
-          <div style=${{marginLeft:'auto',display:'flex',gap:14,alignItems:'center'}}>
-            ${statItems.map((s,i)=>html`
-              <div key=${i} style=${{textAlign:'center',lineHeight:1}}>
-                <div style=${{fontSize:16,fontWeight:800,color:s.color}}>${s.val}</div>
-                <div style=${{fontSize:9,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5,marginTop:2}}>${s.label}</div>
-              </div>`)}
-          </div>
-        </div>
-      </div>
 
-      <!-- ── Main split layout ─────────────────────────────────────── -->
-      <div style=${{flex:1,display:'grid',gridTemplateColumns:'360px 1fr',minHeight:0,overflow:'hidden'}}>
+        <div style=${{display:'grid',gridTemplateColumns:'1fr 320px',gap:18,alignItems:'start'}}>
 
-        <!-- LEFT: Config Panel -->
-        <div style=${{borderRight:'1px solid var(--bd)',overflowY:'auto',padding:'20px 18px',display:'flex',flexDirection:'column',gap:14,background:'var(--sf)'}}>
+          <!-- Left: Config -->
+          <div style=${{display:'flex',flexDirection:'column',gap:14}}>
 
-          <!-- Project selector -->
-          <div>
-            <label class="lbl">📁 Project</label>
-            <select class="sel" value=${projectId} onChange=${e=>setProjectId(e.target.value)}>
-              <option value="">— All workspace projects —</option>
-              ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
-            </select>
-          </div>
-
-          <!-- Description textarea -->
-          <div>
-            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-              <label class="lbl" style=${{margin:0}}>📝 Project Description</label>
-              <span style=${{
-                fontSize:9,fontWeight:700,color:activeDT.color,
-                background:activeDT.bg,padding:'2px 8px',borderRadius:980,letterSpacing:.3,textTransform:'uppercase'
-              }}>Key Field</span>
-            </div>
-            <textarea class="inp" rows=6
-              placeholder=${'Describe your project...\n\nExample:\n"Multi-tenant SaaS for project management. Python/Flask backend, React frontend, PostgreSQL. Role-based access: Admin, Manager, Developer. JWT + 2FA auth. Deployed on Railway."'}
-              value=${description}
-              onInput=${e=>setDescription(e.target.value)}
-              style=${{resize:'vertical',minHeight:130,lineHeight:1.65,fontSize:13,fontFamily:'inherit'}}
-            ></textarea>
-            <div style=${{fontSize:10,color:'var(--tx3)',marginTop:5,lineHeight:1.5}}>
-              💡 More detail = richer output. Include purpose, tech stack, team structure, key features.
-            </div>
-          </div>
-
-          <!-- Tech stack -->
-          <div>
-            <label class="lbl">⚡ Tech Stack <span style=${{fontWeight:400,textTransform:'none',fontSize:9,opacity:.7}}>(optional)</span></label>
-            <input class="inp" placeholder="Python, React, PostgreSQL, Docker, AWS..."
-              value=${techStack} onInput=${e=>setTechStack(e.target.value)}/>
-          </div>
-
-          <!-- Audience -->
-          <div>
-            <label class="lbl">👥 Audience</label>
-            <div style=${{display:'flex',gap:6}}>
-              ${AUDIENCE_OPTS.map(a=>html`
-                <div key=${a.id} onClick=${()=>setAudience(a.id)}
-                  style=${{
-                    flex:1,padding:'8px 6px',borderRadius:12,cursor:'pointer',textAlign:'center',
-                    transition:'all .18s',border:'1.5px solid',
-                    borderColor:audience===a.id?'var(--ac)':'var(--bd)',
-                    background:audience===a.id?'var(--ac3)':'var(--sf2)'
-                  }}>
-                  <div style=${{fontSize:16,marginBottom:3}}>${a.icon}</div>
-                  <div style=${{fontSize:9.5,fontWeight:600,color:audience===a.id?'var(--ac)':'var(--tx3)',letterSpacing:.1}}>${a.label}</div>
-                </div>`)}
-            </div>
-          </div>
-
-          <!-- Error -->
-          ${err?html`<div style=${{padding:'10px 14px',background:'rgba(255,69,58,0.08)',border:'1px solid rgba(255,69,58,0.2)',borderRadius:12,fontSize:12,color:'var(--rd)',display:'flex',gap:9,alignItems:'flex-start',lineHeight:1.5}}>
-            <span style=${{fontSize:16,flexShrink:0}}>⚠️</span><span>${err}</span>
-          </div>`:null}
-
-          <!-- Generate button -->
-          <button class="btn bp" onClick=${generate} disabled=${generating}
-            style=${{
-              padding:'13px 0',fontSize:13.5,fontWeight:700,width:'100%',justifyContent:'center',
-              borderRadius:14,letterSpacing:'-.1px',
-              boxShadow:generating?'none':`0 6px 22px ${activeDT.color}40`,
-              background:generating?'var(--sf3)':activeDT.color,
-              color:generating?'var(--tx3)':'#ffffff',transition:'all .2s'
-            }}>
-            ${generating
-              ?html`<span class="spin" style=${{marginRight:8,width:14,height:14,borderWidth:2}}></span>`
-              :html`<span style=${{marginRight:8}}>${activeDT.icon}</span>`}
-            ${generating?'AI is writing...':'Generate with AI'}
-          </button>
-
-          <!-- Quick prompts -->
-          <div style=${{marginTop:4}}>
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:8}}>Quick Prompts</div>
-            <div style=${{display:'flex',flexDirection:'column',gap:5}}>
-              ${QUICK_PROMPTS.map((q,i)=>html`
-                <button key=${i} class="btn bg"
-                  style=${{width:'100%',justifyContent:'flex-start',padding:'8px 12px',fontSize:12,borderRadius:12,textAlign:'left',gap:8}}
-                  onClick=${()=>setDescription(q.text)}>
-                  <span style=${{fontSize:14,flexShrink:0}}>${q.icon}</span>
-                  <div style=${{flex:1,minWidth:0}}>
-                    <div style=${{fontWeight:700,color:'var(--tx)',marginBottom:1}}>${q.label}</div>
-                    <div style=${{fontSize:10,color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${q.text.slice(0,52)}…</div>
-                  </div>
-                </button>`)}
-            </div>
-          </div>
-        </div>
-
-        <!-- RIGHT: Output Panel -->
-        <div style=${{display:'flex',flexDirection:'column',minHeight:0,overflow:'hidden',background:'var(--bg)'}}>
-
-          <!-- Empty / Loading / Result states -->
-          ${!result&&!generating?html`
-            <!-- Empty state -->
-            <div style=${{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20,padding:40,textAlign:'center'}}>
-              <div style=${{
-                width:80,height:80,borderRadius:24,
-                background:'linear-gradient(135deg,rgba(10,132,255,0.12),rgba(191,90,242,0.12))',
-                border:'1.5px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:36
-              }}>✦</div>
-              <div>
-                <div style=${{fontSize:20,fontWeight:800,color:'var(--tx)',letterSpacing:'-.4px',marginBottom:8}}>Your documentation appears here</div>
-                <div style=${{fontSize:13,color:'var(--tx3)',lineHeight:1.7,maxWidth:420,margin:'0 auto'}}>
-                  Choose a doc type, describe your project on the left, then click <b style=${{color:'var(--ac)'}}>Generate with AI</b>.
-                  The AI will analyse your workspace data and write professional documentation.
-                </div>
-              </div>
-              <div style=${{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center',marginTop:8}}>
+            <!-- Doc type grid -->
+            <div class="card" style=${{padding:16}}>
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:12}}>Output Type</div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                 ${DOC_TYPES.map(t=>html`
                   <div key=${t.id} onClick=${()=>setDocType(t.id)}
-                    style=${{padding:'8px 16px',borderRadius:980,border:'1px solid',borderColor:t.color+'40',
-                      background:t.bg,color:t.color,fontSize:12,fontWeight:600,cursor:'pointer',
-                      transition:'all .18s'}}
-                    onMouseEnter=${e=>e.currentTarget.style.transform='translateY(-2px)'}
-                    onMouseLeave=${e=>e.currentTarget.style.transform='none'}>
-                    ${t.icon} ${t.label}
+                    style=${{
+                      padding:'12px 14px',borderRadius:11,cursor:'pointer',transition:'all .15s',
+                      border:'2px solid '+(docType===t.id?t.color:'var(--bd)'),
+                      background:docType===t.id?t.color+'14':'var(--sf2)',
+                      position:'relative',overflow:'hidden'
+                    }}>
+                    ${docType===t.id?html`<div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:t.color,borderRadius:'11px 11px 0 0'}}></div>`:null}
+                    <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                      <span style=${{fontSize:16}}>${t.icon}</span>
+                      <span style=${{fontSize:12,fontWeight:700,color:docType===t.id?t.color:'var(--tx)'}}>${t.label}</span>
+                    </div>
+                    <div style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>${t.desc}</div>
                   </div>`)}
               </div>
+            </div>
+
+            <!-- Description input — the key field -->
+            <div class="card" style=${{padding:16}}>
+              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <label class="lbl" style=${{margin:0}}>📝 Describe Your Project</label>
+                <span style=${{fontSize:10,color:'var(--ac)',background:'var(--ac3)',padding:'2px 8px',borderRadius:100,fontWeight:600}}>Key Field</span>
+              </div>
+              <textarea class="inp" rows=5 placeholder="Describe your project in detail. Example:
+'This is a multi-tenant SaaS platform for project management. The backend uses Python/Flask with PostgreSQL. Frontend is React. We have REST APIs for tasks, users, projects. The system supports role-based access — Admin, Manager, Developer, Tester. Authentication uses JWT + 2FA. Deployed on Railway with Docker.'"
+                value=${description}
+                onInput=${e=>setDescription(e.target.value)}
+                style=${{resize:'vertical',minHeight:120,lineHeight:1.6,fontSize:13}}
+              ></textarea>
+              <div style=${{fontSize:10,color:'var(--tx3)',marginTop:6,lineHeight:1.5}}>
+                💡 The more detail you provide, the richer the output. Include tech stack, purpose, team structure, key features.
+              </div>
+            </div>
+
+            <!-- Tech stack + Project filter -->
+            <div class="card" style=${{padding:16}}>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                <div>
+                  <label class="lbl">⚡ Tech Stack <span style=${{fontWeight:400,textTransform:'none',fontSize:9}}>(optional)</span></label>
+                  <input class="inp" placeholder="e.g. Python, React, PostgreSQL, Docker, AWS..."
+                    value=${techStack} onInput=${e=>setTechStack(e.target.value)}/>
+                </div>
+                <div>
+                  <label class="lbl">📁 Project Filter</label>
+                  <select class="sel" value=${projectId} onChange=${e=>setProjectId(e.target.value)}>
+                    <option value="">— All workspace projects —</option>
+                    ${safe(projects).map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
+                  </select>
+                </div>
+              </div>
+
+              <div style=${{marginTop:12}}>
+                <label class="lbl">👥 Target Audience</label>
+                <div style=${{display:'flex',gap:8}}>
+                  ${AUDIENCE_OPTS.map(a=>html`
+                    <div key=${a.id} onClick=${()=>setAudience(a.id)}
+                      style=${{
+                        flex:1,padding:'8px 10px',borderRadius:9,cursor:'pointer',textAlign:'center',transition:'all .14s',
+                        border:'1.5px solid '+(audience===a.id?'var(--ac)':'var(--bd)'),
+                        background:audience===a.id?'var(--ac3)':'var(--sf2)'
+                      }}>
+                      <div style=${{fontSize:14,marginBottom:2}}>${a.icon}</div>
+                      <div style=${{fontSize:10,fontWeight:600,color:audience===a.id?'var(--ac)':'var(--tx3)'}}>${a.label}</div>
+                    </div>`)}
+                </div>
+              </div>
+            </div>
+
+            ${err?html`<div style=${{padding:'12px 16px',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:12,fontSize:13,color:'#f87171',display:'flex',gap:10,alignItems:'center'}}>
+              <span style=${{fontSize:18}}>⚠️</span><span>${err}</span>
             </div>`:null}
 
-          ${generating?html`
-            <!-- Loading state -->
-            <div style=${{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:24,padding:40,textAlign:'center'}}>
-              <div style=${{position:'relative',width:72,height:72}}>
-                <div style=${{width:72,height:72,border:'2px solid var(--bd)',borderTop:'2px solid var(--ac)',borderRadius:'50%',animation:'sp .9s linear infinite'}}></div>
-                <div style=${{position:'absolute',inset:10,borderRadius:'50%',background:'linear-gradient(135deg,rgba(10,132,255,0.15),rgba(191,90,242,0.15))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>✦</div>
-              </div>
-              <div>
-                <div style=${{fontSize:18,fontWeight:800,color:'var(--tx)',letterSpacing:'-.3px',marginBottom:6}}>Crafting your documentation…</div>
-                <div style=${{fontSize:12.5,color:'var(--tx3)',lineHeight:1.7,maxWidth:380,margin:'0 auto'}}>Analysing your workspace, projects and tasks to produce rich output. Usually 15–45 seconds.</div>
-              </div>
-              <div style=${{display:'flex',gap:7,flexWrap:'wrap',justifyContent:'center',marginTop:4}}>
-                ${['Reading workspace','Analysing tasks','Building structure','Writing output','Formatting'].map((s,i)=>html`
-                  <div key=${i} style=${{fontSize:10.5,padding:'5px 13px',borderRadius:980,background:'var(--ac3)',color:'var(--ac)',fontWeight:600,animation:'pulse 1.5s ease-in-out '+(i*.28)+'s infinite'}}>
-                    ${s}
-                  </div>`)}
-              </div>
-            </div>`:null}
+            <button class="btn bp" onClick=${generate} disabled=${generating}
+              style=${{padding:'13px 20px',fontSize:14,fontWeight:700,width:'100%',justifyContent:'center',borderRadius:12,
+                boxShadow:generating?'none':'0 6px 20px rgba(29,78,216,0.3)'}}>
+              ${generating?html`<span class="spin" style=${{marginRight:8}}></span>`:
+                html`<span style=${{marginRight:8}}>${DOC_TYPES.find(d=>d.id===docType)?.icon}</span>`}
+              ${generating?'Generating — please wait...':'Generate with AI'}
+            </button>
+          </div>
 
-          ${result&&!generating?html`
-            <!-- Result: tab bar -->
-            <div style=${{flexShrink:0,display:'flex',alignItems:'center',gap:0,padding:'0 24px',borderBottom:'1px solid var(--bd)',background:'var(--sf)'}}>
+          <!-- Right: Tips + Quick prompts -->
+          <div style=${{display:'flex',flexDirection:'column',gap:12}}>
+            <div class="card" style=${{padding:14}}>
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:10}}>💡 Quick Prompts</div>
               ${[
-                {id:'rendered',label:'Preview',icon:'👁'},
-                ...(mermaidSrc?[{id:'diagram',label:'Diagram',icon:'🏗'}]:[]),
-                {id:'raw',label:'Markdown',icon:'{ }'},
-              ].map(t=>html`
-                <button key=${t.id} onClick=${()=>setActiveTab(t.id)}
-                  style=${{
-                    padding:'14px 18px',fontSize:12.5,fontWeight:600,border:'none',cursor:'pointer',
-                    background:'transparent',fontFamily:'inherit',transition:'all .15s',
-                    color:activeTab===t.id?'var(--tx)':'var(--tx3)',
-                    borderBottom:activeTab===t.id?'2px solid var(--ac)':'2px solid transparent',
-                    marginBottom:-1
-                  }}>
-                  <span style=${{marginRight:6}}>${t.icon}</span>${t.label}
+                {label:'SaaS Platform',text:'Multi-tenant SaaS project management platform with REST APIs, role-based access control, real-time notifications, and PostgreSQL database. Built with Python Flask backend and React frontend.'},
+                {label:'Mobile App',text:'Cross-platform mobile app for team collaboration. Features include real-time chat, task management, file sharing, and push notifications. Uses React Native with Node.js backend.'},
+                {label:'Microservices',text:'Microservices architecture with API gateway, auth service, user service, notification service, and data processing pipeline. Uses Docker, Kubernetes, and event-driven messaging.'},
+                {label:'Data Platform',text:'Analytics and reporting platform with ETL pipelines, data warehouse, ML model serving, and interactive dashboards. Python, Spark, PostgreSQL, and React.'},
+              ].map((q,i)=>html`
+                <button key=${i} class="btn bg" style=${{width:'100%',justifyContent:'flex-start',marginBottom:5,fontSize:11,padding:'7px 10px',textAlign:'left'}}
+                  onClick=${()=>setDescription(q.text)}>
+                  <span style=${{fontWeight:700,color:'var(--ac)',marginRight:4}}>${q.label}</span>
+                  <span style=${{color:'var(--tx3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${q.text.slice(0,35)}…</span>
                 </button>`)}
-              <!-- Spacer + actions -->
-              <div style=${{flex:1}}></div>
-              <div style=${{display:'flex',gap:6,padding:'8px 0'}}>
-                <button class="btn bg" style=${{fontSize:11,padding:'6px 13px'}} onClick=${copyContent}>
-                  ${copied?'✓ Copied':'📋 Copy'}
-                </button>
-                <button class="btn bg" style=${{fontSize:11,padding:'6px 13px'}} onClick=${downloadContent}>⬇ .md</button>
-                <button class="btn bg" style=${{fontSize:11,padding:'6px 13px'}} onClick=${()=>{setResult(null);setMermaidSrc('');}}>✕ Clear</button>
+            </div>
+
+            <div class="card" style=${{padding:14}}>
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:10}}>📊 Workspace Context</div>
+              <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                ${[
+                  {label:'Projects',val:safe(projects).length,color:'var(--ac)'},
+                  {label:'Tasks',val:safe(tasks).length,color:'var(--cy)'},
+                  {label:'Members',val:safe(users).length,color:'var(--gn)'},
+                  {label:'Active',val:safe(tasks).filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length,color:'var(--am)'},
+                ].map((s,i)=>html`
+                  <div key=${i} style=${{background:'var(--sf2)',borderRadius:8,padding:'8px 10px',border:'1px solid var(--bd)'}}>
+                    <div style=${{fontSize:18,fontWeight:800,color:s.color,lineHeight:1}}>${s.val}</div>
+                    <div style=${{fontSize:9,color:'var(--tx3)',marginTop:2,textTransform:'uppercase',letterSpacing:.5}}>${s.label}</div>
+                  </div>`)}
+              </div>
+              <div style=${{marginTop:10,padding:'8px 10px',background:'var(--ac4)',borderRadius:8,border:'1px solid var(--ac3)',fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>
+                AI will automatically include this workspace data alongside your description.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        ${generating?html`
+          <div class="card fi" style=${{marginTop:18,textAlign:'center',padding:'48px 20px'}}>
+            <div style=${{width:60,height:60,border:'3px solid var(--bd)',borderTop:'3px solid var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite',margin:'0 auto 20px'}}></div>
+            <div style=${{fontSize:16,fontWeight:800,color:'var(--tx)',marginBottom:8}}>AI is crafting your documentation...</div>
+            <div style=${{fontSize:12,color:'var(--tx3)',maxWidth:360,margin:'0 auto',lineHeight:1.7}}>
+              Analyzing your description, workspace data, projects and tasks to generate comprehensive output. Usually takes 15–45 seconds.
+            </div>
+            <div style=${{marginTop:20,display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+              ${['Reading project data','Analyzing tasks','Building structure','Writing content','Formatting output'].map((s,i)=>html`
+                <div key=${i} style=${{fontSize:10,padding:'4px 12px',borderRadius:100,background:'var(--ac3)',color:'var(--ac)',fontWeight:600,animation:'pulse 1.4s ease-in-out '+(i*.3)+'s infinite'}}>
+                  ${s}
+                </div>`)}
+            </div>
+          </div>`:null}
+
+        <!-- Result output -->
+        ${result&&!generating?html`
+          <div ref=${outputRef} style=${{marginTop:18}}>
+            <!-- Toolbar -->
+            <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8,padding:'12px 16px',background:'var(--sf)',borderRadius:14,border:'1px solid var(--bd)'}}>
+              <div style=${{display:'flex',alignItems:'center',gap:10}}>
+                <div style=${{width:30,height:30,borderRadius:8,background:'rgba(48,209,88,0.15)',border:'1px solid rgba(48,209,88,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>&#x2713;</div>
+                <div>
+                  <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>${DOC_TYPES.find(d=>d.id===docType)?.label||'Output'} generated</div>
+                  <div style=${{fontSize:10,color:'var(--tx3)'}}>Claude &middot; ${new Date().toLocaleTimeString()}</div>
+                </div>
+              </div>
+              <div style=${{display:'flex',gap:6}}>
+                <button class="btn bg" style=${{fontSize:11,padding:'6px 12px'}} onClick=${copyContent}>${copied?'&#x2713; Copied':'Copy'}</button>
+                <button class="btn bg" style=${{fontSize:11,padding:'6px 12px'}} onClick=${downloadContent}>Download .md</button>
+                <button class="btn bg" style=${{fontSize:11,padding:'6px 12px'}} onClick=${()=>{setResult(null);setMermaidSrc('');}}>&#x2715;</button>
               </div>
             </div>
 
-            <!-- Success badge -->
-            <div style=${{flexShrink:0,padding:'10px 24px',background:activeDT.bg,borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10}}>
-              <div style=${{width:22,height:22,borderRadius:50,background:activeDT.color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12}}>✓</div>
-              <span style=${{fontSize:12,fontWeight:600,color:activeDT.color}}>${activeDT.label} generated</span>
-              <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:4}}>· Powered by Claude · ${new Date().toLocaleTimeString()}</span>
+            <!-- Mermaid diagram -->
+            ${mermaidSrc?html`
+              <div class="card" style=${{marginBottom:14,overflow:'hidden'}}>
+                <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                  <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:8}}>
+                    <span style=${{width:28,height:28,borderRadius:8,background:'rgba(124,58,237,0.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>🏗️</span>
+                    Mermaid Diagram Code
+                  </div>
+                  <a href="https://mermaid.live" target="_blank" rel="noopener"
+                    style=${{fontSize:10,color:'var(--ac)',fontWeight:700,textDecoration:'none',padding:'3px 10px',border:'1px solid var(--ac3)',borderRadius:100,background:'var(--ac4)'}}>
+                    Open in mermaid.live ↗
+                  </a>
+                </div>
+                <div style=${{background:'var(--sf2)',borderRadius:10,padding:'16px',border:'1px solid var(--bd)',overflowX:'auto',position:'relative'}}>
+                  <pre style=${{fontFamily:'monospace',fontSize:12,color:'var(--tx2)',margin:0,whiteSpace:'pre-wrap',lineHeight:1.7}}>${mermaidSrc}</pre>
+                </div>
+                <div style=${{marginTop:10,padding:'8px 12px',background:'rgba(124,58,237,0.06)',borderRadius:8,border:'1px solid rgba(124,58,237,0.15)',fontSize:11,color:'var(--tx3)',display:'flex',alignItems:'center',gap:8}}>
+                  <span style=${{fontSize:14}}>💡</span>
+                  Copy the code above and paste it at <b style=${{color:'var(--tx2)'}}>mermaid.live</b> to render and export the interactive diagram as SVG or PNG.
+                </div>
+              </div>`:null}
+
+            <!-- Full markdown output -->
+            <div class="card">
+              <div style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.8,marginBottom:18,display:'flex',alignItems:'center',gap:8}}>
+                <span>${DOC_TYPES.find(d=>d.id===docType)?.icon||'&#x1F4CB;'}</span>
+                Generated Output
+              </div>
+              <div style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.8,maxWidth:760}}
+                dangerouslySetInnerHTML=${{__html:renderMarkdown(result)}}>
+              </div>
             </div>
+          </div>`:null}
 
-            <!-- Tab content -->
-            <div style=${{flex:1,overflowY:'auto',padding:'28px 32px'}}>
-
-              ${activeTab==='rendered'?html`
-                <div style=${{maxWidth:800,margin:'0 auto',fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif'}}
-                  dangerouslySetInnerHTML=${{__html:renderMarkdown(result)}}>
-                </div>`:null}
-
-              ${activeTab==='diagram'&&mermaidSrc?html`
-                <div style=${{maxWidth:800,margin:'0 auto'}}>
-                  <div style=${{marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                    <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>🏗 Mermaid Diagram Code</div>
-                    <a href="https://mermaid.live" target="_blank" rel="noopener"
-                      style=${{fontSize:11,color:'var(--ac)',fontWeight:700,textDecoration:'none',padding:'5px 13px',border:'1px solid var(--ac3)',borderRadius:980,background:'var(--ac4)'}}>
-                      Open in mermaid.live ↗
-                    </a>
-                  </div>
-                  <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,overflow:'hidden'}}>
-                    <div style=${{padding:'8px 16px',background:'var(--sf2)',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:7}}>
-                      ${['#ff5f57','#febc2e','#28c840'].map((c,i)=>html`<div key=${i} style=${{width:11,height:11,borderRadius:50,background:c}}></div>`)}
-                      <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:6,fontFamily:'monospace'}}>diagram.mmd</span>
-                    </div>
-                    <pre style=${{fontFamily:"'JetBrains Mono',monospace",fontSize:12.5,color:'var(--tx2)',margin:0,padding:'20px 22px',overflowX:'auto',lineHeight:1.75,background:'transparent',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>${mermaidSrc}</pre>
-                  </div>
-                  <div style=${{marginTop:12,padding:'10px 14px',background:'rgba(191,90,242,0.07)',borderRadius:10,border:'1px solid rgba(191,90,242,0.18)',fontSize:11.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:9,lineHeight:1.5}}>
-                    <span style=${{fontSize:16}}>💡</span>
-                    Copy this code and paste it at <b style=${{color:'var(--tx2)'}}>mermaid.live</b> to render and export as SVG or PNG.
-                  </div>
-                </div>`:null}
-
-              ${activeTab==='raw'?html`
-                <div style=${{maxWidth:800,margin:'0 auto'}}>
-                  <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,overflow:'hidden'}}>
-                    <div style=${{padding:'8px 16px',background:'var(--sf2)',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:7}}>
-                      ${['#ff5f57','#febc2e','#28c840'].map((c,i)=>html`<div key=${i} style=${{width:11,height:11,borderRadius:50,background:c}}></div>`)}
-                      <span style=${{fontSize:11,color:'var(--tx3)',marginLeft:6,fontFamily:'monospace'}}>output.md</span>
-                      <span style=${{marginLeft:'auto',fontSize:10,color:'var(--tx3)'}}>${result.length.toLocaleString()} chars</span>
-                    </div>
-                    <pre style=${{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'var(--tx2)',margin:0,padding:'20px 22px',overflowX:'auto',lineHeight:1.75,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>${result}</pre>
-                  </div>
-                </div>`:null}
-
-            </div>`:null}
-
-        </div>
       </div>
     </div>`;
 }
-
-
-
-/* ─── AIAssistant floating panel ──────────────────────────────────────────── */
-function AIAssistant({cu,projects,tasks,users}){
-  const [open,setOpen]=useState(false);const [msgs,setMsgs]=useState([]);const [input,setInput]=useState('');const [busy,setBusy]=useState(false);const ref=useRef(null);const iref=useRef(null);
-
-  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
-
-  const QUICK=[
-    {label:'📊 EOD Report',msg:'Generate an end-of-day status report for all projects'}, {label:'🔴 Blocked tasks',msg:'What tasks are blocked and need attention?'}, {label:'📈 Progress summary',msg:'Give me a quick summary of overall project progress'}, {label:'⚠️ Overdue',msg:'Are there any overdue tasks?'}, ];
-
-  const send=async(text)=>{
-    const m=text||input.trim();
-    if(!m||busy)return;
-    setInput('');
-    const userMsg={role:'user',content:m};
-    setMsgs(prev=>[...prev,userMsg]);
-    setBusy(true);
-    const history=[...msgs,userMsg];
-    const r=await api.post('/api/ai/chat',{message:m,history:history.slice(-10)});
-    setBusy(false);
 
 
 
@@ -9886,12 +9776,12 @@ function AIAssistant({cu,projects,tasks,users}){
 
   return html`
     <button class="ai-btn" onClick=${()=>setOpen(!open)} title="AI Assistant">
-      ${open?'✕':'✦'}
+      ${open?'✕':'✶'}
     </button>
     ${open?html`
       <div class="ai-panel">
         <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
-          <div style=${{width:32,height:32,background:'linear-gradient(135deg,#0a84ff,#bf5af2)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,boxShadow:'0 2px 10px rgba(10,132,255,0.35)'}}>✦</div>
+          <div style=${{width:32,height:32,background:'linear-gradient(135deg,#0a84ff,#bf5af2)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,boxShadow:'0 2px 10px rgba(10,132,255,0.35)'}}>&#x2736;</div>
           <div style=${{flex:1}}>
             <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>AI Assistant</div>
             <div style=${{fontSize:10,color:'var(--tx3)'}}>Powered by Claude</div>
