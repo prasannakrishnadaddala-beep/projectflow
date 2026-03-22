@@ -159,14 +159,14 @@ CORS(app, supports_credentials=True)
 @app.after_request
 def add_headers(response):
     """Add performance and security headers to every response."""
-    # Auth endpoints must NEVER be cached — prevents post-logout access via stale cache
-    if request.path.startswith('/api/auth/') or request.path in ('/api/auth/me',):
+    # Auth endpoints must NEVER be cached — a stale /api/auth/me response
+    # allows a logged-out browser to appear authenticated. No exceptions.
+    if request.path.startswith('/api/auth/'):
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     elif request.path.startswith('/api/'):
         if request.method == 'GET':
-            # Short cache for list endpoints — 5s prevents stampede on navigation
             response.headers['Cache-Control'] = 'private, max-age=5'
         else:
             response.headers['Cache-Control'] = 'no-store'
@@ -995,6 +995,7 @@ def login():
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
+        session.pop("_logged_out", None)
         try:
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
@@ -1019,6 +1020,7 @@ def totp_login():
         if _totp_verify(rec["secret"], code):
             session.pop("_totp_pending_uid", None)
             session.pop("_totp_pending_ws",  None)
+            session.pop("_logged_out", None)
             session.permanent = True
             session["user_id"] = uid
             session["workspace_id"] = ws_id
@@ -1032,6 +1034,7 @@ def totp_login():
             db.execute("UPDATE totp_secrets SET backup_codes=? WHERE user_id=?",(json.dumps(backup),uid))
             session.pop("_totp_pending_uid", None)
             session.pop("_totp_pending_ws",  None)
+            session.pop("_logged_out", None)
             session.permanent = True
             session["user_id"] = uid
             session["workspace_id"] = ws_id
@@ -1092,33 +1095,23 @@ def resend_otp():
 @app.route("/api/auth/logout",methods=["POST"])
 def logout():
     session.clear()
-    # Do NOT re-set _logged_out here — session is fully cleared.
-    # The cleared cookie + no-store cache headers are the authoritative gate.
+    session["_logged_out"] = True  # prevents /api/auth/me from auto-logging back in
     response = jsonify({"ok": True})
-    # Expire the session cookie immediately in the browser (Flask default cookie name is "session")
-    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
-    response.set_cookie(
-        cookie_name, "",
-        expires=0,
-        httponly=True,
-        samesite="Lax",
-        secure=app.config.get("SESSION_COOKIE_SECURE", False),
-        path="/"
-    )
+    # Expire the session cookie immediately in the browser
+    response.set_cookie("session", "", expires=0, httponly=True, samesite="Lax")
     return response
 
 @app.route("/signout")
 @app.route("/sign-out")
 def signout_redirect():
-    """GET /signout — clear session, expire cookie, and redirect to login page."""
+    """GET /signout — clear session, expire cookie, redirect to login."""
     session.clear()
-    response = app.make_response(
-        '<html><head><meta http-equiv="refresh" content="0;url=/?action=login"/></head>'
-        '<body>Signing out...</body></html>'
+    resp = app.make_response(
+        '<html><head><meta http-equiv="refresh" content="0;url=/?action=login"/></head><body>Signing out...</body></html>'
     )
     cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
-    response.set_cookie(cookie_name, "", expires=0, httponly=True, samesite="Lax", path="/")
-    return response
+    resp.set_cookie(cookie_name, "", expires=0, httponly=True, samesite="Lax", path="/")
+    return resp
 
 
 @app.route("/api/auth/register",methods=["POST"])
@@ -1209,10 +1202,9 @@ def meet_notify():
 
 @app.route("/api/auth/me")
 def me():
-    # Session is fully cleared on logout — if user_id is absent, they are logged out.
-    # The _logged_out flag is no longer needed since we clear the cookie on logout.
-    if "user_id" not in session:
-        return jsonify({"error": "Not logged in"}), 401
+    # Session is fully cleared + cookie expired on logout.
+    # Absence of user_id is the only check needed.
+    if "user_id" not in session: return jsonify({"error":"Not logged in"}),401
     with get_db() as db:
         u=db.execute("SELECT * FROM users WHERE id=?",(session["user_id"],)).fetchone()
         if not u: session.clear(); return jsonify({"error":"Not found"}),404
@@ -6666,7 +6658,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
                   marginBottom:1
                 }}
                 onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.12)';e.currentTarget.style.color='#93c5fd';}}}
-                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}><span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}}>${NAV_ICONS[it.id]||null}</span>
+                onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.7)';}}}>\n                <span style=${{flexShrink:0,width:col?'auto':16,display:'flex',alignItems:'center',justifyContent:'center',opacity:.8}}>${NAV_ICONS[it.id]||null}</span>
                 ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
                 ${it.id==='dm'&&dmUnread.reduce((a,x)=>a+(x.cnt||0),0)>0?html`<span style=${{minWidth:16,height:16,borderRadius:8,background:'#06b6d4',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>${dmUnread.reduce((a,x)=>a+(x.cnt||0),0)}</span>`:null}
               </button>`):null}
@@ -8272,7 +8264,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
-          ${RC&&RC.ResponsiveContainer?html`
+          ${(typeof RC!=='undefined'&&RC&&RC.ResponsiveContainer)?html`
           <${RC.ResponsiveContainer} width="100%" height=${120}>
             <${RC.PieChart}>
               <${RC.Pie} data=${priChart} cx="50%" cy="50%" innerRadius=${34} outerRadius=${52} dataKey="value" paddingAngle=${4} cursor="pointer"
@@ -8280,7 +8272,8 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
                 ${priChart.map((e,i)=>html`<${RC.Cell} key=${i} fill=${e.color}/>`)}<//>
               <${RC.Tooltip} contentStyle=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,color:'var(--tx)',fontSize:12}}/>
             <//>
-          <//>`:html`<div style=${{textAlign:'center',padding:'24px 0',color:'var(--tx3)',fontSize:12}}>Chart loading…</div>`}          ${priChart.map((item,i)=>html`
+          <//>`:html`<div style=${{padding:'20px 0',textAlign:'center',color:'var(--tx3)',fontSize:12}}>Loading chart…</div>`}
+          ${priChart.map((item,i)=>html`
             <div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'5px 0',borderBottom:i<3?'1px solid var(--bd)':'none',cursor:'pointer'}}
               onClick=${()=>onNav('tasks:priority:'+item.priKey)}>
               <div style=${{display:'flex',alignItems:'center',gap:7}}>
@@ -8667,7 +8660,7 @@ function ProductivityView({cu,tasks,projects,users}){
           <div style=${{padding:'16px 20px',display:'flex',flexDirection:'column',gap:14}}>
             <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'16px 20px'}}>
               <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:14}}>Task Distribution per Developer</h3>
-              ${RC&&RC.ResponsiveContainer?html`
+              ${(typeof RC!=='undefined'&&RC&&RC.ResponsiveContainer)?html`
               <${RC.ResponsiveContainer} width="100%" height=${Math.max(200,filtered.length*28)}>
                 <${RC.BarChart} data=${chartData} layout="vertical" barSize=${14} margin=${{top:0,right:30,bottom:0,left:60}}>
                   <${RC.CartesianGrid} strokeDasharray="3 3" stroke="var(--bd)" horizontal=${false}/>
@@ -8679,7 +8672,7 @@ function ProductivityView({cu,tasks,projects,users}){
                   <${RC.Bar} dataKey="In Progress" stackId="a" fill="var(--cy)" radius=${[0,0,0,0]}/>
                   <${RC.Bar} dataKey="Blocked" stackId="a" fill="var(--rd)" radius=${[0,4,4,0]}/>
                 <//>
-              <//>`:html`<div style=${{textAlign:'center',padding:'24px 0',color:'var(--tx3)',fontSize:12}}>Chart loading…</div>`}
+              <//>`:html`<div style=${{padding:'24px 0',textAlign:'center',color:'var(--tx3)',fontSize:12}}>Loading chart…</div>`}
               <p style=${{fontSize:10,color:'var(--tx3)',marginTop:8,textAlign:'center'}}>All ${filtered.length} developers shown — horizontal bars scale with task count</p>
             </div>
           </div>`:null}
@@ -12890,11 +12883,13 @@ function App(){
   },[cu]);
 
   useEffect(()=>{
-    // Must bypass cache — a stale /api/auth/me response could show a logged-out user as authenticated
+    // Must bypass browser cache — a stale cached response could show a logged-out
+    // user as authenticated (the 5s max-age on /api/* endpoints was the root cause)
     fetch('/api/auth/me',{credentials:'include',cache:'no-store'})
-      .then(r=>r.json())
-      .then(u=>{if(u&&!u.error)setCu(u);setLoading(false);})
-      .catch(()=>setLoading(false));
+      .then(r=>r.ok?r.json():Promise.reject())
+      .then(u=>{if(u&&!u.error)setCu(u);})
+      .catch(()=>{})
+      .finally(()=>setLoading(false));
   },[]);
   // Expose search opener for topbar button
   useEffect(()=>{window._pfOpenSearch=()=>{setShowGlobalSearch(v=>!v);setGlobalSearch('');setSearchSubtasks([]);};},[]);
@@ -13077,11 +13072,9 @@ function App(){
         body:JSON.stringify({})
       });
     }catch(e){}
-    // Clear all local state
     setCu(null);setData({users:[],projects:[],tasks:[],notifs:[]});setDmUnread([]);
-    // Clear any cached team context
     try{localStorage.removeItem('pf_team_ctx');}catch(e){}
-    // Hard redirect — replaceState ensures back-button can't return to app
+    // replace() removes the app from history — back button can't return to authenticated state
     window.location.replace('/?action=login&ts='+Date.now());
   };
 
