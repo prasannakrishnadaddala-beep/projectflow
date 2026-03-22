@@ -2379,6 +2379,104 @@ def _spawn_recurring_tasks():
     except Exception as e:
         print(f"Recurring tasks error: {e}")
 
+
+# ── AI Doc Generation ─────────────────────────────────────────────────────────
+@app.route("/api/docs/generate", methods=["POST"])
+@login_required
+def generate_doc():
+    d = request.json or {}
+    prompt = d.get("prompt","").strip()
+    doc_type = d.get("doc_type","general")  # general|architecture|api|readme|runbook
+    project_id = d.get("project_id","")
+    if not prompt: return jsonify({"error":"Prompt required"}),400
+
+    with get_db() as db:
+        ws = db.execute("SELECT ai_api_key,name FROM workspaces WHERE id=?",(wid(),)).fetchone()
+        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
+        if not api_key:
+            return jsonify({"error":"NO_KEY","message":"Configure your Anthropic API key in Settings to use AI doc generation."}),400
+
+        projects = db.execute("SELECT id,name,description FROM projects WHERE workspace_id=?",(wid(),)).fetchall()
+        proj_ctx = "\n".join([f"- {p['name']}: {p['description']}" for p in projects]) or "No projects"
+        proj_name = ""
+        if project_id:
+            p = db.execute("SELECT name,description FROM projects WHERE id=?",(project_id,)).fetchone()
+            if p: proj_name = p["name"]
+
+    TYPE_INSTRUCTIONS = {
+        "general": "Write a comprehensive, well-structured technical document. Use clear headings, bullet points where appropriate, and code blocks for any code examples.",
+        "architecture": """Write an architectural documentation document. Include:
+1. Overview section
+2. System components and their responsibilities
+3. A Mermaid.js architecture diagram (use ```mermaid code blocks with graph TD or flowchart LR syntax)
+4. Data flow description
+5. Technology stack
+6. Deployment considerations
+Make the Mermaid diagram detailed and accurate to the described system.""",
+        "api": """Write API documentation. Include:
+1. Overview
+2. Authentication
+3. Base URL
+4. Endpoints table with Method, Path, Description
+5. Request/Response examples in JSON code blocks
+6. Error codes""",
+        "readme": """Write a professional README.md. Include:
+1. Project title and badge line
+2. Short description
+3. Features list
+4. Installation steps (with code blocks)
+5. Usage examples
+6. Configuration
+7. Contributing section""",
+        "runbook": """Write an operational runbook. Include:
+1. Service overview
+2. Prerequisites
+3. Common operations (step by step)
+4. Troubleshooting guide
+5. Escalation contacts placeholder
+6. Monitoring and alerts"""
+    }
+
+    system = f"""You are a senior technical writer for the workspace "{ws['name'] if ws else 'VEWIT'}".
+Generate professional technical documentation based on the user's request.
+{TYPE_INSTRUCTIONS.get(doc_type, TYPE_INSTRUCTIONS['general'])}
+Projects in this workspace:
+{proj_ctx}
+{"Focus on the project: " + proj_name if proj_name else ""}
+Output ONLY the document content — no preamble, no meta-commentary.
+For Mermaid diagrams, always wrap in ```mermaid code fences."""
+
+    try:
+        req_data = json.dumps({
+            "model": "claude-sonnet-4-5",
+            "max_tokens": 3000,
+            "system": system,
+            "messages": [{"role":"user","content": prompt}]
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=req_data, method="POST",
+            headers={"Content-Type":"application/json","x-api-key":api_key,"anthropic-version":"2023-06-01"})
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            result = json.loads(resp.read().decode())
+            generated = result["content"][0]["text"]
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        if e.code == 401: return jsonify({"error":"INVALID_KEY","message":"Invalid API key."}),400
+        return jsonify({"error":"API_ERROR","message":f"AI error: {body[:200]}"}),500
+    except Exception as e:
+        return jsonify({"error":"NETWORK_ERROR","message":str(e)}),500
+
+    # Auto-save the generated doc
+    title_line = generated.split('\n')[0].lstrip('#').strip() or prompt[:60]
+    did = f"doc{int(__import__('time').time()*1000)}"
+    now = ts()
+    with get_db() as db:
+        db.execute("INSERT INTO docs VALUES (?,?,?,?,?,?,?,?,?)",
+                   (did, wid(), project_id, title_line, generated,
+                    session["user_id"], now, now, 0))
+    return jsonify({"ok":True,"id":did,"title":title_line,"content":generated})
+
 # ── Docs / Wiki ───────────────────────────────────────────────────────────────
 @app.route("/api/docs", methods=["GET"])
 @login_required
@@ -5668,9 +5766,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const NAV_ICONS={
     dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`, };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'kanban', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'goals', label:'Goals & OKRs'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'integrations', label:'Integrations'}, {id:'audit', label:'Audit Log'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Task Board'}, {id:'kanban', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'goals', label:'Goals & OKRs'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'calendar', label:'Calendar'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'docs', label:'Docs & Wiki'}, {id:'sprints', label:'Sprints'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -9159,13 +9257,20 @@ function WorkspaceSettings({cu,onReload}){
 
 
 /* ─── Calendar View ──────────────────────────────────────────────────────── */
-function CalendarView({tasks,projects,cu,onSetReminder,reload}){
+function CalendarView({tasks,projects,cu,reload}){
   const [cur,setCur]=useState(()=>new Date());
-  const [sel,setSel]=useState(null);
+  const [selDate,setSelDate]=useState(null);
+  const [showQuickAdd,setShowQuickAdd]=useState(false);
+  const [quickTitle,setQuickTitle]=useState('');
+  const [quickProject,setQuickProject]=useState('');
+  const [quickPriority,setQuickPriority]=useState('medium');
+  const [saving,setSaving]=useState(false);
   const year=cur.getFullYear(),month=cur.getMonth();
   const firstDay=new Date(year,month,1).getDay();
   const daysInMonth=new Date(year,month+1,0).getDate();
-  const monthName=cur.toLocaleString('default',{month:'long'});
+  const monthName=cur.toLocaleString('default',{month:'long',year:'numeric'});
+  const today=new Date().toISOString().slice(0,10);
+
   const tasksByDate={};
   safe(tasks).forEach(t=>{
     if(!t.due)return;
@@ -9173,57 +9278,150 @@ function CalendarView({tasks,projects,cu,onSetReminder,reload}){
     if(!tasksByDate[d])tasksByDate[d]=[];
     tasksByDate[d].push(t);
   });
-  const today=new Date().toISOString().slice(0,10);
-  const prev=()=>setCur(new Date(year,month-1,1));
-  const next=()=>setCur(new Date(year,month+1,1));
+
   const STAGE_COLOR={backlog:'#64748b',planning:'#7c3aed',inprogress:'#0891b2',review:'#d97706',testing:'#0e7490',completed:'#15803d',blocked:'#b91c1c'};
-  return html`<div style=${{flex:1,overflow:'auto',padding:'20px 24px'}}>
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-      <div style=${{display:'flex',alignItems:'center',gap:12}}>
+  const PRIO_COLOR={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e'};
+
+  const selectDay=(dateStr)=>{
+    setSelDate(prev=>prev===dateStr?null:dateStr);
+    setShowQuickAdd(false);
+    setQuickTitle('');
+  };
+
+  const quickAdd=async()=>{
+    if(!quickTitle.trim()||!selDate)return;
+    setSaving(true);
+    await api.post('/api/tasks',{title:quickTitle.trim(),due:selDate,project:quickProject,priority:quickPriority,stage:'backlog'});
+    setSaving(false);
+    setQuickTitle('');
+    setShowQuickAdd(false);
+    reload();
+  };
+
+  const dayTasks=selDate?(tasksByDate[selDate]||[]):[];
+
+  return html`<div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+    <!-- Header -->
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+      <div style=${{display:'flex',alignItems:'center',gap:14}}>
         <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📅 Calendar</h2>
-        <span style=${{fontSize:16,fontWeight:600,color:'var(--tx2)'}}>${monthName} ${year}</span>
+        <span style=${{fontSize:15,fontWeight:600,color:'var(--tx2)'}}>${monthName}</span>
       </div>
-      <div style=${{display:'flex',gap:8}}>
-        <button class="btn bg" onClick=${prev}>‹ Prev</button>
-        <button class="btn bg" onClick=${()=>setCur(new Date())}>Today</button>
-        <button class="btn bg" onClick=${next}>Next ›</button>
+      <div style=${{display:'flex',gap:6}}>
+        <button class="btn bg" style=${{fontSize:13,padding:'5px 12px'}} onClick=${()=>setCur(new Date(year,month-1,1))}>‹</button>
+        <button class="btn bg" style=${{fontSize:13,padding:'5px 12px'}} onClick=${()=>{setCur(new Date());setSelDate(today);}}>Today</button>
+        <button class="btn bg" style=${{fontSize:13,padding:'5px 12px'}} onClick=${()=>setCur(new Date(year,month+1,1))}>›</button>
       </div>
     </div>
-    <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1,background:'var(--bd)',borderRadius:10,overflow:'hidden',border:'1px solid var(--bd)'}}>
-      ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>html`
-        <div key=${d} style=${{background:'var(--sf2)',padding:'8px 0',textAlign:'center',fontSize:11,fontWeight:700,color:'var(--tx2)',letterSpacing:'.05em'}}>${d}</div>`)}
-      ${Array.from({length:firstDay}).map((_,i)=>html`<div key=${'e'+i} style=${{background:'var(--bg)',minHeight:90}}></div>`)}
-      ${Array.from({length:daysInMonth}).map((_,i)=>{
-        const day=i+1;
-        const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-        const dayTasks=tasksByDate[dateStr]||[];
-        const isToday=dateStr===today;
-        const isSel=sel===dateStr;
-        return html`
-          <div key=${day} onClick=${()=>setSel(isSel?null:dateStr)}
-            style=${{background:isSel?'rgba(var(--ac-rgb,37,99,235),0.08)':isToday?'rgba(37,99,235,0.05)':'var(--bg)',minHeight:90,padding:'6px 8px',cursor:'pointer',transition:'background .12s',borderTop:isToday?'2px solid var(--ac)':isSel?'2px solid var(--ac)':'2px solid transparent'}}>
-            <div style=${{fontSize:12,fontWeight:isToday?700:500,color:isToday?'var(--ac)':'var(--tx)',marginBottom:3}}>${day}</div>
-            ${dayTasks.slice(0,3).map(t=>html`
-              <div key=${t.id} title=${t.title}
-                style=${{fontSize:10,padding:'2px 5px',borderRadius:4,marginBottom:2,background:(STAGE_COLOR[t.stage]||'#3b82f6')+'22',color:STAGE_COLOR[t.stage]||'#3b82f6',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
-                ${t.title}</div>`)}
-            ${dayTasks.length>3?html`<div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>+${dayTasks.length-3} more</div>`:null}
-          </div>`;
-      })}
+
+    <div style=${{display:'flex',flex:1,overflow:'hidden'}}>
+      <!-- Calendar Grid -->
+      <div style=${{flex:1,overflowY:'auto',padding:'16px 20px'}}>
+        <!-- Day headers -->
+        <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:2}}>
+          ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>html`
+            <div key=${d} style=${{textAlign:'center',fontSize:11,fontWeight:700,color:'var(--tx3)',padding:'6px 0',letterSpacing:'.06em'}}>${d}</div>`)}
+        </div>
+        <!-- Day cells -->
+        <div style=${{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+          ${Array.from({length:firstDay}).map((_,i)=>html`
+            <div key=${'e'+i} style=${{minHeight:80,background:'var(--sf2)',borderRadius:6,opacity:.3}}></div>`)}
+          ${Array.from({length:daysInMonth}).map((_,i)=>{
+            const day=i+1;
+            const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            const dayT=tasksByDate[dateStr]||[];
+            const isToday=dateStr===today;
+            const isSel=selDate===dateStr;
+            const hasOverdue=dayT.some(t=>t.stage!=='completed'&&dateStr<today);
+            return html`
+              <div key=${day}
+                onClick=${()=>selectDay(dateStr)}
+                style=${{
+                  minHeight:80,borderRadius:8,padding:'6px 7px',cursor:'pointer',
+                  background:isSel?'rgba(37,99,235,0.12)':isToday?'rgba(37,99,235,0.05)':'var(--sf)',
+                  border:isSel?'2px solid var(--ac)':isToday?'2px solid rgba(37,99,235,0.35)':'2px solid var(--bd)',
+                  transition:'all .12s',position:'relative',
+                  boxShadow:isSel?'0 0 0 3px rgba(37,99,235,0.15)':'none'
+                }}>
+                <div style=${{
+                  fontSize:13,fontWeight:isToday?800:500,marginBottom:4,lineHeight:1,
+                  color:isToday?'var(--ac)':isSel?'var(--ac)':'var(--tx)'
+                }}>${day}</div>
+                ${dayT.slice(0,2).map(t=>html`
+                  <div key=${t.id} title=${t.title} style=${{
+                    fontSize:10,padding:'2px 5px',borderRadius:3,marginBottom:2,
+                    background:(STAGE_COLOR[t.stage]||'#3b82f6')+'25',
+                    color:STAGE_COLOR[t.stage]||'#3b82f6',fontWeight:600,
+                    whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',lineHeight:1.4
+                  }}>${t.title}</div>`)}
+                ${dayT.length>2?html`<div style=${{fontSize:9,color:'var(--tx3)',fontWeight:600}}>+${dayT.length-2} more</div>`:null}
+                ${!dayT.length?html`<div style=${{position:'absolute',bottom:5,right:6,fontSize:10,color:'var(--tx3)',opacity:.4}}>+</div>`:null}
+              </div>`;
+          })}
+        </div>
+        <!-- Legend -->
+        <div style=${{display:'flex',gap:14,marginTop:14,flexWrap:'wrap'}}>
+          ${Object.entries(STAGE_COLOR).map(([s,c])=>html`
+            <div key=${s} style=${{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--tx3)'}}>
+              <div style=${{width:8,height:8,borderRadius:2,background:c}}></div>${s}
+            </div>`)}
+        </div>
+      </div>
+
+      <!-- Side panel — selected date detail -->
+      ${selDate?html`
+        <div style=${{width:300,borderLeft:'1px solid var(--bd)',display:'flex',flexDirection:'column',flexShrink:0}}>
+          <!-- Date header -->
+          <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+            <div style=${{fontWeight:700,fontSize:15,color:'var(--tx)'}}>${new Date(selDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
+            <div style=${{fontSize:12,color:'var(--tx3)',marginTop:2}}>${dayTasks.length} task${dayTasks.length!==1?'s':''} due</div>
+          </div>
+          <!-- Task list -->
+          <div style=${{flex:1,overflowY:'auto',padding:'10px 12px'}}>
+            ${dayTasks.length?dayTasks.map(t=>html`
+              <div key=${t.id} style=${{padding:'9px 10px',borderRadius:8,background:'var(--sf)',border:'1px solid var(--bd)',marginBottom:7}}>
+                <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',marginBottom:4,lineHeight:1.35}}>${t.title}</div>
+                <div style=${{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:(STAGE_COLOR[t.stage]||'#888')+'22',color:STAGE_COLOR[t.stage]||'#888',fontWeight:700}}>${t.stage}</span>
+                  <span style=${{fontSize:10,padding:'1px 6px',borderRadius:4,background:(PRIO_COLOR[t.priority]||'#888')+'22',color:PRIO_COLOR[t.priority]||'#888',fontWeight:600}}>${t.priority}</span>
+                </div>
+              </div>`):
+            html`<div style=${{textAlign:'center',padding:'30px 0',color:'var(--tx3)'}}>
+              <div style=${{fontSize:28,marginBottom:8}}>📋</div>
+              <div style=${{fontSize:13}}>No tasks due</div>
+            </div>`}
+          </div>
+          <!-- Quick add task -->
+          <div style=${{borderTop:'1px solid var(--bd)',padding:'12px 14px',flexShrink:0}}>
+            ${!showQuickAdd?html`
+              <button class="btn bp" style=${{width:'100%',fontSize:13}} onClick=${()=>setShowQuickAdd(true)}>+ Add Task on ${selDate.slice(5)}</button>`:
+            html`<div style=${{display:'flex',flexDirection:'column',gap:7}}>
+              <input class="inp" autoFocus placeholder="Task title…" value=${quickTitle}
+                onInput=${e=>setQuickTitle(e.target.value)}
+                onKeyDown=${e=>{if(e.key==='Enter')quickAdd();if(e.key==='Escape')setShowQuickAdd(false);}}
+                style=${{height:34,fontSize:13}}/>
+              <div style=${{display:'flex',gap:6}}>
+                <select class="inp" style=${{flex:1,height:30,fontSize:12}} value=${quickProject} onChange=${e=>setQuickProject(e.target.value)}>
+                  <option value="">No project</option>
+                  ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
+                </select>
+                <select class="inp" style=${{width:90,height:30,fontSize:12}} value=${quickPriority} onChange=${e=>setQuickPriority(e.target.value)}>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div style=${{display:'flex',gap:6}}>
+                <button class="btn bp" style=${{flex:1,fontSize:12}} onClick=${quickAdd} disabled=${saving||!quickTitle.trim()}>${saving?'Adding…':'Add Task'}</button>
+                <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setShowQuickAdd(false)}>Cancel</button>
+              </div>
+            </div>`}
+          </div>
+        </div>`:null}
     </div>
-    ${sel&&tasksByDate[sel]?html`
-      <div style=${{marginTop:16,padding:16,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10}}>
-        <div style=${{fontWeight:700,color:'var(--tx)',marginBottom:8}}>${sel} — ${tasksByDate[sel].length} task(s)</div>
-        ${tasksByDate[sel].map(t=>html`
-          <div key=${t.id} style=${{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--bd)'}}>
-            <span style=${{fontSize:10,padding:'2px 6px',borderRadius:4,background:(STAGE_COLOR[t.stage]||'#3b82f6')+'22',color:STAGE_COLOR[t.stage]||'#3b82f6',fontWeight:700,minWidth:64,textAlign:'center'}}>${t.stage}</span>
-            <span style=${{flex:1,fontSize:13,color:'var(--tx)'}}>${t.title}</span>
-            <span style=${{fontSize:11,color:'var(--tx3)'}}>${t.priority}</span>
-          </div>`)}
-      </div>`:null}
   </div>`;
 }
-
 /* ─── Kanban Board View ──────────────────────────────────────────────────── */
 function KanbanView({tasks,projects,users,cu,reload}){
   const STAGES=['backlog','planning','inprogress','review','testing','completed','blocked'];
@@ -9294,78 +9492,228 @@ function DocsView({projects,cu}){
   const [form,setForm]=useState({title:'',content:'',project_id:'',is_public:false});
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState('');
+  const [aiPanel,setAiPanel]=useState(false);
+  const [aiPrompt,setAiPrompt]=useState('');
+  const [aiDocType,setAiDocType]=useState('general');
+  const [aiProject,setAiProject]=useState('');
+  const [aiGenerating,setAiGenerating]=useState(false);
+  const [aiError,setAiError]=useState('');
+  const [renderMermaid,setRenderMermaid]=useState(false);
+
   const load=async()=>{setLoading(true);const r=await api.get('/api/docs');setDocs(r||[]);setLoading(false);};
   useEffect(()=>{load();},[]);
+
+  // Render Mermaid diagrams after content mounts
+  useEffect(()=>{
+    if(!sel||!renderMermaid)return;
+    const timer=setTimeout(()=>{
+      try{
+        if(window.mermaid){
+          window.mermaid.initialize({startOnLoad:false,theme:'default',securityLevel:'loose'});
+          document.querySelectorAll('.mermaid-src').forEach(async(el)=>{
+            try{
+              const id='mmd'+Math.random().toString(36).slice(2);
+              const {svg}=await window.mermaid.render(id,el.textContent.trim());
+              const wrapper=el.parentElement;
+              if(wrapper){wrapper.innerHTML=svg;wrapper.style.background='var(--sf2)';wrapper.style.padding='16px';wrapper.style.borderRadius='8px';}
+            }catch(e){console.warn('Mermaid render:',e);}
+          });
+        }
+      }catch(e){}
+    },100);
+    return()=>clearTimeout(timer);
+  },[sel,renderMermaid]);
+
   const save=async()=>{
     if(sel?.id){await api.put(`/api/docs/${sel.id}`,form);}
-    else{const r=await api.post('/api/docs',form);if(r?.id){setSel({...form,id:r.id});}}
+    else{const r=await api.post('/api/docs',form);if(r?.id)setSel({...form,id:r.id,author_name:cu?.name||''});}
     load();setEditing(false);
   };
+
   const del=async(id)=>{if(!confirm('Delete this doc?'))return;await api.del(`/api/docs/${id}`);setSel(null);load();};
+
+  const generateWithAI=async()=>{
+    if(!aiPrompt.trim())return;
+    setAiGenerating(true);setAiError('');
+    try{
+      const r=await api.post('/api/docs/generate',{prompt:aiPrompt,doc_type:aiDocType,project_id:aiProject});
+      if(r?.error){setAiError(r.message||r.error);}
+      else if(r?.content){
+        setAiPanel(false);
+        setAiPrompt('');
+        setSel({id:r.id,title:r.title,content:r.content,author_name:cu?.name||'AI',updated:new Date().toISOString()});
+        setForm({title:r.title,content:r.content,project_id:aiProject,is_public:false});
+        setRenderMermaid(true);
+        load();
+      }
+    }catch(e){setAiError('Failed to connect to AI service.');}
+    setAiGenerating(false);
+  };
+
+  // Render content with Mermaid diagram support
+  const renderContent=(text)=>{
+    const parts=[];
+    const re=/```mermaid\n([\s\S]*?)```/g;
+    let last=0,m,i=0;
+    while((m=re.exec(text))!==null){
+      if(m.index>last)parts.push(html`<span key=${'t'+i} style=${{whiteSpace:'pre-wrap'}}>${text.slice(last,m.index)}</span>`);
+      parts.push(html`<div key=${'d'+i} style=${{margin:'16px 0',border:'1px solid var(--bd)',borderRadius:8,overflow:'hidden'}}>
+        <div style=${{background:'var(--sf2)',padding:'6px 12px',fontSize:11,fontWeight:700,color:'var(--tx3)',borderBottom:'1px solid var(--bd)'}}>ARCHITECTURE DIAGRAM</div>
+        <div style=${{padding:16,overflowX:'auto'}}><pre class="mermaid-src" style=${{margin:0,fontSize:13,color:'var(--tx)'}}>${m[1]}</pre></div>
+      </div>`);
+      last=m.index+m[0].length;i++;
+    }
+    if(last<text.length)parts.push(html`<span key=${'t'+i} style=${{whiteSpace:'pre-wrap'}}>${text.slice(last)}</span>`);
+    return parts;
+  };
+
   const filtered=docs.filter(d=>!search||d.title.toLowerCase().includes(search.toLowerCase()));
+  const DOC_TYPES=[
+    {id:'general',label:'📝 General Doc',desc:'Structured technical document'},
+    {id:'architecture',label:'🏗 Architecture',desc:'System design + diagram'},
+    {id:'api',label:'🔌 API Docs',desc:'Endpoints & examples'},
+    {id:'readme',label:'📦 README',desc:'Project readme file'},
+    {id:'runbook',label:'⚙️ Runbook',desc:'Operational procedures'},
+  ];
+
   return html`<div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-    <div style=${{display:'flex',alignItems:'center',gap:12,padding:'16px 20px',borderBottom:'1px solid var(--bd)'}}>
+    <!-- Top bar -->
+    <div style=${{display:'flex',alignItems:'center',gap:10,padding:'14px 20px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
       <h2 style=${{margin:0,fontSize:20,fontWeight:700,color:'var(--tx)'}}>📄 Docs & Wiki</h2>
-      <input class="inp" placeholder="Search docs…" value=${search} onInput=${e=>setSearch(e.target.value)} style=${{width:180,height:32,fontSize:13,marginLeft:'auto'}}/>
-      <button class="btn bp" onClick=${()=>{setSel(null);setForm({title:'',content:'',project_id:'',is_public:false});setEditing(true);}}>+ New Doc</button>
+      <input class="inp" placeholder="Search docs…" value=${search} onInput=${e=>setSearch(e.target.value)}
+        style=${{width:160,height:30,fontSize:13,marginLeft:'auto'}}/>
+      <button class="btn bg" style=${{fontSize:13,padding:'5px 14px',display:'flex',alignItems:'center',gap:6}}
+        onClick=${()=>{setAiPanel(true);setSel(null);setEditing(false);}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+        AI Generate
+      </button>
+      <button class="btn bp" style=${{fontSize:13,padding:'5px 14px'}}
+        onClick=${()=>{setSel(null);setForm({title:'',content:'',project_id:'',is_public:false});setEditing(true);setAiPanel(false);}}>+ New Doc</button>
     </div>
+
     <div style=${{display:'flex',flex:1,overflow:'hidden'}}>
-      <div style=${{width:240,borderRight:'1px solid var(--bd)',overflowY:'auto',padding:12}}>
-        ${loading?html`<div class="tx3-11" style=${{textAlign:'center',marginTop:20}}>Loading…</div>`:null}
+      <!-- Sidebar list -->
+      <div style=${{width:220,borderRight:'1px solid var(--bd)',overflowY:'auto',padding:'10px 8px',flexShrink:0}}>
+        ${loading?html`<div style=${{textAlign:'center',padding:20,color:'var(--tx3)',fontSize:12}}>Loading…</div>`:null}
         ${filtered.map(d=>html`
-          <div key=${d.id} onClick=${()=>{setSel(d);setForm({title:d.title,content:d.content||'',project_id:d.project_id||'',is_public:!!d.is_public});setEditing(false);}}
-            style=${{padding:'8px 10px',borderRadius:7,cursor:'pointer',marginBottom:4,background:sel?.id===d.id?'rgba(37,99,235,0.1)':'transparent',border:sel?.id===d.id?'1px solid rgba(37,99,235,0.3)':'1px solid transparent'}}>
+          <div key=${d.id}
+            onClick=${()=>{setSel(d);setForm({title:d.title,content:d.content||'',project_id:d.project_id||'',is_public:!!d.is_public});setEditing(false);setAiPanel(false);setRenderMermaid(true);}}
+            style=${{padding:'8px 10px',borderRadius:7,cursor:'pointer',marginBottom:3,
+              background:sel?.id===d.id?'rgba(37,99,235,0.1)':'transparent',
+              border:sel?.id===d.id?'1px solid rgba(37,99,235,0.3)':'1px solid transparent'}}>
             <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>${d.title}</div>
-            <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${d.author_name||''} · ${(d.updated||'').slice(0,10)}</div>
+            <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${(d.updated||'').slice(0,10)}</div>
           </div>`)}
-        ${!loading&&!filtered.length?html`<div style=${{fontSize:13,color:'var(--tx3)',textAlign:'center',marginTop:24}}>No docs yet</div>`:null}
+        ${!loading&&!filtered.length?html`<div style=${{textAlign:'center',padding:'28px 12px',color:'var(--tx3)',fontSize:12}}>No docs yet.<br/>Use AI Generate or New Doc.</div>`:null}
       </div>
-      <div style=${{flex:1,overflowY:'auto',padding:'20px 24px'}}>
-        ${editing?html`
+
+      <!-- Main area -->
+      <div style=${{flex:1,overflowY:'auto',padding:'20px 28px',minWidth:0}}>
+
+        ${/* AI Generator Panel */aiPanel?html`
+          <div style=${{maxWidth:720}}>
+            <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+              <div style=${{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,rgba(37,99,235,.2),rgba(124,58,237,.2))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>✨</div>
+              <div>
+                <div style=${{fontWeight:700,fontSize:16,color:'var(--tx)'}}>AI Documentation Generator</div>
+                <div style=${{fontSize:12,color:'var(--tx3)'}}>Describe what to document — AI will write it for you, including architecture diagrams</div>
+              </div>
+              <button style=${{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)',fontSize:18}} onClick=${()=>setAiPanel(false)}>✕</button>
+            </div>
+
+            <!-- Doc type selector -->
+            <div style=${{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:16}}>
+              ${DOC_TYPES.map(t=>html`
+                <div key=${t.id} onClick=${()=>setAiDocType(t.id)}
+                  style=${{padding:'10px 8px',borderRadius:10,border:aiDocType===t.id?'2px solid var(--ac)':'2px solid var(--bd)',cursor:'pointer',textAlign:'center',background:aiDocType===t.id?'rgba(37,99,235,0.08)':'var(--sf)',transition:'all .12s'}}>
+                  <div style=${{fontSize:16,marginBottom:4}}>${t.label.split(' ')[0]}</div>
+                  <div style=${{fontSize:11,fontWeight:700,color:aiDocType===t.id?'var(--ac)':'var(--tx)'}}>${t.label.slice(2)}</div>
+                  <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${t.desc}</div>
+                </div>`)}
+            </div>
+
+            <div style=${{display:'flex',gap:8,marginBottom:12}}>
+              <select class="inp" style=${{width:180,height:34,fontSize:13}} value=${aiProject} onChange=${e=>setAiProject(e.target.value)}>
+                <option value="">No specific project</option>
+                ${projects.map(p=>html`<option value=${p.id}>${p.name}</option>`)}
+              </select>
+            </div>
+
+            <textarea class="inp" value=${aiPrompt} onInput=${e=>setAiPrompt(e.target.value)}
+              placeholder=${
+                aiDocType==='architecture'?'Describe your system: e.g. "A microservices platform with an API gateway, auth service, PostgreSQL database, Redis cache, and React frontend deployed on AWS"':
+                aiDocType==='api'?'Describe your API: e.g. "REST API for a task management system with endpoints for users, projects, tasks and comments"':
+                aiDocType==='readme'?'Describe the project: e.g. "VEWIT — an AI-powered team collaboration platform built with Flask and React"':
+                aiDocType==='runbook'?'Describe the service: e.g. "Python Flask web service deployed on Railway with PostgreSQL database and Redis"':
+                'What do you want to document? e.g. "Our deployment process for the backend API including environment setup, database migrations and health checks"'
+              }
+              style=${{width:'100%',minHeight:120,fontSize:14,lineHeight:1.6,resize:'vertical',marginBottom:12}}></textarea>
+
+            ${aiError?html`<div style=${{padding:'10px 14px',background:'rgba(185,28,28,0.1)',border:'1px solid rgba(185,28,28,0.3)',borderRadius:8,color:'#b91c1c',fontSize:13,marginBottom:12}}>${aiError}</div>`:null}
+
+            <div style=${{display:'flex',gap:8,alignItems:'center'}}>
+              <button class="btn bp" style=${{fontSize:14,padding:'9px 20px',display:'flex',alignItems:'center',gap:8}}
+                onClick=${generateWithAI} disabled=${aiGenerating||!aiPrompt.trim()}>
+                ${aiGenerating?html`<span class="spin"></span>`:html`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>`}
+                ${aiGenerating?'Generating…':'Generate Document'}
+              </button>
+              <span style=${{fontSize:12,color:'var(--tx3)'}}>Uses your workspace AI key · Auto-saved on completion</span>
+            </div>
+          </div>`:null}
+
+        ${/* Edit / Create form */editing?html`
           <div style=${{maxWidth:760}}>
             <input class="inp" value=${form.title} onInput=${e=>setForm({...form,title:e.target.value})}
-              placeholder="Document title…" style=${{width:'100%',fontSize:18,fontWeight:700,marginBottom:12,height:44}}/>
+              placeholder="Document title…" style=${{width:'100%',fontSize:18,fontWeight:700,marginBottom:12,height:46}}/>
             <div style=${{display:'flex',gap:10,marginBottom:12}}>
               <select class="inp" style=${{flex:1,height:34}} value=${form.project_id} onChange=${e=>setForm({...form,project_id:e.target.value})}>
                 <option value="">No project</option>
                 ${projects.map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
               </select>
-              <label style=${{display:'flex',alignItems:'center',gap:6,fontSize:13,color:'var(--tx2)',cursor:'pointer'}}>
+              <label style=${{display:'flex',alignItems:'center',gap:6,fontSize:13,color:'var(--tx2)',cursor:'pointer',padding:'0 10px'}}>
                 <input type="checkbox" checked=${form.is_public} onChange=${e=>setForm({...form,is_public:e.target.checked})}/> Public
               </label>
             </div>
             <textarea class="inp" value=${form.content} onInput=${e=>setForm({...form,content:e.target.value})}
-              placeholder="Write your doc in plain text or Markdown…"
-              style=${{width:'100%',minHeight:320,fontSize:14,lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}></textarea>
+              placeholder="Write in Markdown. Wrap Mermaid diagrams in \`\`\`mermaid blocks for auto-rendering…"
+              style=${{width:'100%',minHeight:380,fontSize:14,lineHeight:1.7,resize:'vertical',fontFamily:'var(--font-mono,monospace)'}}></textarea>
             <div style=${{display:'flex',gap:8,marginTop:12}}>
-              <button class="btn bp" onClick=${save}>Save</button>
-              <button class="btn bg" onClick=${()=>{setEditing(false);if(!sel)setSel(null);}}>Cancel</button>
+              <button class="btn bp" onClick=${save}>Save Document</button>
+              <button class="btn bg" onClick=${()=>{setEditing(false);}}>Cancel</button>
             </div>
-          </div>`:
-        sel?html`
+          </div>`:null}
+
+        ${/* Doc viewer */sel&&!editing&&!aiPanel?html`
           <div style=${{maxWidth:760}}>
-            <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}>
-              <h1 style=${{fontSize:22,fontWeight:700,color:'var(--tx)',margin:0}}>${sel.title}</h1>
-              <div style=${{display:'flex',gap:8}}>
-                <button class="btn bg" style=${{fontSize:12}} onClick=${()=>setEditing(true)}>✏️ Edit</button>
-                <button class="btn br" style=${{fontSize:12}} onClick=${()=>del(sel.id)}>🗑</button>
+            <div style=${{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16,gap:12}}>
+              <h1 style=${{fontSize:22,fontWeight:700,color:'var(--tx)',margin:0,lineHeight:1.3}}>${sel.title}</h1>
+              <div style=${{display:'flex',gap:6,flexShrink:0}}>
+                <button class="btn bg" style=${{fontSize:12,padding:'5px 12px'}} onClick=${()=>setEditing(true)}>✏️ Edit</button>
+                <button class="btn br" style=${{fontSize:12,padding:'5px 10px'}} onClick=${()=>del(sel.id)}>🗑</button>
               </div>
             </div>
-            <div style=${{fontSize:12,color:'var(--tx3)',marginBottom:20}}>
-              By ${sel.author_name||''} · ${(sel.updated||'').slice(0,10)}
-              ${sel.is_public?html`<span style=${{marginLeft:8,background:'rgba(21,128,61,0.15)',color:'#15803d',padding:'1px 7px',borderRadius:99,fontWeight:600}}>Public</span>`:null}
+            <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:24,paddingBottom:16,borderBottom:'1px solid var(--bd)'}}>
+              <span style=${{fontSize:12,color:'var(--tx3)'}}>${sel.author_name||'Unknown'} · Updated ${(sel.updated||'').slice(0,10)}</span>
+              ${sel.is_public?html`<span style=${{fontSize:11,fontWeight:700,padding:'1px 8px',borderRadius:99,background:'rgba(21,128,61,0.15)',color:'#15803d'}}>Public</span>`:null}
             </div>
-            <div style=${{fontSize:15,color:'var(--tx)',lineHeight:1.75,whiteSpace:'pre-wrap'}}>${sel.content||'(empty)'}</div>
-          </div>`:
-        html`<div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx3)'}}>
-          <div style=${{fontSize:40,marginBottom:12}}>📄</div>
-          <div style=${{fontSize:15,fontWeight:600}}>Select a doc or create a new one</div>
-        </div>`}
+            <div style=${{fontSize:15,color:'var(--tx)',lineHeight:1.8}}>
+              ${renderContent(sel.content||'*(empty document)*')}
+            </div>
+          </div>`:null}
+
+        ${/* Empty state */!sel&&!editing&&!aiPanel?html`
+          <div style=${{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'var(--tx3)',gap:16}}>
+            <div style=${{fontSize:52}}>📄</div>
+            <div style=${{textAlign:'center'}}>
+              <div style=${{fontSize:16,fontWeight:700,color:'var(--tx)',marginBottom:6}}>Docs & Wiki</div>
+              <div style=${{fontSize:13,maxWidth:280,lineHeight:1.6}}>Select a document from the sidebar, or use <b>AI Generate</b> to create architecture docs, API references, runbooks and more.</div>
+            </div>
+            <button class="btn bp" style=${{fontSize:13}} onClick=${()=>setAiPanel(true)}>✨ Try AI Generate</button>
+          </div>`:null}
       </div>
     </div>
   </div>`;
 }
-
 /* ─── Goals / OKRs View ──────────────────────────────────────────────────── */
 function GoalsView({cu,users}){
   const [goals,setGoals]=useState([]);
@@ -10417,7 +10765,7 @@ function HuddleCall(){return null;}
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','kanban','docs','goals','sprints','integrations','audit'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','calendar','docs','sprints'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -10449,12 +10797,12 @@ function App(){
   });
   // Keep browser URL in sync with current view
   const VIEW_TITLES={
-    dashboard:'Dashboard',projects:'Projects',tasks:'Task Board',
+    dashboard:'Dashboard',projects:'Projects',tasks:'Kanban Board',
     messages:'Channels',dm:'Direct Messages',tickets:'Tickets',
     timeline:'Timeline Tracker',reminders:'Reminders',
     settings:'Settings',team:'Team Management',productivity:'Dev Productivity',
-    calendar:'Calendar',kanban:'Kanban Board',docs:'Docs & Wiki',
-    goals:'Goals & OKRs',sprints:'Sprints',integrations:'Integrations',audit:'Audit Log'
+    calendar:'Calendar',docs:'Docs & Wiki',sprints:'Sprints',
+    tasks:'Kanban Board'
   };
   const _setView=useCallback((v)=>{
     setView(v);
@@ -10870,7 +11218,7 @@ function App(){
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Task Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, };
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, };
 
   const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
@@ -10942,12 +11290,8 @@ function App(){
             ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             ${baseView==='calendar'?html`<${CalendarView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
-            ${baseView==='kanban'?html`<${KanbanView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load}/>`:null}
             ${baseView==='docs'?html`<${DocsView} projects=${scopedProjects} cu=${cu}/>`:null}
-            ${baseView==='goals'?html`<${GoalsView} cu=${cu} users=${scopedUsers}/>`:null}
             ${baseView==='sprints'?html`<${SprintsView} tasks=${scopedTasks} projects=${scopedProjects} cu=${cu} reload=${load}/>`:null}
-            ${baseView==='integrations'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${IntegrationsView} cu=${cu}/>`:null}
-            ${baseView==='audit'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${AuditLogView} cu=${cu}/>`:null}
             </div>
           <//>
         </div>
