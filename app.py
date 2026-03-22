@@ -3068,372 +3068,6 @@ def icon_512():
         headers={'Cache-Control':'public,max-age=86400'})
 
 
-@app.route("/about")
-def about_page():
-    """Public About page — indexed by Google, no login required."""
-    return """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>About VEWIT — AI-Powered Team Collaboration Platform</title>
-<link rel="icon" type="image/png" href="/icon-192.png"/>
-<link rel="shortcut icon" href="/favicon.ico"/>
-<meta name="description" content="VEWIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
-<meta name="keywords" content="VEWIT, team collaboration, project management, task management, AI assistant, direct messages, developer productivity, support tickets"/>
-<meta name="robots" content="index, follow"/>
-<link rel="canonical" href="https://www.vewit.in/about"/>
-<meta property="og:title" content="About VEWIT — AI-Powered Team Collaboration"/>
-<meta property="og:description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, tickets and analytics all in one place."/>
-<meta property="og:url" content="https://www.vewit.in/about"/>
-<meta property="og:type" content="website"/>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization",
-"name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
-"foundingDate":"2024","applicationCategory":"BusinessApplication",
-"sameAs":["https://www.vewit.in"]}
-</script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1e293b;background:#fff;line-height:1.6}
-.nav{background:#0f172a;padding:16px 40px;display:flex;align-items:center;justify-content:space-between}
-.nav-logo{color:#fff;font-size:20px;font-weight:800;letter-spacing:-0.5px;text-decoration:none}
-.nav-logo span{color:#2563eb}
-.nav-cta{background:#2563eb;color:#fff;padding:9px 22px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700}
-.hero{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:#fff;padding:80px 40px;text-align:center}
-.hero h1{font-size:clamp(28px,5vw,52px);font-weight:800;letter-spacing:-1px;margin-bottom:20px;line-height:1.15}
-.hero h1 span{color:#60a5fa}
-.hero p{font-size:18px;color:#94a3b8;max-width:640px;margin:0 auto 36px}
-.hero-cta{display:inline-block;background:#2563eb;color:#fff;padding:14px 36px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-right:12px}
-.hero-sec{display:inline-block;border:1px solid rgba(255,255,255,.25);color:#cbd5e1;padding:13px 28px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600}
-.section{padding:72px 40px;max-width:1100px;margin:0 auto}
-.section-label{font-size:12px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
-.section h2{font-size:clamp(24px,3.5vw,38px);font-weight:800;letter-spacing:-0.5px;margin-bottom:16px;color:#0f172a}
-.section p{color:#475569;font-size:16px;max-width:680px}
-.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:48px}
-.feat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:28px;transition:box-shadow .2s}
-.feat:hover{box-shadow:0 8px 32px rgba(37,99,235,.1)}
-.feat-icon{width:48px;height:48px;background:#eff6ff;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px}
-.feat h3{font-size:16px;font-weight:700;color:#0f172a;margin-bottom:8px}
-.feat p{font-size:14px;color:#64748b;line-height:1.55}
-.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-top:36px}
-.role{background:#f1f5f9;border-radius:12px;padding:20px;text-align:center}
-.role-icon{font-size:28px;margin-bottom:8px}
-.role h4{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px}
-.role p{font-size:12px;color:#64748b}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px;background:#0f172a;border-radius:20px;padding:48px;margin-top:48px}
-.stat{text-align:center;color:#fff}
-.stat-num{font-size:42px;font-weight:800;color:#60a5fa;display:block;letter-spacing:-1px}
-.stat-label{font-size:13px;color:#94a3b8;margin-top:4px}
-.divider{height:1px;background:#e2e8f0;margin:0 40px}
-footer{background:#0f172a;color:#94a3b8;padding:40px;text-align:center;font-size:13px}
-footer a{color:#60a5fa;text-decoration:none}
-footer .footer-links{display:flex;justify-content:center;gap:32px;margin-bottom:16px;flex-wrap:wrap}
-</style>
-</head>
-<body>
-
-<nav class="nav">
-  <a href="/" class="nav-logo">VEWIT</a>
-  <a href="/?action=login" class="nav-cta">Sign In →</a>
-</nav>
-
-<section class="hero">
-  <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);padding:5px 14px;border-radius:100px;margin-bottom:20px">
-    <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e"></span>
-    <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.8);letter-spacing:.06em;text-transform:uppercase">Free to start · No credit card</span>
-  </div>
-  <h1>AI-Powered <span>Project Management</span><br/>&amp; Team Collaboration Platform</h1>
-  <p>VEWIT replaces Jira, Slack and Linear with one unified platform — project management, task tracking, direct messaging, support tickets, timeline planning and AI-powered analytics for your entire team.</p>
-  <a href="/?action=register" class="hero-cta">Get Started Free</a>
-  <a href="/?action=login" class="hero-sec">Sign In</a>
-  <div style="display:flex;gap:24px;justify-content:center;margin-top:28px;flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> Free workspace</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> AI assistant included</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> 12+ modules built-in</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.5)"><span style="color:#22c55e;font-weight:700">✓</span> No credit card needed</div>
-  </div>
-</section>
-
-<div class="section">
-  <div class="section-label">What is VEWIT</div>
-  <h2>Everything your team needs, in one place</h2>
-  <p>VEWIT is a multi-workspace team collaboration platform powered by AI. Teams use VEWIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
-
-  <div class="features">
-    <div class="feat">
-      <div class="feat-icon">📋</div>
-      <h3>Project Management</h3>
-      <p>Create and manage multiple projects with team assignments, progress tracking, target dates and priority management. Filter projects by team and track completion rates in real time.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">✅</div>
-      <h3>Smart Kanban Board</h3>
-      <p>Kanban-style task board with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders. Assign tasks to specific team members with role-based access.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">💬</div>
-      <h3>Direct Messages</h3>
-      <p>Private one-to-one messaging between team members with real-time online presence indicators, message history and unread notification badges. See who is active at a glance.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">#️⃣</div>
-      <h3>Project Channels</h3>
-      <p>Dedicated message channels per project for focused team communication. Share updates, files and decisions in context without cluttering direct messages.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🎫</div>
-      <h3>Support Tickets</h3>
-      <p>Full ticketing system with bug reports, feature requests, priority levels, assignee tracking, status workflows and team-based filtering. Close issues faster with full context.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">📅</div>
-      <h3>Timeline Tracker</h3>
-      <p>Visual Gantt-style timeline to plan project schedules, track milestones and identify overlapping workloads across your entire team. Navigate weeks and months effortlessly.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">📊</div>
-      <h3>Developer Productivity</h3>
-      <p>Analytics dashboard measuring individual and team output — completed tasks, velocity, blocked work, sprint performance and project contribution breakdowns.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🤖</div>
-      <h3>AI Assistant</h3>
-      <p>Built-in AI assistant powered by Anthropic Claude. Ask questions about your projects and tasks, get summaries, generate task descriptions and get intelligent suggestions.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">⏰</div>
-      <h3>Smart Reminders</h3>
-      <p>Set reminders on tasks and deadlines. Get desktop push notifications at the right time so nothing falls through the cracks — even when the app is in the background.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🔔</div>
-      <h3>Push Notifications</h3>
-      <p>Real-time notifications for task assignments, status changes, comments, direct messages and reminders. Desktop and in-app notifications route you directly to the relevant item.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">👥</div>
-      <h3>Team Management</h3>
-      <p>Create sub-teams within your workspace, assign team leads, add members and filter all views by team. Admins control roles, permissions and workspace settings.</p>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🏢</div>
-      <h3>Multi-Workspace</h3>
-      <p>Separate workspaces for different companies or departments, each with their own members, projects, settings and branding. Invite members with a unique workspace code.</p>
-    </div>
-  </div>
-</div>
-
-<div class="divider"></div>
-
-<div class="section">
-  <div class="section-label">User Roles</div>
-  <h2>Role-based access for every team</h2>
-  <p>VEWIT supports five user roles with fine-grained permissions, so every team member sees exactly what they need.</p>
-  <div class="roles">
-    <div class="role"><div class="role-icon">👑</div><h4>Admin</h4><p>Full workspace control, settings, billing and all data</p></div>
-    <div class="role"><div class="role-icon">🗂️</div><h4>Manager</h4><p>Create projects, manage tasks and view all team data</p></div>
-    <div class="role"><div class="role-icon">🏷️</div><h4>Team Lead</h4><p>Lead sub-teams, assign tasks and manage team members</p></div>
-    <div class="role"><div class="role-icon">💻</div><h4>Developer</h4><p>Work on assigned tasks, log progress and communicate</p></div>
-    <div class="role"><div class="role-icon">🔍</div><h4>Tester</h4><p>Create and manage tickets, test and verify work items</p></div>
-    <div class="role"><div class="role-icon">👁️</div><h4>Viewer</h4><p>Read-only access to projects and team progress</p></div>
-  </div>
-</div>
-
-<div class="divider"></div>
-
-<div class="section" style="padding-bottom:0">
-  <div class="section-label">Why VEWIT</div>
-  <h2>One platform, zero context switching</h2>
-  <p>Most teams use 5–7 separate tools for project management, communication, ticketing and analytics. VEWIT replaces all of them with a single integrated platform that keeps your entire team in sync.</p>
-  <div class="stats">
-    <div class="stat"><span class="stat-num">12+</span><span class="stat-label">Integrated modules</span></div>
-    <div class="stat"><span class="stat-num">6</span><span class="stat-label">User role levels</span></div>
-    <div class="stat"><span class="stat-num">∞</span><span class="stat-label">Projects & tasks</span></div>
-    <div class="stat"><span class="stat-num">AI</span><span class="stat-label">Powered by Claude</span></div>
-  </div>
-</div>
-
-<div class="section">
-  <div class="section-label">Get Started</div>
-  <h2>Ready to bring your team together?</h2>
-  <p>Create a free workspace in seconds. Invite your team, set up your first project and start shipping faster — no credit card required.</p>
-  <div style="margin-top:28px;display:flex;gap:16px;flex-wrap:wrap">
-    <a href="/?action=register" class="hero-cta" style="display:inline-block">Create Free Account</a>
-    <a href="/?action=login" class="hero-sec" style="display:inline-block;background:#f1f5f9;border-color:#e2e8f0;color:#475569">Sign In to VEWIT</a>
-  </div>
-</div>
-
-
-
-<footer>
-  <div class="footer-links">
-    <a href="/">Home</a>
-    <a href="/about">About</a>
-    <a href="/?action=login">Sign In</a>
-    <a href="/?action=register">Sign Up</a>
-  </div>
-  <p>© 2024 VEWIT — AI-Powered Team Collaboration Platform &nbsp;·&nbsp; <a href="https://www.vewit.in">www.vewit.in</a></p>
-</footer>
-
-</body>
-</html>"""
-
-
-@app.route("/api/contact", methods=["POST"])
-def contact_form():
-    """Handle public contact form — sends email to ceo@vewit.in."""
-    d = request.json or {}
-    name    = d.get("name","").strip()
-    email   = d.get("email","").strip()
-    company = d.get("company","").strip()
-    topic   = d.get("topic","").strip()
-    message = d.get("message","").strip()
-
-    if not name or not email or not message or not topic:
-        return jsonify({"error": "Please fill in all required fields."}), 400
-
-    topic_labels = {
-        "demo": "Request a Demo",
-        "support": "Technical Support",
-        "feature": "Feature Request",
-        "enterprise": "Enterprise / Pricing",
-        "partnership": "Partnership",
-        "other": "General Inquiry"
-    }
-    topic_label = topic_labels.get(topic, topic)
-
-    subject = f"VEWIT Contact Form: {topic_label} — from {name}"
-    body_html = f"""
-    <html>
-    <body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;">
-      <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
-        <div style="background:#0f172a;padding:24px 32px;display:flex;align-items:center;gap:12px;">
-          <div style="width:36px;height:36px;background:#2563eb;border-radius:8px;display:flex;align-items:center;justify-content:center;">
-            <span style="color:white;font-weight:800;font-size:14px">V</span>
-          </div>
-          <h1 style="color:#fff;margin:0;font-size:18px;font-weight:700;">VEWIT — New Contact Form Submission</h1>
-        </div>
-        <div style="padding:28px 32px;">
-          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 18px;margin-bottom:24px;">
-            <p style="margin:0;font-size:13px;color:#0369a1;font-weight:600;">📩 Topic: {topic_label}</p>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
-            <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;width:130px;">Name</td><td style="padding:10px 0;color:#1e293b;">{name}</td></tr>
-            <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 0;color:#64748b;font-weight:600;">Email</td><td style="padding:10px 0;"><a href="mailto:{email}" style="color:#2563eb;">{email}</a></td></tr>
-            {"<tr style='border-bottom:1px solid #f1f5f9;'><td style='padding:10px 0;color:#64748b;font-weight:600;'>Company</td><td style='padding:10px 0;color:#1e293b;'>" + company + "</td></tr>" if company else ""}
-          </table>
-          <div style="background:#f8fafc;border-radius:8px;padding:18px;border:1px solid #e2e8f0;">
-            <p style="margin:0 0 8px;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Message</p>
-            <p style="margin:0;font-size:14px;color:#1e293b;line-height:1.7;white-space:pre-wrap;">{message}</p>
-          </div>
-        </div>
-        <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">Reply directly to <a href="mailto:{email}" style="color:#2563eb;">{email}</a></p>
-          <p style="margin:0;font-size:11px;color:#cbd5e1;">VEWIT Contact Form</p>
-        </div>
-      </div>
-    </body>
-    </html>
-    """
-
-    # Log before sending
-    print(f"[Contact] Attempting send: {name} <{email}> | SMTP={SMTP_SERVER}:{SMTP_PORT} | user={SMTP_USERNAME} | pwd_len={len((SMTP_PASSWORD or '').replace(' ',''))}")
-
-    # Send to CEO
-    success = send_email("ceo@vewit.in", subject, body_html)
-    print(f"[Contact] send_email to CEO returned: {success}")
-
-    # Also send auto-reply to the person who submitted
-    auto_reply_html = f"""
-    <html>
-    <body style="font-family:Arial,sans-serif;background:#f4f4f4;padding:20px;">
-      <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
-        <div style="background:#0f172a;padding:24px 32px;text-align:center;">
-          <h1 style="color:#fff;margin:0;font-size:20px;font-weight:800;">VEWIT</h1>
-          <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">We received your message</p>
-        </div>
-        <div style="padding:32px;">
-          <h2 style="color:#1e293b;margin:0 0 12px;font-size:16px;">Hi {name}, thanks for reaching out! 👋</h2>
-          <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;">We've received your message about <strong>{topic_label}</strong> and will get back to you within <strong>24 hours</strong>.</p>
-          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
-            <p style="margin:0;font-size:13px;color:#0369a1;"><strong>Your message summary:</strong><br/><span style="color:#1e293b;">{message[:200]}{"..." if len(message)>200 else ""}</span></p>
-          </div>
-          <p style="color:#64748b;font-size:13px;margin:0;">In the meantime, you can <a href="https://www.vewit.in" style="color:#2563eb;">explore VEWIT</a> or reply to this email if you have anything to add.</p>
-        </div>
-        <div style="background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0;text-align:center;">
-          <p style="margin:0;font-size:12px;color:#94a3b8;">© 2026 VEWIT · <a href="https://www.vewit.in" style="color:#2563eb;">www.vewit.in</a></p>
-        </div>
-      </div>
-    </body>
-    </html>
-    """
-    send_email(email, f"We received your message — VEWIT", auto_reply_html)
-
-    if success:
-        return jsonify({"ok": True, "message": f"Message sent successfully! We'll reply to {email} within 24 hours."})
-    else:
-        return jsonify({"ok": False, "error": "Email could not be sent. Please email ceo@vewit.in directly."}), 500
-
-@app.route("/sitemap.xml")
-def sitemap():
-    from datetime import datetime as _dt
-    today = _dt.utcnow().strftime("%Y-%m-%d")
-    xml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://www.vewit.in/</loc><lastmod>{today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://www.vewit.in/about</loc><lastmod>{today}</lastmod><changefreq>monthly</changefreq><priority>0.9</priority></url>
-</urlset>'''
-    return xml, 200, {"Content-Type": "application/xml"}
-
-@app.route("/robots.txt")
-def robots():
-    txt = """User-agent: *
-Allow: /
-Allow: /about
-Disallow: /api/
-Disallow: /dashboard
-Disallow: /projects
-Disallow: /tasks
-Disallow: /messages
-Disallow: /dm
-Disallow: /tickets
-Disallow: /timeline
-Disallow: /reminders
-Disallow: /settings
-Disallow: /team
-Disallow: /productivity
-Sitemap: https://www.vewit.in/sitemap.xml"""
-    return txt, 200, {"Content-Type": "text/plain"}
-
-@app.route("/dashboard")
-@app.route("/projects")
-@app.route("/tasks")
-@app.route("/messages")
-@app.route("/dm")
-@app.route("/dashboard")
-@app.route("/projects")
-@app.route("/tasks")
-@app.route("/messages")
-@app.route("/dm")
-@app.route("/tickets")
-@app.route("/timeline")
-@app.route("/reminders")
-@app.route("/settings")
-@app.route("/team")
-@app.route("/productivity")
-def app_page(**kwargs):
-    """Serve the SPA for all clean URLs — JS picks up the path and sets the view."""
-    return HTML
-
-@app.route("/",defaults={"p":""})
-@app.route("/<path:p>")
-def root(p):
-    action=request.args.get("action","")
-    if action in ("login","register") or p!="":
-        return HTML
-    return LANDING_HTML
-
 LANDING_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3444,1014 +3078,1171 @@ LANDING_HTML = """<!DOCTYPE html>
 <meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
 <meta name="author" content="VEWIT"/>
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
-<meta name="googlebot" content="index, follow"/>
-<meta name="revisit-after" content="3 days"/>
-<meta name="language" content="English"/>
-<meta name="rating" content="general"/>
-<meta name="category" content="Business Software, Project Management, Team Collaboration"/>
-<meta name="theme-color" content="#0f172a"/>
+<meta name="theme-color" content="#000000"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
-<link rel="alternate" hreflang="en" href="https://www.vewit.in/"/>
-<link rel="alternate" hreflang="en-in" href="https://www.vewit.in/"/>
-<link rel="alternate" hreflang="x-default" href="https://www.vewit.in/"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
 <meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
 <meta property="og:site_name" content="VEWIT"/>
-<meta property="og:locale" content="en_IN"/>
 <meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
-<meta property="og:image:width" content="512"/>
-<meta property="og:image:height" content="512"/>
-<meta property="og:image:alt" content="VEWIT — AI-Powered Team Collaboration Platform"/>
-<meta property="og:site_name" content="VEWIT"/>
-<meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="VEWIT — AI-Powered Team Collaboration"/>
-<meta name="twitter:description" content="AI-powered team collaboration platform for projects, tasks, direct messages and team productivity."/>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication",
-"name":"VEWIT","alternateName":"VEWIT Team Collaboration","url":"https://www.vewit.in",
+"name":"VEWIT","url":"https://www.vewit.in",
 "description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
 "applicationCategory":"BusinessApplication","applicationSubCategory":"Project Management",
 "operatingSystem":"Web, PWA, iOS, Android",
 "offers":{"@type":"Offer","price":"0","priceCurrency":"INR","availability":"https://schema.org/InStock"},
-"aggregateRating":{"@type":"AggregateRating","ratingValue":"5","reviewCount":"1"},
-"featureList":["AI-Powered Project Management","Kanban Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"],
-"screenshot":"https://www.vewit.in/icon-512.png",
-"softwareVersion":"4.0",
-"releaseNotes":"AI assistant, multi-workspace support, push notifications"}
+"featureList":["AI-Powered Project Management","Kanban Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"]}
 </script>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebSite",
-"name":"VEWIT","url":"https://www.vewit.in",
-"potentialAction":{"@type":"SearchAction","target":"https://www.vewit.in/tasks?q={search_term_string}","query-input":"required name=search_term_string"}}
-</script>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"FAQPage",
-"mainEntity":[
-  {"@type":"Question","name":"What is VEWIT?","acceptedAnswer":{"@type":"Answer","text":"VEWIT is an AI-powered team collaboration platform that combines project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics in one unified workspace."}},
-  {"@type":"Question","name":"Is VEWIT free?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT is free to start. Create a workspace instantly with no credit card required."}},
-  {"@type":"Question","name":"How is VEWIT different from Jira?","acceptedAnswer":{"@type":"Answer","text":"Unlike Jira, VEWIT includes built-in direct messaging, support tickets, AI assistant, developer productivity analytics and timeline tracking all in one platform — no plugins or integrations needed."}},
-  {"@type":"Question","name":"Does VEWIT have an AI assistant?","acceptedAnswer":{"@type":"Answer","text":"Yes, VEWIT has a built-in AI assistant powered by Anthropic Claude that understands your actual projects and tasks and can answer questions, summarise work and generate task descriptions."}},
-  {"@type":"Question","name":"How many users can join a VEWIT workspace?","acceptedAnswer":{"@type":"Answer","text":"VEWIT supports unlimited team members in a workspace with six role levels: Admin, Manager, Team Lead, Developer, Tester and Viewer."}}
-]}
-</script>
-<meta name="description" content="VEWIT v4.0 — Multi-tenant workspaces, AI assistant, real-time collaboration, huddle calls, timeline tracking, and developer productivity analytics."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
-:root{
-  --bg:#ffffff;--sf:#f8fafc;--sf2:#f1f5f9;--bd:rgba(37,99,235,0.12);--bd2:rgba(0,0,0,0.06);
-  --ac:#2563eb;--ac2:#1d4ed8;--ac3:rgba(37,99,235,0.08);
-  --tx:#0a0f1e;--tx2:#475569;--tx3:#94a3b8;
-  --ocean1:#e0f2fe;--ocean2:#bae6fd;--ocean3:#7dd3fc;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;}
-body{background:#ffffff;color:var(--tx);font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.65;overflow-x:hidden;}
-h1,h2,h3,h4{font-family:'Syne',sans-serif;line-height:1.15;}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* NAV */
-nav{position:fixed;top:0;left:0;right:0;z-index:200;height:56px;display:flex;align-items:center;background:rgba(255,255,255,0.88);backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,0,0,0.06);transition:background .3s;}
-.nav-inner{max-width:1160px;margin:0 auto;padding:0 28px;width:100%;display:flex;align-items:center;justify-content:space-between;}
-.logo{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:800;color:var(--tx);text-decoration:none;display:flex;align-items:center;gap:8px;letter-spacing:-.02em;}
-.logo-icon{width:28px;height:28px;border-radius:7px;background:var(--ac);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(37,99,235,0.3);}
-.nav-links{display:flex;align-items:center;gap:4px;list-style:none;}
-.nav-links a{color:var(--tx2);text-decoration:none;font-size:.875rem;padding:6px 12px;border-radius:7px;transition:all .18s;}
-.nav-links a:hover{color:var(--tx);background:var(--sf2);}
-.nav-pill{background:var(--ac3);color:var(--ac)!important;border:1px solid var(--bd);}
-.nav-pill:hover{background:rgba(37,99,235,0.12)!important;}
-.btn{display:inline-flex;align-items:center;gap:7px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;transition:all .18s;text-decoration:none;white-space:nowrap;}
-.btn-primary{background:var(--ac);color:#fff;padding:9px 20px;border-radius:9px;font-size:.875rem;box-shadow:0 2px 10px rgba(37,99,235,0.25);}
-.btn-primary:hover{background:var(--ac2);box-shadow:0 4px 18px rgba(37,99,235,0.35);transform:translateY(-1px);}
-.btn-outline{background:transparent;color:var(--tx);padding:9px 20px;border-radius:9px;font-size:.875rem;border:1.5px solid var(--bd2);}
-.btn-outline:hover{border-color:rgba(0,0,0,0.15);background:var(--sf);}
-.nav-cta{display:flex;gap:8px;align-items:center;}
+  :root {
+    --bg: #000;
+    --bg2: #0a0a0a;
+    --bg3: #111;
+    --surface: rgba(255,255,255,0.05);
+    --surface2: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.1);
+    --border2: rgba(255,255,255,0.15);
+    --text: #f5f5f7;
+    --text2: #a1a1a6;
+    --text3: #6e6e73;
+    --accent: #2997ff;
+    --accent2: #30d158;
+    --accent3: #ff375f;
+    --accent4: #bf5af2;
+    --grad1: linear-gradient(135deg, #2997ff 0%, #bf5af2 100%);
+    --grad2: linear-gradient(135deg, #30d158 0%, #2997ff 100%);
+    --radius: 18px;
+    --radius-sm: 10px;
+    --shadow: 0 32px 80px rgba(0,0,0,0.6);
+    --font: -apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  }
 
-/* HERO */
-.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 28px 0;position:relative;overflow:hidden;}
-.hero-content{position:relative;z-index:2;text-align:center;max-width:760px;margin:0 auto;}
-.hero-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);padding:5px 14px;border-radius:100px;font-size:.75rem;font-weight:700;color:var(--ac);margin-bottom:24px;letter-spacing:.05em;text-transform:uppercase;}
-.hero-badge-dot{width:5px;height:5px;background:var(--ac);border-radius:50%;}
-.hero h1{font-size:clamp(2.4rem,5.5vw,4rem);font-weight:800;color:var(--tx);margin-bottom:18px;letter-spacing:-.04em;line-height:1.1;}
-.hero h1 .blue{color:var(--ac);}
-.hero-sub{font-size:1.05rem;color:var(--tx2);max-width:520px;margin:0 auto 36px;font-weight:300;line-height:1.75;}
-.hero-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
-.btn-xl{padding:13px 28px!important;font-size:.96rem!important;border-radius:11px!important;}
-.hero-note{font-size:.78rem;color:var(--tx3);}
-.hero-note span{color:var(--ac);font-weight:600;}
+  html { scroll-behavior: smooth; }
 
-/* APP MOCKUP */
-.hero-mockup{position:relative;z-index:2;width:100%;max-width:900px;margin:48px auto 0;}
-.mockup-frame{border-radius:16px 16px 0 0;overflow:hidden;box-shadow:0 -4px 60px rgba(37,99,235,0.12),0 0 0 1px rgba(0,0,0,0.06);background:#fff;}
-.mockup-topbar{height:36px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;padding:0 14px;gap:6px;}
-.m-dot{width:9px;height:9px;border-radius:50%;}
-.mockup-url{flex:1;margin:0 10px;height:18px;background:#f1f5f9;border-radius:5px;display:flex;align-items:center;padding:0 8px;}
-.mockup-url-txt{font-size:.6rem;color:#94a3b8;font-family:monospace;}
-.mockup-body{display:flex;height:360px;}
-.m-sidebar{width:180px;flex-shrink:0;background:#fafbfc;border-right:1px solid #f1f5f9;padding:12px 10px;display:flex;flex-direction:column;gap:2px;}
-.m-ws{display:flex;align-items:center;gap:7px;padding:7px 8px;margin-bottom:6px;border-radius:7px;background:#f1f5f9;}
-.m-ws-av{width:26px;height:26px;border-radius:6px;background:var(--ac);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;color:#fff;flex-shrink:0;}
-.m-ws-n{font-size:.72rem;font-weight:700;color:var(--tx);}
-.m-ws-s{font-size:.62rem;color:var(--tx3);}
-.m-sec{font-size:.58rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--tx3);padding:8px 8px 3px;}
-.m-nav{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;font-size:.72rem;color:var(--tx2);}
-.m-nav.act{background:rgba(37,99,235,0.08);color:var(--ac);}
-.m-badge{margin-left:auto;background:var(--ac);color:#fff;font-size:.55rem;font-weight:700;padding:1px 5px;border-radius:100px;}
-.m-main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
-.m-header{padding:11px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;}
-.m-title{font-family:'Syne',sans-serif;font-size:.82rem;font-weight:700;color:var(--tx);}
-.m-tabs{display:flex;gap:2px;}
-.m-tab{font-size:.62rem;padding:3px 9px;border-radius:5px;color:var(--tx3);}
-.m-tab.act{background:rgba(37,99,235,0.08);color:var(--ac);}
-.m-board{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:12px 14px;height:100%;align-content:start;}
-.m-col{background:#f8fafc;border:1px solid #f1f5f9;border-radius:7px;padding:8px;}
-.m-col-h{font-size:.6rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin-bottom:7px;display:flex;justify-content:space-between;}
-.m-col-c{width:15px;height:15px;border-radius:4px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:var(--tx3);}
-.m-card{background:#fff;border:1px solid #f1f5f9;border-radius:6px;padding:7px;margin-bottom:6px;}
-.m-card-t{font-size:.66rem;font-weight:500;color:var(--tx);margin-bottom:5px;line-height:1.4;}
-.m-pill{display:inline-block;font-size:.54rem;padding:2px 5px;border-radius:100px;font-weight:600;}
-.pill-h{background:rgba(239,68,68,.08);color:#ef4444;}
-.pill-m{background:rgba(180,83,9,0.10);color:#f59e0b;}
-.pill-d{background:rgba(37,99,235,.08);color:#2563eb;}
-.pill-ok{background:rgba(34,197,94,.08);color:#16a34a;}
-.m-prog{height:2px;background:#f1f5f9;border-radius:100px;margin-top:6px;}
-.m-prog-fill{height:100%;border-radius:100px;background:var(--ac);}
-.m-prog-fill.g{background:#16a34a;}
-.m-prog-fill.o{background:#f59e0b;}
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-/* STATS BAR */
-.stats-bar{padding:40px 0;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
-.stats-grid{max-width:1160px;margin:0 auto;padding:0 28px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e2e8f0;border-radius:12px;overflow:hidden;}
-.stat-item{background:#f8fafc;text-align:center;padding:24px 16px;}
-.stat-num{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;line-height:1;margin-bottom:5px;color:var(--ac);}
-.stat-lbl{font-size:.82rem;color:#475569;font-weight:500;}
+  /* ── Nav ─────────────────────────────── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px;
+    height: 52px;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    transition: background 0.3s;
+  }
+  .nav-logo {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
+    color: var(--text); text-decoration: none;
+    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .nav-links { display: flex; align-items: center; gap: 36px; }
+  .nav-links a {
+    color: var(--text2); font-size: 13px; font-weight: 400;
+    text-decoration: none; transition: color 0.2s; letter-spacing: -0.1px;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-actions { display: flex; align-items: center; gap: 12px; }
+  .btn-ghost {
+    color: var(--text2); font-size: 13px; font-weight: 500;
+    text-decoration: none; padding: 6px 14px; border-radius: 980px;
+    transition: color 0.2s, background 0.2s; letter-spacing: -0.1px;
+  }
+  .btn-ghost:hover { color: var(--text); background: var(--surface); }
+  .btn-primary {
+    background: var(--accent); color: #fff; font-size: 13px; font-weight: 500;
+    text-decoration: none; padding: 7px 18px; border-radius: 980px;
+    transition: opacity 0.2s, transform 0.15s; letter-spacing: -0.1px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn-primary:hover { opacity: 0.88; transform: scale(1.02); }
 
-/* SECTIONS */
-section{padding:80px 0;}
-.wrap{max-width:1160px;margin:0 auto;padding:0 28px;}
-.sec-tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;background:var(--ac3);padding:3px 11px;border-radius:100px;border:1px solid var(--bd);}
-.sec-title{font-size:clamp(1.7rem,3vw,2.2rem);font-weight:800;max-width:540px;margin-bottom:10px;letter-spacing:-.025em;color:var(--tx);}
-.sec-sub{color:var(--tx2);font-size:.95rem;max-width:500px;margin-bottom:44px;font-weight:300;line-height:1.75;}
-.centered{text-align:center;}.centered .sec-title,.centered .sec-sub{margin-left:auto;margin-right:auto;}
+  /* ── Hero ─────────────────────────────── */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 120px 24px 80px;
+    position: relative; overflow: hidden;
+  }
+  .hero-glow {
+    position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+    width: 800px; height: 800px;
+    background: radial-gradient(ellipse at center, rgba(41,151,255,0.18) 0%, rgba(191,90,242,0.08) 50%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(41,151,255,0.1); border: 1px solid rgba(41,151,255,0.25);
+    color: var(--accent); font-size: 12px; font-weight: 500;
+    padding: 5px 14px; border-radius: 980px; margin-bottom: 28px;
+    letter-spacing: 0.02em; text-transform: uppercase;
+    animation: fadeUp 0.7s ease both;
+  }
+  .hero-badge::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2); box-shadow: 0 0 8px var(--accent2);
+    flex-shrink: 0;
+  }
+  .hero h1 {
+    font-size: clamp(42px, 7vw, 88px);
+    font-weight: 700; letter-spacing: -3px; line-height: 1.05;
+    margin-bottom: 24px; max-width: 820px;
+    animation: fadeUp 0.7s 0.1s ease both;
+  }
+  .hero h1 .grad {
+    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .hero-sub {
+    font-size: clamp(16px, 2.5vw, 20px); color: var(--text2);
+    max-width: 560px; line-height: 1.6; margin-bottom: 44px;
+    font-weight: 400; letter-spacing: -0.2px;
+    animation: fadeUp 0.7s 0.2s ease both;
+  }
+  .hero-ctas {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center;
+    animation: fadeUp 0.7s 0.3s ease both;
+  }
+  .cta-main {
+    background: var(--text); color: var(--bg); font-size: 16px; font-weight: 600;
+    text-decoration: none; padding: 14px 32px; border-radius: 980px;
+    transition: opacity 0.2s, transform 0.15s; letter-spacing: -0.3px;
+  }
+  .cta-main:hover { opacity: 0.88; transform: scale(1.02); }
+  .cta-sec {
+    color: var(--text); font-size: 16px; font-weight: 500;
+    text-decoration: none; padding: 14px 28px; border-radius: 980px;
+    border: 1px solid var(--border2); transition: background 0.2s, border-color 0.2s;
+    letter-spacing: -0.3px;
+  }
+  .cta-sec:hover { background: var(--surface2); border-color: rgba(255,255,255,0.25); }
+  .hero-proof {
+    margin-top: 56px; display: flex; gap: 32px; flex-wrap: wrap; justify-content: center;
+    animation: fadeUp 0.7s 0.4s ease both;
+  }
+  .proof-item {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 13px; color: var(--text3); font-weight: 400;
+  }
+  .proof-item svg { color: var(--accent2); flex-shrink: 0; }
 
-/* FEATURES BENTO */
-.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.bc{background:#fff;border:1.5px solid #f1f5f9;border-radius:14px;padding:24px;transition:all .22s;cursor:default;position:relative;overflow:hidden;}
-.bc:hover{border-color:rgba(37,99,235,0.2);box-shadow:0 8px 32px rgba(37,99,235,0.08);transform:translateY(-2px);}
-.bc.span2{grid-column:span 2;}
-.bc.featured{border-color:rgba(37,99,235,0.15);background:linear-gradient(135deg,rgba(37,99,235,0.03) 0%,#fff 60%);}
-.b-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:13px;background:var(--ac3);border:1px solid var(--bd);}
-.bc h3{font-size:1rem;font-weight:700;margin-bottom:8px;color:#0a0f1e;}
-.bc p{font-size:.88rem;color:#334155;line-height:1.68;}
-.feat-list{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:6px;}
-.feat-list li{display:flex;align-items:flex-start;gap:8px;font-size:.84rem;color:#334155;}
-.feat-list li::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--ac);flex-shrink:0;margin-top:7px;}
-.role-badge{font-size:.64rem;background:rgba(37,99,235,.08);color:var(--ac);padding:2px 8px;border-radius:100px;margin-left:5px;border:1px solid var(--bd);font-weight:600;}
+  /* ── Dashboard preview ─────────────────── */
+  .preview-section {
+    padding: 0 24px 120px; display: flex; justify-content: center;
+    animation: fadeUp 0.9s 0.5s ease both;
+  }
+  .preview-wrap {
+    max-width: 1100px; width: 100%; position: relative;
+  }
+  .preview-frame {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.05), var(--shadow);
+    position: relative;
+  }
+  .preview-bar {
+    display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+    background: rgba(255,255,255,0.04); border-bottom: 1px solid var(--border);
+  }
+  .preview-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .preview-ui {
+    display: grid; grid-template-columns: 200px 1fr;
+    min-height: 380px; font-size: 12px;
+  }
+  .preview-sidebar {
+    background: rgba(0,0,0,0.3); border-right: 1px solid var(--border);
+    padding: 16px 12px;
+  }
+  .preview-sidebar-logo {
+    font-size: 14px; font-weight: 700; letter-spacing: -0.5px;
+    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    padding: 4px 8px; margin-bottom: 20px;
+  }
+  .preview-nav-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 8px;
+    border-radius: 8px; color: var(--text3); margin-bottom: 3px;
+    font-size: 12px; font-weight: 500; transition: background 0.15s;
+    cursor: default;
+  }
+  .preview-nav-item.active { background: rgba(41,151,255,0.15); color: var(--accent); }
+  .preview-nav-item:hover:not(.active) { background: var(--surface); color: var(--text2); }
+  .preview-content { padding: 20px 24px; }
+  .preview-content-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .preview-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+  .preview-pill {
+    font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 980px;
+    background: rgba(41,151,255,0.15); color: var(--accent); border: 1px solid rgba(41,151,255,0.2);
+  }
+  .kanban-cols { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+  .kanban-col { display: flex; flex-direction: column; gap: 6px; }
+  .kanban-col-head {
+    font-size: 10px; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .kanban-col-head .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .task-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px;
+  }
+  .task-card-title { font-size: 11px; font-weight: 500; color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
+  .task-card-meta { display: flex; align-items: center; gap: 6px; }
+  .task-avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    font-size: 8px; font-weight: 700; color: #fff;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .task-prio {
+    font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+    margin-left: auto;
+  }
+  .preview-glow {
+    position: absolute; inset: -1px;
+    background: linear-gradient(135deg, rgba(41,151,255,0.15) 0%, rgba(191,90,242,0.08) 50%, transparent 100%);
+    border-radius: inherit; pointer-events: none;
+    mask: linear-gradient(to bottom, black, transparent 60%);
+  }
 
-/* MODULES */
-.modules-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:40px;}
-.mod-card{background:#fff;border:1.5px solid #f1f5f9;border-radius:11px;padding:16px 14px;text-align:center;transition:all .2s;}
-.mod-card:hover{border-color:rgba(37,99,235,.15);transform:translateY(-1px);box-shadow:0 4px 16px rgba(37,99,235,.07);}
-.mod-ico{font-size:1.6rem;margin-bottom:8px;}
-.mod-n{font-size:.84rem;font-weight:700;margin-bottom:3px;color:#0a0f1e;}
-.mod-d{font-size:.76rem;color:#475569;line-height:1.5;}
+  /* ── Sections ─────────────────────────── */
+  section.content { padding: 100px 24px; max-width: 1100px; margin: 0 auto; }
+  .section-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px;
+  }
+  .section-eyebrow::before {
+    content: ''; width: 4px; height: 16px; background: var(--accent);
+    border-radius: 2px; display: inline-block;
+  }
+  .section-title {
+    font-size: clamp(32px, 4.5vw, 52px); font-weight: 700;
+    letter-spacing: -2px; line-height: 1.1; color: var(--text); margin-bottom: 16px;
+  }
+  .section-sub {
+    font-size: 17px; color: var(--text2); max-width: 540px; line-height: 1.65;
+    font-weight: 400; letter-spacing: -0.2px; margin-bottom: 60px;
+  }
 
-/* HOW IT WORKS */
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:44px;}
-.step{text-align:center;}
-.step-num{width:44px;height:44px;border-radius:50%;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-family:'Syne',sans-serif;font-weight:800;font-size:.9rem;color:var(--ac);background:var(--ac3);}
-.step h3{font-size:.95rem;font-weight:700;margin-bottom:6px;color:#0a0f1e;}
-.step p{font-size:.86rem;color:#334155;}
+  /* ── Feature grid ─────────────────────── */
+  .feat-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2px; border: 2px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  }
+  .feat-card {
+    background: var(--bg3); padding: 36px 32px;
+    transition: background 0.25s;
+    position: relative; overflow: hidden;
+  }
+  .feat-card:hover { background: rgba(255,255,255,0.04); }
+  .feat-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--grad1); opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .feat-card:hover::before { opacity: 0.03; }
+  .feat-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; margin-bottom: 20px; flex-shrink: 0;
+  }
+  .feat-card h3 {
+    font-size: 18px; font-weight: 600; color: var(--text);
+    letter-spacing: -0.5px; margin-bottom: 10px;
+  }
+  .feat-card p { font-size: 14px; color: var(--text3); line-height: 1.65; }
 
-/* CTA */
-.cta-section{padding:80px 0;background:linear-gradient(135deg,#eff6ff 0%,#f0f9ff 50%,#e0f2fe 100%);}
-.cta-box{text-align:center;border:1.5px solid rgba(37,99,235,0.15);border-radius:20px;padding:64px 40px;background:#fff;position:relative;overflow:hidden;box-shadow:0 4px 40px rgba(37,99,235,0.08);}
-.cta-box::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:240px;height:2px;background:linear-gradient(90deg,transparent,var(--ac),transparent);}
-.cta-box h2{font-size:clamp(1.7rem,3vw,2.3rem);font-weight:800;margin-bottom:12px;color:var(--tx);letter-spacing:-.03em;}
-.cta-box p{color:var(--tx2);margin-bottom:30px;font-size:.96rem;max-width:440px;margin-left:auto;margin-right:auto;}
-.cta-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
-.trust-row{display:flex;justify-content:center;align-items:center;gap:18px;flex-wrap:wrap;}
-.trust-item{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--tx3);}
-.trust-item span{color:var(--ac);font-weight:600;}
+  /* ── Stats ─────────────────────────────── */
+  .stats-section {
+    padding: 80px 24px; background: var(--bg3);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .stats-wrap { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; }
+  .stat-item {
+    padding: 48px 32px; text-align: center;
+    border-right: 1px solid var(--border);
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num {
+    font-size: clamp(36px, 5vw, 56px); font-weight: 700;
+    letter-spacing: -2px; line-height: 1;
+    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 8px;
+  }
+  .stat-label { font-size: 13px; color: var(--text3); font-weight: 400; letter-spacing: -0.1px; }
 
-/* FOOTER */
-footer{padding:48px 0 32px;border-top:1px solid #e2e8f0;background:#fff;}
-.footer-top{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:36px;margin-bottom:40px;}
-.footer-brand p{font-size:.82rem;color:var(--tx3);margin-top:9px;line-height:1.7;max-width:230px;}
-.footer-col h4{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx2);margin-bottom:12px;}
-.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:7px;}
-.footer-col a{color:var(--tx3);font-size:.82rem;text-decoration:none;transition:color .18s;}
-.footer-col a:hover{color:var(--tx2);}
-.footer-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:20px;border-top:1px solid #f1f5f9;flex-wrap:wrap;gap:10px;}
-.footer-copy{color:var(--tx3);font-size:.78rem;}
-.footer-badges{display:flex;gap:6px;}
-.fb{font-size:.7rem;padding:3px 9px;border-radius:100px;border:1px solid #e2e8f0;color:var(--tx3);}
+  /* ── Testimonials ─────────────────────── */
+  .testimonial-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .testimonial-card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 28px;
+    transition: border-color 0.2s;
+  }
+  .testimonial-card:hover { border-color: var(--border2); }
+  .testimonial-stars { display: flex; gap: 3px; margin-bottom: 14px; color: #ff9f0a; font-size: 14px; }
+  .testimonial-text { font-size: 14px; color: var(--text2); line-height: 1.7; margin-bottom: 20px; font-style: italic; }
+  .testimonial-author { display: flex; align-items: center; gap: 12px; }
+  .testimonial-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    font-size: 13px; font-weight: 700; color: #fff;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .testimonial-name { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+  .testimonial-role { font-size: 12px; color: var(--text3); }
 
-/* TICKER */
-.ticker-wrap{overflow:hidden;border-top:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;padding:10px 0;background:#fafbfc;}
-.ticker{display:flex;animation:ticker 32s linear infinite;}
-.ticker-item{display:flex;align-items:center;gap:8px;padding:0 28px;font-size:.76rem;color:var(--tx3);white-space:nowrap;flex-shrink:0;}
-.ticker-item .hi{color:var(--ac);font-weight:600;}
-.ticker-sep{color:#e2e8f0;margin-left:20px;}
-@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+  /* ── Pricing ─────────────────────────── */
+  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2px; }
+  .pricing-card {
+    background: var(--bg3); padding: 40px 32px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    position: relative; transition: transform 0.2s, border-color 0.2s;
+  }
+  .pricing-card:hover { transform: translateY(-4px); border-color: var(--border2); }
+  .pricing-card.featured {
+    background: rgba(41,151,255,0.06); border-color: rgba(41,151,255,0.3);
+  }
+  .pricing-badge {
+    position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #fff; font-size: 11px; font-weight: 600;
+    padding: 4px 14px; border-radius: 0 0 10px 10px; letter-spacing: 0.03em;
+  }
+  .pricing-name { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -0.5px; margin-bottom: 8px; }
+  .pricing-price {
+    font-size: 48px; font-weight: 700; letter-spacing: -2px; color: var(--text);
+    line-height: 1; margin: 20px 0 6px;
+  }
+  .pricing-price sup { font-size: 24px; font-weight: 600; vertical-align: top; margin-top: 8px; letter-spacing: 0; }
+  .pricing-price small { font-size: 14px; color: var(--text3); font-weight: 400; letter-spacing: 0; }
+  .pricing-desc { font-size: 13px; color: var(--text3); margin-bottom: 28px; }
+  .pricing-cta {
+    display: block; text-align: center; padding: 13px 24px; border-radius: 980px;
+    font-size: 15px; font-weight: 600; text-decoration: none;
+    transition: opacity 0.2s, transform 0.15s; margin-bottom: 28px;
+    letter-spacing: -0.2px;
+  }
+  .pricing-cta.solid { background: var(--text); color: var(--bg); }
+  .pricing-cta.solid:hover { opacity: 0.88; }
+  .pricing-cta.outline {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border2);
+  }
+  .pricing-cta.outline:hover { background: var(--surface2); transform: scale(1.02); }
+  .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .pricing-features li {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; color: var(--text2);
+  }
+  .pricing-features li::before {
+    content: '✓'; color: var(--accent2); font-weight: 700; flex-shrink: 0; margin-top: 1px;
+  }
 
-/* ANIMATIONS */
-@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-.a1{animation:fadeUp .6s .1s both;}.a2{animation:fadeUp .6s .22s both;}.a3{animation:fadeUp .6s .36s both;}
-.a4{animation:fadeUp .6s .5s both;}.a5{animation:fadeUp .6s .64s both;}
+  /* ── CTA banner ─────────────────────── */
+  .cta-banner {
+    margin: 60px auto; max-width: 900px; padding: 0 24px;
+  }
+  .cta-banner-inner {
+    background: linear-gradient(135deg, rgba(41,151,255,0.12) 0%, rgba(191,90,242,0.08) 100%);
+    border: 1px solid rgba(41,151,255,0.2); border-radius: 24px;
+    padding: 64px 48px; text-align: center; position: relative; overflow: hidden;
+  }
+  .cta-banner-inner::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(41,151,255,0.5), transparent);
+  }
+  .cta-banner h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; letter-spacing: -1.5px; margin-bottom: 14px; }
+  .cta-banner p { font-size: 17px; color: var(--text2); max-width: 480px; margin: 0 auto 36px; line-height: 1.65; }
+  .cta-banner-btns { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
 
-/* RESPONSIVE */
-@media(max-width:960px){.bento{grid-template-columns:1fr 1fr;}.bc.span2{grid-column:span 1;}.modules-grid{grid-template-columns:repeat(2,1fr);}.steps{grid-template-columns:1fr 1fr;}.footer-top{grid-template-columns:1fr 1fr;}.stats-grid{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:640px){.nav-links,.nav-cta .btn-outline{display:none;}.bento{grid-template-columns:1fr;}.steps{grid-template-columns:1fr;}.modules-grid{grid-template-columns:repeat(2,1fr);}.footer-top{grid-template-columns:1fr;}.stats-grid{grid-template-columns:1fr 1fr;}.m-board{grid-template-columns:repeat(2,1fr);}.mockup-body{height:240px;}.m-sidebar{width:140px;}}
+  /* ── Footer ─────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border); padding: 60px 40px 40px;
+    background: var(--bg);
+  }
+  .footer-grid {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: 2fr repeat(3,1fr); gap: 48px;
+    margin-bottom: 48px;
+  }
+  .footer-brand .brand-name {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
+    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    margin-bottom: 12px; display: inline-block;
+  }
+  .footer-brand p { font-size: 13px; color: var(--text3); line-height: 1.7; max-width: 240px; }
+  .footer-col h4 { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
+  .footer-col a { display: block; font-size: 13px; color: var(--text3); text-decoration: none; margin-bottom: 10px; transition: color 0.2s; }
+  .footer-col a:hover { color: var(--text); }
+  .footer-bottom {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    border-top: 1px solid var(--border); padding-top: 28px;
+  }
+  .footer-bottom p { font-size: 12px; color: var(--text3); }
+  .footer-bottom a { color: var(--text3); text-decoration: none; }
+  .footer-bottom a:hover { color: var(--accent); }
+
+  /* ── Animations ─────────────────────── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0; transform: translateY(32px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .reveal.visible { opacity: 1; transform: none; }
+
+  /* ── Scrollbar ──────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+  /* ── Responsive ─────────────────────── */
+  @media (max-width: 768px) {
+    nav { padding: 0 20px; }
+    .nav-links { display: none; }
+    .stats-wrap { grid-template-columns: repeat(2,1fr); }
+    .stat-item:nth-child(2) { border-right: none; }
+    .footer-grid { grid-template-columns: 1fr 1fr; }
+    .preview-ui { grid-template-columns: 1fr; }
+    .preview-sidebar { display: none; }
+    .kanban-cols { grid-template-columns: repeat(2,1fr); }
+  }
+  @media (max-width: 500px) {
+    .stats-wrap { grid-template-columns: 1fr 1fr; }
+    .footer-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
 
+<!-- Nav -->
 <nav id="nav">
-  <div class="nav-inner">
-    <a href="/" class="logo">
-      <div class="logo-icon"><svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>
-      VEWIT
-    </a>
-    <ul class="nav-links">
-      <li><a href="#features">Features</a></li>
-      <li><a href="#modules">Modules</a></li>
-      <li><a href="#how">How it works</a></li>
-      <li><a href="#about">About</a></li>
-      <li><a href="#contact">Contact</a></li>
-    </ul>
-    <div class="nav-cta">
-      <a href="/?action=login" class="btn btn-outline">Sign In</a>
-      <a href="/?action=register" class="btn btn-primary">Get Started Free</a>
-    </div>
+  <a href="/" class="nav-logo">VEWIT</a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/about">About</a>
+  </div>
+  <div class="nav-actions">
+    <a href="/?action=login" class="btn-ghost">Sign In</a>
+    <a href="/?action=register" class="btn-primary">Get Started</a>
   </div>
 </nav>
 
+<!-- Hero -->
 <section class="hero">
-  <div class="hero-content">
-    <div class="hero-badge a1"><span class="hero-badge-dot"></span>VEWIT — Team Collaboration Platform</div>
-    <h1 class="a2">The workspace your<br/>team <span class="blue">actually uses.</span></h1>
-    <p class="hero-sub a3">Multi-tenant workspaces, AI assistant, real-time messaging, Instant Meet, timeline tracking, support tickets, and developer analytics — all in one platform.</p>
-    <div class="hero-actions a4">
-      <a href="/?action=register" class="btn btn-primary btn-xl">Get Started Free →</a>
-      <a href="/?action=login" class="btn btn-outline btn-xl">Sign In</a>
-    </div>
-    <p class="hero-note a4">✓ Free to start &nbsp;·&nbsp; <span>No credit card</span> &nbsp;·&nbsp; Up in 2 minutes</p>
+  <div class="hero-glow"></div>
+  <div class="hero-badge">New · AI-Powered Workspace v4.0</div>
+  <h1>Work smarter,<br/>together — with <span class="grad">AI.</span></h1>
+  <p class="hero-sub">VEWIT brings your projects, tasks, messages, tickets and analytics into one beautifully unified platform — powered by Claude AI.</p>
+  <div class="hero-ctas">
+    <a href="/?action=register" class="cta-main">Start for free</a>
+    <a href="/?action=login" class="cta-sec">Sign in →</a>
   </div>
-    <div class="hero-mockup a5">
-        <div style="display:flex;justify-content:center;gap:6px;margin-bottom:12px;">
-      <button onclick="showTab('dash')" id="tab-dash" style="padding:6px 16px;border-radius:8px;border:1.5px solid #2563eb;background:#2563eb;color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;">Dashboard</button>
-      <button onclick="showTab('proj')" id="tab-proj" style="padding:6px 16px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;font-size:.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;">Projects</button>
+  <div class="hero-proof">
+    <div class="proof-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      Free workspace
     </div>
+    <div class="proof-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      AI assistant included
+    </div>
+    <div class="proof-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      12+ modules built-in
+    </div>
+    <div class="proof-item">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      No credit card needed
+    </div>
+  </div>
+</section>
 
-    <div class="mockup-frame" id="mock-dash">
-      <div class="mockup-topbar">
-        <div class="m-dot" style="background:#ff5f57"></div>
-        <div class="m-dot" style="background:#febc2e"></div>
-        <div class="m-dot" style="background:#28c840"></div>
-        <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app</span></div>
+<!-- Dashboard Preview -->
+<div class="preview-section">
+  <div class="preview-wrap">
+    <div class="preview-frame">
+      <div class="preview-bar">
+        <div class="preview-dot" style="background:#ff5f57"></div>
+        <div class="preview-dot" style="background:#febc2e"></div>
+        <div class="preview-dot" style="background:#28c840"></div>
+        <div style="flex:1;text-align:center;font-size:11px;color:rgba(255,255,255,0.25);letter-spacing:-0.2px">app.vewit.in</div>
       </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
-          <span style="font-size:.6rem;color:#94a3b8;background:#1e293b;padding:2px 8px;border-radius:100px;">No reminders today</span>
-          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">A</div>
-        </div>
-      </div>
-      <div class="mockup-body" style="height:320px;">
-        <div class="m-sidebar">
-          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">12 members</div></div></div>
-          <div class="m-sec">Workspace</div>
-          <div class="m-nav act">📊 Dashboard</div>
-          <div class="m-nav">📁 Projects</div>
-          <div class="m-nav">✅ Tasks</div>
-          <div class="m-nav">💬 Messages</div>
-          <div class="m-sec">Tools</div>
-          <div class="m-nav">📅 Timeline</div>
-          <div class="m-nav">🎫 Tickets</div>
-          <div class="m-nav">👩‍💻 Analytics</div>
-        </div>
-        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
-                    <div style="padding:10px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;">
-            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Dashboard <span style="font-size:.68rem;font-weight:400;color:#94a3b8;margin-left:4px;">Acme Corp Team Dashboard</span></div>
+      <div class="preview-ui">
+        <div class="preview-sidebar">
+          <div class="preview-sidebar-logo">VEWIT</div>
+          <div class="preview-nav-item active">
+            <span>📋</span> Projects
           </div>
-                    <div style="margin:8px 10px;padding:8px 12px;background:#fff;border-radius:10px;border:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <div style="width:24px;height:24px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;">P</div>
-              <div>
-                <div style="font-size:.75rem;font-weight:700;color:#0f172a;">Good day, Alex! 👋 <span style="background:#eff6ff;color:#2563eb;font-size:.6rem;padding:1px 7px;border-radius:100px;border:1px solid #bfdbfe;margin-left:3px;">Acme Corp</span></div>
-                <div style="font-size:.62rem;color:#64748b;">8 projects · 24 tasks · 6 members · 5 active tasks assigned to you</div>
+          <div class="preview-nav-item">
+            <span>✅</span> Tasks
+          </div>
+          <div class="preview-nav-item">
+            <span>💬</span> Messages
+          </div>
+          <div class="preview-nav-item">
+            <span>🎫</span> Tickets
+          </div>
+          <div class="preview-nav-item">
+            <span>📅</span> Timeline
+          </div>
+          <div class="preview-nav-item">
+            <span>🤖</span> AI Assistant
+          </div>
+          <div class="preview-nav-item">
+            <span>📊</span> Productivity
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,0.06);margin:12px 0"></div>
+          <div class="preview-nav-item">
+            <span>⚙️</span> Settings
+          </div>
+        </div>
+        <div class="preview-content">
+          <div class="preview-content-header">
+            <div class="preview-title">E-Commerce Platform</div>
+            <div class="preview-pill">Sprint 3 · Active</div>
+          </div>
+          <div class="kanban-cols">
+            <div class="kanban-col">
+              <div class="kanban-col-head">
+                <div class="dot" style="background:#6e6e73"></div> Backlog
               </div>
-            </div>
-          </div>
-                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:0 10px 8px;">
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #2563eb;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">8</div><div style="font-size:.58rem;color:#64748b;">Total Projects</div></div>
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #059669;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">24</div><div style="font-size:.58rem;color:#64748b;">Active Tasks</div></div>
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #7c3aed;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">11</div><div style="font-size:.58rem;color:#64748b;">Completed</div></div>
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #dc2626;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">0</div><div style="font-size:.58rem;color:#64748b;">Blocked</div></div>
-            <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:6px 8px;border-top:2px solid #d97706;"><div style="font-size:1rem;font-weight:800;color:#0f172a;">5</div><div style="font-size:.58rem;color:#64748b;">My Tasks</div></div>
-          </div>
-                    <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;margin:0 10px;">
-                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
-              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Priority Split</div>
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Critical</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">3</div></div>
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#f97316;"></div><div style="font-size:.6rem;color:#334155;flex:1;">High</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">9</div></div>
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;"><div style="width:8px;height:8px;border-radius:50%;background:#7c3aed;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Medium</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">8</div></div>
-              <div style="display:flex;align-items:center;gap:4px;"><div style="width:8px;height:8px;border-radius:50%;background:#2563eb;"></div><div style="font-size:.6rem;color:#334155;flex:1;">Low</div><div style="font-size:.62rem;font-weight:700;color:#0f172a;">4</div></div>
-            </div>
-                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
-              <div style="font-size:.68rem;font-weight:700;color:#0f172a;margin-bottom:6px;">Project Progress</div>
-              <div style="display:flex;flex-direction:column;gap:5px;">
-                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">E-commerce Platform</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">72%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:72%;background:#059669;border-radius:2px;"></div></div></div>
-                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Mobile App Redesign</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">65%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:65%;background:#f59e0b;border-radius:2px;"></div></div></div>
-                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">API Gateway v2</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">81%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:81%;background:#ef4444;border-radius:2px;"></div></div></div>
-                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Customer Portal</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">90%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:90%;background:#2563eb;border-radius:2px;"></div></div></div>
-                <div><div style="display:flex;justify-content:space-between;margin-bottom:2px;"><span style="font-size:.6rem;color:#334155;">Analytics Dashboard</span><span style="font-size:.6rem;font-weight:700;color:#0f172a;">55%</span></div><div style="height:3px;background:#f1f5f9;border-radius:2px;"><div style="height:100%;width:55%;background:#7c3aed;border-radius:2px;"></div></div></div>
-              </div>
-            </div>
-                        <div style="background:#fff;border:1px solid #f1f5f9;border-radius:8px;padding:8px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;">My Active Tasks</div><div style="font-size:.58rem;color:#ef4444;font-weight:600;">⚠ 1 overdue</div></div>
-              <div style="display:flex;flex-direction:column;gap:5px;">
-                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #2563eb;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Review Q2 sprint plan</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">PLANNING</span><span style="font-size:.55rem;background:#fef3c7;color:#d97706;padding:1px 5px;border-radius:3px;">HIGH</span></div></div>
-                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #7c3aed;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Fix auth token expiry bug</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;">CRITICAL</span></div></div>
-                <div style="padding:5px 7px;border-radius:6px;border-left:3px solid #059669;background:#f8fafc;"><div style="font-size:.62rem;font-weight:600;color:#0f172a;">Update API documentation</div><div style="display:flex;gap:3px;margin-top:2px;"><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;">DEV</span></div></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="mockup-frame" id="mock-proj" style="display:none;">
-      <div class="mockup-topbar">
-        <div class="m-dot" style="background:#ff5f57"></div>
-        <div class="m-dot" style="background:#febc2e"></div>
-        <div class="m-dot" style="background:#28c840"></div>
-        <div class="mockup-url"><span class="mockup-url-txt">projectflowpro.up.railway.app/projects</span></div>
-      </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:32px;background:#0a0f1e;border-bottom:1px solid #1e293b;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="width:20px;height:20px;border-radius:5px;background:#2563eb;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#0a0f1e"/><circle cx="32" cy="11" r="5" fill="#0a0f1e"/><circle cx="51" cy="43" r="5" fill="#0a0f1e"/><circle cx="13" cy="43" r="5" fill="#0a0f1e"/><line x1="32" y1="16" x2="32" y2="23" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#0a0f1e" stroke-width="3" stroke-linecap="round"/></svg></div>
-          <span style="font-size:.62rem;font-weight:800;color:#fff;font-family:Syne,sans-serif;">VEWIT</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:.6rem;color:#94a3b8;">Your Schedule · Mar 20</span>
-          <div style="width:18px;height:18px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;color:#fff;">P</div>
-        </div>
-      </div>
-      <div class="mockup-body" style="height:320px;">
-        <div class="m-sidebar">
-          <div class="m-ws"><div class="m-ws-av">PF</div><div><div class="m-ws-n">Acme Corp</div><div class="m-ws-s">4 members</div></div></div>
-          <div class="m-sec">Workspace</div>
-          <div class="m-nav">📊 Dashboard</div>
-          <div class="m-nav act">📁 Projects <span class="m-badge">12</span></div>
-          <div class="m-nav">✅ Tasks</div>
-          <div class="m-nav">💬 Messages</div>
-          <div class="m-sec">Tools</div>
-          <div class="m-nav">📅 Timeline</div>
-          <div class="m-nav">🎫 Tickets</div>
-          <div class="m-nav">👩‍💻 Analytics</div>
-        </div>
-        <div class="m-main" style="background:#f8fafc;overflow-y:auto;">
-          <div style="padding:8px 14px 6px;border-bottom:1px solid #f1f5f9;background:#fff;display:flex;align-items:center;justify-content:space-between;">
-            <div style="font-size:.82rem;font-weight:700;color:#0f172a;">Projects <span style="font-size:.68rem;font-weight:400;color:#94a3b8;">8 projects · Acme Corp</span></div>
-            <div style="font-size:.62rem;color:#fff;background:#2563eb;padding:3px 9px;border-radius:6px;font-weight:600;">+ New Project</div>
-          </div>
-          <div style="padding:8px 10px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;">
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">E-commerce Platform</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
-              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Next-gen shopping experience rebuild</div>
-              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
-              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#059669;border-radius:2px;"></div></div>
-              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Jan – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">72%</span></div>
-            </div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #f59e0b;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Mobile App Redesign</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
-              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">iOS & Android redesign with new UI</div>
-              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
-              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:68%;background:#f59e0b;border-radius:2px;"></div></div>
-              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">15 Feb – 15 May</span><span style="font-size:.58rem;color:#f59e0b;font-weight:600;">65%</span></div>
-            </div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #ef4444;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">API Gateway v2</div><span style="font-size:.55rem;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
-              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">High-performance REST & GraphQL gateway</div>
-              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
-              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:78%;background:#ef4444;border-radius:2px;"></div></div>
-              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 01 Aug</span><span style="font-size:.58rem;color:#ef4444;font-weight:600;">81%</span></div>
-            </div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #2563eb;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Customer Portal</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
-              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Self-service customer dashboard & billing</div>
-              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
-              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:88%;background:#2563eb;border-radius:2px;"></div></div>
-              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Feb – 31 Mar</span><span style="font-size:.58rem;color:#2563eb;font-weight:600;">90%</span></div>
-            </div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #7c3aed;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">Analytics Dashboard</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">2 TASKS</span></div>
-              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">Real-time KPI tracking and reporting</div>
-              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
-              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:98%;background:#7c3aed;border-radius:2px;"></div></div>
-              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">10 Jan – 30 Apr</span><span style="font-size:.58rem;color:#7c3aed;font-weight:600;">55%</span></div>
-            </div>
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:9px;padding:9px;border-top:2px solid #059669;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div style="font-size:.68rem;font-weight:700;color:#0f172a;line-height:1.3;">DevOps Pipeline</div><span style="font-size:.55rem;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;white-space:nowrap;">1 TASKS</span></div>
-              <div style="font-size:.6rem;color:#64748b;margin-bottom:5px;line-height:1.4;">CI/CD automation & infrastructure as code</div>
-              <div style="font-size:.58rem;color:#94a3b8;margin-bottom:3px;letter-spacing:.04em;">PROGRESS</div>
-              <div style="height:3px;background:#f1f5f9;border-radius:2px;margin-bottom:4px;"><div style="height:100%;width:95%;background:#059669;border-radius:2px;"></div></div>
-              <div style="display:flex;justify-content:space-between;"><span style="font-size:.58rem;color:#64748b;">01 Mar – 30 Jun</span><span style="font-size:.58rem;color:#059669;font-weight:600;">88%</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-<script>
-function showTab(t){
-  document.getElementById('mock-dash').style.display=t==='dash'?'block':'none';
-  document.getElementById('mock-proj').style.display=t==='proj'?'block':'none';
-  document.getElementById('tab-dash').style.background=t==='dash'?'#2563eb':'#fff';
-  document.getElementById('tab-dash').style.color=t==='dash'?'#fff':'#64748b';
-  document.getElementById('tab-dash').style.borderColor=t==='dash'?'#2563eb':'#e2e8f0';
-  document.getElementById('tab-proj').style.background=t==='proj'?'#2563eb':'#fff';
-  document.getElementById('tab-proj').style.color=t==='proj'?'#fff':'#64748b';
-  document.getElementById('tab-proj').style.borderColor=t==='proj'?'#2563eb':'#e2e8f0';
-}
-</script>
-
-<div class="ticker-wrap">
-  <div class="ticker">
-    <div class="ticker-item">📋 Smart Kanban Boards <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📋 Smart Kanban Boards <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">🤖 <span class="hi">AI Assistant</span> <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📅 Timeline Tracker <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">📞 <span class="hi">Instant Meet</span> <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">💬 Real-time Messaging <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">✉️ Direct DMs <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">🎫 Support Tickets <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">👩‍💻 <span class="hi">Dev Analytics</span> <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">⏰ Smart Reminders <span class="ticker-sep">·</span></div>
-    <div class="ticker-item">🔔 Push Notifications <span class="ticker-sep">·</span></div>
-  </div>
-</div>
-
-<div class="stats-bar">
-  <div class="stats-grid">
-    <div class="stat-item"><div class="stat-num">∞</div><div class="stat-lbl">Multi-tenant workspaces</div></div>
-    <div class="stat-item"><div class="stat-num" style="color:#7c3aed">11+</div><div class="stat-lbl">Built-in modules</div></div>
-    <div class="stat-item"><div class="stat-num" style="color:#059669">6</div><div class="stat-lbl">User roles</div></div>
-    <div class="stat-item"><div class="stat-num" style="color:#d97706">150MB</div><div class="stat-lbl">Max file upload</div></div>
-  </div>
-</div>
-
-<section id="features">
-  <div class="wrap">
-    <div class="centered">
-      <div class="sec-tag">Features</div>
-      <h2 class="sec-title">Everything your team needs</h2>
-      <p class="sec-sub">One platform replaces your task tracker, chat tool, ticketing system, and analytics dashboard.</p>
-    </div>
-    <div class="bento">
-      <div class="bc featured"><div class="b-ico">📋</div><h3>Smart Task Management</h3><p>Create, assign and track tasks with custom stage workflows, priorities, due dates and inline comments.</p><ul class="feat-list"><li>Custom stages: Backlog → Dev → Review → Done</li><li>Priority levels: Low, Medium, High, Critical</li><li>Inline comments & file attachments up to 150MB</li><li>Assignee management with avatar display</li></ul></div>
-      <div class="bc"><div class="b-ico">📁</div><h3>Project Workspaces</h3><p>Colour-coded projects with start & end dates, per-member access control, and live progress bars.</p><ul class="feat-list"><li>Start date + target date planning</li><li>Visual progress from task completion</li><li>Per-project team member access control</li></ul></div>
-      <div class="bc featured"><div class="b-ico">🤖</div><h3>AI Assistant</h3><p>Floating AI panel with full workspace context. Bring your own Anthropic API key.</p><ul class="feat-list"><li>Ask anything about tasks, projects & blockers</li><li>Smart EOD reports & sprint summaries</li><li>Bring your own API key (Anthropic)</li><li>Context-aware using live workspace data</li></ul></div>
-      <div class="bc span2"><div class="b-ico">📅</div><h3>Timeline Tracker <span class="role-badge">Admin / Manager</span></h3><p>Dual progress bars compare time elapsed against task completion % so you catch at-risk projects instantly. Auto health badges calculated from today's date.</p><ul class="feat-list"><li>Days spent & remaining — calculated from today</li><li>Health badges: On Track · At Risk · Needs Attention · Overdue</li><li>Filter by health status, sort by days remaining</li></ul></div>
-      <div class="bc"><div class="b-ico">👩‍💻</div><h3>Dev Productivity <span class="role-badge">Admin</span></h3><p>Full leaderboard with productivity score 0–100 per developer. Table + Chart views with drill-down.</p><ul class="feat-list"><li>Productivity score 0–100 auto-calculated</li><li>Table & chart view toggle</li><li>Drill into any developer's full task list</li></ul></div>
-      <div class="bc"><div class="b-ico">💬</div><h3>Messaging & DMs</h3><p>Per-project channels plus private one-on-one direct messages with unread badges.</p><ul class="feat-list"><li>Per-project message channels</li><li>Private direct messages</li><li>Start huddle directly from DMs</li></ul></div>
-      <div class="bc"><div class="b-ico">📞</div><h3>Instant Meet</h3><p>Instant in-app Instant Meet. Start from sidebar or DMs, invite mid-call.</p><ul class="feat-list"><li>One-click room creation</li><li>Invite participants mid-call</li><li>Mute/unmute controls</li></ul></div>
-      <div class="bc"><div class="b-ico">🎫</div><h3>Support Tickets</h3><p>Built-in bug tracking & support ticketing separate from project tasks.</p><ul class="feat-list"><li>Bug, feature-request & incident types</li><li>Status: Open · In Progress · Resolved</li><li>Threaded comments per ticket</li></ul></div>
-
-    </div>
-  </div>
-</section>
-
-<section id="modules" style="padding-top:0;background:#f8fafc;">
-  <div class="wrap centered" style="padding-top:60px;padding-bottom:60px;">
-    <div class="sec-tag">All Modules</div>
-    <h2 class="sec-title">11 modules, one platform</h2>
-    <p class="sec-sub">Every module shares data automatically — tasks flow into analytics, tickets link to projects, reminders fire to notifications.</p>
-    <div class="modules-grid">
-      <div class="mod-card"><div class="mod-ico">📋</div><div class="mod-n">Kanban Board</div><div class="mod-d">Kanban with custom stages</div></div>
-      <div class="mod-card"><div class="mod-ico">📁</div><div class="mod-n">Projects</div><div class="mod-d">Multi-project management</div></div>
-      <div class="mod-card"><div class="mod-ico">🤖</div><div class="mod-n">AI Assistant</div><div class="mod-d">Workspace-aware AI</div></div>
-      <div class="mod-card"><div class="mod-ico">📅</div><div class="mod-n">Timeline</div><div class="mod-d">Health tracking per project</div></div>
-      <div class="mod-card"><div class="mod-ico">👩‍💻</div><div class="mod-n">Dev Analytics</div><div class="mod-d">Productivity leaderboard</div></div>
-      <div class="mod-card"><div class="mod-ico">💬</div><div class="mod-n">Messaging</div><div class="mod-d">Per-project channels</div></div>
-      <div class="mod-card"><div class="mod-ico">✉️</div><div class="mod-n">Direct DMs</div><div class="mod-d">Private conversations</div></div>
-      <div class="mod-card"><div class="mod-ico">📞</div><div class="mod-n">Instant Meet</div><div class="mod-d">Instant voice rooms</div></div>
-      <div class="mod-card"><div class="mod-ico">🎫</div><div class="mod-n">Tickets</div><div class="mod-d">Bug & support tracking</div></div>
-      <div class="mod-card"><div class="mod-ico">⏰</div><div class="mod-n">Reminders</div><div class="mod-d">Per-task alerts</div></div>
-      <div class="mod-card"><div class="mod-ico">🔔</div><div class="mod-n">Notifications</div><div class="mod-d">Push, email & in-app</div></div>
-      <div class="mod-card" style="border-color:rgba(37,99,235,.12);background:rgba(37,99,235,.02);"><div class="mod-ico">⚙️</div><div class="mod-n">Settings</div><div class="mod-d">SMTP, AI key, invite codes</div></div>
-    </div>
-  </div>
-</section>
-
-<section id="how">
-  <div class="wrap centered">
-    <div class="sec-tag">How it works</div>
-    <h2 class="sec-title">Up and running in 4 steps</h2>
-    <p class="sec-sub">No DevOps required. Create a workspace, configure it once, invite your team.</p>
-    <div class="steps">
-      <div class="step"><div class="step-num">1</div><h3>Create Account</h3><p>Sign up and create a new workspace. An invite code is generated instantly.</p></div>
-      <div class="step"><div class="step-num">2</div><h3>Configure</h3><p>Add your AI API key, set up SMTP for email notifications, customise settings.</p></div>
-      <div class="step"><div class="step-num">3</div><h3>Invite Team</h3><p>Share the invite code. Members join instantly with their chosen role.</p></div>
-      <div class="step"><div class="step-num">4</div><h3>Ship Together</h3><p>Create projects, assign tasks, huddle, use AI, track timelines. Ship faster.</p></div>
-    </div>
-  </div>
-</section>
-
-<section id="about">
-  <div class="wrap">
-    <div class="centered" style="margin-bottom:52px">
-      <div class="sec-tag">About VEWIT</div>
-      <h2 class="sec-title">One platform. Every tool your team needs.</h2>
-      <p class="sec-sub">Most engineering teams lose 2–3 hours a day switching between tools. VEWIT was built to end that — a single platform where planning, execution and communication happen together.</p>
-    </div>
-
-    <!-- Origin story / mission -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:56px;align-items:center">
-      <div>
-        <div class="sec-tag" style="margin-bottom:14px">Our mission</div>
-        <h3 style="font-size:clamp(20px,2.5vw,28px);font-weight:800;color:var(--tx);margin-bottom:16px;letter-spacing:-.02em;line-height:1.3">Replace the tool chaos with clarity</h3>
-        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">The average team uses Jira for tasks, Slack for chat, Confluence for docs, Notion for planning and spreadsheets for tracking. Each switch breaks focus and loses context.</p>
-        <p style="color:var(--tx2);font-size:15px;line-height:1.75;margin-bottom:16px">VEWIT puts your projects, tasks, direct messages, support tickets, timeline and analytics under one roof — with an AI assistant that understands <em>your actual work</em>, not just general knowledge.</p>
-        <p style="color:var(--tx2);font-size:15px;line-height:1.75">The result: less overhead, faster delivery, and a team that stays in sync without the noise.</p>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
-          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">12+</div>
-          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Built-in modules</div>
-        </div>
-        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
-          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">6</div>
-          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Access roles</div>
-        </div>
-        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
-          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">AI</div>
-          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Claude-powered</div>
-        </div>
-        <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:14px;padding:24px;text-align:center">
-          <div style="font-size:34px;font-weight:800;color:var(--ac);letter-spacing:-1px;margin-bottom:6px">PWA</div>
-          <div style="font-size:12px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Works on mobile</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Who it's for — role cards using landing theme -->
-    <div class="sec-tag centered" style="display:block;text-align:center;margin-bottom:12px">Who uses VEWIT</div>
-    <h3 style="text-align:center;font-size:clamp(18px,2.5vw,26px);font-weight:800;color:var(--tx);margin-bottom:32px;letter-spacing:-.02em">Built for every layer of your team</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:56px">
-      <div class="step" style="margin:0;text-align:left;padding:20px">
-        <div style="font-size:22px;margin-bottom:10px">👑</div>
-        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Admin</h3>
-        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Full workspace control — SMTP, AI keys, invite codes, roles and all settings</p>
-      </div>
-      <div class="step" style="margin:0;text-align:left;padding:20px">
-        <div style="font-size:22px;margin-bottom:10px">🗂️</div>
-        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Manager</h3>
-        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Create and manage projects, assign tasks, view team analytics and productivity</p>
-      </div>
-      <div class="step" style="margin:0;text-align:left;padding:20px">
-        <div style="font-size:22px;margin-bottom:10px">🏷️</div>
-        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Team Lead</h3>
-        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Lead sub-teams, assign work to members, track progress and unblock delivery</p>
-      </div>
-      <div class="step" style="margin:0;text-align:left;padding:20px">
-        <div style="font-size:22px;margin-bottom:10px">💻</div>
-        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Developer</h3>
-        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Own tasks, track story points, log progress, DM teammates and use the AI assistant</p>
-      </div>
-      <div class="step" style="margin:0;text-align:left;padding:20px">
-        <div style="font-size:22px;margin-bottom:10px">🔍</div>
-        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Tester</h3>
-        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Raise and manage tickets, link bugs to tasks, track resolution across sprints</p>
-      </div>
-      <div class="step" style="margin:0;text-align:left;padding:20px">
-        <div style="font-size:22px;margin-bottom:10px">👁️</div>
-        <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">Viewer</h3>
-        <p style="font-size:12px;color:var(--tx3);line-height:1.5">Read-only visibility into projects, tasks and team progress — perfect for stakeholders</p>
-      </div>
-    </div>
-
-    <!-- VEWIT vs others comparison — premium redesign -->
-    <div class="centered" style="margin-bottom:40px">
-      <div class="sec-tag">VEWIT vs the alternatives</div>
-      <h3 style="font-size:clamp(20px,2.8vw,30px);font-weight:800;color:var(--tx);margin-top:12px;letter-spacing:-.03em;line-height:1.2">Stop paying for 5 tools when 1 does it all</h3>
-      <p style="color:var(--tx3);font-size:14px;margin-top:10px;max-width:520px;margin-left:auto;margin-right:auto">Every capability your team needs — built-in, not bolted on.</p>
-    </div>
-
-    <div style="overflow-x:auto;margin-bottom:64px;border-radius:20px;box-shadow:0 4px 32px rgba(0,0,0,.07);border:1px solid var(--bd)">
-      <table style="width:100%;border-collapse:collapse;min-width:600px">
-
-        <!-- Header -->
-        <thead>
-          <tr>
-            <th style="padding:20px 24px;text-align:left;background:var(--sf);border-bottom:1px solid var(--bd);width:35%">
-              <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--tx3)">Capability</span>
-            </th>
-            <!-- VEWIT column — highlighted -->
-            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:2px solid var(--ac);position:relative;width:21%">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-                <div style="width:28px;height:28px;border-radius:8px;background:var(--ac);display:flex;align-items:center;justify-content:center;margin-bottom:2px">
-                  <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+              <div class="task-card">
+                <div class="task-card-title">Performance testing suite</div>
+                <div class="task-card-meta">
+                  <div class="task-avatar" style="background:#d97706">DK</div>
+                  <div class="task-prio" style="background:rgba(109,110,115,0.2);color:#6e6e73">Low</div>
                 </div>
-                <span style="font-size:14px;font-weight:800;color:var(--tx);letter-spacing:-.01em">VEWIT</span>
               </div>
-            </th>
-            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
-              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Jira + Slack</div>
-              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
-            </th>
-            <th style="padding:20px 24px;text-align:center;background:var(--sf);border-bottom:1px solid var(--bd);width:22%">
-              <div style="font-size:13px;font-weight:700;color:var(--tx2)">Notion + Linear</div>
-              <div style="font-size:11px;color:var(--tx3);margin-top:3px;font-weight:400">2 separate tools</div>
-            </th>
-          </tr>
-        </thead>
-
-        <tbody>
-          <!-- Row macro: cap | vewit | jira | notion -->
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📋</span>
-              Project &amp; task management
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
-            </td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💬</span>
-              Direct messaging
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
-                <span style="font-size:10px;color:#94a3b8">via Slack</span>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-head">
+                <div class="dot" style="background:#2997ff"></div> In Progress
               </div>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
-            </td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</span>
-              AI assistant (workspace-aware)
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
-                <span style="font-size:10px;color:#94a3b8">Partial</span>
+              <div class="task-card">
+                <div class="task-card-title">Product catalog UI</div>
+                <div class="task-card-meta">
+                  <div class="task-avatar" style="background:#7c3aed">AC</div>
+                  <div class="task-prio" style="background:rgba(255,159,10,0.15);color:#ff9f0a">Med</div>
+                </div>
               </div>
-            </td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🎫</span>
-              Support ticket system
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
-            </td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📅</span>
-              Timeline / Gantt view
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
-                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+              <div class="task-card">
+                <div class="task-card-title">Inventory management</div>
+                <div class="task-card-meta">
+                  <div class="task-avatar" style="background:#2563eb">BM</div>
+                  <div class="task-prio" style="background:rgba(255,55,95,0.15);color:#ff375f">High</div>
+                </div>
               </div>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fef9c3;font-size:12px;color:#ca8a04">~</span>
-                <span style="font-size:10px;color:#94a3b8">Partial</span>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-head">
+                <div class="dot" style="background:#ff9f0a"></div> Review
               </div>
-            </td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📊</span>
-              Developer productivity analytics
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
-            </td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔔</span>
-              Push notifications (desktop)
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#fee2e2;font-size:12px;color:#ef4444">✕</span>
-            </td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--bd)">
-            <td style="padding:15px 24px;font-size:13px;color:var(--tx);font-weight:500;display:flex;align-items:center;gap:10px">
-              <span style="width:28px;height:28px;border-radius:8px;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🏢</span>
-              Multi-workspace / multi-tenant
-            </td>
-            <td style="text-align:center;background:rgba(37,99,235,.04);padding:15px 24px">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#dcfce7;font-size:13px">✓</span>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
-                <span style="font-size:10px;color:#94a3b8">Expensive</span>
+              <div class="task-card">
+                <div class="task-card-title">Payment gateway integration</div>
+                <div class="task-card-meta">
+                  <div class="task-avatar" style="background:#059669">CS</div>
+                  <div class="task-prio" style="background:rgba(255,55,95,0.15);color:#ff375f">High</div>
+                </div>
               </div>
-            </td>
-            <td style="text-align:center;padding:15px 24px">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#f1f5f9;font-size:13px;color:#64748b">✓</span>
-                <span style="font-size:10px;color:#94a3b8">Paid plan</span>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-head">
+                <div class="dot" style="background:#30d158"></div> Done
               </div>
-            </td>
-          </tr>
-          <!-- Pricing footer row -->
-          <tr style="background:var(--sf2)">
-            <td style="padding:18px 24px;font-size:13px;font-weight:700;color:var(--tx)">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span style="width:28px;height:28px;border-radius:8px;background:var(--ac3);border:1px solid var(--bd);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💰</span>
-                Monthly cost per user
+              <div class="task-card">
+                <div class="task-card-title">Design system setup</div>
+                <div class="task-card-meta">
+                  <div class="task-avatar" style="background:#dc2626">EW</div>
+                  <div class="task-prio" style="background:rgba(48,209,88,0.15);color:#30d158">✓</div>
+                </div>
               </div>
-            </td>
-            <td style="text-align:center;background:linear-gradient(160deg,rgba(37,99,235,.12),rgba(37,99,235,.06));padding:18px 24px;border-top:2px solid var(--ac)">
-              <div style="font-size:18px;font-weight:800;color:var(--ac);line-height:1">Free</div>
-              <div style="font-size:10px;color:var(--tx3);margin-top:4px;font-weight:500">to get started</div>
-            </td>
-            <td style="text-align:center;padding:18px 24px">
-              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$15–30</div>
-              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
-            </td>
-            <td style="text-align:center;padding:18px 24px">
-              <div style="font-size:16px;font-weight:700;color:var(--tx2)">$16–20</div>
-              <div style="font-size:10px;color:var(--tx3);margin-top:4px">/user/month</div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- Legend -->
-      <div style="display:flex;gap:20px;justify-content:flex-end;padding:14px 24px;border-top:1px solid var(--bd);background:var(--sf);border-radius:0 0 20px 20px">
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#dcfce7;font-size:10px">✓</span> Included
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fee2e2;font-size:9px;color:#ef4444">✕</span> Not available
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx3)">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fef9c3;font-size:10px;color:#ca8a04">~</span> Partial / add-on
+              <div class="task-card">
+                <div class="task-card-title">User authentication API</div>
+                <div class="task-card-meta">
+                  <div class="task-avatar" style="background:#7c3aed">AC</div>
+                  <div class="task-prio" style="background:rgba(48,209,88,0.15);color:#30d158">✓</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+      <div class="preview-glow"></div>
     </div>
+  </div>
+</div>
 
-    <!-- Security & tech stack -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:8px">
-      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
-        <div class="sec-tag" style="margin-bottom:16px">Security</div>
-        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Enterprise-grade security, zero config</h4>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> bcrypt password hashing (12 rounds)</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Optional OTP email verification per login</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Role-based access control (6 levels)</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Session-based auth with 7-day persistence</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Workspace isolation — data never crosses tenants</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> HTTPS enforced via Railway + Let's Encrypt</div>
-        </div>
-      </div>
-      <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:18px;padding:32px">
-        <div class="sec-tag" style="margin-bottom:16px">Technology</div>
-        <h4 style="font-size:17px;font-weight:700;color:var(--tx);margin-bottom:16px">Modern stack, no dependencies to manage</h4>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Python Flask backend — fast and lightweight</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> PostgreSQL database via pg8000 (pure Python)</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> React 18 frontend — no build step, instant load</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Anthropic Claude AI integration</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Web Push API for real-time desktop notifications</div>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)"><span style="color:var(--ac);font-weight:700;font-size:16px">✓</span> Hosted on Railway — auto-deploy, zero downtime</div>
-        </div>
-      </div>
+<!-- Features -->
+<section class="content reveal" id="features">
+  <div class="section-eyebrow">Features</div>
+  <h2 class="section-title">Everything your<br/>team needs.</h2>
+  <p class="section-sub">Twelve powerful modules — beautifully integrated — so your team spends less time switching tools and more time building.</p>
+
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-icon">📋</div>
+      <h3>Project Management</h3>
+      <p>Multi-project workspaces with team assignments, progress tracking, target dates and priority management.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">✅</div>
+      <h3>Smart Kanban Board</h3>
+      <p>Kanban with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🤖</div>
+      <h3>Claude AI Assistant</h3>
+      <p>Ask your AI to create tasks, generate EOD reports, update statuses and answer questions about your projects in natural language.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">💬</div>
+      <h3>Direct Messages</h3>
+      <p>Private one-to-one messaging with real-time online presence indicators, message history and unread notification badges.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">#️⃣</div>
+      <h3>Project Channels</h3>
+      <p>Dedicated message channels per project for focused team communication — no scattered threads.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🎫</div>
+      <h3>Support Tickets</h3>
+      <p>Full ticketing system with bug reports, feature requests, priority levels, assignee tracking and status workflows.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📅</div>
+      <h3>Timeline / Gantt</h3>
+      <p>Visual timeline to plan project schedules, track milestones and identify overlapping workloads across your team.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📊</div>
+      <h3>Developer Productivity</h3>
+      <p>Analytics measuring individual and team output — velocity, blocked work, sprint performance and project contributions.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🔔</div>
+      <h3>Desktop Push Notifications</h3>
+      <p>Stay informed even when the app is minimised — task assignments, comments, DMs and reminders delivered instantly.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📹</div>
+      <h3>Instant Meet Calls</h3>
+      <p>Launch instant video meetings, invite team members and collaborate in real-time without leaving the platform.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🏢</div>
+      <h3>Multi-Workspace</h3>
+      <p>Create separate workspaces for different companies or clients — each with its own team, projects and settings.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🔐</div>
+      <h3>Role-Based Access</h3>
+      <p>Admin, Manager, TeamLead, Developer, Tester and Viewer roles — with granular permissions per action.</p>
     </div>
   </div>
 </section>
 
-<section class="cta-section">
-  <div class="wrap">
-    <div class="cta-box">
-      <h2>Ready to ship faster, together?</h2>
-      <p>Create your free workspace in under 2 minutes. No credit card required.</p>
-      <div class="cta-actions">
-        <a href="/?action=register" class="btn btn-primary btn-xl">🚀 Create Your Workspace</a>
-        <a href="/?action=login" class="btn btn-outline btn-xl">Sign In →</a>
-      </div>
-      <div class="trust-row">
-        <div class="trust-item"><span>✓</span> Free to start</div>
-        <div class="trust-item"><span>✓</span> No credit card</div>
-        <div class="trust-item"><span>✓</span> Multi-tenant</div>
-        <div class="trust-item"><span>✓</span> Hosted on Railway</div>
-        <div class="trust-item"><span>✓</span> bcrypt security</div>
-      </div>
+<!-- Stats -->
+<div class="stats-section">
+  <div class="stats-wrap">
+    <div class="stat-item reveal">
+      <div class="stat-num">12+</div>
+      <div class="stat-label">Integrated modules</div>
+    </div>
+    <div class="stat-item reveal">
+      <div class="stat-num">6</div>
+      <div class="stat-label">User role types</div>
+    </div>
+    <div class="stat-item reveal">
+      <div class="stat-num">100%</div>
+      <div class="stat-label">Free to start</div>
+    </div>
+    <div class="stat-item reveal">
+      <div class="stat-num">AI</div>
+      <div class="stat-label">Powered by Claude</div>
     </div>
   </div>
-</section>
+</div>
 
-<section id="contact" style="padding:90px 0;background:var(--bg);border-top:1px solid var(--bd)">
-  <div class="wrap">
+<!-- Testimonials -->
+<section class="content reveal">
+  <div class="section-eyebrow">Testimonials</div>
+  <h2 class="section-title">Loved by teams.</h2>
+  <p class="section-sub">From startups to growing engineering teams — here's what people say about VEWIT.</p>
 
-    <!-- Header -->
-    <div class="centered" style="margin-bottom:56px">
-      <div class="sec-tag">Get in touch</div>
-      <h2 class="sec-title" style="margin-top:12px">We'd love to hear from you</h2>
-      <p class="sec-sub">Have a question, want a demo, or need help getting started? Reach out — we respond within 24 hours.</p>
-    </div>
-
-    <!-- Main contact panel -->
-    <div style="background:var(--sf);border:1px solid var(--bd);border-radius:24px;overflow:hidden;display:grid;grid-template-columns:1fr 1.4fr">
-
-      <!-- Left — info panel -->
-      <div style="background:linear-gradient(160deg,#0f172a 0%,#1e3a5f 100%);padding:48px 40px;display:flex;flex-direction:column;gap:32px">
+  <div class="testimonial-grid">
+    <div class="testimonial-card">
+      <div class="testimonial-stars">★★★★★</div>
+      <p class="testimonial-text">"We replaced Jira and Slack with VEWIT. The AI assistant alone saves us hours every week — it generates our EOD reports automatically."</p>
+      <div class="testimonial-author">
+        <div class="testimonial-avatar" style="background:#7c3aed">PR</div>
         <div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-            <div style="width:36px;height:36px;border-radius:10px;background:rgba(37,99,235,.4);display:flex;align-items:center;justify-content:center">
-              <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
-            </div>
-            <span style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-.02em">VEWIT</span>
-          </div>
-          <h3 style="font-size:22px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:10px">Let's build something great together</h3>
-          <p style="font-size:13px;color:#94a3b8;line-height:1.7">Whether you're a startup or an enterprise team, we're here to help you get more done with less friction.</p>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:20px">
-
-          <div style="display:flex;align-items:flex-start;gap:14px">
-            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🌐</div>
-            <div>
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Website</div>
-              <a href="https://www.vewit.in" style="font-size:14px;color:#60a5fa;font-weight:600;text-decoration:none">www.vewit.in</a>
-            </div>
-          </div>
-          <div style="display:flex;align-items:flex-start;gap:14px">
-            <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏰</div>
-            <div>
-              <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Business hours</div>
-              <div style="font-size:14px;color:#cbd5e1;font-weight:500">Mon–Sat · 9 AM – 6 PM IST</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- What we can help with -->
-        <div style="border-top:1px solid rgba(255,255,255,.08);padding-top:24px">
-          <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">We can help with</div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Workspace setup &amp; onboarding</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Team migration from other tools</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Custom feature requests</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Enterprise &amp; team pricing</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8"><span style="color:#22c55e;font-weight:700">✓</span> Technical support &amp; bug reports</div>
-          </div>
+          <div class="testimonial-name">Priya R.</div>
+          <div class="testimonial-role">Engineering Manager · Fintech startup</div>
         </div>
       </div>
-
-      <!-- Right — direct email CTA -->
-      <div style="padding:52px 44px;background:var(--sf);display:flex;flex-direction:column;justify-content:center;gap:32px">
-
+    </div>
+    <div class="testimonial-card">
+      <div class="testimonial-stars">★★★★★</div>
+      <p class="testimonial-text">"The Kanban board with sprint planning is exactly what we needed. Story points, subtasks, file attachments — all in one clean view."</p>
+      <div class="testimonial-author">
+        <div class="testimonial-avatar" style="background:#2563eb">SK</div>
         <div>
-          <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.18);padding:5px 14px;border-radius:100px;margin-bottom:18px">
-            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e"></span>
-            <span style="font-size:11px;font-weight:700;color:#2563eb;letter-spacing:.06em;text-transform:uppercase">We respond within 24 hours</span>
-          </div>
-          <h3 style="font-size:26px;font-weight:800;color:var(--tx);letter-spacing:-.03em;line-height:1.2;margin-bottom:12px">Reach us directly<br/>by email</h3>
-          <p style="font-size:14px;color:var(--tx3);line-height:1.7">No forms, no bots. Write to us directly and a real person will reply — usually within a few hours.</p>
+          <div class="testimonial-name">Suresh K.</div>
+          <div class="testimonial-role">CTO · SaaS company</div>
         </div>
-
-        <div style="display:flex;flex-direction:column;gap:14px">
-          <a href="mailto:ceo@vewit.in?subject=Enquiry about VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#2563eb';this.style.background='rgba(37,99,235,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
-            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✉️</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">General enquiries &amp; CEO</div>
-              <div style="font-size:15px;font-weight:700;color:#2563eb">ceo@vewit.in</div>
-              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Partnerships · Demo · Enterprise</div>
-            </div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
-          </a>
-
-          <a href="mailto:support@vewit.in?subject=Support Request — VEWIT" style="text-decoration:none;display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--bg);border:1.5px solid var(--bd);border-radius:16px;transition:all .18s" onmouseover="this.style.borderColor='#7c3aed';this.style.background='rgba(124,58,237,.03)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--bg)'">
-            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🛠️</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Technical support</div>
-              <div style="font-size:15px;font-weight:700;color:#7c3aed">support@vewit.in</div>
-              <div style="font-size:11px;color:var(--tx3);margin-top:2px">Bugs · Feature requests · Help</div>
-            </div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
-          </a>
+      </div>
+    </div>
+    <div class="testimonial-card">
+      <div class="testimonial-stars">★★★★★</div>
+      <p class="testimonial-text">"The support ticket system and direct messages work seamlessly together. Our team stays in the loop without any context-switching."</p>
+      <div class="testimonial-author">
+        <div class="testimonial-avatar" style="background:#059669">AM</div>
+        <div>
+          <div class="testimonial-name">Anika M.</div>
+          <div class="testimonial-role">Product Lead · E-commerce</div>
         </div>
-
-        <div style="display:flex;align-items:flex-start;gap:12px;padding:16px 18px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:12px">
-          <span style="font-size:18px;flex-shrink:0;margin-top:1px">💡</span>
-          <p style="margin:0;font-size:12px;color:var(--tx2);line-height:1.65"><strong style="color:var(--tx)">Pro tip:</strong> Include your workspace name, team size and what you need — it helps us reply faster.</p>
-        </div>
-
       </div>
     </div>
   </div>
 </section>
 
+<!-- Pricing -->
+<section class="content reveal" id="pricing">
+  <div class="section-eyebrow">Pricing</div>
+  <h2 class="section-title">Simple, honest pricing.</h2>
+  <p class="section-sub">Start free, scale when you're ready. No hidden fees, no credit card required to begin.</p>
 
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <div class="pricing-name">Starter</div>
+      <p class="pricing-desc">Perfect for small teams and side projects.</p>
+      <div class="pricing-price"><sup>₹</sup>0<small>/mo</small></div>
+      <a href="/?action=register" class="pricing-cta outline">Get started free</a>
+      <ul class="pricing-features">
+        <li>1 workspace</li>
+        <li>Up to 5 team members</li>
+        <li>Unlimited projects &amp; tasks</li>
+        <li>AI assistant (bring your key)</li>
+        <li>Kanban, Timeline, Tickets</li>
+        <li>Direct messages &amp; channels</li>
+        <li>Push notifications</li>
+      </ul>
+    </div>
+    <div class="pricing-card featured">
+      <div class="pricing-badge">Most Popular</div>
+      <div class="pricing-name">Team</div>
+      <p class="pricing-desc">For growing teams that need more power.</p>
+      <div class="pricing-price"><sup>₹</sup>499<small>/mo</small></div>
+      <a href="/?action=register" class="pricing-cta solid">Start free trial</a>
+      <ul class="pricing-features">
+        <li>Everything in Starter</li>
+        <li>Unlimited team members</li>
+        <li>Multiple workspaces</li>
+        <li>Role-based access control</li>
+        <li>Developer productivity analytics</li>
+        <li>SMTP / custom email</li>
+        <li>Priority support</li>
+      </ul>
+    </div>
+    <div class="pricing-card">
+      <div class="pricing-name">Enterprise</div>
+      <p class="pricing-desc">Custom solutions for large organisations.</p>
+      <div class="pricing-price" style="font-size:36px;letter-spacing:-1px;margin:20px 0 6px">Custom</div>
+      <a href="mailto:hello@vewit.in" class="pricing-cta outline">Contact us</a>
+      <ul class="pricing-features">
+        <li>Everything in Team</li>
+        <li>Dedicated instance</li>
+        <li>Custom integrations</li>
+        <li>SLA guarantee</li>
+        <li>On-premise deployment</li>
+        <li>Dedicated account manager</li>
+        <li>Custom onboarding</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- CTA Banner -->
+<div class="cta-banner reveal">
+  <div class="cta-banner-inner">
+    <h2>Ready to transform<br/>how your team works?</h2>
+    <p>Join hundreds of teams using VEWIT to ship faster, communicate better and stay aligned — all powered by AI.</p>
+    <div class="cta-banner-btns">
+      <a href="/?action=register" class="cta-main">Start for free</a>
+      <a href="/about" class="cta-sec">Learn more</a>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
 <footer>
-  <div class="wrap">
-    <div class="footer-top">
-      <div class="footer-brand">
-        <a href="/" class="logo"><div class="logo-icon"><svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg></div>VEWIT</a>
-        <p>The all-in-one project management platform for engineering teams. AI-powered, multi-tenant, fully featured.</p>
-      </div>
-      <div class="footer-col"><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#modules">All Modules</a></li><li><a href="#about">About VEWIT</a></li><li><a href="#how">How it works</a></li></ul></div>
-      <div class="footer-col"><h4>Platform</h4><ul><li><a href="/?action=register">Create Workspace</a></li><li><a href="/?action=login">Sign In</a></li><li><a href="#contact">Contact Us</a></li></ul></div>
-      <div class="footer-col"><h4>Capabilities</h4><ul><li><a href="#features">AI Assistant</a></li><li><a href="#features">Instant Meet</a></li><li><a href="#features">Notifications</a></li></ul></div>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="brand-name">VEWIT</div>
+      <p>AI-powered team collaboration platform. Projects, tasks, messages, tickets and analytics — all in one place.</p>
     </div>
-    <div class="footer-bottom">
-      <div class="footer-copy">© 2026 VEWIT — AI-Powered Team Collaboration</div>
-      <div class="footer-badges"><div class="fb">v4.0</div><div class="fb">PostgreSQL</div><div class="fb">AI-Powered</div><div class="fb">bcrypt</div></div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="/about">About</a>
+      <a href="/?action=register">Get started</a>
     </div>
+    <div class="footer-col">
+      <h4>Use Cases</h4>
+      <a href="/?action=register">Engineering teams</a>
+      <a href="/?action=register">Startups</a>
+      <a href="/?action=register">Product teams</a>
+      <a href="/?action=register">Freelancers</a>
+    </div>
+    <div class="footer-col">
+      <h4>Company</h4>
+      <a href="/about">About VEWIT</a>
+      <a href="mailto:hello@vewit.in">Contact</a>
+      <a href="/?action=login">Sign in</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2025 VEWIT. All rights reserved.</p>
+    <p>Built with ♥ in India · <a href="mailto:hello@vewit.in">hello@vewit.in</a></p>
   </div>
 </footer>
 
 <script>
-// Scroll animations
-const observer=new IntersectionObserver(entries=>{
-  entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='translateY(0)';}});
-},{threshold:.08,rootMargin:'0px 0px -20px 0px'});
-document.querySelectorAll('.bc,.mod-card,.step').forEach((el,i)=>{
-  el.style.opacity='0';el.style.transform='translateY(16px)';
-  el.style.transition=`opacity .45s ${i*.045}s ease,transform .45s ${i*.045}s ease`;
-  observer.observe(el);
-});
+// Scroll reveal
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) { e.target.classList.add('visible'); } });
+}, { threshold: 0.08 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-// Nav scroll
-const nav=document.getElementById('nav');
-window.addEventListener('scroll',()=>{
-  nav.style.background=window.scrollY>30?'rgba(255,255,255,0.97)':'rgba(255,255,255,0.88)';
-},{passive:true});
-
+// Nav background on scroll
+const nav = document.getElementById('nav');
+if(nav) {
+  window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 40
+      ? 'rgba(0,0,0,0.9)'
+      : 'rgba(0,0,0,0.72)';
+  }, { passive: true });
+}
 </script>
 </body>
 </html>"""
+
+
+ABOUT_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>About VEWIT — AI-Powered Team Collaboration Platform</title>
+<link rel="icon" type="image/png" href="/icon-192.png"/>
+<meta name="description" content="VEWIT is an AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics."/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="https://www.vewit.in/about"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #000; --bg2: #0a0a0a; --bg3: #111;
+    --surface: rgba(255,255,255,0.05); --surface2: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.15);
+    --text: #f5f5f7; --text2: #a1a1a6; --text3: #6e6e73;
+    --accent: #2997ff; --accent2: #30d158;
+    --grad1: linear-gradient(135deg, #2997ff 0%, #bf5af2 100%);
+    --radius: 18px; --radius-sm: 10px;
+    --font: -apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font); background: var(--bg); color: var(--text);
+    line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 40px; height: 52px;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .nav-logo {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
+    color: var(--text); text-decoration: none;
+    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .nav-links { display: flex; align-items: center; gap: 36px; }
+  .nav-links a { color: var(--text2); font-size: 13px; text-decoration: none; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--text); }
+  .btn-primary {
+    background: var(--accent); color: #fff; font-size: 13px; font-weight: 500;
+    text-decoration: none; padding: 7px 18px; border-radius: 980px;
+    transition: opacity 0.2s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+
+  .page-hero {
+    padding: 140px 24px 80px; text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .page-hero::before {
+    content: ''; position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+    width: 600px; height: 600px;
+    background: radial-gradient(ellipse, rgba(41,151,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .page-hero h1 {
+    font-size: clamp(36px, 6vw, 72px); font-weight: 700; letter-spacing: -3px;
+    line-height: 1.05; margin-bottom: 20px;
+  }
+  .page-hero p {
+    font-size: 18px; color: var(--text2); max-width: 560px; margin: 0 auto;
+    line-height: 1.65;
+  }
+  .eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 20px;
+  }
+
+  .content-wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px 120px; }
+  .section { padding: 72px 0; border-top: 1px solid var(--border); }
+  .section:first-child { border-top: none; }
+  .section-label {
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px;
+  }
+  .section h2 {
+    font-size: clamp(28px, 4vw, 42px); font-weight: 700; letter-spacing: -1.5px;
+    margin-bottom: 16px; color: var(--text);
+  }
+  .section p { font-size: 16px; color: var(--text2); line-height: 1.75; max-width: 640px; }
+  .section p + p { margin-top: 16px; }
+
+  .feat-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 40px; }
+  .feat-card2 {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 28px;
+    transition: border-color 0.2s;
+  }
+  .feat-card2:hover { border-color: var(--border2); }
+  .feat-card2 .icon { font-size: 24px; margin-bottom: 14px; }
+  .feat-card2 h3 { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; margin-bottom: 8px; }
+  .feat-card2 p { font-size: 13px; color: var(--text3); line-height: 1.65; }
+
+  .roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 36px; }
+  .role-card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 20px; text-align: center;
+  }
+  .role-card .icon { font-size: 24px; margin-bottom: 10px; }
+  .role-card h4 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; letter-spacing: -0.2px; }
+  .role-card p { font-size: 12px; color: var(--text3); line-height: 1.5; }
+
+  .stack-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .stack-pill {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 980px; padding: 6px 16px;
+    font-size: 13px; font-weight: 500; color: var(--text2);
+  }
+
+  .cta-section {
+    background: linear-gradient(135deg, rgba(41,151,255,0.1) 0%, rgba(191,90,242,0.06) 100%);
+    border: 1px solid rgba(41,151,255,0.15); border-radius: 24px;
+    padding: 60px 48px; text-align: center; margin-top: 60px; position: relative;
+  }
+  .cta-section::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(41,151,255,0.4), transparent);
+  }
+  .cta-section h2 { font-size: clamp(24px, 3.5vw, 38px); font-weight: 700; letter-spacing: -1.5px; margin-bottom: 12px; }
+  .cta-section p { font-size: 16px; color: var(--text2); max-width: 400px; margin: 0 auto 32px; }
+  .cta-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .cta-main2 {
+    background: var(--text); color: var(--bg); font-size: 15px; font-weight: 600;
+    text-decoration: none; padding: 12px 28px; border-radius: 980px;
+    transition: opacity 0.2s; letter-spacing: -0.2px;
+  }
+  .cta-main2:hover { opacity: 0.88; }
+  .cta-sec2 {
+    color: var(--text); font-size: 15px; font-weight: 500;
+    text-decoration: none; padding: 12px 24px; border-radius: 980px;
+    border: 1px solid var(--border2); transition: background 0.2s;
+  }
+  .cta-sec2:hover { background: var(--surface2); }
+
+  footer {
+    border-top: 1px solid var(--border); padding: 32px 40px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  footer p { font-size: 12px; color: var(--text3); }
+  footer a { color: var(--text3); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.visible { opacity: 1; transform: none; }
+
+  @media(max-width:768px) {
+    nav { padding: 0 20px; }
+    .nav-links { display: none; }
+    .page-hero { padding: 100px 24px 60px; }
+    .cta-section { padding: 40px 24px; }
+    footer { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">VEWIT</a>
+  <div class="nav-links">
+    <a href="/#features">Features</a>
+    <a href="/#pricing">Pricing</a>
+    <a href="/about" style="color:var(--text)">About</a>
+  </div>
+  <a href="/?action=register" class="btn-primary">Get Started</a>
+</nav>
+
+<div class="page-hero" style="animation:fadeUp 0.7s ease both">
+  <div class="eyebrow">About VEWIT</div>
+  <h1>One platform.<br/>Every team need.</h1>
+  <p>VEWIT replaces Jira, Slack and Linear with a single AI-powered workspace — built for modern engineering teams.</p>
+</div>
+
+<div class="content-wrap">
+
+  <div class="section reveal">
+    <div class="section-label">What is VEWIT</div>
+    <h2>Everything your team needs, in one place</h2>
+    <p>VEWIT is a multi-workspace team collaboration platform powered by Claude AI. Teams use VEWIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
+    <p>Built for engineers, designed for everyone. VEWIT is used by startup founders, product managers, developers and remote teams who want a single source of truth for all their work.</p>
+  </div>
+
+  <div class="section reveal">
+    <div class="section-label">Core Features</div>
+    <h2>12 modules, fully integrated</h2>
+    <p>Every feature is designed to work together. Your tasks connect to your projects, your messages are in context, and your AI assistant knows your entire workspace.</p>
+    <div class="feat-grid2">
+      <div class="feat-card2"><div class="icon">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress tracking, target dates and priorities.</p></div>
+      <div class="feat-card2"><div class="icon">✅</div><h3>Smart Kanban Board</h3><p>Kanban with custom stages, story points, sprint planning, subtasks, comments and file attachments.</p></div>
+      <div class="feat-card2"><div class="icon">🤖</div><h3>Claude AI Assistant</h3><p>Create tasks, generate EOD reports, update statuses and query your workspace in natural language.</p></div>
+      <div class="feat-card2"><div class="icon">💬</div><h3>Direct Messages</h3><p>Private one-to-one messaging with real-time online presence and unread notification badges.</p></div>
+      <div class="feat-card2"><div class="icon">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication.</p></div>
+      <div class="feat-card2"><div class="icon">🎫</div><h3>Support Tickets</h3><p>Full ticketing system with bug reports, feature requests, priorities and status workflows.</p></div>
+      <div class="feat-card2"><div class="icon">📅</div><h3>Gantt Timeline</h3><p>Visual timeline to plan schedules, track milestones and spot overlapping workloads.</p></div>
+      <div class="feat-card2"><div class="icon">📊</div><h3>Productivity Analytics</h3><p>Team velocity, blocked work, sprint performance and individual contribution breakdowns.</p></div>
+      <div class="feat-card2"><div class="icon">🔔</div><h3>Push Notifications</h3><p>Desktop notifications for task assignments, comments, DMs and time-based reminders.</p></div>
+      <div class="feat-card2"><div class="icon">📹</div><h3>Instant Meet</h3><p>Launch video meetings and invite team members without leaving the platform.</p></div>
+      <div class="feat-card2"><div class="icon">🏢</div><h3>Multi-Workspace</h3><p>Separate workspaces for different companies or clients — each isolated and secure.</p></div>
+      <div class="feat-card2"><div class="icon">🔐</div><h3>Role-Based Access</h3><p>Admin, Manager, TeamLead, Developer, Tester and Viewer roles with granular permissions.</p></div>
+    </div>
+  </div>
+
+  <div class="section reveal">
+    <div class="section-label">User Roles</div>
+    <h2>Built for every member of your team</h2>
+    <p>VEWIT's role system ensures each person on your team has exactly the right access — no more, no less.</p>
+    <div class="roles-grid">
+      <div class="role-card"><div class="icon">👑</div><h4>Admin</h4><p>Full workspace control — users, settings, billing.</p></div>
+      <div class="role-card"><div class="icon">🧑‍💼</div><h4>Manager</h4><p>Create and manage projects, assign tasks, run sprints.</p></div>
+      <div class="role-card"><div class="icon">🧑‍✈️</div><h4>Team Lead</h4><p>Lead a team, review work, manage task stages.</p></div>
+      <div class="role-card"><div class="icon">💻</div><h4>Developer</h4><p>Work on tasks, log progress, collaborate in channels.</p></div>
+      <div class="role-card"><div class="icon">🧪</div><h4>Tester</h4><p>Manage tickets, verify task completion, report bugs.</p></div>
+      <div class="role-card"><div class="icon">👁️</div><h4>Viewer</h4><p>Read-only access to projects and task progress.</p></div>
+    </div>
+  </div>
+
+  <div class="section reveal">
+    <div class="section-label">Technology</div>
+    <h2>Modern, reliable stack</h2>
+    <p>VEWIT is built with battle-tested technologies — fast, secure, and deployable anywhere. No external JS framework dependencies at runtime; React is loaded from CDN and rendered server-side via Python Flask.</p>
+    <div class="stack-row">
+      <span class="stack-pill">Python 3 · Flask</span>
+      <span class="stack-pill">PostgreSQL · pg8000</span>
+      <span class="stack-pill">React 18 · HTM</span>
+      <span class="stack-pill">Anthropic Claude API</span>
+      <span class="stack-pill">Recharts</span>
+      <span class="stack-pill">Web Push (VAPID)</span>
+      <span class="stack-pill">WebRTC (Instant Meet)</span>
+      <span class="stack-pill">TOTP / Google Auth 2FA</span>
+      <span class="stack-pill">SMTP · Resend API</span>
+      <span class="stack-pill">Railway · Docker</span>
+    </div>
+  </div>
+
+  <div class="section reveal">
+    <div class="section-label">Security</div>
+    <h2>Security you can trust</h2>
+    <p>VEWIT is built with security at every layer — bcrypt password hashing, session-based auth, TOTP two-factor authentication via Google Authenticator, role-based access control, HTTPS-only sessions and tenant-isolated data queries throughout every API endpoint.</p>
+  </div>
+
+  <div class="cta-section reveal">
+    <h2>Ready to get started?</h2>
+    <p>Create your free workspace in under 60 seconds. No credit card required.</p>
+    <div class="cta-btns">
+      <a href="/?action=register" class="cta-main2">Create free workspace</a>
+      <a href="/?action=login" class="cta-sec2">Sign in</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <p>© 2025 VEWIT · <a href="mailto:hello@vewit.in">hello@vewit.in</a></p>
+  <p><a href="/">Home</a> · <a href="/?action=register">Get Started</a> · <a href="/?action=login">Sign In</a></p>
+</footer>
+
+<script>
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.08 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>"""
+
+@app.route("/about")
+def about_page():
+    return ABOUT_HTML
+
+@app.route("/",defaults={"p":""})
+@app.route("/<path:p>")
+def root(p):
+    action=request.args.get("action","")
+    if action in ("login","register") or p!="":
+        return HTML
+    return LANDING_HTML
+
 
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
