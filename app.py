@@ -3076,826 +3076,541 @@ LANDING_HTML = """<!DOCTYPE html>
 <title>VEWIT — AI-Powered Project Management &amp; Team Collaboration Platform</title>
 <meta name="description" content="VEWIT is an AI-powered team collaboration platform. Manage projects, tasks, direct messages, support tickets, timeline tracking and developer productivity — all in one place. Free to start."/>
 <meta name="keywords" content="VEWIT, team collaboration software, project management tool, AI project management, task tracking, direct messaging, support tickets, developer productivity, timeline tracker, team workspace, free project management, alternative to Jira, alternative to Slack, vewit.in"/>
-<meta name="author" content="VEWIT"/>
-<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
-<meta name="theme-color" content="#000000"/>
+<meta name="robots" content="index, follow"/>
+<meta name="theme-color" content="#080c14"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://www.vewit.in/"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration Platform"/>
 <meta property="og:description" content="AI-powered team collaboration. Projects, tasks, direct messages, tickets and analytics — all in one platform. Free to start, no credit card required."/>
 <meta property="og:site_name" content="VEWIT"/>
-<meta property="og:image" content="https://www.vewit.in/icon-512.png"/>
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication",
-"name":"VEWIT","url":"https://www.vewit.in",
-"description":"AI-powered team collaboration platform for project management, task tracking, direct messaging, support tickets, timeline tracking and developer productivity analytics.",
-"applicationCategory":"BusinessApplication","applicationSubCategory":"Project Management",
-"operatingSystem":"Web, PWA, iOS, Android",
-"offers":{"@type":"Offer","price":"0","priceCurrency":"INR","availability":"https://schema.org/InStock"},
-"featureList":["AI-Powered Project Management","Kanban Board with Sprint Planning","Real-time Direct Messaging","Support Ticket System","Gantt Timeline Tracker","Developer Productivity Analytics","Claude AI Assistant","Desktop Push Notifications","Multi-Workspace Support","Role-Based Access Control"]}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"VEWIT","url":"https://www.vewit.in","description":"AI-powered team collaboration platform","applicationCategory":"BusinessApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"},"featureList":["AI-Powered Project Management","Kanban Board","Real-time Direct Messaging","Support Ticket System","Gantt Timeline","Developer Productivity Analytics","Claude AI Assistant","Push Notifications","Multi-Workspace","Role-Based Access Control"]}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c14;
+  --bg2:#0d1221;
+  --bg3:#111827;
+  --bg4:#1a2236;
+  --surface:rgba(255,255,255,0.04);
+  --surface2:rgba(255,255,255,0.07);
+  --surface3:rgba(255,255,255,0.11);
+  --border:rgba(255,255,255,0.08);
+  --border2:rgba(255,255,255,0.14);
+  --border3:rgba(255,255,255,0.22);
+  --text:#f0f4ff;
+  --text2:#a8b4cc;
+  --text3:#5c6b84;
+  --blue:#4f8ef7;
+  --blue2:#3b7ef4;
+  --purple:#8b5cf6;
+  --cyan:#22d3ee;
+  --green:#34d399;
+  --amber:#fbbf24;
+  --pink:#f472b6;
+  --orange:#fb923c;
+  --grad-blue:linear-gradient(135deg,#4f8ef7 0%,#8b5cf6 100%);
+  --grad-cyan:linear-gradient(135deg,#22d3ee 0%,#4f8ef7 100%);
+  --grad-warm:linear-gradient(135deg,#fb923c 0%,#f472b6 100%);
+  --grad-green:linear-gradient(135deg,#34d399 0%,#22d3ee 100%);
+  --glow-blue:0 0 60px rgba(79,142,247,0.25);
+  --glow-purple:0 0 60px rgba(139,92,246,0.2);
+  --radius:20px;
+  --radius-sm:12px;
+  --shadow:0 32px 80px rgba(0,0,0,0.7);
+  --font:'Bricolage Grotesque',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,sans-serif;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 
-  :root {
-    --bg: #000;
-    --bg2: #0a0a0a;
-    --bg3: #111;
-    --surface: rgba(255,255,255,0.05);
-    --surface2: rgba(255,255,255,0.08);
-    --border: rgba(255,255,255,0.1);
-    --border2: rgba(255,255,255,0.15);
-    --text: #f5f5f7;
-    --text2: #a1a1a6;
-    --text3: #6e6e73;
-    --accent: #2997ff;
-    --accent2: #30d158;
-    --accent3: #ff375f;
-    --accent4: #bf5af2;
-    --grad1: linear-gradient(135deg, #2997ff 0%, #bf5af2 100%);
-    --grad2: linear-gradient(135deg, #30d158 0%, #2997ff 100%);
-    --radius: 18px;
-    --radius-sm: 10px;
-    --shadow: 0 32px 80px rgba(0,0,0,0.6);
-    --font: -apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
-  }
+/* Noise texture overlay */
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");opacity:1;pointer-events:none;z-index:0}
 
-  html { scroll-behavior: smooth; }
+/* ── Nav ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 48px;height:58px;background:rgba(8,12,20,0.75);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);border-bottom:1px solid var(--border);transition:background .3s}
+.nav-logo{font-family:var(--font);font-size:22px;font-weight:800;letter-spacing:-1px;text-decoration:none;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-links{display:flex;align-items:center;gap:32px}
+.nav-links a{color:var(--text2);font-size:13.5px;font-weight:500;text-decoration:none;transition:color .2s;font-family:var(--font-body)}
+.nav-links a:hover{color:var(--text)}
+.nav-cta-wrap{display:flex;align-items:center;gap:10px}
+.nav-signin{color:var(--text2);font-size:13.5px;font-weight:500;text-decoration:none;padding:7px 16px;border-radius:980px;transition:color .2s,background .2s;font-family:var(--font-body)}
+.nav-signin:hover{color:var(--text);background:var(--surface2)}
+.nav-start{background:var(--grad-blue);color:#fff;font-size:13.5px;font-weight:600;text-decoration:none;padding:8px 20px;border-radius:980px;transition:opacity .2s,transform .15s;font-family:var(--font-body)}
+.nav-start:hover{opacity:.88;transform:scale(1.03)}
 
-  body {
-    font-family: var(--font);
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+/* ── Hero ── */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:130px 24px 80px;position:relative;overflow:hidden}
+.hero-mesh{position:absolute;inset:0;pointer-events:none;z-index:0}
+.mesh-blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.45;animation:blobFloat 8s ease-in-out infinite}
+.mesh-blob-1{width:600px;height:600px;background:radial-gradient(circle,rgba(79,142,247,0.35),transparent 70%);top:-200px;left:-100px;animation-delay:0s}
+.mesh-blob-2{width:500px;height:500px;background:radial-gradient(circle,rgba(139,92,246,0.3),transparent 70%);top:-100px;right:-150px;animation-delay:-3s}
+.mesh-blob-3{width:400px;height:400px;background:radial-gradient(circle,rgba(34,211,238,0.2),transparent 70%);bottom:100px;left:20%;animation-delay:-5s}
+@keyframes blobFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-30px) scale(1.05)}}
+.hero-content{position:relative;z-index:1}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,0.3);color:var(--blue);font-size:12px;font-weight:600;padding:6px 16px;border-radius:980px;margin-bottom:32px;letter-spacing:.04em;text-transform:uppercase;animation:fadeUp .7s ease both;font-family:var(--font-body)}
+.hero-badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+h1.hero-title{font-family:var(--font);font-size:clamp(44px,7.5vw,96px);font-weight:800;letter-spacing:-3.5px;line-height:1.02;margin-bottom:28px;max-width:900px;animation:fadeUp .7s .1s ease both}
+h1.hero-title .line2{display:block}
+.grad-text-blue{background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grad-text-cyan{background:var(--grad-cyan);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grad-text-warm{background:var(--grad-warm);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(16px,2.2vw,20px);color:var(--text2);max-width:580px;line-height:1.7;margin:0 auto 48px;font-weight:400;animation:fadeUp .7s .2s ease both}
+.hero-ctas{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center;animation:fadeUp .7s .3s ease both}
+.cta-primary{background:var(--grad-blue);color:#fff;font-size:16px;font-weight:700;text-decoration:none;padding:15px 36px;border-radius:980px;transition:transform .2s,box-shadow .2s;font-family:var(--font);letter-spacing:-.3px;box-shadow:0 8px 32px rgba(79,142,247,0.4)}
+.cta-primary:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 16px 48px rgba(79,142,247,0.5)}
+.cta-secondary{color:var(--text);font-size:16px;font-weight:600;text-decoration:none;padding:15px 32px;border-radius:980px;border:1px solid var(--border3);transition:background .2s,border-color .2s,transform .15s;font-family:var(--font);letter-spacing:-.3px}
+.cta-secondary:hover{background:var(--surface2);border-color:var(--border3);transform:translateY(-1px)}
+.hero-trust{margin-top:56px;display:flex;gap:36px;flex-wrap:wrap;justify-content:center;animation:fadeUp .7s .4s ease both}
+.trust-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text3);font-family:var(--font-body)}
+.trust-check{width:18px;height:18px;border-radius:50%;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.4);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:var(--green)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
 
-  /* ── Nav ─────────────────────────────── */
-  nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 40px;
-    height: 52px;
-    background: rgba(0,0,0,0.72);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    transition: background 0.3s;
-  }
-  .nav-logo {
-    font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
-    color: var(--text); text-decoration: none;
-    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .nav-links { display: flex; align-items: center; gap: 36px; }
-  .nav-links a {
-    color: var(--text2); font-size: 13px; font-weight: 400;
-    text-decoration: none; transition: color 0.2s; letter-spacing: -0.1px;
-  }
-  .nav-links a:hover { color: var(--text); }
-  .nav-actions { display: flex; align-items: center; gap: 12px; }
-  .btn-ghost {
-    color: var(--text2); font-size: 13px; font-weight: 500;
-    text-decoration: none; padding: 6px 14px; border-radius: 980px;
-    transition: color 0.2s, background 0.2s; letter-spacing: -0.1px;
-  }
-  .btn-ghost:hover { color: var(--text); background: var(--surface); }
-  .btn-primary {
-    background: var(--accent); color: #fff; font-size: 13px; font-weight: 500;
-    text-decoration: none; padding: 7px 18px; border-radius: 980px;
-    transition: opacity 0.2s, transform 0.15s; letter-spacing: -0.1px;
-    display: inline-flex; align-items: center; gap: 4px;
-  }
-  .btn-primary:hover { opacity: 0.88; transform: scale(1.02); }
+/* ── Dashboard Preview ── */
+.preview-section{padding:0 24px 120px;display:flex;justify-content:center;position:relative;z-index:1;animation:fadeUp .9s .5s ease both}
+.preview-outer{max-width:1120px;width:100%;position:relative}
+.preview-glow-wrap{position:absolute;inset:-1px;border-radius:24px;background:var(--grad-blue);opacity:.2;filter:blur(40px);pointer-events:none}
+.preview-frame{background:var(--bg3);border:1px solid var(--border2);border-radius:22px;overflow:hidden;box-shadow:var(--shadow);position:relative}
+.preview-topbar{display:flex;align-items:center;gap:8px;padding:13px 18px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border)}
+.pdot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.purl{flex:1;text-align:center;font-size:11px;color:rgba(255,255,255,0.2);font-family:monospace}
+.preview-layout{display:grid;grid-template-columns:210px 1fr;min-height:400px;font-size:12px}
+.preview-nav{background:rgba(0,0,0,0.4);border-right:1px solid var(--border);padding:16px 10px;display:flex;flex-direction:column;gap:2px}
+.pnav-logo{font-family:var(--font);font-size:14px;font-weight:800;letter-spacing:-0.5px;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;padding:4px 10px;margin-bottom:16px}
+.pnav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;color:var(--text3);font-size:12px;font-weight:500;cursor:default;transition:background .15s}
+.pnav-item.active{background:rgba(79,142,247,0.15);color:var(--blue)}
+.pnav-item:hover:not(.active){background:var(--surface);color:var(--text2)}
+.pnav-sep{height:1px;background:var(--border);margin:8px 6px}
+.preview-body{padding:22px 24px;background:var(--bg2)}
+.preview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.preview-page-title{font-family:var(--font);font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.5px}
+.preview-sprint-badge{font-size:10px;font-weight:700;padding:4px 12px;border-radius:980px;background:rgba(52,211,153,0.12);color:var(--green);border:1px solid rgba(52,211,153,0.25)}
+.kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kcol-head{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.kcol-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ktask{background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:8px;transition:border-color .2s}
+.ktask:hover{border-color:var(--border2)}
+.ktask-title{font-size:11.5px;font-weight:500;color:var(--text2);margin-bottom:10px;line-height:1.4}
+.ktask-meta{display:flex;align-items:center;gap:7px}
+.kav{width:20px;height:20px;border-radius:50%;font-size:8px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.kprio{font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;margin-left:auto}
 
-  /* ── Hero ─────────────────────────────── */
-  .hero {
-    min-height: 100vh;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: 120px 24px 80px;
-    position: relative; overflow: hidden;
-  }
-  .hero-glow {
-    position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
-    width: 800px; height: 800px;
-    background: radial-gradient(ellipse at center, rgba(41,151,255,0.18) 0%, rgba(191,90,242,0.08) 50%, transparent 70%);
-    pointer-events: none;
-  }
-  .hero-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(41,151,255,0.1); border: 1px solid rgba(41,151,255,0.25);
-    color: var(--accent); font-size: 12px; font-weight: 500;
-    padding: 5px 14px; border-radius: 980px; margin-bottom: 28px;
-    letter-spacing: 0.02em; text-transform: uppercase;
-    animation: fadeUp 0.7s ease both;
-  }
-  .hero-badge::before {
-    content: ''; width: 6px; height: 6px; border-radius: 50%;
-    background: var(--accent2); box-shadow: 0 0 8px var(--accent2);
-    flex-shrink: 0;
-  }
-  .hero h1 {
-    font-size: clamp(42px, 7vw, 88px);
-    font-weight: 700; letter-spacing: -3px; line-height: 1.05;
-    margin-bottom: 24px; max-width: 820px;
-    animation: fadeUp 0.7s 0.1s ease both;
-  }
-  .hero h1 .grad {
-    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  }
-  .hero-sub {
-    font-size: clamp(16px, 2.5vw, 20px); color: var(--text2);
-    max-width: 560px; line-height: 1.6; margin-bottom: 44px;
-    font-weight: 400; letter-spacing: -0.2px;
-    animation: fadeUp 0.7s 0.2s ease both;
-  }
-  .hero-ctas {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center;
-    animation: fadeUp 0.7s 0.3s ease both;
-  }
-  .cta-main {
-    background: var(--text); color: var(--bg); font-size: 16px; font-weight: 600;
-    text-decoration: none; padding: 14px 32px; border-radius: 980px;
-    transition: opacity 0.2s, transform 0.15s; letter-spacing: -0.3px;
-  }
-  .cta-main:hover { opacity: 0.88; transform: scale(1.02); }
-  .cta-sec {
-    color: var(--text); font-size: 16px; font-weight: 500;
-    text-decoration: none; padding: 14px 28px; border-radius: 980px;
-    border: 1px solid var(--border2); transition: background 0.2s, border-color 0.2s;
-    letter-spacing: -0.3px;
-  }
-  .cta-sec:hover { background: var(--surface2); border-color: rgba(255,255,255,0.25); }
-  .hero-proof {
-    margin-top: 56px; display: flex; gap: 32px; flex-wrap: wrap; justify-content: center;
-    animation: fadeUp 0.7s 0.4s ease both;
-  }
-  .proof-item {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 13px; color: var(--text3); font-weight: 400;
-  }
-  .proof-item svg { color: var(--accent2); flex-shrink: 0; }
+/* ── Section base ── */
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.section{padding:100px 0;position:relative}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:18px;font-family:var(--font-body)}
+.eyebrow::before{content:'';width:4px;height:18px;background:var(--grad-blue);border-radius:2px;display:inline-block}
+h2.section-title{font-family:var(--font);font-size:clamp(32px,4.5vw,56px);font-weight:800;letter-spacing:-2.5px;line-height:1.05;color:var(--text);margin-bottom:18px}
+.section-sub{font-size:17px;color:var(--text2);max-width:560px;line-height:1.7;font-weight:400;margin-bottom:64px;font-family:var(--font-body)}
 
-  /* ── Dashboard preview ─────────────────── */
-  .preview-section {
-    padding: 0 24px 120px; display: flex; justify-content: center;
-    animation: fadeUp 0.9s 0.5s ease both;
-  }
-  .preview-wrap {
-    max-width: 1100px; width: 100%; position: relative;
-  }
-  .preview-frame {
-    background: var(--bg3); border: 1px solid var(--border);
-    border-radius: var(--radius); overflow: hidden;
-    box-shadow: 0 0 0 1px rgba(255,255,255,0.05), var(--shadow);
-    position: relative;
-  }
-  .preview-bar {
-    display: flex; align-items: center; gap: 8px; padding: 12px 16px;
-    background: rgba(255,255,255,0.04); border-bottom: 1px solid var(--border);
-  }
-  .preview-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-  .preview-ui {
-    display: grid; grid-template-columns: 200px 1fr;
-    min-height: 380px; font-size: 12px;
-  }
-  .preview-sidebar {
-    background: rgba(0,0,0,0.3); border-right: 1px solid var(--border);
-    padding: 16px 12px;
-  }
-  .preview-sidebar-logo {
-    font-size: 14px; font-weight: 700; letter-spacing: -0.5px;
-    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    padding: 4px 8px; margin-bottom: 20px;
-  }
-  .preview-nav-item {
-    display: flex; align-items: center; gap: 8px; padding: 7px 8px;
-    border-radius: 8px; color: var(--text3); margin-bottom: 3px;
-    font-size: 12px; font-weight: 500; transition: background 0.15s;
-    cursor: default;
-  }
-  .preview-nav-item.active { background: rgba(41,151,255,0.15); color: var(--accent); }
-  .preview-nav-item:hover:not(.active) { background: var(--surface); color: var(--text2); }
-  .preview-content { padding: 20px 24px; }
-  .preview-content-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 20px;
-  }
-  .preview-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
-  .preview-pill {
-    font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 980px;
-    background: rgba(41,151,255,0.15); color: var(--accent); border: 1px solid rgba(41,151,255,0.2);
-  }
-  .kanban-cols { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
-  .kanban-col { display: flex; flex-direction: column; gap: 6px; }
-  .kanban-col-head {
-    font-size: 10px; font-weight: 600; color: var(--text3);
-    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .kanban-col-head .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .task-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 10px;
-  }
-  .task-card-title { font-size: 11px; font-weight: 500; color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
-  .task-card-meta { display: flex; align-items: center; gap: 6px; }
-  .task-avatar {
-    width: 18px; height: 18px; border-radius: 50%;
-    font-size: 8px; font-weight: 700; color: #fff;
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  .task-prio {
-    font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
-    margin-left: auto;
-  }
-  .preview-glow {
-    position: absolute; inset: -1px;
-    background: linear-gradient(135deg, rgba(41,151,255,0.15) 0%, rgba(191,90,242,0.08) 50%, transparent 100%);
-    border-radius: inherit; pointer-events: none;
-    mask: linear-gradient(to bottom, black, transparent 60%);
-  }
+/* ── Feature Grid ── */
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.feat-card{background:var(--bg3);padding:36px 30px;transition:background .25s;position:relative;overflow:hidden}
+.feat-card::after{content:'';position:absolute;inset:0;background:var(--grad-blue);opacity:0;transition:opacity .3s}
+.feat-card:hover{background:rgba(255,255,255,0.03)}
+.feat-card:hover::after{opacity:.03}
+.feat-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:20px;position:relative;z-index:1}
+.feat-card h3{font-family:var(--font);font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.4px;margin-bottom:10px;position:relative;z-index:1}
+.feat-card p{font-size:13.5px;color:var(--text3);line-height:1.7;position:relative;z-index:1;font-family:var(--font-body)}
+.feat-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:980px;margin-top:14px;position:relative;z-index:1;font-family:var(--font-body)}
 
-  /* ── Sections ─────────────────────────── */
-  section.content { padding: 100px 24px; max-width: 1100px; margin: 0 auto; }
-  .section-eyebrow {
-    display: inline-flex; align-items: center; gap: 8px;
-    font-size: 12px; font-weight: 600; color: var(--accent);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px;
-  }
-  .section-eyebrow::before {
-    content: ''; width: 4px; height: 16px; background: var(--accent);
-    border-radius: 2px; display: inline-block;
-  }
-  .section-title {
-    font-size: clamp(32px, 4.5vw, 52px); font-weight: 700;
-    letter-spacing: -2px; line-height: 1.1; color: var(--text); margin-bottom: 16px;
-  }
-  .section-sub {
-    font-size: 17px; color: var(--text2); max-width: 540px; line-height: 1.65;
-    font-weight: 400; letter-spacing: -0.2px; margin-bottom: 60px;
-  }
+/* ── Plan Cards (pricing) ── */
+.plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start}
+.plan-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:36px 32px;position:relative;transition:transform .25s,box-shadow .25s}
+.plan-card:hover{transform:translateY(-6px);box-shadow:0 24px 60px rgba(0,0,0,0.5)}
+.plan-card.best{background:linear-gradient(180deg,rgba(79,142,247,0.08) 0%,var(--bg3) 100%);border-color:rgba(79,142,247,0.4)}
+.plan-badge-wrap{position:absolute;top:-1px;left:50%;transform:translateX(-50%)}
+.plan-badge{background:var(--grad-blue);color:#fff;font-size:11px;font-weight:700;padding:5px 18px;border-radius:0 0 12px 12px;letter-spacing:.04em;font-family:var(--font-body)}
+.plan-name{font-family:var(--font);font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.5px;margin-bottom:8px}
+.plan-desc{font-size:13.5px;color:var(--text3);margin-bottom:24px;line-height:1.6;font-family:var(--font-body)}
+.plan-price{font-family:var(--font);font-size:52px;font-weight:800;letter-spacing:-2.5px;color:var(--text);line-height:1;margin-bottom:6px}
+.plan-price sup{font-size:24px;font-weight:700;vertical-align:super;margin-top:6px;letter-spacing:0}
+.plan-price small{font-size:14px;color:var(--text3);font-weight:500;font-family:var(--font-body);letter-spacing:0}
+.plan-price-custom{font-family:var(--font);font-size:36px;font-weight:800;letter-spacing:-1.5px;color:var(--text);line-height:1;margin-bottom:6px}
+.plan-period{font-size:12px;color:var(--text3);margin-bottom:28px;font-family:var(--font-body)}
+.plan-cta{display:block;text-align:center;padding:14px 24px;border-radius:980px;font-size:15px;font-weight:700;text-decoration:none;transition:all .2s;margin-bottom:30px;font-family:var(--font);letter-spacing:-.2px}
+.plan-cta.fill{background:var(--grad-blue);color:#fff;box-shadow:0 8px 24px rgba(79,142,247,0.35)}
+.plan-cta.fill:hover{transform:scale(1.03);box-shadow:0 12px 36px rgba(79,142,247,0.5)}
+.plan-cta.outline{background:transparent;color:var(--text);border:1px solid var(--border3)}
+.plan-cta.outline:hover{background:var(--surface2);transform:scale(1.02)}
+.plan-divider{height:1px;background:var(--border);margin-bottom:24px}
+.plan-feature-head{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;font-family:var(--font-body)}
+.plan-features{list-style:none;display:flex;flex-direction:column;gap:10px}
+.plan-features li{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--text2);font-family:var(--font-body);line-height:1.5}
+.plan-features li .check{width:18px;height:18px;border-radius:50%;background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:9px;color:var(--green)}
+.plan-features li.dim{opacity:.4}
+.plan-features li.dim .check{background:var(--surface);border-color:var(--border);color:var(--text3)}
 
-  /* ── Feature grid ─────────────────────── */
-  .feat-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 2px; border: 2px solid var(--border); border-radius: var(--radius); overflow: hidden;
-  }
-  .feat-card {
-    background: var(--bg3); padding: 36px 32px;
-    transition: background 0.25s;
-    position: relative; overflow: hidden;
-  }
-  .feat-card:hover { background: rgba(255,255,255,0.04); }
-  .feat-card::before {
-    content: ''; position: absolute; inset: 0;
-    background: var(--grad1); opacity: 0;
-    transition: opacity 0.3s;
-  }
-  .feat-card:hover::before { opacity: 0.03; }
-  .feat-icon {
-    width: 44px; height: 44px; border-radius: 12px;
-    background: var(--surface2); border: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px; margin-bottom: 20px; flex-shrink: 0;
-  }
-  .feat-card h3 {
-    font-size: 18px; font-weight: 600; color: var(--text);
-    letter-spacing: -0.5px; margin-bottom: 10px;
-  }
-  .feat-card p { font-size: 14px; color: var(--text3); line-height: 1.65; }
+/* ── Stats ── */
+.stats-band{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:72px 0}
+.stats-inner{max-width:900px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.stat{padding:44px 28px;text-align:center;background:var(--bg3)}
+.stat-n{font-family:var(--font);font-size:clamp(40px,5vw,60px);font-weight:800;letter-spacing:-2.5px;line-height:1;margin-bottom:8px}
+.stat-l{font-size:13px;color:var(--text3);font-family:var(--font-body)}
 
-  /* ── Stats ─────────────────────────────── */
-  .stats-section {
-    padding: 80px 24px; background: var(--bg3);
-    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  }
-  .stats-wrap { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; }
-  .stat-item {
-    padding: 48px 32px; text-align: center;
-    border-right: 1px solid var(--border);
-  }
-  .stat-item:last-child { border-right: none; }
-  .stat-num {
-    font-size: clamp(36px, 5vw, 56px); font-weight: 700;
-    letter-spacing: -2px; line-height: 1;
-    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    margin-bottom: 8px;
-  }
-  .stat-label { font-size: 13px; color: var(--text3); font-weight: 400; letter-spacing: -0.1px; }
+/* ── Testimonials ── */
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.testi{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:28px;transition:border-color .2s}
+.testi:hover{border-color:var(--border2)}
+.testi-stars{display:flex;gap:3px;margin-bottom:14px;font-size:15px}
+.testi-text{font-size:14px;color:var(--text2);line-height:1.75;margin-bottom:22px;font-style:italic;font-family:var(--font-body)}
+.testi-author{display:flex;align-items:center;gap:12px}
+.testi-av{width:38px;height:38px;border-radius:50%;font-size:13px;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--font)}
+.testi-name{font-family:var(--font);font-size:14px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+.testi-role{font-size:12px;color:var(--text3);font-family:var(--font-body)}
 
-  /* ── Testimonials ─────────────────────── */
-  .testimonial-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-  .testimonial-card {
-    background: var(--bg3); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 28px;
-    transition: border-color 0.2s;
-  }
-  .testimonial-card:hover { border-color: var(--border2); }
-  .testimonial-stars { display: flex; gap: 3px; margin-bottom: 14px; color: #ff9f0a; font-size: 14px; }
-  .testimonial-text { font-size: 14px; color: var(--text2); line-height: 1.7; margin-bottom: 20px; font-style: italic; }
-  .testimonial-author { display: flex; align-items: center; gap: 12px; }
-  .testimonial-avatar {
-    width: 36px; height: 36px; border-radius: 50%;
-    font-size: 13px; font-weight: 700; color: #fff;
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  .testimonial-name { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
-  .testimonial-role { font-size: 12px; color: var(--text3); }
+/* ── FAQ ── */
+.faq-list{display:flex;flex-direction:column;gap:2px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.faq-item{background:var(--bg3)}
+.faq-q{width:100%;background:none;border:none;padding:22px 28px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-family:var(--font);font-size:16px;font-weight:600;color:var(--text);letter-spacing:-.3px;text-align:left;transition:background .2s}
+.faq-q:hover{background:var(--surface)}
+.faq-q .arr{font-size:18px;color:var(--text3);transition:transform .3s;flex-shrink:0}
+.faq-a{padding:0 28px 22px;font-size:14px;color:var(--text2);line-height:1.75;font-family:var(--font-body);display:none}
+.faq-item.open .faq-a{display:block}
+.faq-item.open .arr{transform:rotate(180deg)}
 
-  /* ── Pricing ─────────────────────────── */
-  .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2px; }
-  .pricing-card {
-    background: var(--bg3); padding: 40px 32px;
-    border: 1px solid var(--border); border-radius: var(--radius);
-    position: relative; transition: transform 0.2s, border-color 0.2s;
-  }
-  .pricing-card:hover { transform: translateY(-4px); border-color: var(--border2); }
-  .pricing-card.featured {
-    background: rgba(41,151,255,0.06); border-color: rgba(41,151,255,0.3);
-  }
-  .pricing-badge {
-    position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
-    background: var(--accent); color: #fff; font-size: 11px; font-weight: 600;
-    padding: 4px 14px; border-radius: 0 0 10px 10px; letter-spacing: 0.03em;
-  }
-  .pricing-name { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -0.5px; margin-bottom: 8px; }
-  .pricing-price {
-    font-size: 48px; font-weight: 700; letter-spacing: -2px; color: var(--text);
-    line-height: 1; margin: 20px 0 6px;
-  }
-  .pricing-price sup { font-size: 24px; font-weight: 600; vertical-align: top; margin-top: 8px; letter-spacing: 0; }
-  .pricing-price small { font-size: 14px; color: var(--text3); font-weight: 400; letter-spacing: 0; }
-  .pricing-desc { font-size: 13px; color: var(--text3); margin-bottom: 28px; }
-  .pricing-cta {
-    display: block; text-align: center; padding: 13px 24px; border-radius: 980px;
-    font-size: 15px; font-weight: 600; text-decoration: none;
-    transition: opacity 0.2s, transform 0.15s; margin-bottom: 28px;
-    letter-spacing: -0.2px;
-  }
-  .pricing-cta.solid { background: var(--text); color: var(--bg); }
-  .pricing-cta.solid:hover { opacity: 0.88; }
-  .pricing-cta.outline {
-    background: transparent; color: var(--text);
-    border: 1px solid var(--border2);
-  }
-  .pricing-cta.outline:hover { background: var(--surface2); transform: scale(1.02); }
-  .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-  .pricing-features li {
-    display: flex; align-items: flex-start; gap: 10px;
-    font-size: 13px; color: var(--text2);
-  }
-  .pricing-features li::before {
-    content: '✓'; color: var(--accent2); font-weight: 700; flex-shrink: 0; margin-top: 1px;
-  }
+/* ── CTA banner ── */
+.cta-strip{padding:80px 24px;position:relative}
+.cta-inner{max-width:920px;margin:0 auto;background:linear-gradient(135deg,rgba(79,142,247,0.1) 0%,rgba(139,92,246,0.1) 100%);border:1px solid rgba(79,142,247,0.2);border-radius:28px;padding:72px 48px;text-align:center;position:relative;overflow:hidden}
+.cta-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.6),rgba(139,92,246,.6),transparent)}
+.cta-inner::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.3),transparent)}
+.cta-inner h2{font-family:var(--font);font-size:clamp(28px,4.5vw,48px);font-weight:800;letter-spacing:-2px;margin-bottom:16px;line-height:1.1}
+.cta-inner p{font-size:17px;color:var(--text2);max-width:500px;margin:0 auto 40px;line-height:1.7;font-family:var(--font-body)}
+.cta-inner-btns{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
 
-  /* ── CTA banner ─────────────────────── */
-  .cta-banner {
-    margin: 60px auto; max-width: 900px; padding: 0 24px;
-  }
-  .cta-banner-inner {
-    background: linear-gradient(135deg, rgba(41,151,255,0.12) 0%, rgba(191,90,242,0.08) 100%);
-    border: 1px solid rgba(41,151,255,0.2); border-radius: 24px;
-    padding: 64px 48px; text-align: center; position: relative; overflow: hidden;
-  }
-  .cta-banner-inner::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(41,151,255,0.5), transparent);
-  }
-  .cta-banner h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; letter-spacing: -1.5px; margin-bottom: 14px; }
-  .cta-banner p { font-size: 17px; color: var(--text2); max-width: 480px; margin: 0 auto 36px; line-height: 1.65; }
-  .cta-banner-btns { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+/* ── Contact section ── */
+.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:48px}
+.contact-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:28px;transition:border-color .2s,transform .2s}
+.contact-card:hover{border-color:var(--border2);transform:translateY(-3px)}
+.contact-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:18px}
+.contact-card h3{font-family:var(--font);font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin-bottom:8px}
+.contact-card p{font-size:13.5px;color:var(--text3);line-height:1.65;margin-bottom:16px;font-family:var(--font-body)}
+.contact-link{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--blue);text-decoration:none;font-family:var(--font-body);transition:opacity .2s}
+.contact-link:hover{opacity:.75}
 
-  /* ── Footer ─────────────────────────── */
-  footer {
-    border-top: 1px solid var(--border); padding: 60px 40px 40px;
-    background: var(--bg);
-  }
-  .footer-grid {
-    max-width: 1100px; margin: 0 auto;
-    display: grid; grid-template-columns: 2fr repeat(3,1fr); gap: 48px;
-    margin-bottom: 48px;
-  }
-  .footer-brand .brand-name {
-    font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
-    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    margin-bottom: 12px; display: inline-block;
-  }
-  .footer-brand p { font-size: 13px; color: var(--text3); line-height: 1.7; max-width: 240px; }
-  .footer-col h4 { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
-  .footer-col a { display: block; font-size: 13px; color: var(--text3); text-decoration: none; margin-bottom: 10px; transition: color 0.2s; }
-  .footer-col a:hover { color: var(--text); }
-  .footer-bottom {
-    max-width: 1100px; margin: 0 auto;
-    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-    border-top: 1px solid var(--border); padding-top: 28px;
-  }
-  .footer-bottom p { font-size: 12px; color: var(--text3); }
-  .footer-bottom a { color: var(--text3); text-decoration: none; }
-  .footer-bottom a:hover { color: var(--accent); }
+/* ── Footer ── */
+footer{border-top:1px solid var(--border);padding:64px 48px 40px;background:var(--bg)}
+.footer-grid{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:48px;margin-bottom:52px}
+.footer-brand-name{font-family:var(--font);font-size:24px;font-weight:800;letter-spacing:-1px;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:inline-block;margin-bottom:14px}
+.footer-brand p{font-size:13.5px;color:var(--text3);line-height:1.75;max-width:260px;font-family:var(--font-body);margin-bottom:20px}
+.footer-contact-mini{display:flex;flex-direction:column;gap:6px}
+.footer-contact-mini a{font-size:12.5px;color:var(--text3);text-decoration:none;transition:color .2s;font-family:var(--font-body)}
+.footer-contact-mini a:hover{color:var(--blue)}
+.footer-col h4{font-family:var(--font-body);font-size:11.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:18px}
+.footer-col a{display:block;font-size:13.5px;color:var(--text3);text-decoration:none;margin-bottom:10px;transition:color .2s;font-family:var(--font-body)}
+.footer-col a:hover{color:var(--text)}
+.footer-bottom{max-width:1120px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-top:1px solid var(--border);padding-top:28px}
+.footer-bottom p,.footer-bottom a{font-size:12.5px;color:var(--text3);text-decoration:none;font-family:var(--font-body);transition:color .2s}
+.footer-bottom a:hover{color:var(--blue)}
 
-  /* ── Animations ─────────────────────── */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(24px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
+/* ── Scroll reveal ── */
+.reveal{opacity:0;transform:translateY(36px);transition:opacity .65s ease,transform .65s ease}
+.reveal.visible{opacity:1;transform:none}
+.reveal-fast{opacity:0;transform:translateY(20px);transition:opacity .4s ease,transform .4s ease}
+.reveal-fast.visible{opacity:1;transform:none}
 
-  .reveal {
-    opacity: 0; transform: translateY(32px);
-    transition: opacity 0.6s ease, transform 0.6s ease;
-  }
-  .reveal.visible { opacity: 1; transform: none; }
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.18)}
 
-  /* ── Scrollbar ──────────────────────── */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-
-  /* ── Responsive ─────────────────────── */
-  @media (max-width: 768px) {
-    nav { padding: 0 20px; }
-    .nav-links { display: none; }
-    .stats-wrap { grid-template-columns: repeat(2,1fr); }
-    .stat-item:nth-child(2) { border-right: none; }
-    .footer-grid { grid-template-columns: 1fr 1fr; }
-    .preview-ui { grid-template-columns: 1fr; }
-    .preview-sidebar { display: none; }
-    .kanban-cols { grid-template-columns: repeat(2,1fr); }
-  }
-  @media (max-width: 500px) {
-    .stats-wrap { grid-template-columns: 1fr 1fr; }
-    .footer-grid { grid-template-columns: 1fr; }
-  }
+/* ── Responsive ── */
+@media(max-width:960px){.feat-grid{grid-template-columns:repeat(2,1fr)}.plan-grid{grid-template-columns:1fr}.stats-inner{grid-template-columns:repeat(2,1fr)}.testi-grid{grid-template-columns:1fr 1fr}.contact-grid{grid-template-columns:1fr 1fr}.footer-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:680px){nav{padding:0 20px}.nav-links{display:none}.feat-grid{grid-template-columns:1fr}.testi-grid{grid-template-columns:1fr}.contact-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr 1fr}.preview-nav{display:none}.kanban{grid-template-columns:repeat(2,1fr)}.cta-inner{padding:40px 24px}.stats-inner{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 
 <!-- Nav -->
-<nav id="nav">
+<nav id="main-nav">
   <a href="/" class="nav-logo">VEWIT</a>
   <div class="nav-links">
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
+    <a href="#contact">Contact</a>
     <a href="/about">About</a>
   </div>
-  <div class="nav-actions">
-    <a href="/?action=login" class="btn-ghost">Sign In</a>
-    <a href="/?action=register" class="btn-primary">Get Started</a>
+  <div class="nav-cta-wrap">
+    <a href="/?action=login" class="nav-signin">Sign In</a>
+    <a href="/?action=register" class="nav-start">Get Started →</a>
   </div>
 </nav>
 
 <!-- Hero -->
 <section class="hero">
-  <div class="hero-glow"></div>
-  <div class="hero-badge">New · AI-Powered Workspace v4.0</div>
-  <h1>Work smarter,<br/>together — with <span class="grad">AI.</span></h1>
-  <p class="hero-sub">VEWIT brings your projects, tasks, messages, tickets and analytics into one beautifully unified platform — powered by Claude AI.</p>
-  <div class="hero-ctas">
-    <a href="/?action=register" class="cta-main">Start for free</a>
-    <a href="/?action=login" class="cta-sec">Sign in →</a>
+  <div class="hero-mesh">
+    <div class="mesh-blob mesh-blob-1"></div>
+    <div class="mesh-blob mesh-blob-2"></div>
+    <div class="mesh-blob mesh-blob-3"></div>
   </div>
-  <div class="hero-proof">
-    <div class="proof-item">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-      Free workspace
+  <div class="hero-content">
+    <div class="hero-badge"><span class="hero-badge-dot"></span> AI-Powered Workspace v4.0 — Free to start</div>
+    <h1 class="hero-title">
+      Where teams <span class="grad-text-blue">ship</span> faster<span class="line2">with <span class="grad-text-cyan">AI</span> by their side.</span>
+    </h1>
+    <p class="hero-sub">VEWIT unifies your projects, tasks, messages, tickets and analytics into one beautifully powerful platform — with Claude AI built right in.</p>
+    <div class="hero-ctas">
+      <a href="/?action=register" class="cta-primary">Start free — no card needed</a>
+      <a href="/?action=login" class="cta-secondary">Sign In →</a>
     </div>
-    <div class="proof-item">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-      AI assistant included
-    </div>
-    <div class="proof-item">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-      12+ modules built-in
-    </div>
-    <div class="proof-item">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-      No credit card needed
+    <div class="hero-trust">
+      <div class="trust-item"><div class="trust-check">✓</div> Free workspace forever</div>
+      <div class="trust-item"><div class="trust-check">✓</div> Claude AI assistant</div>
+      <div class="trust-item"><div class="trust-check">✓</div> 12 integrated modules</div>
+      <div class="trust-item"><div class="trust-check">✓</div> No credit card needed</div>
     </div>
   </div>
 </section>
 
-<!-- Dashboard Preview -->
+<!-- App Preview -->
 <div class="preview-section">
-  <div class="preview-wrap">
+  <div class="preview-outer">
+    <div class="preview-glow-wrap"></div>
     <div class="preview-frame">
-      <div class="preview-bar">
-        <div class="preview-dot" style="background:#ff5f57"></div>
-        <div class="preview-dot" style="background:#febc2e"></div>
-        <div class="preview-dot" style="background:#28c840"></div>
-        <div style="flex:1;text-align:center;font-size:11px;color:rgba(255,255,255,0.25);letter-spacing:-0.2px">app.vewit.in</div>
+      <div class="preview-topbar">
+        <div class="pdot" style="background:#ff5f57"></div>
+        <div class="pdot" style="background:#febc2e"></div>
+        <div class="pdot" style="background:#28c840"></div>
+        <div class="purl">app.vewit.in — E-Commerce Platform · Sprint 3</div>
       </div>
-      <div class="preview-ui">
-        <div class="preview-sidebar">
-          <div class="preview-sidebar-logo">VEWIT</div>
-          <div class="preview-nav-item active">
-            <span>📋</span> Projects
-          </div>
-          <div class="preview-nav-item">
-            <span>✅</span> Tasks
-          </div>
-          <div class="preview-nav-item">
-            <span>💬</span> Messages
-          </div>
-          <div class="preview-nav-item">
-            <span>🎫</span> Tickets
-          </div>
-          <div class="preview-nav-item">
-            <span>📅</span> Timeline
-          </div>
-          <div class="preview-nav-item">
-            <span>🤖</span> AI Assistant
-          </div>
-          <div class="preview-nav-item">
-            <span>📊</span> Productivity
-          </div>
-          <div style="height:1px;background:rgba(255,255,255,0.06);margin:12px 0"></div>
-          <div class="preview-nav-item">
-            <span>⚙️</span> Settings
-          </div>
+      <div class="preview-layout">
+        <div class="preview-nav">
+          <div class="pnav-logo">VEWIT</div>
+          <div class="pnav-item active"><span>📋</span> Projects</div>
+          <div class="pnav-item"><span>✅</span> Tasks</div>
+          <div class="pnav-item"><span>💬</span> Messages</div>
+          <div class="pnav-item"><span>🎫</span> Tickets</div>
+          <div class="pnav-item"><span>📅</span> Timeline</div>
+          <div class="pnav-item"><span>🤖</span> AI Assistant</div>
+          <div class="pnav-item"><span>📊</span> Productivity</div>
+          <div class="pnav-sep"></div>
+          <div class="pnav-item"><span>⚙️</span> Settings</div>
         </div>
-        <div class="preview-content">
-          <div class="preview-content-header">
-            <div class="preview-title">E-Commerce Platform</div>
-            <div class="preview-pill">Sprint 3 · Active</div>
+        <div class="preview-body">
+          <div class="preview-header">
+            <div class="preview-page-title">E-Commerce Platform</div>
+            <div class="preview-sprint-badge">● Sprint 3 Active</div>
           </div>
-          <div class="kanban-cols">
-            <div class="kanban-col">
-              <div class="kanban-col-head">
-                <div class="dot" style="background:#6e6e73"></div> Backlog
-              </div>
-              <div class="task-card">
-                <div class="task-card-title">Performance testing suite</div>
-                <div class="task-card-meta">
-                  <div class="task-avatar" style="background:#d97706">DK</div>
-                  <div class="task-prio" style="background:rgba(109,110,115,0.2);color:#6e6e73">Low</div>
-                </div>
-              </div>
+          <div class="kanban">
+            <div>
+              <div class="kcol-head"><div class="kcol-dot" style="background:#5c6b84"></div>Backlog</div>
+              <div class="ktask"><div class="ktask-title">Performance testing suite</div><div class="ktask-meta"><div class="kav" style="background:#d97706">DK</div><div class="kprio" style="background:rgba(92,107,132,0.2);color:#5c6b84">Low</div></div></div>
             </div>
-            <div class="kanban-col">
-              <div class="kanban-col-head">
-                <div class="dot" style="background:#2997ff"></div> In Progress
-              </div>
-              <div class="task-card">
-                <div class="task-card-title">Product catalog UI</div>
-                <div class="task-card-meta">
-                  <div class="task-avatar" style="background:#7c3aed">AC</div>
-                  <div class="task-prio" style="background:rgba(255,159,10,0.15);color:#ff9f0a">Med</div>
-                </div>
-              </div>
-              <div class="task-card">
-                <div class="task-card-title">Inventory management</div>
-                <div class="task-card-meta">
-                  <div class="task-avatar" style="background:#2563eb">BM</div>
-                  <div class="task-prio" style="background:rgba(255,55,95,0.15);color:#ff375f">High</div>
-                </div>
-              </div>
+            <div>
+              <div class="kcol-head"><div class="kcol-dot" style="background:#4f8ef7"></div>In Progress</div>
+              <div class="ktask"><div class="ktask-title">Product catalog UI with filtering</div><div class="ktask-meta"><div class="kav" style="background:#8b5cf6">AC</div><div class="kprio" style="background:rgba(251,191,36,0.15);color:#fbbf24">Med</div></div></div>
+              <div class="ktask"><div class="ktask-title">Inventory management module</div><div class="ktask-meta"><div class="kav" style="background:#4f8ef7">BM</div><div class="kprio" style="background:rgba(244,114,182,0.15);color:#f472b6">High</div></div></div>
             </div>
-            <div class="kanban-col">
-              <div class="kanban-col-head">
-                <div class="dot" style="background:#ff9f0a"></div> Review
-              </div>
-              <div class="task-card">
-                <div class="task-card-title">Payment gateway integration</div>
-                <div class="task-card-meta">
-                  <div class="task-avatar" style="background:#059669">CS</div>
-                  <div class="task-prio" style="background:rgba(255,55,95,0.15);color:#ff375f">High</div>
-                </div>
-              </div>
+            <div>
+              <div class="kcol-head"><div class="kcol-dot" style="background:#fb923c"></div>Review</div>
+              <div class="ktask"><div class="ktask-title">Payment gateway (Stripe)</div><div class="ktask-meta"><div class="kav" style="background:#34d399">CS</div><div class="kprio" style="background:rgba(244,114,182,0.15);color:#f472b6">High</div></div></div>
             </div>
-            <div class="kanban-col">
-              <div class="kanban-col-head">
-                <div class="dot" style="background:#30d158"></div> Done
-              </div>
-              <div class="task-card">
-                <div class="task-card-title">Design system setup</div>
-                <div class="task-card-meta">
-                  <div class="task-avatar" style="background:#dc2626">EW</div>
-                  <div class="task-prio" style="background:rgba(48,209,88,0.15);color:#30d158">✓</div>
-                </div>
-              </div>
-              <div class="task-card">
-                <div class="task-card-title">User authentication API</div>
-                <div class="task-card-meta">
-                  <div class="task-avatar" style="background:#7c3aed">AC</div>
-                  <div class="task-prio" style="background:rgba(48,209,88,0.15);color:#30d158">✓</div>
-                </div>
-              </div>
+            <div>
+              <div class="kcol-head"><div class="kcol-dot" style="background:#34d399"></div>Done</div>
+              <div class="ktask"><div class="ktask-title">Design system setup ✓</div><div class="ktask-meta"><div class="kav" style="background:#f472b6">EW</div><div class="kprio" style="background:rgba(52,211,153,0.15);color:#34d399">✓</div></div></div>
+              <div class="ktask"><div class="ktask-title">User authentication API ✓</div><div class="ktask-meta"><div class="kav" style="background:#8b5cf6">AC</div><div class="kprio" style="background:rgba(52,211,153,0.15);color:#34d399">✓</div></div></div>
             </div>
           </div>
         </div>
       </div>
-      <div class="preview-glow"></div>
     </div>
   </div>
 </div>
 
 <!-- Features -->
-<section class="content reveal" id="features">
-  <div class="section-eyebrow">Features</div>
-  <h2 class="section-title">Everything your<br/>team needs.</h2>
-  <p class="section-sub">Twelve powerful modules — beautifully integrated — so your team spends less time switching tools and more time building.</p>
-
-  <div class="feat-grid">
-    <div class="feat-card">
-      <div class="feat-icon">📋</div>
-      <h3>Project Management</h3>
-      <p>Multi-project workspaces with team assignments, progress tracking, target dates and priority management.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">✅</div>
-      <h3>Smart Kanban Board</h3>
-      <p>Kanban with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">🤖</div>
-      <h3>Claude AI Assistant</h3>
-      <p>Ask your AI to create tasks, generate EOD reports, update statuses and answer questions about your projects in natural language.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">💬</div>
-      <h3>Direct Messages</h3>
-      <p>Private one-to-one messaging with real-time online presence indicators, message history and unread notification badges.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">#️⃣</div>
-      <h3>Project Channels</h3>
-      <p>Dedicated message channels per project for focused team communication — no scattered threads.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">🎫</div>
-      <h3>Support Tickets</h3>
-      <p>Full ticketing system with bug reports, feature requests, priority levels, assignee tracking and status workflows.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">📅</div>
-      <h3>Timeline / Gantt</h3>
-      <p>Visual timeline to plan project schedules, track milestones and identify overlapping workloads across your team.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">📊</div>
-      <h3>Developer Productivity</h3>
-      <p>Analytics measuring individual and team output — velocity, blocked work, sprint performance and project contributions.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">🔔</div>
-      <h3>Desktop Push Notifications</h3>
-      <p>Stay informed even when the app is minimised — task assignments, comments, DMs and reminders delivered instantly.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">📹</div>
-      <h3>Instant Meet Calls</h3>
-      <p>Launch instant video meetings, invite team members and collaborate in real-time without leaving the platform.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">🏢</div>
-      <h3>Multi-Workspace</h3>
-      <p>Create separate workspaces for different companies or clients — each with its own team, projects and settings.</p>
-    </div>
-    <div class="feat-card">
-      <div class="feat-icon">🔐</div>
-      <h3>Role-Based Access</h3>
-      <p>Admin, Manager, TeamLead, Developer, Tester and Viewer roles — with granular permissions per action.</p>
+<section class="section reveal" id="features">
+  <div class="wrap">
+    <div class="eyebrow">Features</div>
+    <h2 class="section-title">Built for the whole team.<br/><span class="grad-text-blue">All 12 modules included.</span></h2>
+    <p class="section-sub">Every feature is designed to work together — your tasks connect to your projects, messages stay in context, and your AI assistant knows your entire workspace.</p>
+    <div class="feat-grid">
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress tracking, target dates and priority management. Filter and search across everything.</p><div class="feat-tag" style="background:rgba(79,142,247,0.1);color:#4f8ef7;border:1px solid rgba(79,142,247,0.2)">Core</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">✅</div><h3>Smart Kanban Board</h3><p>Kanban with custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders. Role-based access throughout.</p><div class="feat-tag" style="background:rgba(139,92,246,0.1);color:#8b5cf6;border:1px solid rgba(139,92,246,0.2)">Core</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">🤖</div><h3>Claude AI Assistant</h3><p>Ask AI to create tasks, generate EOD reports, update statuses and query your whole workspace in plain English. Powered by Anthropic Claude.</p><div class="feat-tag" style="background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2)">AI-Powered</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.2)">💬</div><h3>Direct Messages</h3><p>Private 1-to-1 messaging with real-time online presence, message history and unread notification badges. Know who's active right now.</p><div class="feat-tag" style="background:rgba(34,211,238,0.1);color:#22d3ee;border:1px solid rgba(34,211,238,0.2)">Real-time</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.2)">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication. Share updates, files and decisions in context without clutter.</p><div class="feat-tag" style="background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)">Collaboration</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(244,114,182,0.12);border:1px solid rgba(244,114,182,0.2)">🎫</div><h3>Support Tickets</h3><p>Full ticketing with bug reports, feature requests, priority levels, assignee tracking, status workflows and team-based filtering.</p><div class="feat-tag" style="background:rgba(244,114,182,0.1);color:#f472b6;border:1px solid rgba(244,114,182,0.2)">Support</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.2)">📅</div><h3>Gantt Timeline</h3><p>Visual Gantt-style timeline to plan project schedules, track milestones and identify overlapping workloads. Navigate weeks and months at a glance.</p><div class="feat-tag" style="background:rgba(251,146,60,0.1);color:#fb923c;border:1px solid rgba(251,146,60,0.2)">Planning</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">📊</div><h3>Developer Productivity</h3><p>Analytics measuring individual and team output — velocity, blocked work, sprint performance, story point burn and contribution breakdowns.</p><div class="feat-tag" style="background:rgba(79,142,247,0.1);color:#4f8ef7;border:1px solid rgba(79,142,247,0.2)">Analytics</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">🔔</div><h3>Desktop Push Notifications</h3><p>Stay informed even when the app is minimised — task assignments, status changes, comments, DMs and time-based reminders delivered instantly.</p><div class="feat-tag" style="background:rgba(139,92,246,0.1);color:#8b5cf6;border:1px solid rgba(139,92,246,0.2)">Notifications</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">📹</div><h3>Instant Meet Calls</h3><p>Launch instant video meetings via WebRTC, invite team members and collaborate in real-time without ever leaving VEWIT. No third-party app needed.</p><div class="feat-tag" style="background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.2)">Meetings</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.2)">🏢</div><h3>Multi-Workspace</h3><p>Create separate workspaces for different companies or clients — each with its own team, projects, settings and invite codes. Switch in one click.</p><div class="feat-tag" style="background:rgba(34,211,238,0.1);color:#22d3ee;border:1px solid rgba(34,211,238,0.2)">Enterprise</div></div>
+      <div class="feat-card"><div class="feat-icon" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.2)">🔐</div><h3>Security &amp; Access Control</h3><p>6 role types (Admin to Viewer), bcrypt passwords, Google Authenticator TOTP 2FA, session security and workspace-isolated data across every API endpoint.</p><div class="feat-tag" style="background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)">Security</div></div>
     </div>
   </div>
 </section>
 
-<!-- Stats -->
-<div class="stats-section">
-  <div class="stats-wrap">
-    <div class="stat-item reveal">
-      <div class="stat-num">12+</div>
-      <div class="stat-label">Integrated modules</div>
-    </div>
-    <div class="stat-item reveal">
-      <div class="stat-num">6</div>
-      <div class="stat-label">User role types</div>
-    </div>
-    <div class="stat-item reveal">
-      <div class="stat-num">100%</div>
-      <div class="stat-label">Free to start</div>
-    </div>
-    <div class="stat-item reveal">
-      <div class="stat-num">AI</div>
-      <div class="stat-label">Powered by Claude</div>
-    </div>
+<!-- Stats band -->
+<div class="stats-band reveal">
+  <div class="stats-inner">
+    <div class="stat"><div class="stat-n grad-text-blue">12+</div><div class="stat-l">Integrated modules</div></div>
+    <div class="stat"><div class="stat-n grad-text-cyan">6</div><div class="stat-l">User role types</div></div>
+    <div class="stat"><div class="stat-n grad-text-warm">₹0</div><div class="stat-l">To get started</div></div>
+    <div class="stat"><div class="stat-n grad-text-blue">AI</div><div class="stat-l">Powered by Claude</div></div>
   </div>
 </div>
 
 <!-- Testimonials -->
-<section class="content reveal">
-  <div class="section-eyebrow">Testimonials</div>
-  <h2 class="section-title">Loved by teams.</h2>
-  <p class="section-sub">From startups to growing engineering teams — here's what people say about VEWIT.</p>
-
-  <div class="testimonial-grid">
-    <div class="testimonial-card">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-text">"We replaced Jira and Slack with VEWIT. The AI assistant alone saves us hours every week — it generates our EOD reports automatically."</p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar" style="background:#7c3aed">PR</div>
-        <div>
-          <div class="testimonial-name">Priya R.</div>
-          <div class="testimonial-role">Engineering Manager · Fintech startup</div>
-        </div>
-      </div>
-    </div>
-    <div class="testimonial-card">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-text">"The Kanban board with sprint planning is exactly what we needed. Story points, subtasks, file attachments — all in one clean view."</p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar" style="background:#2563eb">SK</div>
-        <div>
-          <div class="testimonial-name">Suresh K.</div>
-          <div class="testimonial-role">CTO · SaaS company</div>
-        </div>
-      </div>
-    </div>
-    <div class="testimonial-card">
-      <div class="testimonial-stars">★★★★★</div>
-      <p class="testimonial-text">"The support ticket system and direct messages work seamlessly together. Our team stays in the loop without any context-switching."</p>
-      <div class="testimonial-author">
-        <div class="testimonial-avatar" style="background:#059669">AM</div>
-        <div>
-          <div class="testimonial-name">Anika M.</div>
-          <div class="testimonial-role">Product Lead · E-commerce</div>
-        </div>
-      </div>
+<section class="section reveal">
+  <div class="wrap">
+    <div class="eyebrow">Testimonials</div>
+    <h2 class="section-title">Loved by teams who<br/><span class="grad-text-cyan">ship fast.</span></h2>
+    <p class="section-sub">From early-stage startups to growing engineering orgs — here's what people say about replacing Jira, Slack and Linear with VEWIT.</p>
+    <div class="testi-grid">
+      <div class="testi"><div class="testi-stars">★★★★★</div><p class="testi-text">"We replaced Jira and Slack with VEWIT in a single afternoon. The AI assistant alone saves us 2–3 hours per week — it generates our EOD reports automatically and creates tasks from plain English."</p><div class="testi-author"><div class="testi-av" style="background:linear-gradient(135deg,#8b5cf6,#4f8ef7)">PR</div><div><div class="testi-name">Priya R.</div><div class="testi-role">Engineering Manager · Fintech startup</div></div></div></div>
+      <div class="testi"><div class="testi-stars">★★★★★</div><p class="testi-text">"The Kanban board with sprint planning is exactly what a dev team needs. Story points, subtasks, file attachments — everything in one clean view. Our velocity is up 40% since switching."</p><div class="testi-author"><div class="testi-av" style="background:linear-gradient(135deg,#34d399,#22d3ee)">SK</div><div><div class="testi-name">Suresh K.</div><div class="testi-role">CTO · SaaS company</div></div></div></div>
+      <div class="testi"><div class="testi-stars">★★★★★</div><p class="testi-text">"The support ticket system and DMs work seamlessly together. Our team stays in the loop without any context-switching. The multi-workspace setup is perfect for our agency model."</p><div class="testi-author"><div class="testi-av" style="background:linear-gradient(135deg,#f472b6,#fb923c)">AM</div><div><div class="testi-name">Anika M.</div><div class="testi-role">Product Lead · E-commerce</div></div></div></div>
     </div>
   </div>
 </section>
 
 <!-- Pricing -->
-<section class="content reveal" id="pricing">
-  <div class="section-eyebrow">Pricing</div>
-  <h2 class="section-title">Simple, honest pricing.</h2>
-  <p class="section-sub">Start free, scale when you're ready. No hidden fees, no credit card required to begin.</p>
+<section class="section reveal" id="pricing">
+  <div class="wrap">
+    <div class="eyebrow">Pricing</div>
+    <h2 class="section-title">Simple, honest pricing.<br/><span class="grad-text-blue">Start free today.</span></h2>
+    <p class="section-sub">No hidden fees, no feature-gating tricks. Every plan includes the full platform — pricing reflects team size and support level only.</p>
+    <div class="plan-grid">
 
-  <div class="pricing-grid">
-    <div class="pricing-card">
-      <div class="pricing-name">Starter</div>
-      <p class="pricing-desc">Perfect for small teams and side projects.</p>
-      <div class="pricing-price"><sup>₹</sup>0<small>/mo</small></div>
-      <a href="/?action=register" class="pricing-cta outline">Get started free</a>
-      <ul class="pricing-features">
-        <li>1 workspace</li>
-        <li>Up to 5 team members</li>
-        <li>Unlimited projects &amp; tasks</li>
-        <li>AI assistant (bring your key)</li>
-        <li>Kanban, Timeline, Tickets</li>
-        <li>Direct messages &amp; channels</li>
-        <li>Push notifications</li>
-      </ul>
+      <!-- Starter -->
+      <div class="plan-card">
+        <div class="plan-name">Starter</div>
+        <div class="plan-desc">Perfect for small teams, side projects and solo founders who want professional-grade tooling at zero cost.</div>
+        <div class="plan-price"><sup>₹</sup>0<small>/mo</small></div>
+        <div class="plan-period">Free forever · No credit card</div>
+        <a href="/?action=register" class="plan-cta outline">Create free workspace →</a>
+        <div class="plan-divider"></div>
+        <div class="plan-feature-head">What's included</div>
+        <ul class="plan-features">
+          <li><div class="check">✓</div> 1 workspace</li>
+          <li><div class="check">✓</div> Up to 5 team members</li>
+          <li><div class="check">✓</div> Unlimited projects &amp; tasks</li>
+          <li><div class="check">✓</div> Kanban board with sprints</li>
+          <li><div class="check">✓</div> Gantt timeline tracker</li>
+          <li><div class="check">✓</div> Support ticket system</li>
+          <li><div class="check">✓</div> Direct messages &amp; channels</li>
+          <li><div class="check">✓</div> Desktop push notifications</li>
+          <li><div class="check">✓</div> AI assistant (bring your own key)</li>
+          <li><div class="check">✓</div> File attachments (150 MB each)</li>
+          <li><div class="check">✓</div> Google Authenticator 2FA</li>
+        </ul>
+      </div>
+
+      <!-- Team -->
+      <div class="plan-card best">
+        <div class="plan-badge-wrap"><div class="plan-badge">Most Popular</div></div>
+        <div class="plan-name">Team</div>
+        <div class="plan-desc">For growing teams who need unlimited members, deeper analytics and managed email notifications.</div>
+        <div class="plan-price"><sup>₹</sup>499<small>/mo</small></div>
+        <div class="plan-period">Per workspace · Billed monthly</div>
+        <a href="/?action=register" class="plan-cta fill">Start free 14-day trial →</a>
+        <div class="plan-divider"></div>
+        <div class="plan-feature-head">Everything in Starter, plus</div>
+        <ul class="plan-features">
+          <li><div class="check">✓</div> <b>Unlimited team members</b></li>
+          <li><div class="check">✓</div> Multiple workspaces</li>
+          <li><div class="check">✓</div> Teams &amp; sub-team management</li>
+          <li><div class="check">✓</div> Role-based access control (6 roles)</li>
+          <li><div class="check">✓</div> Developer productivity analytics</li>
+          <li><div class="check">✓</div> Velocity &amp; sprint burn-down charts</li>
+          <li><div class="check">✓</div> Custom SMTP / Resend email</li>
+          <li><div class="check">✓</div> Instant Meet video calls (WebRTC)</div></li>
+          <li><div class="check">✓</div> Task labels &amp; story points</li>
+          <li><div class="check">✓</div> EOD report automation (AI)</li>
+          <li><div class="check">✓</div> Priority email support</li>
+        </ul>
+      </div>
+
+      <!-- Enterprise -->
+      <div class="plan-card">
+        <div class="plan-name">Enterprise</div>
+        <div class="plan-desc">Custom solutions for large organisations, regulated industries or teams that need on-premise deployment and SLA guarantees.</div>
+        <div class="plan-price-custom">Custom</div>
+        <div class="plan-period">Volume pricing · Annual billing</div>
+        <a href="mailto:support@vewit.in" class="plan-cta outline">Contact support@vewit.in →</a>
+        <div class="plan-divider"></div>
+        <div class="plan-feature-head">Everything in Team, plus</div>
+        <ul class="plan-features">
+          <li><div class="check">✓</div> Dedicated hosted instance</li>
+          <li><div class="check">✓</div> On-premise / self-hosted deployment</li>
+          <li><div class="check">✓</div> Custom integrations &amp; webhooks</li>
+          <li><div class="check">✓</div> 99.9% SLA uptime guarantee</li>
+          <li><div class="check">✓</div> SSO / SAML authentication</li>
+          <li><div class="check">✓</div> Advanced audit logs</li>
+          <li><div class="check">✓</div> Dedicated account manager</li>
+          <li><div class="check">✓</div> Custom onboarding &amp; training</li>
+          <li><div class="check">✓</div> White-label branding option</li>
+          <li><div class="check">✓</div> 24/7 priority support</li>
+        </ul>
+      </div>
+
     </div>
-    <div class="pricing-card featured">
-      <div class="pricing-badge">Most Popular</div>
-      <div class="pricing-name">Team</div>
-      <p class="pricing-desc">For growing teams that need more power.</p>
-      <div class="pricing-price"><sup>₹</sup>499<small>/mo</small></div>
-      <a href="/?action=register" class="pricing-cta solid">Start free trial</a>
-      <ul class="pricing-features">
-        <li>Everything in Starter</li>
-        <li>Unlimited team members</li>
-        <li>Multiple workspaces</li>
-        <li>Role-based access control</li>
-        <li>Developer productivity analytics</li>
-        <li>SMTP / custom email</li>
-        <li>Priority support</li>
-      </ul>
+
+    <!-- Pricing note -->
+    <div style="text-align:center;margin-top:36px;padding:24px;background:rgba(79,142,247,0.06);border:1px solid rgba(79,142,247,0.15);border-radius:14px">
+      <p style="font-size:14px;color:var(--text2);font-family:var(--font-body);line-height:1.7">💡 <b style="color:var(--text)">Pricing applies to your workspace subscription.</b> The AI assistant requires your own Anthropic API key — bring it in Workspace Settings. All other features work fully without it.</p>
     </div>
-    <div class="pricing-card">
-      <div class="pricing-name">Enterprise</div>
-      <p class="pricing-desc">Custom solutions for large organisations.</p>
-      <div class="pricing-price" style="font-size:36px;letter-spacing:-1px;margin:20px 0 6px">Custom</div>
-      <a href="mailto:hello@vewit.in" class="pricing-cta outline">Contact us</a>
-      <ul class="pricing-features">
-        <li>Everything in Team</li>
-        <li>Dedicated instance</li>
-        <li>Custom integrations</li>
-        <li>SLA guarantee</li>
-        <li>On-premise deployment</li>
-        <li>Dedicated account manager</li>
-        <li>Custom onboarding</li>
-      </ul>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section reveal">
+  <div class="wrap">
+    <div class="eyebrow">FAQ</div>
+    <h2 class="section-title">Common questions.</h2>
+    <p class="section-sub" style="margin-bottom:40px">Can't find an answer? Email us at <a href="mailto:support@vewit.in" style="color:var(--blue);text-decoration:none">support@vewit.in</a></p>
+    <div class="faq-list">
+      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Do I need a credit card to start?<span class="arr">▾</span></button><div class="faq-a">No. The Starter plan is completely free — create a workspace, invite your team and start using all 12 modules with zero payment required. You only need billing details when upgrading to Team or Enterprise.</div></div>
+      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">How does the AI assistant work?<span class="arr">▾</span></button><div class="faq-a">VEWIT's AI assistant is powered by Anthropic Claude. You bring your own API key (set it in Workspace Settings → AI Key). Once configured, the assistant can create tasks, update stages, generate EOD reports, and answer questions about your projects — all in natural language.</div></div>
+      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I invite my whole team on the free plan?<span class="arr">▾</span></button><div class="faq-a">The Starter plan supports up to 5 team members. If your team is larger, upgrade to the Team plan for unlimited members. You can invite people using the workspace invite code found in Settings.</div></div>
+      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Is my data secure?<span class="arr">▾</span></button><div class="faq-a">Yes. VEWIT uses bcrypt password hashing, session-based authentication, Google Authenticator TOTP 2FA, HTTPS-only sessions, and tenant-isolated database queries so no workspace can access another's data. Enterprise customers can opt for on-premise deployment for complete data sovereignty.</div></div>
+      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">What does "bring your own AI key" mean?<span class="arr">▾</span></button><div class="faq-a">You get an API key from Anthropic (anthropic.com) and paste it once in VEWIT's Workspace Settings. VEWIT calls the Anthropic Claude API directly — you pay Anthropic only for what you use, and VEWIT never stores your key beyond your workspace settings.</div></div>
+      <div class="faq-item"><button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I upgrade or downgrade anytime?<span class="arr">▾</span></button><div class="faq-a">Yes. You can upgrade from Starter to Team at any time and your data is preserved exactly as-is. Downgrades are handled at the end of your billing period. Contact support@vewit.in for Enterprise custom billing arrangements.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Contact -->
+<section class="section reveal" id="contact">
+  <div class="wrap">
+    <div class="eyebrow">Contact</div>
+    <h2 class="section-title">We're here to help.</h2>
+    <p class="section-sub">Have a question, need onboarding help, or want to explore an Enterprise deal? Reach out — we respond fast.</p>
+    <div class="contact-grid">
+      <div class="contact-card">
+        <div class="contact-icon" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">🤝</div>
+        <h3>Sales &amp; Partnerships</h3>
+        <p>Enterprise pricing, volume deals, custom contracts and strategic partnership discussions.</p>
+        <a href="mailto:ceo@vewit.in" class="contact-link">ceo@vewit.in →</a>
+      </div>
+      <div class="contact-card">
+        <div class="contact-icon" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">🛟</div>
+        <h3>Technical Support</h3>
+        <p>Bug reports, feature requests, onboarding help, API questions and general product support.</p>
+        <a href="mailto:support@vewit.in" class="contact-link">support@vewit.in →</a>
+      </div>
+      <div class="contact-card">
+        <div class="contact-icon" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">📣</div>
+        <h3>General Inquiries</h3>
+        <p>Press, media, feedback, partnerships and anything else — we'd love to hear from you.</p>
+        <a href="mailto:ceo@vewit.in" class="contact-link">ceo@vewit.in →</a>
+      </div>
     </div>
   </div>
 </section>
 
 <!-- CTA Banner -->
-<div class="cta-banner reveal">
-  <div class="cta-banner-inner">
+<div class="cta-strip reveal">
+  <div class="cta-inner">
     <h2>Ready to transform<br/>how your team works?</h2>
-    <p>Join hundreds of teams using VEWIT to ship faster, communicate better and stay aligned — all powered by AI.</p>
-    <div class="cta-banner-btns">
-      <a href="/?action=register" class="cta-main">Start for free</a>
-      <a href="/about" class="cta-sec">Learn more</a>
+    <p>Join hundreds of teams using VEWIT to ship faster, communicate better and stay aligned — all powered by Claude AI.</p>
+    <div class="cta-inner-btns">
+      <a href="/?action=register" class="cta-primary">Create free workspace</a>
+      <a href="/about" class="cta-secondary">Learn more</a>
     </div>
   </div>
 </div>
@@ -3904,51 +3619,58 @@ LANDING_HTML = """<!DOCTYPE html>
 <footer>
   <div class="footer-grid">
     <div class="footer-brand">
-      <div class="brand-name">VEWIT</div>
-      <p>AI-powered team collaboration platform. Projects, tasks, messages, tickets and analytics — all in one place.</p>
+      <div class="footer-brand-name">VEWIT</div>
+      <p>AI-powered team collaboration platform. Projects, tasks, messages, tickets and analytics — all in one beautifully unified workspace.</p>
+      <div class="footer-contact-mini">
+        <a href="mailto:ceo@vewit.in">📧 ceo@vewit.in — Sales &amp; CEO</a>
+        <a href="mailto:support@vewit.in">🛟 support@vewit.in — Support</a>
+      </div>
     </div>
     <div class="footer-col">
       <h4>Product</h4>
       <a href="#features">Features</a>
       <a href="#pricing">Pricing</a>
-      <a href="/about">About</a>
+      <a href="/about">About VEWIT</a>
       <a href="/?action=register">Get started</a>
+      <a href="/?action=login">Sign in</a>
     </div>
     <div class="footer-col">
       <h4>Use Cases</h4>
       <a href="/?action=register">Engineering teams</a>
+      <a href="/?action=register">Product managers</a>
       <a href="/?action=register">Startups</a>
-      <a href="/?action=register">Product teams</a>
+      <a href="/?action=register">Agencies</a>
       <a href="/?action=register">Freelancers</a>
     </div>
     <div class="footer-col">
-      <h4>Company</h4>
-      <a href="/about">About VEWIT</a>
-      <a href="mailto:hello@vewit.in">Contact</a>
-      <a href="/?action=login">Sign in</a>
+      <h4>Contact</h4>
+      <a href="mailto:ceo@vewit.in">ceo@vewit.in</a>
+      <a href="mailto:support@vewit.in">support@vewit.in</a>
+      <a href="/about">About us</a>
+      <a href="#faq">FAQ</a>
     </div>
   </div>
   <div class="footer-bottom">
-    <p>© 2025 VEWIT. All rights reserved.</p>
-    <p>Built with ♥ in India · <a href="mailto:hello@vewit.in">hello@vewit.in</a></p>
+    <p>© 2025 VEWIT. All rights reserved. Built with ♥ in India.</p>
+    <p><a href="mailto:ceo@vewit.in">ceo@vewit.in</a> · <a href="mailto:support@vewit.in">support@vewit.in</a></p>
   </div>
 </footer>
 
 <script>
 // Scroll reveal
-const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => { if(e.isIntersecting) { e.target.classList.add('visible'); } });
-}, { threshold: 0.08 });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+const obs = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); } });
+},{ threshold:0.07 });
+document.querySelectorAll('.reveal,.reveal-fast').forEach(el=>obs.observe(el));
 
-// Nav background on scroll
-const nav = document.getElementById('nav');
-if(nav) {
-  window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 40
-      ? 'rgba(0,0,0,0.9)'
-      : 'rgba(0,0,0,0.72)';
-  }, { passive: true });
+// Nav bg on scroll
+const nav = document.getElementById('main-nav');
+if(nav){
+  window.addEventListener('scroll',()=>{
+    nav.style.background = window.scrollY > 50
+      ? 'rgba(8,12,20,0.95)'
+      : 'rgba(8,12,20,0.75)';
+  },{passive:true});
 }
 </script>
 </body>
@@ -3967,266 +3689,176 @@ ABOUT_HTML = """<!DOCTYPE html>
 <link rel="canonical" href="https://www.vewit.in/about"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #000; --bg2: #0a0a0a; --bg3: #111;
-    --surface: rgba(255,255,255,0.05); --surface2: rgba(255,255,255,0.08);
-    --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.15);
-    --text: #f5f5f7; --text2: #a1a1a6; --text3: #6e6e73;
-    --accent: #2997ff; --accent2: #30d158;
-    --grad1: linear-gradient(135deg, #2997ff 0%, #bf5af2 100%);
-    --radius: 18px; --radius-sm: 10px;
-    --font: -apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
-  }
-  html { scroll-behavior: smooth; }
-  body {
-    font-family: var(--font); background: var(--bg); color: var(--text);
-    line-height: 1.6; -webkit-font-smoothing: antialiased;
-  }
-  nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 40px; height: 52px;
-    background: rgba(0,0,0,0.72);
-    backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .nav-logo {
-    font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
-    color: var(--text); text-decoration: none;
-    background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  }
-  .nav-links { display: flex; align-items: center; gap: 36px; }
-  .nav-links a { color: var(--text2); font-size: 13px; text-decoration: none; transition: color 0.2s; }
-  .nav-links a:hover { color: var(--text); }
-  .btn-primary {
-    background: var(--accent); color: #fff; font-size: 13px; font-weight: 500;
-    text-decoration: none; padding: 7px 18px; border-radius: 980px;
-    transition: opacity 0.2s;
-  }
-  .btn-primary:hover { opacity: 0.88; }
-
-  .page-hero {
-    padding: 140px 24px 80px; text-align: center;
-    position: relative; overflow: hidden;
-  }
-  .page-hero::before {
-    content: ''; position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
-    width: 600px; height: 600px;
-    background: radial-gradient(ellipse, rgba(41,151,255,0.12) 0%, transparent 70%);
-    pointer-events: none;
-  }
-  .page-hero h1 {
-    font-size: clamp(36px, 6vw, 72px); font-weight: 700; letter-spacing: -3px;
-    line-height: 1.05; margin-bottom: 20px;
-  }
-  .page-hero p {
-    font-size: 18px; color: var(--text2); max-width: 560px; margin: 0 auto;
-    line-height: 1.65;
-  }
-  .eyebrow {
-    display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 20px;
-  }
-
-  .content-wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px 120px; }
-  .section { padding: 72px 0; border-top: 1px solid var(--border); }
-  .section:first-child { border-top: none; }
-  .section-label {
-    font-size: 12px; font-weight: 600; color: var(--accent);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px;
-  }
-  .section h2 {
-    font-size: clamp(28px, 4vw, 42px); font-weight: 700; letter-spacing: -1.5px;
-    margin-bottom: 16px; color: var(--text);
-  }
-  .section p { font-size: 16px; color: var(--text2); line-height: 1.75; max-width: 640px; }
-  .section p + p { margin-top: 16px; }
-
-  .feat-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 40px; }
-  .feat-card2 {
-    background: var(--bg3); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 28px;
-    transition: border-color 0.2s;
-  }
-  .feat-card2:hover { border-color: var(--border2); }
-  .feat-card2 .icon { font-size: 24px; margin-bottom: 14px; }
-  .feat-card2 h3 { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; margin-bottom: 8px; }
-  .feat-card2 p { font-size: 13px; color: var(--text3); line-height: 1.65; }
-
-  .roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 36px; }
-  .role-card {
-    background: var(--bg3); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 20px; text-align: center;
-  }
-  .role-card .icon { font-size: 24px; margin-bottom: 10px; }
-  .role-card h4 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; letter-spacing: -0.2px; }
-  .role-card p { font-size: 12px; color: var(--text3); line-height: 1.5; }
-
-  .stack-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
-  .stack-pill {
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 980px; padding: 6px 16px;
-    font-size: 13px; font-weight: 500; color: var(--text2);
-  }
-
-  .cta-section {
-    background: linear-gradient(135deg, rgba(41,151,255,0.1) 0%, rgba(191,90,242,0.06) 100%);
-    border: 1px solid rgba(41,151,255,0.15); border-radius: 24px;
-    padding: 60px 48px; text-align: center; margin-top: 60px; position: relative;
-  }
-  .cta-section::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(41,151,255,0.4), transparent);
-  }
-  .cta-section h2 { font-size: clamp(24px, 3.5vw, 38px); font-weight: 700; letter-spacing: -1.5px; margin-bottom: 12px; }
-  .cta-section p { font-size: 16px; color: var(--text2); max-width: 400px; margin: 0 auto 32px; }
-  .cta-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-  .cta-main2 {
-    background: var(--text); color: var(--bg); font-size: 15px; font-weight: 600;
-    text-decoration: none; padding: 12px 28px; border-radius: 980px;
-    transition: opacity 0.2s; letter-spacing: -0.2px;
-  }
-  .cta-main2:hover { opacity: 0.88; }
-  .cta-sec2 {
-    color: var(--text); font-size: 15px; font-weight: 500;
-    text-decoration: none; padding: 12px 24px; border-radius: 980px;
-    border: 1px solid var(--border2); transition: background 0.2s;
-  }
-  .cta-sec2:hover { background: var(--surface2); }
-
-  footer {
-    border-top: 1px solid var(--border); padding: 32px 40px;
-    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-  }
-  footer p { font-size: 12px; color: var(--text3); }
-  footer a { color: var(--text3); text-decoration: none; }
-  footer a:hover { color: var(--accent); }
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to   { opacity: 1; transform: none; }
-  }
-  .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.6s ease, transform 0.6s ease; }
-  .reveal.visible { opacity: 1; transform: none; }
-
-  @media(max-width:768px) {
-    nav { padding: 0 20px; }
-    .nav-links { display: none; }
-    .page-hero { padding: 100px 24px 60px; }
-    .cta-section { padding: 40px 24px; }
-    footer { flex-direction: column; align-items: flex-start; }
-  }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#080c14;--bg2:#0d1221;--bg3:#111827;--bg4:#1a2236;--surface:rgba(255,255,255,0.04);--surface2:rgba(255,255,255,0.07);--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);--text:#f0f4ff;--text2:#a8b4cc;--text3:#5c6b84;--blue:#4f8ef7;--purple:#8b5cf6;--cyan:#22d3ee;--green:#34d399;--amber:#fbbf24;--pink:#f472b6;--grad-blue:linear-gradient(135deg,#4f8ef7 0%,#8b5cf6 100%);--font:'Bricolage Grotesque',system-ui,sans-serif;--font-body:'Inter',system-ui,sans-serif}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 48px;height:58px;background:rgba(8,12,20,0.82);backdrop-filter:blur(24px);border-bottom:1px solid var(--border)}
+.nav-logo{font-family:var(--font);font-size:22px;font-weight:800;letter-spacing:-1px;text-decoration:none;background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-links{display:flex;align-items:center;gap:32px}
+.nav-links a{color:var(--text2);font-size:13.5px;text-decoration:none;transition:color .2s}
+.nav-links a:hover,.nav-links a.cur{color:var(--text)}
+.nav-start{background:var(--grad-blue);color:#fff;font-size:13.5px;font-weight:600;text-decoration:none;padding:8px 20px;border-radius:980px;transition:opacity .2s}
+.nav-start:hover{opacity:.88}
+.page-hero{padding:150px 24px 80px;text-align:center;position:relative;overflow:hidden}
+.hero-bg-blob{position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:700px;height:500px;background:radial-gradient(ellipse,rgba(79,142,247,0.12) 0%,transparent 70%);pointer-events:none}
+.page-hero h1{font-family:var(--font);font-size:clamp(40px,7vw,80px);font-weight:800;letter-spacing:-3px;line-height:1.05;margin-bottom:20px;position:relative;z-index:1}
+.grad{background:var(--grad-blue);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-hero p{font-size:18px;color:var(--text2);max-width:580px;margin:0 auto;line-height:1.7;position:relative;z-index:1}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:18px;font-family:var(--font-body)}
+.eyebrow::before{content:'';width:4px;height:16px;background:var(--grad-blue);border-radius:2px;display:inline-block}
+.wrap{max-width:1040px;margin:0 auto;padding:0 24px 120px}
+.sec{padding:72px 0;border-top:1px solid var(--border)}
+.sec:first-child{border-top:none}
+.sec h2{font-family:var(--font);font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-2px;margin-bottom:16px;color:var(--text)}
+.sec p{font-size:15.5px;color:var(--text2);line-height:1.8;max-width:680px}
+.sec p+p{margin-top:14px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:40px}
+.fc{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:28px;transition:border-color .2s,transform .2s}
+.fc:hover{border-color:var(--border2);transform:translateY(-3px)}
+.fc .ico{font-size:24px;margin-bottom:14px}
+.fc h3{font-family:var(--font);font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.3px;margin-bottom:8px}
+.fc p{font-size:13px;color:var(--text3);line-height:1.65}
+.roles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:32px}
+.rc{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:22px;text-align:center;transition:border-color .2s}
+.rc:hover{border-color:var(--border2)}
+.rc .ico{font-size:26px;margin-bottom:10px}
+.rc h4{font-family:var(--font);font-size:14px;font-weight:700;color:var(--text);margin-bottom:5px;letter-spacing:-.2px}
+.rc p{font-size:12px;color:var(--text3);line-height:1.55}
+.stack-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.sp{background:var(--surface2);border:1px solid var(--border);border-radius:980px;padding:7px 16px;font-size:13px;font-weight:500;color:var(--text2)}
+.contact-sec{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:36px}
+.cc{background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:28px;transition:border-color .2s,transform .2s}
+.cc:hover{border-color:var(--border2);transform:translateY(-3px)}
+.cc .ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:16px}
+.cc h3{font-family:var(--font);font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-.3px}
+.cc p{font-size:13px;color:var(--text3);line-height:1.65;margin-bottom:14px}
+.cc a{font-size:14px;font-weight:600;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.cc a:hover{text-decoration:underline}
+.cta-box{background:linear-gradient(135deg,rgba(79,142,247,0.1),rgba(139,92,246,0.08));border:1px solid rgba(79,142,247,0.2);border-radius:24px;padding:60px;text-align:center;margin-top:60px;position:relative;overflow:hidden}
+.cta-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.5),transparent)}
+.cta-box h2{font-family:var(--font);font-size:clamp(26px,4vw,40px);font-weight:800;letter-spacing:-2px;margin-bottom:12px}
+.cta-box p{font-size:16px;color:var(--text2);max-width:440px;margin:0 auto 32px;line-height:1.7}
+.cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.cta-main{background:var(--grad-blue);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:980px;font-family:var(--font);box-shadow:0 8px 24px rgba(79,142,247,0.3)}
+.cta-out{color:var(--text);font-size:15px;font-weight:600;text-decoration:none;padding:13px 24px;border-radius:980px;border:1px solid var(--border2);transition:background .2s;font-family:var(--font)}
+.cta-out:hover{background:var(--surface2)}
+footer{border-top:1px solid var(--border);padding:36px 48px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+footer p,footer a{font-size:12.5px;color:var(--text3);text-decoration:none;transition:color .2s}
+footer a:hover{color:var(--blue)}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .65s ease,transform .65s ease}
+.reveal.visible{opacity:1;transform:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@media(max-width:768px){nav{padding:0 20px}.nav-links{display:none}.cta-box{padding:36px 24px}}
 </style>
 </head>
 <body>
-
 <nav>
   <a href="/" class="nav-logo">VEWIT</a>
   <div class="nav-links">
     <a href="/#features">Features</a>
     <a href="/#pricing">Pricing</a>
-    <a href="/about" style="color:var(--text)">About</a>
+    <a href="/#contact">Contact</a>
+    <a href="/about" class="cur">About</a>
   </div>
-  <a href="/?action=register" class="btn-primary">Get Started</a>
+  <a href="/?action=register" class="nav-start">Get Started →</a>
 </nav>
 
-<div class="page-hero" style="animation:fadeUp 0.7s ease both">
+<div class="page-hero" style="animation:fadeUp .7s ease both">
+  <div class="hero-bg-blob"></div>
   <div class="eyebrow">About VEWIT</div>
-  <h1>One platform.<br/>Every team need.</h1>
-  <p>VEWIT replaces Jira, Slack and Linear with a single AI-powered workspace — built for modern engineering teams.</p>
+  <h1>One platform.<br/><span class="grad">Every team need.</span></h1>
+  <p>VEWIT replaces Jira, Slack and Linear with a single AI-powered workspace — built for modern engineering teams who want to move fast without the tool-switching tax.</p>
 </div>
 
-<div class="content-wrap">
-
-  <div class="section reveal">
-    <div class="section-label">What is VEWIT</div>
+<div class="wrap">
+  <div class="sec reveal">
+    <div class="eyebrow">What is VEWIT</div>
     <h2>Everything your team needs, in one place</h2>
-    <p>VEWIT is a multi-workspace team collaboration platform powered by Claude AI. Teams use VEWIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
-    <p>Built for engineers, designed for everyone. VEWIT is used by startup founders, product managers, developers and remote teams who want a single source of truth for all their work.</p>
+    <p>VEWIT is a multi-workspace team collaboration platform powered by Claude AI (Anthropic). Teams use VEWIT to plan projects, track tasks, communicate directly, manage support tickets, monitor timelines and measure developer productivity — without switching between multiple tools.</p>
+    <p>Built for engineers, designed for everyone. VEWIT is used by startup founders, product managers, developers and remote teams who want a single source of truth for all their work. Free to start, with no credit card required.</p>
   </div>
 
-  <div class="section reveal">
-    <div class="section-label">Core Features</div>
-    <h2>12 modules, fully integrated</h2>
-    <p>Every feature is designed to work together. Your tasks connect to your projects, your messages are in context, and your AI assistant knows your entire workspace.</p>
-    <div class="feat-grid2">
-      <div class="feat-card2"><div class="icon">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress tracking, target dates and priorities.</p></div>
-      <div class="feat-card2"><div class="icon">✅</div><h3>Smart Kanban Board</h3><p>Kanban with custom stages, story points, sprint planning, subtasks, comments and file attachments.</p></div>
-      <div class="feat-card2"><div class="icon">🤖</div><h3>Claude AI Assistant</h3><p>Create tasks, generate EOD reports, update statuses and query your workspace in natural language.</p></div>
-      <div class="feat-card2"><div class="icon">💬</div><h3>Direct Messages</h3><p>Private one-to-one messaging with real-time online presence and unread notification badges.</p></div>
-      <div class="feat-card2"><div class="icon">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication.</p></div>
-      <div class="feat-card2"><div class="icon">🎫</div><h3>Support Tickets</h3><p>Full ticketing system with bug reports, feature requests, priorities and status workflows.</p></div>
-      <div class="feat-card2"><div class="icon">📅</div><h3>Gantt Timeline</h3><p>Visual timeline to plan schedules, track milestones and spot overlapping workloads.</p></div>
-      <div class="feat-card2"><div class="icon">📊</div><h3>Productivity Analytics</h3><p>Team velocity, blocked work, sprint performance and individual contribution breakdowns.</p></div>
-      <div class="feat-card2"><div class="icon">🔔</div><h3>Push Notifications</h3><p>Desktop notifications for task assignments, comments, DMs and time-based reminders.</p></div>
-      <div class="feat-card2"><div class="icon">📹</div><h3>Instant Meet</h3><p>Launch video meetings and invite team members without leaving the platform.</p></div>
-      <div class="feat-card2"><div class="icon">🏢</div><h3>Multi-Workspace</h3><p>Separate workspaces for different companies or clients — each isolated and secure.</p></div>
-      <div class="feat-card2"><div class="icon">🔐</div><h3>Role-Based Access</h3><p>Admin, Manager, TeamLead, Developer, Tester and Viewer roles with granular permissions.</p></div>
+  <div class="sec reveal">
+    <div class="eyebrow">Core Features</div>
+    <h2>12 modules, <span class="grad">fully integrated</span></h2>
+    <p>Every feature is designed to work together. Your tasks connect to projects, messages stay in context, and your AI assistant knows your entire workspace.</p>
+    <div class="grid2">
+      <div class="fc"><div class="ico">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress, target dates and priorities.</p></div>
+      <div class="fc"><div class="ico">✅</div><h3>Smart Kanban Board</h3><p>Kanban with custom stages, story points, sprint planning, subtasks, comments and file attachments.</p></div>
+      <div class="fc"><div class="ico">🤖</div><h3>Claude AI Assistant</h3><p>Create tasks, generate EOD reports, update statuses and query your workspace in natural language.</p></div>
+      <div class="fc"><div class="ico">💬</div><h3>Direct Messages</h3><p>Private 1-to-1 messaging with real-time online presence and unread notification badges.</p></div>
+      <div class="fc"><div class="ico">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication.</p></div>
+      <div class="fc"><div class="ico">🎫</div><h3>Support Tickets</h3><p>Full ticketing with bug reports, feature requests, priorities and status workflows.</p></div>
+      <div class="fc"><div class="ico">📅</div><h3>Gantt Timeline</h3><p>Visual timeline to plan schedules, track milestones and spot overlapping workloads.</p></div>
+      <div class="fc"><div class="ico">📊</div><h3>Productivity Analytics</h3><p>Team velocity, blocked work, sprint performance and individual contribution breakdowns.</p></div>
+      <div class="fc"><div class="ico">🔔</div><h3>Push Notifications</h3><p>Desktop notifications for task assignments, comments, DMs and time-based reminders.</p></div>
+      <div class="fc"><div class="ico">📹</div><h3>Instant Meet</h3><p>Launch WebRTC video meetings and invite team members without leaving the platform.</p></div>
+      <div class="fc"><div class="ico">🏢</div><h3>Multi-Workspace</h3><p>Separate workspaces for different companies or clients — each isolated and secure.</p></div>
+      <div class="fc"><div class="ico">🔐</div><h3>Role-Based Access</h3><p>6 roles (Admin → Viewer), bcrypt passwords, TOTP 2FA and workspace-isolated data.</p></div>
     </div>
   </div>
 
-  <div class="section reveal">
-    <div class="section-label">User Roles</div>
-    <h2>Built for every member of your team</h2>
-    <p>VEWIT's role system ensures each person on your team has exactly the right access — no more, no less.</p>
+  <div class="sec reveal">
+    <div class="eyebrow">User Roles</div>
+    <h2>Built for <span class="grad">every member</span> of your team</h2>
+    <p>VEWIT's role system gives each person exactly the right level of access — granular enough for enterprises, simple enough for startups.</p>
     <div class="roles-grid">
-      <div class="role-card"><div class="icon">👑</div><h4>Admin</h4><p>Full workspace control — users, settings, billing.</p></div>
-      <div class="role-card"><div class="icon">🧑‍💼</div><h4>Manager</h4><p>Create and manage projects, assign tasks, run sprints.</p></div>
-      <div class="role-card"><div class="icon">🧑‍✈️</div><h4>Team Lead</h4><p>Lead a team, review work, manage task stages.</p></div>
-      <div class="role-card"><div class="icon">💻</div><h4>Developer</h4><p>Work on tasks, log progress, collaborate in channels.</p></div>
-      <div class="role-card"><div class="icon">🧪</div><h4>Tester</h4><p>Manage tickets, verify task completion, report bugs.</p></div>
-      <div class="role-card"><div class="icon">👁️</div><h4>Viewer</h4><p>Read-only access to projects and task progress.</p></div>
+      <div class="rc"><div class="ico">👑</div><h4>Admin</h4><p>Full workspace control — users, settings, billing and AI configuration.</p></div>
+      <div class="rc"><div class="ico">🧑‍💼</div><h4>Manager</h4><p>Create and manage projects, assign tasks, run sprints and view analytics.</p></div>
+      <div class="rc"><div class="ico">🧑‍✈️</div><h4>Team Lead</h4><p>Lead a sub-team, review work, manage task stages and team dashboards.</p></div>
+      <div class="rc"><div class="ico">💻</div><h4>Developer</h4><p>Work on tasks, log progress, collaborate in channels and DMs.</p></div>
+      <div class="rc"><div class="ico">🧪</div><h4>Tester</h4><p>Manage tickets, verify task completion, report bugs and run QA workflows.</p></div>
+      <div class="rc"><div class="ico">👁️</div><h4>Viewer</h4><p>Read-only access to projects and task progress — perfect for stakeholders.</p></div>
     </div>
   </div>
 
-  <div class="section reveal">
-    <div class="section-label">Technology</div>
+  <div class="sec reveal">
+    <div class="eyebrow">Technology</div>
     <h2>Modern, reliable stack</h2>
-    <p>VEWIT is built with battle-tested technologies — fast, secure, and deployable anywhere. No external JS framework dependencies at runtime; React is loaded from CDN and rendered server-side via Python Flask.</p>
-    <div class="stack-row">
-      <span class="stack-pill">Python 3 · Flask</span>
-      <span class="stack-pill">PostgreSQL · pg8000</span>
-      <span class="stack-pill">React 18 · HTM</span>
-      <span class="stack-pill">Anthropic Claude API</span>
-      <span class="stack-pill">Recharts</span>
-      <span class="stack-pill">Web Push (VAPID)</span>
-      <span class="stack-pill">WebRTC (Instant Meet)</span>
-      <span class="stack-pill">TOTP / Google Auth 2FA</span>
-      <span class="stack-pill">SMTP · Resend API</span>
-      <span class="stack-pill">Railway · Docker</span>
+    <p>VEWIT is built on battle-tested technologies — fast, secure and deployable anywhere. React 18 runs via CDN with no build step; the entire backend is a single Python file serving both the REST API and the frontend shell.</p>
+    <div class="stack-pills">
+      <span class="sp">Python 3 · Flask</span><span class="sp">PostgreSQL · pg8000</span><span class="sp">React 18 · HTM</span><span class="sp">Anthropic Claude API</span><span class="sp">Recharts</span><span class="sp">Web Push (VAPID)</span><span class="sp">WebRTC (Instant Meet)</span><span class="sp">TOTP / Google Authenticator 2FA</span><span class="sp">SMTP · Resend API</span><span class="sp">Railway · Docker</span><span class="sp">bcrypt · SHA-256</span>
     </div>
   </div>
 
-  <div class="section reveal">
-    <div class="section-label">Security</div>
+  <div class="sec reveal">
+    <div class="eyebrow">Security</div>
     <h2>Security you can trust</h2>
-    <p>VEWIT is built with security at every layer — bcrypt password hashing, session-based auth, TOTP two-factor authentication via Google Authenticator, role-based access control, HTTPS-only sessions and tenant-isolated data queries throughout every API endpoint.</p>
+    <p>Every layer of VEWIT is designed with security in mind — bcrypt password hashing with automatic legacy SHA-256 upgrade, session-based auth with 7-day persistence, TOTP two-factor authentication via Google Authenticator, role-based access control enforced on every API endpoint, HTTPS-only sessions and tenant-isolated database queries throughout. Enterprise customers can opt for on-premise deployment for complete data sovereignty.</p>
   </div>
 
-  <div class="cta-section reveal">
+  <div class="sec reveal">
+    <div class="eyebrow">Contact Us</div>
+    <h2>Get in touch</h2>
+    <p>Whether you need support, want to explore Enterprise pricing, or just have a question — we'd love to hear from you.</p>
+    <div class="contact-sec">
+      <div class="cc"><div class="ico" style="background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.2)">🤝</div><h3>CEO &amp; Sales</h3><p>Enterprise pricing, partnerships, custom contracts and strategic discussions.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
+      <div class="cc"><div class="ico" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding help, API questions and product support.</p><a href="mailto:support@vewit.in">support@vewit.in →</a></div>
+      <div class="cc"><div class="ico" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we respond to every message.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
+    </div>
+  </div>
+
+  <div class="cta-box reveal">
     <h2>Ready to get started?</h2>
     <p>Create your free workspace in under 60 seconds. No credit card required.</p>
     <div class="cta-btns">
-      <a href="/?action=register" class="cta-main2">Create free workspace</a>
-      <a href="/?action=login" class="cta-sec2">Sign in</a>
+      <a href="/?action=register" class="cta-main">Create free workspace →</a>
+      <a href="/?action=login" class="cta-out">Sign in</a>
     </div>
   </div>
-
 </div>
 
 <footer>
-  <p>© 2025 VEWIT · <a href="mailto:hello@vewit.in">hello@vewit.in</a></p>
-  <p><a href="/">Home</a> · <a href="/?action=register">Get Started</a> · <a href="/?action=login">Sign In</a></p>
+  <p>© 2025 VEWIT · Built with ♥ in India</p>
+  <p><a href="/">Home</a> · <a href="/#pricing">Pricing</a> · <a href="mailto:ceo@vewit.in">ceo@vewit.in</a> · <a href="mailto:support@vewit.in">support@vewit.in</a></p>
 </footer>
 
 <script>
-const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.08 });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+const obs = new IntersectionObserver(e=>e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('visible')}),{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 </script>
 </body>
 </html>"""
@@ -4242,7 +3874,6 @@ def root(p):
     if action in ("login","register") or p!="":
         return HTML
     return LANDING_HTML
-
 
 HTML = r"""<!DOCTYPE html>
 <html lang="en"><head>
@@ -4744,11 +4375,12 @@ class ErrorBoundary extends React.Component{
 }
 
 /* ─── AuthScreen — Professional Tech Design ───────────────────────────────── */
+
 function AuthScreen({onLogin}){
   const _initTab=(()=>{try{const p=new URLSearchParams(window.location.search);return p.get('action')==='register'?'register':'login';}catch{return 'login';}})();
   const _setTab=(t)=>{
     setTabRaw(t);
-    setEmail('');setPw('');setErr('');setName('');setWsName('');setInviteCode('');
+    setEmail('');setPw('');setErr('');setName('');setWsName('');setInviteCode('');setSuccess(false);
     try{history.replaceState(null,'','/?action='+t);}catch{}
   };
   const [tab,setTabRaw]=useState(_initTab);const setTab=_setTab;
@@ -4762,361 +4394,401 @@ function AuthScreen({onLogin}){
   const [showPw,setShowPw]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
-  const [otpCode,setOtpCode]=useState(''); // kept for ref cleanup only
-  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()]; // kept to avoid ref errors
-  // TOTP / Google Authenticator state
+  const [success,setSuccess]=useState(false);
+  const [successMsg,setSuccessMsg]=useState('');
   const [totpStep,setTotpStep]=useState(false);
   const [totpUserId,setTotpUserId]=useState('');
   const [totpUserName,setTotpUserName]=useState('');
   const [totpToken,setTotpToken]=useState('');
   const cvRef=useRef(null);
+  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
 
-  useEffect(()=>{
-    if(totpStep)setTotpToken('');
-  },[totpStep]);
+  useEffect(()=>{ if(totpStep) setTotpToken(''); },[totpStep]);
 
+  // Rich canvas animation — dark, colorful mesh
   useEffect(()=>{
     const cv=cvRef.current;if(!cv)return;
     const ctx=cv.getContext('2d');
     let id,frame=0;
     const resize=()=>{cv.width=cv.offsetWidth||700;cv.height=cv.offsetHeight||900;};
     resize();
-    const ro=new ResizeObserver(()=>{resize();});ro.observe(cv);
+    const ro=new ResizeObserver(()=>resize());ro.observe(cv);
 
-    const waveConfigs=[
-      {spd:.00042,amp:.048,freq:2.2,ph:0, fill:'rgba(147,197,253,',stroke:'rgba(96,165,250,', base:.50}, {spd:.00031,amp:.040,freq:1.8,ph:2.0, fill:'rgba(96,165,250,', stroke:'rgba(59,130,246,', base:.56}, {spd:.00051,amp:.032,freq:2.7,ph:4.1, fill:'rgba(59,130,246,', stroke:'rgba(37,99,235,', base:.61}, {spd:.00024,amp:.026,freq:1.5,ph:1.2, fill:'rgba(37,99,235,', stroke:'rgba(29,78,216,', base:.66}, {spd:.00058,amp:.020,freq:3.1,ph:3.4, fill:'rgba(29,78,216,', stroke:'rgba(30,64,175,', base:.70}, ];
+    const COLORS=[
+      [79,142,247],   // blue
+      [139,92,246],   // purple
+      [34,211,238],   // cyan
+      [52,211,153],   // green
+      [244,114,182],  // pink
+      [251,191,36],   // amber
+    ];
 
-    const pts=Array.from({length:28},()=>({
-      x:Math.random(),y:Math.random()*.5, vx:(Math.random()-.5)*.00012,vy:(Math.random()-.5)*.00010, r:.6+Math.random()*1.2,ph:Math.random()*Math.PI*2,sp:.006+Math.random()*.008, }));
+    const orbs=COLORS.map((c,i)=>({
+      x:.1+Math.random()*.8, y:.1+Math.random()*.8,
+      vx:(Math.random()-.5)*.00018, vy:(Math.random()-.5)*.00015,
+      r:.28+Math.random()*.22, ph:i*1.05, sp:.003+Math.random()*.004,
+      c, a:.18+Math.random()*.14
+    }));
 
-    const bubbles=Array.from({length:16},()=>({
-      x:Math.random(),y:.45+Math.random()*.45, r:1.5+Math.random()*4,vy:-.00025-Math.random()*.0003, ph:Math.random()*Math.PI*2,sp:.007+Math.random()*.005,a:.06+Math.random()*.10, }));
+    const pts=Array.from({length:32},()=>({
+      x:Math.random(), y:Math.random(),
+      vx:(Math.random()-.5)*.00014, vy:(Math.random()-.5)*.00012,
+      ph:Math.random()*Math.PI*2, sp:.005+Math.random()*.007,
+      ci:Math.floor(Math.random()*COLORS.length)
+    }));
 
-    const sparks=Array.from({length:24},()=>({
-      x:Math.random(),yb:.46+Math.random()*.18, ph:Math.random()*Math.PI*2,sp:.018+Math.random()*.014,sz:.6+Math.random()*1.2, }));
+    const sparks=Array.from({length:18},()=>({
+      x:Math.random(), y:Math.random(),
+      ph:Math.random()*Math.PI*2, sp:.012+Math.random()*.01,
+      sz:.4+Math.random()*1.0, ci:Math.floor(Math.random()*COLORS.length)
+    }));
 
     const draw=()=>{
-      const W=cv.width,H=cv.height;
-      frame++;const t=frame*.016;
+      const W=cv.width, H=cv.height;
+      frame++; const t=frame*.016;
 
-      const bg=ctx.createLinearGradient(0,0,0,H);
-      bg.addColorStop(0,'#ffffff');
-      bg.addColorStop(.30,'#f0f9ff');
-      bg.addColorStop(.52,'#dbeafe');
-      bg.addColorStop(.75,'#bfdbfe');
-      bg.addColorStop(1,'#93c5fd');
-      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+      // Dark base gradient
+      const bg=ctx.createLinearGradient(0,0,W*.5,H);
+      bg.addColorStop(0,'#080c14');
+      bg.addColorStop(.5,'#0d1221');
+      bg.addColorStop(1,'#111827');
+      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
 
-      const sg=ctx.createRadialGradient(W*.78,H*.08,0,W*.78,H*.08,W*.5);
-      sg.addColorStop(0,'rgba(254,240,138,0.45)');
-      sg.addColorStop(.3,'rgba(253,224,71,0.15)');
-      sg.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
+      // Floating color orbs
+      orbs.forEach(o=>{
+        o.x+=o.vx; o.y+=o.vy; o.ph+=o.sp;
+        if(o.x<-.1)o.x=1.1; if(o.x>1.1)o.x=-.1;
+        if(o.y<-.1)o.y=1.1; if(o.y>1.1)o.y=-.1;
+        const ox=o.x*W + Math.sin(o.ph*.7)*W*.06;
+        const oy=o.y*H + Math.cos(o.ph*.5)*H*.06;
+        const rr=o.r*Math.min(W,H);
+        const pulse=1+Math.sin(o.ph*2.1)*.12;
+        const g=ctx.createRadialGradient(ox,oy,0,ox,oy,rr*pulse);
+        const [r,g2,b]=o.c;
+        g.addColorStop(0,`rgba(${r},${g2},${b},${o.a})`);
+        g.addColorStop(.5,`rgba(${r},${g2},${b},${o.a*.35})`);
+        g.addColorStop(1,`rgba(${r},${g2},${b},0)`);
+        ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      });
 
-      const ta=ctx.createRadialGradient(W*.5,0,0,W*.5,0,H*.55);
-      ta.addColorStop(0,'rgba(219,234,254,0.4)');
-      ta.addColorStop(1,'rgba(0,0,0,0)');
-      ctx.fillStyle=ta;ctx.fillRect(0,0,W,H);
-
+      // Particle nodes
+      ctx.save();
       pts.forEach(p=>{
-        p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
-        if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=.5;if(p.y>.5)p.y=0;
-        const a=(.08+Math.sin(p.ph)*.06)*(1-p.y/.5);
-        ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
-        ctx.fillStyle='rgba(59,130,246,'+a+')';ctx.fill();
+        p.x+=p.vx; p.y+=p.vy; p.ph+=p.sp;
+        if(p.x<0)p.x=1; if(p.x>1)p.x=0;
+        if(p.y<0)p.y=1; if(p.y>1)p.y=0;
+        const [r,g,b]=COLORS[p.ci];
+        const a=.12+Math.sin(p.ph)*.07;
+        ctx.beginPath(); ctx.arc(p.x*W,p.y*H,1.2,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${r},${g},${b},${a})`; ctx.fill();
       });
 
-      ctx.lineWidth=.4;
-      for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){
-        const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H;
+      // Connection lines
+      ctx.lineWidth=.5;
+      for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
+        const dx=(pts[i].x-pts[j].x)*W, dy=(pts[i].y-pts[j].y)*H;
         const d=Math.sqrt(dx*dx+dy*dy);
-        if(d<W*.14){
-          ctx.strokeStyle='rgba(147,197,253,'+(0.06*(1-d/(W*.14)))+')';
-          ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.stroke();
+        if(d<W*.13){
+          const [r,g,b]=COLORS[pts[i].ci];
+          const a=.06*(1-d/(W*.13));
+          ctx.strokeStyle=`rgba(${r},${g},${b},${a})`;
+          ctx.beginPath(); ctx.moveTo(pts[i].x*W,pts[i].y*H);
+          ctx.lineTo(pts[j].x*W,pts[j].y*H); ctx.stroke();
         }
       }
+      ctx.restore();
 
-      const hy=H*.48;
-      const hl=ctx.createLinearGradient(0,hy,W,hy);
-      hl.addColorStop(0,'rgba(255,255,255,0)');hl.addColorStop(.3,'rgba(255,255,255,0.4)');
-      hl.addColorStop(.5,'rgba(219,234,254,0.6)');hl.addColorStop(.7,'rgba(255,255,255,0.4)');
-      hl.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle=hl;ctx.fillRect(0,hy-1,W,3);
-
-      waveConfigs.forEach((w,wi)=>{
-        const ph=t*w.spd*1000+w.ph;
-        ctx.beginPath();ctx.moveTo(0,H);
-        for(let x=0;x<=W;x+=2){
-          const xn=x/W;
-          const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
-            +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)
-            +Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));
-          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-        }
-        ctx.lineTo(W,H);ctx.closePath();
-        ctx.fillStyle=w.fill+[.14,.12,.11,.10,.09][wi]+')';ctx.fill();
-        ctx.beginPath();
-        for(let x=0;x<=W;x+=2){
-          const xn=x/W;
-          const y=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
-            +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3)
-            +Math.sin(xn*Math.PI*w.freq*.9+ph*1.4)*(w.amp*.18));
-          x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-        }
-        ctx.strokeStyle=w.stroke+[.07,.06,.06,.05,.05][wi]+')';ctx.lineWidth=1.1;ctx.stroke();
-        if(wi===0){
-          for(let fx=W*.04;fx<W;fx+=W*.09+Math.sin(fx*0.01)*W*.02){
-            const xn=fx/W;
-            const fy=H*(w.base+Math.sin(xn*Math.PI*w.freq+ph)*w.amp
-              +Math.sin(xn*Math.PI*w.freq*1.7+ph*.65)*(w.amp*.3));
-            const fa=.10+Math.sin(t*.9+fx*.008)*.05;
-            const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,20+Math.sin(t+fx*.01)*5);
-            fg.addColorStop(0,'rgba(255,255,255,'+fa+')');fg.addColorStop(1,'rgba(255,255,255,0)');
-            ctx.fillStyle=fg;ctx.beginPath();ctx.ellipse(fx,fy,22,5,0,0,Math.PI*2);ctx.fill();
-          }
-        }
-      });
-
-      for(let rx=W*.02;rx<W;rx+=W*.065){
-        const ry=H*(.52+Math.sin(t*.35+rx*.008)*.05);
-        const ra=.03+Math.sin(t*.7+rx*.015)*.02;
-        const rg=ctx.createLinearGradient(rx,ry,rx+W*.05,ry);
-        rg.addColorStop(0,'rgba(255,255,255,0)');rg.addColorStop(.5,'rgba(255,255,255,'+ra+')');rg.addColorStop(1,'rgba(255,255,255,0)');
-        ctx.fillStyle=rg;ctx.fillRect(rx,ry,W*.05,2);
-      }
-
-      bubbles.forEach(b=>{
-        b.y+=b.vy;b.ph+=b.sp;
-        if(b.y<.42)b.y=.5+Math.random()*.3;
-        const bx=b.x*W+Math.sin(b.ph)*6;
-        const by=b.y*H;
-        const ba=b.a*(0.4+Math.sin(b.ph)*.6);
-        ctx.beginPath();ctx.arc(bx,by,b.r,0,Math.PI*2);
-        ctx.strokeStyle='rgba(147,197,253,'+ba+')';ctx.lineWidth=.7;ctx.stroke();
-        ctx.beginPath();ctx.arc(bx-b.r*.3,by-b.r*.35,b.r*.28,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,255,255,'+(ba*.55)+')';ctx.fill();
-      });
-
+      // Sparkles / stars
       sparks.forEach(s=>{
         s.ph+=s.sp;
-        const sx=s.x*W+Math.sin(s.ph*.4)*10;
-        const sy=H*(s.yb+Math.sin(s.ph*.3)*.015);
+        const sx=s.x*W+Math.sin(s.ph*.3)*12;
+        const sy=s.y*H+Math.cos(s.ph*.4)*8;
         const sa=(Math.sin(s.ph)+1)/2;
-        if(sa>.35){
-          const a=sa*.22;
-          ctx.save();ctx.translate(sx,sy);
-          ctx.fillStyle='rgba(255,255,255,'+a+')';
+        if(sa>.3){
+          const [r,g,b]=COLORS[s.ci];
+          const a=sa*.28;
+          ctx.save(); ctx.translate(sx,sy);
+          ctx.fillStyle=`rgba(${r},${g},${b},${a})`;
           ctx.beginPath();
-          ctx.moveTo(0,-s.sz*2.2);ctx.lineTo(s.sz*.35,-s.sz*.35);ctx.lineTo(s.sz*2.2,0);
-          ctx.lineTo(s.sz*.35,s.sz*.35);ctx.lineTo(0,s.sz*2.2);ctx.lineTo(-s.sz*.35,s.sz*.35);
-          ctx.lineTo(-s.sz*2.2,0);ctx.lineTo(-s.sz*.35,-s.sz*.35);
-          ctx.closePath();ctx.fill();ctx.restore();
+          ctx.moveTo(0,-s.sz*2.0); ctx.lineTo(s.sz*.3,-s.sz*.3);
+          ctx.lineTo(s.sz*2.0,0);  ctx.lineTo(s.sz*.3,s.sz*.3);
+          ctx.lineTo(0,s.sz*2.0);  ctx.lineTo(-s.sz*.3,s.sz*.3);
+          ctx.lineTo(-s.sz*2.0,0); ctx.lineTo(-s.sz*.3,-s.sz*.3);
+          ctx.closePath(); ctx.fill(); ctx.restore();
         }
       });
+
+      // Subtle grid lines
+      ctx.save();
+      ctx.strokeStyle='rgba(255,255,255,0.025)'; ctx.lineWidth=.5;
+      const gStep=Math.floor(W/8);
+      for(let x=0;x<W;x+=gStep){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+      for(let y=0;y<H;y+=gStep){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      ctx.restore();
 
       id=requestAnimationFrame(draw);
     };
     draw();
-    return()=>{ro.disconnect();cancelAnimationFrame(id);};
+    return()=>{ ro.disconnect(); cancelAnimationFrame(id); };
   },[]);
 
   const go=async()=>{
-    setErr('');setBusy(true);
+    setErr(''); setBusy(true); setSuccess(false);
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
-      if(r.error)setErr(r.error);
-      else if(r.totp_required){setTotpUserId(r.user_id);setTotpUserName(r.name);setTotpStep(true);setTotpToken('');}
-      else onLogin(r);
+      if(r.error){ setErr(r.error); setBusy(false); }
+      else if(r.totp_required){ setTotpUserId(r.user_id); setTotpUserName(r.name); setTotpStep(true); setTotpToken(''); setBusy(false); }
+      else{
+        setSuccess(true); setSuccessMsg('Welcome back, '+r.name+'!');
+        setTimeout(()=>onLogin(r), 1200);
+      }
     } else {
-      if(!name||!email||!pw){setErr('All fields required.');setBusy(false);return;}
-      if(regMode==='create'&&!wsName){setErr('Workspace name required.');setBusy(false);return;}
-      if(regMode==='join'&&!inviteCode){setErr('Invite code required.');setBusy(false);return;}
+      if(!name||!email||!pw){ setErr('All fields required.'); setBusy(false); return; }
+      if(regMode==='create'&&!wsName){ setErr('Workspace name required.'); setBusy(false); return; }
+      if(regMode==='join'&&!inviteCode){ setErr('Invite code required.'); setBusy(false); return; }
       const r=await api.post('/api/auth/register',{mode:regMode,workspace_name:wsName,invite_code:inviteCode,name,email,password:pw,role});
-      if(r.error)setErr(r.error);else onLogin(r);
+      if(r.error){ setErr(r.error); setBusy(false); }
+      else{
+        setSuccess(true); setSuccessMsg('Workspace ready! Signing you in…');
+        setTimeout(()=>onLogin(r), 1400);
+      }
     }
-    setBusy(false);
   };
+
   const submitTotp=async()=>{
     const tok=totpToken.replace(/\s/g,'');
-    if(tok.length!==6){setErr('Enter the 6-digit code from your authenticator app.');return;}
-    setErr('');setBusy(true);
+    if(tok.length!==6){ setErr('Enter the 6-digit code from your authenticator app.'); return; }
+    setErr(''); setBusy(true);
     const r=await api.post('/api/auth/totp/verify',{user_id:totpUserId,token:tok});
-    if(r.error){setErr(r.error);setTotpToken('');}else onLogin(r);
-    setBusy(false);
+    if(r.error){ setErr(r.error); setTotpToken(''); setBusy(false); }
+    else{
+      setSuccess(true); setSuccessMsg('Identity verified! Welcome back.');
+      setTimeout(()=>onLogin(r), 1000);
+    }
   };
-  // OTP handlers removed — Google Authenticator is the only 2FA method
 
+  // ── Input styles (dark theme) ──
   const inp={
-    width:'100%',padding:'12px 15px',borderRadius:10,fontSize:14,outline:'none', background:'#f8fafc',border:'1.5px solid #e2e8f0',color:'#0f172a', fontFamily:'inherit',transition:'border-color .18s,box-shadow .18s',boxSizing:'border-box', };
-  const lbl={display:'block',fontSize:11,fontWeight:700,letterSpacing:.07, textTransform:'uppercase',color:'#94a3b8',marginBottom:6};
+    width:'100%', padding:'13px 16px', borderRadius:12, fontSize:14.5, outline:'none',
+    background:'rgba(255,255,255,0.06)', border:'1.5px solid rgba(255,255,255,0.12)',
+    color:'#f0f4ff', fontFamily:'inherit', transition:'border-color .2s,box-shadow .2s,background .2s',
+    boxSizing:'border-box', letterSpacing:'-.1px',
+  };
+  const inpFocus=(e)=>{ e.target.style.borderColor='rgba(79,142,247,0.7)'; e.target.style.background='rgba(79,142,247,0.08)'; e.target.style.boxShadow='0 0 0 3px rgba(79,142,247,0.15)'; };
+  const inpBlur=(e)=>{ e.target.style.borderColor='rgba(255,255,255,0.12)'; e.target.style.background='rgba(255,255,255,0.06)'; e.target.style.boxShadow='none'; };
+  const lbl={ display:'block', fontSize:11, fontWeight:700, letterSpacing:.8, textTransform:'uppercase', color:'rgba(168,180,204,0.8)', marginBottom:7 };
+
+  // ── Success overlay ──
+  if(success) return html`
+    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080c14',position:'fixed',inset:0,zIndex:9999}}>
+      <div style=${{textAlign:'center',animation:'authSuccessIn .5s cubic-bezier(.34,1.56,.64,1) both'}}>
+        <style>{'@keyframes authSuccessIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}} @keyframes checkDraw{from{stroke-dashoffset:60}to{stroke-dashoffset:0}} @keyframes ringPulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.8);opacity:0}}'}</style>
+        <div style=${{position:'relative',width:100,height:100,margin:'0 auto 28px'}}>
+          <div style=${{position:'absolute',inset:0,borderRadius:'50%',background:'rgba(52,211,153,0.12)',border:'2px solid rgba(52,211,153,0.4)',animation:'ringPulse 1s .3s ease-out both'}}></div>
+          <div style=${{position:'absolute',inset:0,borderRadius:'50%',background:'linear-gradient(135deg,rgba(52,211,153,0.2),rgba(79,142,247,0.2))',border:'2px solid rgba(52,211,153,0.5)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <svg width="44" height="44" viewBox="0 0 52 52" fill="none">
+              <circle cx="26" cy="26" r="25" stroke="rgba(52,211,153,0.5)" strokeWidth="2" fill="none"/>
+              <polyline points="14,27 22,35 38,18" stroke="#34d399" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="60" strokeDashoffset="60" style="animation:checkDraw .5s .3s ease both;stroke-dashoffset:0"/>
+            </svg>
+          </div>
+        </div>
+        <div style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:26,fontWeight:800,color:'#f0f4ff',letterSpacing:'-1px',marginBottom:10}}>${successMsg}</div>
+        <div style=${{fontSize:14,color:'rgba(168,180,204,0.7)'}}>Taking you to your workspace…</div>
+        <div style=${{marginTop:24,width:180,height:3,background:'rgba(255,255,255,0.08)',borderRadius:3,overflow:'hidden',margin:'24px auto 0'}}>
+          <div style=${{height:'100%',background:'linear-gradient(90deg,#4f8ef7,#8b5cf6)',borderRadius:3,animation:'progressBar 1.2s ease both'}}></div>
+        </div>
+        <style>{'@keyframes progressBar{from{width:0}to{width:100%}}'}</style>
+      </div>
+    </div>`;
 
   const leftPanel=html`
-    <div style=${{
-      width:'48%',flexShrink:0,minHeight:'100vh', position:'relative',overflow:'hidden', }}>
-      <canvas ref=${cvRef} style=${{
-        position:'absolute',top:0,left:0, width:'100%',height:'100%',display:'block', }}></canvas>
+    <div style=${{width:'48%',flexShrink:0,minHeight:'100vh',position:'relative',overflow:'hidden'}}>
+      <canvas ref=${cvRef} style=${{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'block'}}></canvas>
 
-      <div style=${{position:'absolute',top:24,left:24,zIndex:10,display:'flex',alignItems:'center',gap:9}}>
-        <div style=${{width:32,height:32,borderRadius:9,background:'white',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 12px rgba(59,130,246,0.2)'}}>
-          <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="#1d4ed8"/><circle cx="32" cy="11" r="6" fill="#1d4ed8"/><circle cx="51" cy="43" r="6" fill="#1d4ed8"/><circle cx="13" cy="43" r="6" fill="#1d4ed8"/><line x1="32" y1="17" x2="32" y2="23" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="#1d4ed8" stroke-width="3.5" stroke-linecap="round"/></svg>
+      <!-- Logo overlay -->
+      <div style=${{position:'absolute',top:24,left:24,zIndex:10,display:'flex',alignItems:'center',gap:10}}>
+        <div style=${{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(79,142,247,0.4)'}}>
+          <svg width="18" height="18" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
         </div>
-        <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:'#1e3a5f',letterSpacing:-.3}}>VEWIT</span>
+        <span style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:16,color:'#f0f4ff',letterSpacing:'-0.5px'}}>VEWIT</span>
       </div>
 
-            <div style=${{
-        position:'absolute',top:'50%',left:'50%', transform:'translate(-50%,-50%)', textAlign:'center',zIndex:10,pointerEvents:'none', width:'80%', }}>
-        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(255,255,255,0.7)',border:'1px solid rgba(147,197,253,0.6)',padding:'5px 14px',borderRadius:100,marginBottom:18,backdropFilter:'blur(8px)'}}>
-          <div style=${{width:5,height:5,borderRadius:'50%',background:'#3b82f6'}}></div>
-          <span style=${{fontSize:11,color:'#1d4ed8',fontWeight:700,letterSpacing:.05}}>TEAM COLLABORATION · AI-POWERED</span>
+      <!-- Center copy -->
+      <div style=${{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center',zIndex:10,pointerEvents:'none',width:'80%'}}>
+        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(79,142,247,0.15)',border:'1px solid rgba(79,142,247,0.3)',padding:'5px 14px',borderRadius:100,marginBottom:20,backdropFilter:'blur(8px)'}}>
+          <div style=${{width:5,height:5,borderRadius:'50%',background:'#34d399',boxShadow:'0 0 8px #34d399'}}></div>
+          <span style=${{fontSize:11,color:'#4f8ef7',fontWeight:700,letterSpacing:.05}}>AI-POWERED · FREE TO START</span>
         </div>
-        <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.5vw,2rem)',fontWeight:800,color:'#1e3a5f',lineHeight:1.2,marginBottom:10,letterSpacing:-.03}}>
+        <h2 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:'clamp(1.6rem,2.8vw,2.2rem)',fontWeight:800,color:'#f0f4ff',lineHeight:1.15,marginBottom:14,letterSpacing:'-1.5px'}}>
           Where teams<br/>ship together
         </h2>
-        <p style=${{fontSize:13,color:'rgba(30,58,95,0.65)',lineHeight:1.7}}>
-          Tasks · AI assistant · Huddles<br/>Timeline · Tickets
+        <p style=${{fontSize:13,color:'rgba(168,180,204,0.7)',lineHeight:1.75}}>
+          Projects · Tasks · AI Assistant<br/>Timeline · Tickets · Direct Messages
         </p>
       </div>
 
-            <div style=${{
-        position:'absolute',bottom:28,left:0,right:0, display:'flex',justifyContent:'center',gap:8,flexWrap:'wrap', padding:'0 20px',zIndex:10, }}>
-        ${['📋 Tasks','🤖 AI','📅 Timeline','📞 Huddles','🎫 Tickets'].map(f=>html`
-          <div key=${f} style=${{
-            background:'rgba(255,255,255,0.72)', border:'1px solid rgba(147,197,253,0.5)', backdropFilter:'blur(8px)', padding:'5px 12px',borderRadius:100, fontSize:11,fontWeight:600,color:'#1d4ed8', }}>${f}</div>
+      <!-- Bottom feature pills -->
+      <div style=${{position:'absolute',bottom:28,left:0,right:0,display:'flex',justifyContent:'center',gap:7,flexWrap:'wrap',padding:'0 20px',zIndex:10}}>
+        ${['📋 Kanban','🤖 AI','📅 Timeline','📞 Meet','🎫 Tickets','📊 Analytics'].map(f=>html`
+          <div key=${f} style=${{background:'rgba(8,12,20,0.6)',border:'1px solid rgba(79,142,247,0.25)',backdropFilter:'blur(12px)',padding:'5px 12px',borderRadius:100,fontSize:11,fontWeight:600,color:'rgba(168,180,204,0.9)'}}>${f}</div>
         `)}
       </div>
     </div>`;
 
   const rightPanel=(child)=>html`
-    <div style=${{
-      flex:1,minHeight:'100vh',background:'#ffffff', display:'flex',alignItems:'center',justifyContent:'center', padding:'40px 36px',overflowY:'auto', borderLeft:'1px solid #f1f5f9', }}>
+    <div style=${{flex:1,minHeight:'100vh',background:'#0d1221',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 36px',overflowY:'auto',borderLeft:'1px solid rgba(255,255,255,0.06)'}}>
       <div style=${{width:'100%',maxWidth:400}}>
         ${child}
       </div>
     </div>`;
 
+  // TOTP step
   if(totpStep) return html`
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
         <div style=${{marginBottom:24}}>
-          <div style=${{width:56,height:56,borderRadius:16,background:'linear-gradient(135deg,#1d4ed8,#7c3aed)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:18,boxShadow:'0 6px 20px rgba(29,78,216,0.3)'}}>
+          <div style=${{width:56,height:56,borderRadius:16,background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:18,boxShadow:'0 6px 24px rgba(79,142,247,0.35)'}}>
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1" fill="white"/></svg>
           </div>
-          <h2 style=${{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,color:'#0f172a',marginBottom:8,letterSpacing:'-.3px'}}>Authenticator Code</h2>
-          <p style=${{fontSize:13,color:'#64748b',marginBottom:4,lineHeight:1.6}}>Hi <b style=${{color:'#1d4ed8'}}>${totpUserName}</b>, open your Google Authenticator app and enter the 6-digit code for <b>VEWIT</b>.</p>
+          <h2 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:24,fontWeight:800,color:'#f0f4ff',marginBottom:8,letterSpacing:'-1px'}}>Authenticator Code</h2>
+          <p style=${{fontSize:13.5,color:'rgba(168,180,204,0.8)',marginBottom:4,lineHeight:1.6}}>Hi <b style=${{color:'#4f8ef7'}}>${totpUserName}</b>, open your Google Authenticator app and enter the 6-digit code for <b>VEWIT</b>.</p>
         </div>
 
-        <div style=${{background:'linear-gradient(135deg,#f0f9ff,#eff6ff)',border:'1px solid #bfdbfe',borderRadius:14,padding:'14px 16px',marginBottom:20,display:'flex',gap:12,alignItems:'center'}}>
+        <div style=${{background:'rgba(79,142,247,0.08)',border:'1px solid rgba(79,142,247,0.2)',borderRadius:14,padding:'14px 16px',marginBottom:22,display:'flex',gap:12,alignItems:'center'}}>
           <div style=${{fontSize:28}}>📱</div>
-          <div style=${{fontSize:12,color:'#1e40af',lineHeight:1.5}}>
-            Open <b>Google Authenticator</b>, <b>Authy</b>, or any TOTP app and find the <b>VEWIT</b> entry.
+          <div style=${{fontSize:12.5,color:'rgba(168,180,204,0.85)',lineHeight:1.55}}>
+            Open <b style=${{color:'#f0f4ff'}}>Google Authenticator</b> or <b style=${{color:'#f0f4ff'}}>Authy</b> and find the <b style=${{color:'#4f8ef7'}}>VEWIT</b> entry.
           </div>
         </div>
 
         <div style=${{marginBottom:20}}>
-          <label style=${{display:'block',fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:.8,marginBottom:8}}>6-Digit Code</label>
-          <input
-            value=${totpToken}
+          <label style=${lbl}>6-Digit Code</label>
+          <input value=${totpToken}
             onInput=${e=>setTotpToken(e.target.value.replace(/\D/g,'').slice(0,6))}
             onKeyDown=${e=>e.key==='Enter'&&submitTotp()}
-            placeholder="000 000"
-            maxLength=6
-            autoFocus
+            placeholder="000 000" maxLength=6 autoFocus
             style=${{
-              width:'100%',height:60,borderRadius:14,textAlign:'center',
-              fontSize:28,fontWeight:700,fontFamily:'monospace',letterSpacing:8,
+              width:'100%',height:64,borderRadius:14,textAlign:'center',
+              fontSize:30,fontWeight:800,fontFamily:'monospace',letterSpacing:10,
               outline:'none',boxSizing:'border-box',
-              background:totpToken.length===6?'#eff6ff':'#f8fafc',
-              border:'2px solid '+(totpToken.length===6?'#2563eb':'#e2e8f0'),
-              color:'#0f172a',transition:'all .15s',
-              boxShadow:totpToken.length===6?'0 0 0 4px rgba(37,99,235,0.12)':'none'
+              background:totpToken.length===6?'rgba(52,211,153,0.08)':'rgba(255,255,255,0.04)',
+              border:'2px solid '+(totpToken.length===6?'rgba(52,211,153,0.6)':'rgba(255,255,255,0.12)'),
+              color:'#f0f4ff',transition:'all .2s',
+              boxShadow:totpToken.length===6?'0 0 0 4px rgba(52,211,153,0.15)':'none'
             }}/>
         </div>
 
-        ${err?html`<div style=${{color:'#dc2626',fontSize:13,padding:'10px 14px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca',marginBottom:14}}>${err}</div>`:null}
+        ${err?html`<div style=${{display:'flex',alignItems:'center',gap:8,padding:'11px 14px',background:'rgba(244,114,182,0.08)',borderRadius:10,border:'1px solid rgba(244,114,182,0.2)',marginBottom:14}}><span style=${{fontSize:14}}>⚠️</span><span style=${{fontSize:13,color:'#f472b6'}}>${err}</span></div>`:null}
 
         <button onClick=${submitTotp} disabled=${busy||totpToken.length!==6}
           style=${{
-            width:'100%',height:50,borderRadius:12,border:'none',fontFamily:'inherit',
-            background:totpToken.length===6?'linear-gradient(135deg,#1d4ed8,#2563eb)':'#e2e8f0',
-            color:totpToken.length===6?'#fff':'#94a3b8',
+            width:'100%',height:52,borderRadius:14,border:'none',fontFamily:"'Bricolage Grotesque',inherit",
+            background:totpToken.length===6?'linear-gradient(135deg,#4f8ef7,#8b5cf6)':'rgba(255,255,255,0.06)',
+            color:totpToken.length===6?'#fff':'rgba(168,180,204,0.4)',
             fontSize:15,fontWeight:700,cursor:totpToken.length===6?'pointer':'default',
-            transition:'all .18s',marginBottom:16,
-            boxShadow:totpToken.length===6?'0 6px 20px rgba(29,78,216,0.35)':'none'
+            transition:'all .2s',marginBottom:16,letterSpacing:'-.3px',
+            boxShadow:totpToken.length===6?'0 6px 24px rgba(79,142,247,0.4)':'none'
           }}>
-          ${busy?'Verifying...':'Verify & Sign In →'}
+          ${busy?'Verifying…':'Verify & Sign In →'}
         </button>
 
         <div style=${{textAlign:'center'}}>
           <button onClick=${()=>{setTotpStep(false);setTotpToken('');setErr('');}}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:12,fontFamily:'inherit',textDecoration:'underline'}}>
+            style=${{background:'none',border:'none',cursor:'pointer',color:'rgba(168,180,204,0.5)',fontSize:12.5,fontFamily:'inherit',transition:'color .2s'}}
+            onMouseEnter=${e=>e.target.style.color='rgba(168,180,204,0.9)'}
+            onMouseLeave=${e=>e.target.style.color='rgba(168,180,204,0.5)'}>
             ← Back to login
           </button>
         </div>
       `)}
     </div>`;
 
+  // Main login/register panel
   return html`
+    <style>
+      @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+      .auth-input:focus{border-color:rgba(79,142,247,0.7)!important;background:rgba(79,142,247,0.08)!important;box-shadow:0 0 0 3px rgba(79,142,247,0.15)!important}
+      .auth-btn-main{background:linear-gradient(135deg,#4f8ef7,#8b5cf6);color:#fff;box-shadow:0 6px 24px rgba(79,142,247,0.35)}
+      .auth-btn-main:hover:not(:disabled){transform:translateY(-2px) scale(1.02);box-shadow:0 10px 36px rgba(79,142,247,0.5)}
+      .auth-btn-main:active:not(:disabled){transform:translateY(0)}
+      .auth-btn-main:disabled{background:rgba(255,255,255,0.06);color:rgba(168,180,204,0.3);box-shadow:none;cursor:not-allowed}
+    </style>
     <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
       ${leftPanel}
       ${rightPanel(html`
-                <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:28}}>
-          <div style=${{width:28,height:28,borderRadius:7,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
-            <svg width="15" height="15" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+
+        <!-- Logo -->
+        <div style=${{display:'flex',alignItems:'center',gap:9,marginBottom:32}}>
+          <div style=${{width:30,height:30,borderRadius:8,background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 3px 12px rgba(79,142,247,0.4)'}}>
+            <svg width="16" height="16" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
           </div>
-          <span style=${{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14.5,color:'#0f172a',letterSpacing:-.3}}>VEWIT</span>
+          <span style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:16,color:'#f0f4ff',letterSpacing:'-.5px'}}>VEWIT</span>
         </div>
 
-                <h1 style=${{fontFamily:"'Syne',sans-serif",fontSize:'clamp(1.5rem,2.2vw,1.85rem)',fontWeight:800,color:'#0f172a',marginBottom:6,letterSpacing:-.03,lineHeight:1.15}}>
-          ${tab==='login'?'Welcome back':'Create account'}
+        <!-- Heading -->
+        <h1 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:'clamp(1.6rem,2.4vw,2rem)',fontWeight:800,color:'#f0f4ff',marginBottom:8,letterSpacing:'-1.5px',lineHeight:1.1}}>
+          ${tab==='login'?'Welcome back 👋':'Create your account'}
         </h1>
-        <p style=${{fontSize:13.5,color:'#64748b',marginBottom:24,lineHeight:1.6}}>
+        <p style=${{fontSize:14,color:'rgba(168,180,204,0.65)',marginBottom:26,lineHeight:1.6}}>
           ${tab==='login'?'Sign in to your VEWIT workspace':'Set up your workspace and start shipping'}
         </p>
 
-                <div style=${{display:'flex',background:'#f1f5f9',borderRadius:11,padding:3,marginBottom:22}}>
+        <!-- Tab switcher -->
+        <div style=${{display:'flex',background:'rgba(255,255,255,0.04)',borderRadius:12,padding:3,marginBottom:24,border:'1px solid rgba(255,255,255,0.06)'}}>
           ${['login','register'].map(tp=>html`
             <button key=${tp} onClick=${()=>{setTab(tp);setErr('');}}
-              style=${{flex:1,height:35,fontSize:13,fontWeight:600,border:'none',cursor:'pointer', borderRadius:9,fontFamily:'inherit',transition:'all .16s', background:tab===tp?'#ffffff':'transparent', color:tab===tp?'#0f172a':'#94a3b8', boxShadow:tab===tp?'0 1px 4px rgba(0,0,0,0.08)':'none'}}>
+              style=${{flex:1,height:37,fontSize:13.5,fontWeight:700,border:'none',cursor:'pointer',borderRadius:10,fontFamily:'inherit',transition:'all .2s',letterSpacing:'-.2px',
+              background:tab===tp?'rgba(79,142,247,0.2)':'transparent',
+              color:tab===tp?'#4f8ef7':'rgba(168,180,204,0.5)',
+              boxShadow:tab===tp?'0 1px 8px rgba(79,142,247,0.2)':'none'}}>
               ${tp==='login'?'Sign In':'Create Account'}
             </button>`)}
         </div>
 
+        <!-- Register mode switcher -->
         ${tab==='register'?html`
-          <div style=${{display:'flex',background:'#f1f5f9',borderRadius:9,padding:3,marginBottom:16}}>
-            ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,lbl])=>html`
+          <div style=${{display:'flex',background:'rgba(255,255,255,0.03)',borderRadius:10,padding:3,marginBottom:18,border:'1px solid rgba(255,255,255,0.05)'}}>
+            ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,l])=>html`
               <button key=${m} onClick=${()=>setRegMode(m)}
-                style=${{flex:1,height:29,fontSize:11,fontWeight:600,border:'none',cursor:'pointer', borderRadius:7,fontFamily:'inherit',transition:'all .16s', background:regMode===m?'#ffffff':'transparent', color:regMode===m?'#374151':'#94a3b8', boxShadow:regMode===m?'0 1px 3px rgba(0,0,0,0.07)':'none'}}>
-                ${lbl}
+                style=${{flex:1,height:31,fontSize:11.5,fontWeight:700,border:'none',cursor:'pointer',borderRadius:8,fontFamily:'inherit',transition:'all .2s',
+                background:regMode===m?'rgba(255,255,255,0.08)':'transparent',
+                color:regMode===m?'#f0f4ff':'rgba(168,180,204,0.4)'}}>
+                ${l}
               </button>`)}
           </div>
           ${regMode==='create'?html`
-            <div style=${{marginBottom:14}}><label style=${lbl}>Workspace Name</label>
-              <input style=${inp} placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/></div>`:null}
+            <div style=${{marginBottom:15,animation:'slideDown .25s ease both'}}>
+              <label style=${lbl}>Workspace Name</label>
+              <input class="auth-input" style=${{...inp}} placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/>
+            </div>`:null}
           ${regMode==='join'?html`
-            <div style=${{marginBottom:14,padding:'12px 14px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe'}}>
+            <div style=${{marginBottom:15,padding:'14px 16px',background:'rgba(79,142,247,0.06)',borderRadius:12,border:'1px solid rgba(79,142,247,0.15)',animation:'slideDown .25s ease both'}}>
               <label style=${lbl}>Invite Code</label>
-              <input style=${{...inp,fontFamily:'monospace',letterSpacing:4,fontSize:16,textAlign:'center',background:'#fff'}}
+              <input class="auth-input" style=${{...inp,fontFamily:'monospace',letterSpacing:5,fontSize:17,textAlign:'center',background:'rgba(255,255,255,0.05)'}}
                 placeholder="XXXXXXXX" value=${inviteCode}
                 onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
             </div>`:null}`:null}
 
-        <div style=${{display:'flex',flexDirection:'column',gap:13}}>
+        <!-- Form fields -->
+        <div style=${{display:'flex',flexDirection:'column',gap:14}}>
           ${tab==='register'?html`
             <div><label style=${lbl}>Full Name</label>
-              <input style=${inp} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
+              <input class="auth-input" style=${inp} placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/></div>`:null}
 
           <div><label style=${lbl}>Email Address</label>
-            <input style=${inp} type="email" placeholder="you@company.com" value=${email} autoComplete="username"
+            <input class="auth-input" style=${inp} type="email" placeholder="you@company.com" value=${email} autoComplete="username"
               onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/></div>
 
           <div><label style=${lbl}>Password</label>
             <div style=${{position:'relative'}}>
-              <input style=${{...inp,paddingRight:42}} type=${showPw?'text':'password'}
+              <input class="auth-input" style=${{...inp,paddingRight:46}} type=${showPw?'text':'password'}
                 placeholder="••••••••••" value=${pw} autoComplete="current-password"
                 onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
               <button onClick=${()=>setShowPw(!showPw)}
-                style=${{position:'absolute',right:13,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#94a3b8',fontSize:14,padding:0,lineHeight:1}}>
+                style=${{position:'absolute',right:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(168,180,204,0.5)',fontSize:15,padding:0,lineHeight:1,transition:'color .2s'}}
+                onMouseEnter=${e=>e.target.style.color='rgba(168,180,204,0.9)'}
+                onMouseLeave=${e=>e.target.style.color='rgba(168,180,204,0.5)'}>
                 ${showPw?'🙈':'👁'}
               </button>
             </div>
@@ -5124,31 +4796,50 @@ function AuthScreen({onLogin}){
 
           ${tab==='register'?html`
             <div><label style=${lbl}>Role</label>
-              <select style=${{...inp,cursor:'pointer'}} value=${role} onChange=${e=>setRole(e.target.value)}>
-                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
+              <select style=${{...inp,cursor:'pointer',paddingRight:36,background:"rgba(255,255,255,0.06) url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a8b4cc' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\") no-repeat right 12px center"}}
+                value=${role} onChange=${e=>setRole(e.target.value)}>
+                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r} style=${{background:'#111827'}}>${r}</option>`)}
               </select></div>`:null}
 
+          <!-- Error -->
           ${err?html`
-            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'10px 13px',background:'#fef2f2',borderRadius:9,border:'1px solid #fecaca'}}>
-              <span style=${{fontSize:13}}>⚠️</span>
-              <span style=${{fontSize:13,color:'#dc2626'}}>${err}</span>
+            <div style=${{display:'flex',alignItems:'center',gap:8,padding:'11px 14px',background:'rgba(244,114,182,0.07)',borderRadius:10,border:'1px solid rgba(244,114,182,0.2)',animation:'slideDown .2s ease both'}}>
+              <span style=${{fontSize:14}}>⚠️</span>
+              <span style=${{fontSize:13,color:'#f472b6'}}>${err}</span>
             </div>`:null}
 
-          <button onClick=${go} disabled=${busy}
-            style=${{height:46,borderRadius:10,border:'none',cursor:busy?'default':'pointer', fontFamily:'inherit', background:busy?'#bfdbfe':'#2563eb', color:busy?'#93c5fd':'#ffffff', fontSize:14,fontWeight:700,letterSpacing:.01, transition:'all .18s',marginTop:2, boxShadow:busy?'none':'0 4px 14px rgba(37,99,235,0.3),inset 0 1px 0 rgba(255,255,255,0.15)'}}>
-            ${busy?'Please wait...':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace & Account →':'Join Workspace →')}
+          <!-- Submit -->
+          <button class="auth-btn-main" onClick=${go} disabled=${busy}
+            style=${{height:50,borderRadius:14,border:'none',cursor:busy?'default':'pointer',fontFamily:"'Bricolage Grotesque',inherit",fontSize:15,fontWeight:800,transition:'all .2s',marginTop:2,letterSpacing:'-.3px',background:'linear-gradient(135deg,#4f8ef7,#8b5cf6)',color:'#fff',boxShadow:'0 6px 24px rgba(79,142,247,0.35)'}}>
+            ${busy?'Please wait…':(tab==='login'?'Sign In →':regMode==='create'?'Create Workspace →':'Join Workspace →')}
           </button>
         </div>
 
-        <p style=${{fontSize:12.5,color:'#94a3b8',marginTop:18,textAlign:'center'}}>
+        <!-- Switch link -->
+        <p style=${{fontSize:13,color:'rgba(168,180,204,0.5)',marginTop:20,textAlign:'center'}}>
           ${tab==='login'
-            ?html`New to VEWIT? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Create an account</button>`
-            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');try{history.replaceState(null,'','/?action=login');}catch{}}} style=${{background:'none',border:'none',color:'#2563eb',cursor:'pointer',fontSize:12.5,fontWeight:600,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
+            ?html`New to VEWIT? <button onClick=${()=>{setTab('register');setErr('');try{history.replaceState(null,'','/?action=register');}catch{}}} style=${{background:'none',border:'none',color:'#4f8ef7',cursor:'pointer',fontSize:13,fontWeight:700,padding:'0 0 0 2px',fontFamily:'inherit',transition:'opacity .2s'}}>Create an account</button>`
+            :html`Already have an account? <button onClick=${()=>{setTab('login');setErr('');try{history.replaceState(null,'','/?action=login');}catch{}}} style=${{background:'none',border:'none',color:'#4f8ef7',cursor:'pointer',fontSize:13,fontWeight:700,padding:'0 0 0 2px',fontFamily:'inherit'}}>Sign in</button>`}
         </p>
+
+        <!-- Contact links -->
+        <div style=${{marginTop:28,padding:'14px 16px',background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.05)',borderRadius:12,textAlign:'center'}}>
+          <div style=${{fontSize:11,color:'rgba(168,180,204,0.4)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.06em',fontWeight:600}}>Need Help?</div>
+          <div style=${{display:'flex',justifyContent:'center',gap:18,flexWrap:'wrap'}}>
+            <a href="mailto:support@vewit.in" style=${{fontSize:12,color:'rgba(79,142,247,0.7)',textDecoration:'none',transition:'color .2s'}}
+              onMouseEnter=${e=>e.target.style.color='#4f8ef7'} onMouseLeave=${e=>e.target.style.color='rgba(79,142,247,0.7)'}>
+              🛟 support@vewit.in
+            </a>
+            <a href="mailto:ceo@vewit.in" style=${{fontSize:12,color:'rgba(79,142,247,0.7)',textDecoration:'none',transition:'color .2s'}}
+              onMouseEnter=${e=>e.target.style.color='#4f8ef7'} onMouseLeave=${e=>e.target.style.color='rgba(79,142,247,0.7)'}>
+              🤝 ceo@vewit.in
+            </a>
+          </div>
+        </div>
+
       `)}
     </div>`;
 }
-
 /* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
 function SidebarCallsList({cu,onJoin,currentRoomId}){
   const [calls,setCalls]=useState([]);
