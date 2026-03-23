@@ -156,7 +156,7 @@ app.config.update(
     MAX_CONTENT_LENGTH=150*1024*1024)
 CORS(app, supports_credentials=True)
 
-CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#aaff00"]
+CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#5a8cff"]
 
 def get_db(autocommit=False):
     conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
@@ -210,13 +210,13 @@ def send_otp_email(to_email, otp_code, user_name):
     <body style="font-family: Arial, sans-serif; background:#f4f4f4; padding:20px;">
       <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
         <div style="background:#0a1a00;padding:24px 32px;text-align:center;">
-          <h1 style="color:#aaff00;margin:0;font-size:22px;letter-spacing:-0.5px;">VEWIT</h1>
+          <h1 style="color:#5a8cff;margin:0;font-size:22px;letter-spacing:-0.5px;">VEWIT</h1>
         </div>
         <div style="padding:32px;">
           <h2 style="color:#111;margin:0 0 8px;">Hi {user_name},</h2>
           <p style="color:#555;margin:0 0 28px;">Use the code below to complete your sign-in. It expires in <b>10 minutes</b>.</p>
           <div style="text-align:center;margin:0 0 28px;">
-            <div style="display:inline-block;background:#f0fff0;border:2px solid #aaff00;border-radius:12px;padding:18px 36px;">
+            <div style="display:inline-block;background:#f0fff0;border:2px solid #5a8cff;border-radius:12px;padding:18px 36px;">
               <span style="font-size:38px;font-weight:800;letter-spacing:10px;color:#0a1a00;font-family:monospace;">{otp_code}</span>
             </div>
           </div>
@@ -1483,7 +1483,7 @@ def create_project():
         db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                    (pid,wid(),d["name"],d.get("description",""),session["user_id"],
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
-                    d.get("color","#aaff00"),ts(),d.get("team_id","")))
+                    d.get("color","#5a8cff"),ts(),d.get("team_id","")))
         p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
         creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cname=creator["name"] if creator else "Someone"
@@ -2451,7 +2451,7 @@ TEAM MEMBERS:
 You can answer questions, analyze status, and PERFORM ACTIONS by including JSON in your reply like:
 <action>{{"type":"create_task","title":"Task name","project":"project_id","priority":"high","stage":"backlog","assignee":"user_id","due":"YYYY-MM-DD","description":"details"}}</action>
 <action>{{"type":"update_task","task_id":"T-001","stage":"testing","pct":75}}</action>
-<action>{{"type":"create_project","name":"Project Name","description":"desc","color":"#aaff00","members":["user_id"]}}</action>
+<action>{{"type":"create_project","name":"Project Name","description":"desc","color":"#5a8cff","members":["user_id"]}}</action>
 <action>{{"type":"eod_report"}}</action>
 
 IMPORTANT: Always be helpful and concise. When performing actions, explain what you did. For EOD reports, summarize all task statuses by project."""
@@ -2506,7 +2506,7 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
                     db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                                (pid,wid(),act.get("name","New Project"),act.get("description",""),
                                 session["user_id"],json.dumps(mems),"",act.get("target_date",""),0,
-                                act.get("color","#aaff00"),ts()))
+                                act.get("color","#5a8cff"),ts()))
                     action_results.append({"type":"create_project","id":pid,"name":act.get("name")})
                 elif atype=="eod_report":
                     rows=db.execute("SELECT t.*,p.name as pname FROM tasks t LEFT JOIN projects p ON t.project=p.id WHERE t.workspace_id=?",(wid(),)).fetchall()
@@ -2827,7 +2827,7 @@ def import_csv():
                         db.execute(
                             "INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                             (proj_id, wid(), proj_name, "", session["user_id"],
-                             json.dumps([session["user_id"]]), "", "", 0, "#aaff00", ts())
+                             json.dumps([session["user_id"]]), "", "", 0, "#5a8cff", ts())
                         )
                         created_projects += 1
                 title = row.get("title", row.get("task", row.get("task_title", ""))).strip()
@@ -4283,6 +4283,64 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 </style></head><body>
 
 <div id="root"></div>
+
+  <!-- Apple-style loading screen — shown until React hydrates -->
+  <div id="vw-boot" style="
+    position:fixed;inset:0;z-index:99999;
+    background:linear-gradient(135deg,#06040f 0%,#0a0618 40%,#060412 100%);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:'Bricolage Grotesque',system-ui,sans-serif;
+    transition:opacity 0.5s ease,visibility 0.5s ease;
+  ">
+    <!-- Animated background orbs -->
+    <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none">
+      <div style="position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(90,140,255,0.18) 0%,transparent 70%);top:-150px;left:-100px;animation:vwBoot-orb1 8s ease-in-out infinite"></div>
+      <div style="position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(168,85,247,0.15) 0%,transparent 70%);bottom:-100px;right:-80px;animation:vwBoot-orb2 10s ease-in-out infinite"></div>
+      <div style="position:absolute;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(236,72,153,0.10) 0%,transparent 70%);top:40%;left:60%;animation:vwBoot-orb3 12s ease-in-out infinite"></div>
+    </div>
+    <!-- Top titanium line -->
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#5a8cff 25%,#a855f7 50%,#ec4899 75%,transparent);box-shadow:0 0 20px rgba(90,140,255,0.6)"></div>
+    <!-- Logo mark -->
+    <div style="position:relative;z-index:1;text-align:center;animation:vwBoot-up 0.7s ease both">
+      <div style="
+        width:64px;height:64px;border-radius:20px;margin:0 auto 20px;
+        background:linear-gradient(135deg,#5a8cff,#a855f7);
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 8px 32px rgba(90,140,255,0.5),0 0 0 1px rgba(255,255,255,0.1);
+      ">
+        <svg width="34" height="34" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="8.5" fill="white"/>
+          <circle cx="32" cy="11" r="5.5" fill="white" opacity=".9"/>
+          <circle cx="51" cy="43" r="5.5" fill="white" opacity=".9"/>
+          <circle cx="13" cy="43" r="5.5" fill="white" opacity=".9"/>
+          <line x1="32" y1="16.5" x2="32" y2="23.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+          <line x1="46" y1="40" x2="40.5" y2="36.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+          <line x1="18" y1="40" x2="23.5" y2="36.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div style="font-size:28px;font-weight:800;color:#f5f5f7;letter-spacing:-1.5px;margin-bottom:6px">VEWIT</div>
+      <div style="font-size:13px;color:rgba(174,174,178,0.6);letter-spacing:0.05em;font-family:'Inter',system-ui;margin-bottom:36px">AI-Powered Workspace</div>
+      <!-- Thin shimmer progress bar -->
+      <div style="width:180px;height:2px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin:0 auto">
+        <div style="height:100%;border-radius:2px;background:linear-gradient(90deg,#5a8cff,#a855f7,#ec4899);animation:vwBoot-bar 1.8s cubic-bezier(0.4,0,0.2,1) infinite"></div>
+      </div>
+    </div>
+    <style>
+      @keyframes vwBoot-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+      @keyframes vwBoot-orb1{0%,100%{transform:translate(0,0)}50%{transform:translate(40px,-30px)}}
+      @keyframes vwBoot-orb2{0%,100%{transform:translate(0,0)}50%{transform:translate(-30px,20px)}}
+      @keyframes vwBoot-orb3{0%,100%{transform:translate(0,0)}50%{transform:translate(-20px,-25px)}}
+      @keyframes vwBoot-bar{0%{transform:scaleX(0);transform-origin:left}50%{transform:scaleX(1);transform-origin:left}51%{transform:scaleX(1);transform-origin:right}100%{transform:scaleX(0);transform-origin:right}}
+    </style>
+  </div>
+  <script>
+    // Hide loading screen as soon as React mounts
+    window._vwHideBoot=function(){
+      var el=document.getElementById('vw-boot');
+      if(el){el.style.opacity='0';el.style.visibility='hidden';setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},600);}
+    };
+  </script>
+
   <div id="LE" style="display:none;color:#dc2626;font-size:12px;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:360px;padding:12px 16px;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);border-radius:10px;text-align:center;z-index:9999;"></div>
 <script>
 window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
@@ -4318,7 +4376,7 @@ const KCOLS=['backlog','planning','development','code_review','testing','uat','r
 const PRIS={critical:{label:'Critical',color:'var(--rd)',sym:'🔴'},high:{label:'High',color:'var(--rd2)',sym:'↑'},medium:{label:'Medium',color:'var(--pu)',sym:'→'},low:{label:'Low',color:'var(--cy)',sym:'↓'}};
 const ROLES=['Admin','Manager','TeamLead','Developer','Tester','Viewer'];
 const JOIN_ROLES=['Developer','Tester','Viewer']; // roles available when joining via invite code
-const PAL=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#aaff00'];
+const PAL=['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#ec4899','#0891b2','#5a8cff'];
 const fmtD=d=>{if(!d)return'—';try{return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch(e){return d;}};
 const ago=iso=>{const m=Math.floor((Date.now()-new Date(iso))/60000);if(m<1)return'just now';if(m<60)return m+'m ago';if(m<1440)return Math.floor(m/60)+'h ago';return Math.floor(m/1440)+'d ago';};
 const safe=a=>(Array.isArray(a)?a:[]);
@@ -4700,34 +4758,6 @@ function AuthScreen({onLogin}){
 
       <!-- Center hero -->
       <div style=${{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center',zIndex:10,width:'84%',pointerEvents:'none'}}>
-
-        <!-- Floating device ring — Apple Watch / iPhone silhouette -->
-        <div style=${{margin:'0 auto 32px',width:100,height:100,position:'relative',animation:'ap-float 5s ease-in-out infinite'}}>
-          <!-- Outer glow ring -->
-          <div style=${{position:'absolute',inset:-8,borderRadius:'50%',background:'transparent',boxShadow:'0 0 0 1.5px rgba(90,140,255,0.25),0 0 40px rgba(90,140,255,0.18),0 0 80px rgba(168,85,247,0.12)',animation:'ap-glow 4s ease-in-out infinite'}}></div>
-          <!-- Titanium ring — iPhone bezel aesthetic -->
-          <svg width="100" height="100" viewBox="0 0 100 100" style=${{position:'absolute',inset:0}}>
-            <defs>
-              <linearGradient id="rg1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#5a8cff" stop-opacity="0.8"/>
-                <stop offset="40%" stop-color="#a855f7" stop-opacity="0.9"/>
-                <stop offset="100%" stop-color="#ec4899" stop-opacity="0.7"/>
-              </linearGradient>
-              <linearGradient id="rg2" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#1a1a2e" stop-opacity="0.7"/>
-                <stop offset="100%" stop-color="#16213e" stop-opacity="0.5"/>
-              </linearGradient>
-            </defs>
-            <!-- Background disc -->
-            <circle cx="50" cy="50" r="46" fill="url(#rg2)" stroke="url(#rg1)" stroke-width="1.5"/>
-            <!-- Progress arcs — like Apple Watch rings -->
-            <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
-            <circle cx="50" cy="50" r="38" fill="none" stroke="url(#rg1)" stroke-width="5" stroke-linecap="round" stroke-dasharray="238" stroke-dashoffset="60" transform="rotate(-90 50 50)"/>
-            <circle cx="50" cy="50" r="28" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="4"/>
-            <circle cx="50" cy="50" r="28" fill="none" stroke="rgba(90,140,255,0.6)" stroke-width="4" stroke-linecap="round" stroke-dasharray="176" stroke-dashoffset="50" transform="rotate(-90 50 50)"/>
-          </svg>
-          <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>⚡</div>
-        </div>
 
         <!-- Badge chip -->
         <div style=${{display:'flex',justifyContent:'center',marginBottom:22,animation:'ap-badge 0.8s 0.3s cubic-bezier(0.34,1.56,0.64,1) both',opacity:0}}>
@@ -5197,18 +5227,18 @@ function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,project
           const teamProjs=new Set(teamTasks.map(t=>t.project).filter(Boolean)).size;
           return html`
             <div key=${team.id}
-              style=${{padding:'10px 12px',borderRadius:10,border:'2px solid '+(teamCtx===team.id?'var(--ac)':'var(--bd)'),marginBottom:7,background:teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
+              style=${{padding:'10px 12px',borderRadius:10,border:'2px solid '+(teamCtx===team.id?'var(--ac)':'var(--bd)'),marginBottom:7,background:teamCtx===team.id?'rgba(90,140,255,.06)':'var(--sf2)',cursor:'pointer',transition:'all .12s'}}
               onClick=${()=>{
                 onSelectTeam(team.id);
                 setTeamCtx&&setTeamCtx(team.id);
               }}
               onMouseEnter=${e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.borderColor='var(--ac)77';}}
-              onMouseLeave=${e=>{e.currentTarget.style.background=teamCtx===team.id?'rgba(170,255,0,.06)':'var(--sf2)';e.currentTarget.style.borderColor=teamCtx===team.id?'var(--ac)':'var(--bd)';}}>
+              onMouseLeave=${e=>{e.currentTarget.style.background=teamCtx===team.id?'rgba(90,140,255,.06)':'var(--sf2)';e.currentTarget.style.borderColor=teamCtx===team.id?'var(--ac)':'var(--bd)';}}>
               <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:7}}>
                 <div style=${{width:9,height:9,borderRadius:2,background:teamCtx===team.id?'var(--ac)':'var(--tx3)',flexShrink:0}}></div>
                 <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${team.name}</span>
                 ${teamCtx===team.id?html`
-                  <span style=${{fontSize:9,color:'var(--ac)',fontWeight:700,background:'rgba(170,255,0,.12)',padding:'2px 6px',borderRadius:4,flexShrink:0}}>ACTIVE</span>`:null}
+                  <span style=${{fontSize:9,color:'var(--ac)',fontWeight:700,background:'rgba(90,140,255,.10)',padding:'2px 6px',borderRadius:4,flexShrink:0}}>ACTIVE</span>`:null}
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
               </div>
               ${lead?html`<div style=${{fontSize:10,color:'var(--tx3)',marginBottom:6}}>Lead: <b style=${{color:'var(--cy)'}}>${lead.name}</b></div>`:null}
@@ -5524,7 +5554,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
     <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd2)',position:'relative',zIndex:100}}>
       <div style=${{padding:'0 18px',height:54,display:'flex',alignItems:'center',gap:10}}>
                 <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#1e3a5f',borderRadius:100,cursor:'pointer',border:'1px solid rgba(37,99,235,0.25)',transition:'all .14s'}} onClick=${onViewReminders}>
-          <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#60a5fa"/><circle cx="32" cy="13" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#aaff00" strokeWidth="2.5" strokeLinecap="round"/></svg>
+          <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#60a5fa"/><circle cx="32" cy="13" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#5a8cff" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#5a8cff" strokeWidth="2.5" strokeLinecap="round"/></svg>
           <span style=${{fontSize:11,fontWeight:700,color:'#bfdbfe',letterSpacing:'.3px'}}>Your Reminders</span>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.35)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style=${{fontSize:11,color:'#93c5fd',fontWeight:700}}>${todayStr}</span>
@@ -5547,7 +5577,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
                     <div key=${r.id} style=${{display:'flex',flexDirection:'column',alignItems:'center',marginRight:i<upcoming.length-1?28:0,flexShrink:0,position:'relative',zIndex:1,cursor:'pointer'}} onClick=${onViewReminders} title=${r.task_title}>
                       <div style=${{position:'relative'}}>
                         ${cu&&cu.avatar_data&&cu.avatar_data.startsWith('data:image')?
-                          html`<img src=${cu.avatar_data} style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',objectFit:'cover',border:isNow?'2px solid #22c55e':'2px solid rgba(170,255,0,.4)',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'none',transition:'all .18s'}}/>`:
+                          html`<img src=${cu.avatar_data} style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',objectFit:'cover',border:isNow?'2px solid #22c55e':'2px solid rgba(90,140,255,.35)',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'none',transition:'all .18s'}}/>`:
                           html`<div style=${{width:isNow?28:22,height:isNow?28:22,borderRadius:'50%',background:isNow?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#3b82f6,#2563eb)',border:isNow?'2px solid #22c55e':'2px solid rgba(96,165,250,0.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:isNow?10:8,fontWeight:700,color:isNow?'#fff':'#fff',boxShadow:isNow?'0 0 0 3px rgba(34,197,94,.2)':'0 0 8px rgba(59,130,246,.3)',transition:'all .18s'}}>
                             ${(r.task_title||'?').charAt(0).toUpperCase()}
                           </div>`}
@@ -5960,7 +5990,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
                   </div>
                 </div>
                 ${rmEnabled?html`
-                  <div style=${{background:'rgba(170,255,0,.06)',borderRadius:10,border:'1px solid rgba(99,102,241,.18)',padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}}>
+                  <div style=${{background:'rgba(90,140,255,.06)',borderRadius:10,border:'1px solid rgba(99,102,241,.18)',padding:'12px 14px',display:'flex',flexDirection:'column',gap:10}}>
                     <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
                       <div>
                         <label class="lbl" style=${{fontSize:10,marginBottom:3}}>Reminder Date</label>
@@ -6095,7 +6125,7 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
 function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetReminder,teams,activeTeam}){
   const [tab,setTab]=useState('tasks');const [edit,setEdit]=useState(false);
   const [name,setName]=useState(project.name||'');const [desc,setDesc]=useState(project.description||'');
-  const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#aaff00');
+  const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#5a8cff');
   const [members,setMembers]=useState(safe(project.members));const [saving,setSaving]=useState(false);
   const [showNew,setShowNew]=useState(false);const [editTask,setEditTask]=useState(null);
   const [projTeamId,setProjTeamId]=useState((project.team_id)||'');
@@ -6182,7 +6212,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
             <div style=${{display:'flex',alignItems:'center',gap:14,marginBottom:12}}>
               <span style=${{fontSize:12,color:'var(--tx2)'}}><b style=${{color:'var(--tx)'}}>${projTasks.length}</b> tasks · <b style=${{color:'var(--gn)'}}>${done}</b> done · <b style=${{color:'var(--am)'}}>${projTasks.length-done}</b> open</span>
               <div style=${{display:'flex',alignItems:'center',gap:8}}>
-                ${(()=>{const pt=safe(teams).find(t=>t.id===(project.team_id||projTeamId));return pt?html`<span style=${{fontSize:10,color:'var(--ac)',background:'rgba(170,255,0,.1)',border:'1px solid rgba(170,255,0,.25)',padding:'2px 8px',borderRadius:5,fontWeight:600}}>👥 ${pt.name}</span>`:null;})()}
+                ${(()=>{const pt=safe(teams).find(t=>t.id===(project.team_id||projTeamId));return pt?html`<span style=${{fontSize:10,color:'var(--ac)',background:'rgba(90,140,255,.10)',border:'1px solid rgba(90,140,255,.25)',padding:'2px 8px',borderRadius:5,fontWeight:600}}>👥 ${pt.name}</span>`:null;})()}
                 <div style=${{display:'flex'}}>
                   ${projUsers.slice(0,7).map((m,i)=>html`<div key=${m.id} title=${m.name} style=${{marginLeft:i>0?-8:0,border:'2px solid var(--sf)',borderRadius:'50%',zIndex:7-i}}><${Av} u=${m} size=${24}/></div>`)}
                 </div>
@@ -8524,7 +8554,7 @@ function TicketsView({cu,users,projects,onReload,activeTeam,initialAssignee,init
   };
 
   const TYPE_CFG={
-    bug:{icon:'🐛',color:'var(--rd)',bg:'rgba(248,113,113,.12)',label:'Bug'}, feature:{icon:'✨',color:'var(--ac)',bg:'rgba(170,255,0,.12)',label:'Feature'}, improvement:{icon:'🔧',color:'var(--cy)',bg:'rgba(34,211,238,.12)',label:'Improvement'}, task:{icon:'✅',color:'var(--gn)',bg:'rgba(74,222,128,.12)',label:'Task'}, question:{icon:'❓',color:'var(--pu)',bg:'rgba(167,139,250,.12)',label:'Question'}, };
+    bug:{icon:'🐛',color:'var(--rd)',bg:'rgba(248,113,113,.12)',label:'Bug'}, feature:{icon:'✨',color:'var(--ac)',bg:'rgba(90,140,255,.10)',label:'Feature'}, improvement:{icon:'🔧',color:'var(--cy)',bg:'rgba(34,211,238,.12)',label:'Improvement'}, task:{icon:'✅',color:'var(--gn)',bg:'rgba(74,222,128,.12)',label:'Task'}, question:{icon:'❓',color:'var(--pu)',bg:'rgba(167,139,250,.12)',label:'Question'}, };
   const PRIORITY_CFG={
     critical:{icon:'🔴',color:'#ef4444',label:'Critical'}, high:{icon:'🟠',color:'#f97316',label:'High'}, medium:{icon:'🟡',color:'#eab308',label:'Medium'}, low:{icon:'🟢',color:'#22c55e',label:'Low'}, };
   const STATUS_CFG={
@@ -8960,7 +8990,7 @@ function WorkspaceSettings({cu,onReload}){
         <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🔗 Invite Code</h3>
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Share this code with teammates to join your workspace.</p>
         <div style=${{display:'flex',alignItems:'center',gap:10}}>
-          <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(170,255,0,.12),rgba(109,40,217,0.10))',borderRadius:12,border:'1px solid rgba(170,255,0,.18)'}}>
+          <div style=${{flex:1,textAlign:'center',padding:'14px',background:'linear-gradient(135deg,rgba(90,140,255,.10),rgba(109,40,217,0.10))',borderRadius:12,border:'1px solid rgba(90,140,255,.18)'}}>
             <div style=${{fontSize:28,fontWeight:700,color:'var(--ac2)',fontFamily:'monospace',letterSpacing:4}}>${ws.invite_code}</div>
           </div>
           <div style=${{display:'flex',flexDirection:'column',gap:8}}>
@@ -8980,7 +9010,7 @@ function WorkspaceSettings({cu,onReload}){
             <button onClick=${()=>setShowKey(!showKey)} style=${{position:'absolute',right:11,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--tx3)'}}>${showKey?'🙈':'👁'}</button>
           </div>
         </div>
-        <div style=${{marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',borderRadius:8,border:'1px solid rgba(170,255,0,.15)',fontSize:12,color:'var(--tx2)'}}>
+        <div style=${{marginTop:10,padding:'9px 12px',background:'rgba(99,102,241,.07)',borderRadius:8,border:'1px solid rgba(90,140,255,.15)',fontSize:12,color:'var(--tx2)'}}>
           💡 Get your API key at <b style=${{color:'var(--ac2)'}}>console.anthropic.com</b>. The AI can answer questions, create tasks, update statuses, and generate EOD reports.
         </div>
       </div>
@@ -9018,7 +9048,7 @@ function WorkspaceSettings({cu,onReload}){
             </tbody>
           </table>
         </div>
-        <div style=${{marginTop:12,padding:'9px 13px',background:'rgba(170,255,0,.05)',borderRadius:9,border:'1px solid rgba(170,255,0,.15)',fontSize:12,color:'var(--tx3)'}}>
+        <div style=${{marginTop:12,padding:'9px 13px',background:'rgba(90,140,255,.05)',borderRadius:9,border:'1px solid rgba(90,140,255,.15)',fontSize:12,color:'var(--tx3)'}}>
           💡 Changes save automatically. Assign roles in the <b style=${{color:'var(--tx2)'}}>Team</b> tab.
         </div>
       </div>
@@ -9810,7 +9840,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
                             <div style=${{background:'var(--sf2)',borderRadius:14,padding:'16px',border:'2px solid '+(addTaskId&&addTaskId!=='__custom__'?'var(--ac)':'var(--bd)'),transition:'border-color .15s',position:'relative',overflow:'hidden'}}>
                 <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,var(--ac),var(--cy))',borderRadius:'14px 14px 0 0',opacity:addTaskId&&addTaskId!=='__custom__'?1:.3,transition:'opacity .15s'}}></div>
                 <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:14}}>
-                  <div style=${{width:28,height:28,borderRadius:7,background:'rgba(170,255,0,.12)',border:'1px solid rgba(170,255,0,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>📋</div>
+                  <div style=${{width:28,height:28,borderRadius:7,background:'rgba(90,140,255,.10)',border:'1px solid rgba(90,140,255,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>📋</div>
                   <div>
                     <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)'}}>Project Reminder</div>
                     <div style=${{fontSize:10,color:'var(--tx3)'}}>Linked to a task</div>
@@ -9832,7 +9862,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
                     </select>
                   </div>
                   ${addTaskId&&addTaskId!=='__custom__'?html`
-                    <div style=${{padding:'7px 10px',background:'rgba(170,255,0,.07)',borderRadius:8,border:'1px solid rgba(170,255,0,.18)',fontSize:11,color:'var(--tx2)',display:'flex',alignItems:'center',gap:6}}>
+                    <div style=${{padding:'7px 10px',background:'rgba(90,140,255,.07)',borderRadius:8,border:'1px solid rgba(90,140,255,.18)',fontSize:11,color:'var(--tx2)',display:'flex',alignItems:'center',gap:6}}>
                       <span style=${{color:'var(--ac)'}}>✓</span>
                       <span>Linked: <b style=${{color:'var(--tx)'}}>${(safe(tasks).find(t=>t.id===addTaskId)||{title:''}).title}</b></span>
                     </div>`:null}
@@ -9885,7 +9915,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
                     </button>`)}
                 </div>
               </div>
-              <div style=${{marginTop:12,background:'rgba(170,255,0,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(170,255,0,.15)',display:'flex',alignItems:'center',gap:8}}>
+              <div style=${{marginTop:12,background:'rgba(90,140,255,.06)',borderRadius:9,padding:'10px 13px',fontSize:12,color:'var(--tx2)',border:'1px solid rgba(90,140,255,.15)',display:'flex',alignItems:'center',gap:8}}>
                 <span style=${{fontSize:16}}>🔔</span>
                 <span>You'll get a browser notification + sound <b style=${{color:'#1d4ed8'}}>${addMins} min</b> before the reminder time.</span>
               </div>
@@ -10126,7 +10156,7 @@ function App(){
   useEffect(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem('pf_accent')||'null');
-      const oldGreen=['#aaff00','#99ee00','#aaf000','#aaff00'.toLowerCase(),'#7c3aed','#8b5cf6','#6d28d9','#9333ea','#a855f7'];
+      const oldGreen=['#5a8cff','#4d7fff','#5a8cff','#5a8cff'.toLowerCase(),'#7c3aed','#8b5cf6','#6d28d9','#9333ea','#a855f7'];
       if(saved&&saved.ac&&oldGreen.includes(saved.ac.toLowerCase())){
         localStorage.removeItem('pf_accent');
         return;
@@ -10695,8 +10725,8 @@ function App(){
     <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${setView}/>
 
     ${showNotifBanner?html`
-      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100, background:'var(--sf)',border:'1px solid rgba(170,255,0,.35)',borderRadius:18, padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)', display:'flex',alignItems:'flex-start',gap:14,maxWidth:440, animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
-        <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,rgba(170,255,0,.2),rgba(170,255,0,.05))',border:'1px solid rgba(170,255,0,.35)', display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:22}}>🔔</div>
+      <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100, background:'var(--sf)',border:'1px solid rgba(90,140,255,.30)',borderRadius:18, padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)', display:'flex',alignItems:'flex-start',gap:14,maxWidth:440, animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
+        <div style=${{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,rgba(90,140,255,.18),rgba(90,140,255,.05))',border:'1px solid rgba(90,140,255,.30)', display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:22}}>🔔</div>
         <div style=${{flex:1,minWidth:0}}>
           <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>Enable desktop notifications</div>
           <div style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.55,marginBottom:10}}>
@@ -10704,7 +10734,7 @@ function App(){
           </div>
           <div style=${{display:'flex',flexWrap:'wrap',gap:5,marginBottom:12}}>
             ${['✅ Task assigned','🔄 Status changes','💬 Comments','📁 Project updates','⏰ Reminders'].map(tag=>html`
-              <span key=${tag} style=${{fontSize:10,padding:'2px 8px',borderRadius:100,background:'rgba(170,255,0,.08)',border:'1px solid rgba(170,255,0,.2)',color:'var(--ac)',fontWeight:600}}>${tag}</span>`)}
+              <span key=${tag} style=${{fontSize:10,padding:'2px 8px',borderRadius:100,background:'rgba(90,140,255,.08)',border:'1px solid rgba(90,140,255,.18)',color:'var(--ac)',fontWeight:600}}>${tag}</span>`)}
           </div>
           <div style=${{display:'flex',gap:7}}>
             <button class="btn bp" style=${{padding:'7px 16px',fontSize:12}}
@@ -10722,6 +10752,7 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(html`<${ErrorBoundary}><${App}<//>`);
+if(window._vwHideBoot)window._vwHideBoot();
 };
 waitForLibs(window._pfStartApp);
 })();
