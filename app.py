@@ -2242,6 +2242,23 @@ def delete_timelog(log_id):
         db.execute("DELETE FROM time_logs WHERE id=?", (log_id,))
     return jsonify({"ok": True})
 
+@app.route("/api/timelogs/<log_id>", methods=["PUT"])
+@login_required
+def update_timelog(log_id):
+    d = request.json or {}
+    with get_db() as db:
+        row = db.execute("SELECT user_id FROM time_logs WHERE id=? AND workspace_id=?",
+                         (log_id, wid())).fetchone()
+        if not row:
+            return jsonify({"error":"Not found"}), 404
+        if row["user_id"] != session["user_id"] and session.get("role") not in ("Admin","Manager"):
+            return jsonify({"error":"Forbidden"}), 403
+        db.execute(
+            "UPDATE time_logs SET hours=?, minutes=?, comments=? WHERE id=?",
+            (float(d.get("hours", 0)), int(d.get("minutes", 0)),
+             d.get("comments", ""), log_id))
+    return jsonify({"ok": True, "id": log_id})
+
 @app.route("/api/timelogs/required-hours", methods=["GET","POST"])
 @login_required
 def required_hours():
@@ -10203,96 +10220,113 @@ function TimesheetView({cu,teams,users,projects,tasks}){
   const [logs,setLogs]=useState([]);
   const [busy,setBusy]=useState(false);
 
-  // Form state — "project" tab selects project→task, "manual" tab is free text
+  // ── Form state
   const blankForm=()=>({
     date:new Date().toISOString().slice(0,10),
-    tab:'project',          // 'project' | 'manual'
-    project_id:'',
-    task_id:'',
-    task_name:'',           // used in manual tab
-    hours:0,
-    minutes:0,
-    comments:''
+    tab:'project',
+    project_id:'',task_id:'',task_name:'',
+    hours:'',minutes:'',comments:''
   });
   const [form,setForm]=useState(blankForm());
+
+  // ── Inline edit state
+  const [editId,setEditId]=useState(null);
+  const [editForm,setEditForm]=useState({hours:'',minutes:'',comments:''});
+
+  // ── Filter state
   const [filterMode,setFilterMode]=useState('week');
   const [filterMonth,setFilterMonth]=useState(new Date().toISOString().slice(0,7));
   const [filterFrom,setFilterFrom]=useState('');
   const [filterTo,setFilterTo]=useState('');
   const [filterUser,setFilterUser]=useState('');
+
+  // ── Policy
   const [requiredHrs,setRequiredHrs]=useState(8);
   const [adminHrsInput,setAdminHrsInput]=useState('8');
   const [showForm,setShowForm]=useState(false);
   const [saveMsg,setSaveMsg]=useState('');
 
-  // Projects/tasks available to this user
+  // ── Derived
   const myProjects=useMemo(()=>safe(projects),[projects]);
   const tasksForProject=useMemo(()=>{
     if(!form.project_id)return[];
     return safe(tasks).filter(t=>t.project===form.project_id);
   },[tasks,form.project_id]);
 
+  // ── Load logs + policy together
   const load=async()=>{
-    const d=await api.get('/api/timelogs');
+    const [d,h]=await Promise.all([api.get('/api/timelogs'),api.get('/api/timelogs/required-hours')]);
     if(Array.isArray(d))setLogs(d);
-    const h=await api.get('/api/timelogs/required-hours');
-    if(h&&h.hours!=null){setRequiredHrs(Number(h.hours));setAdminHrsInput(String(h.hours));}
+    // Fix: always sync requiredHrs from server so "Active: Xh/day" updates after Save
+    const hrs=Number((h&&h.hours!=null)?h.hours:8);
+    setRequiredHrs(hrs);
+    setAdminHrsInput(String(hrs));
   };
   useEffect(()=>{load();},[]);
 
-  // ── Date filter — use local date comparison to avoid UTC offset bugs ──
+  // ── Filter — local date parse avoids UTC offset bug
   const filtered=useMemo(()=>{
+    const toLocal=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
     const now=new Date();
-    // Strip time for comparison
-    const toDay=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
-    const todayDay=toDay(now);
-    let fromDay=null,toDay_=null;
+    let fromD=null,toD=null;
     if(filterMode==='week'){
-      const sun=new Date(now); sun.setDate(now.getDate()-now.getDay());
-      fromDay=toDay(sun);
-      const sat=new Date(sun); sat.setDate(sun.getDate()+6);
-      toDay_=toDay(sat);
+      const sun=new Date(now);sun.setDate(now.getDate()-now.getDay());
+      fromD=toLocal(sun);
+      const sat=new Date(sun);sat.setDate(sun.getDate()+6);
+      toD=toLocal(sat);
     } else if(filterMode==='month'){
       const [yr,mo]=filterMonth.split('-').map(Number);
-      fromDay=new Date(yr,mo-1,1);
-      toDay_=new Date(yr,mo,0);
+      fromD=new Date(yr,mo-1,1);toD=new Date(yr,mo,0);
     } else {
-      fromDay=filterFrom?toDay(new Date(filterFrom)):null;
-      toDay_=filterTo?toDay(new Date(filterTo)):null;
+      fromD=filterFrom?toLocal(new Date(filterFrom)):null;
+      toD=filterTo?toLocal(new Date(filterTo)):null;
     }
     return logs.filter(l=>{
-      // Parse log date as local date (YYYY-MM-DD)
       const [yr,mo,dy]=l.date.split('-').map(Number);
       const ld=new Date(yr,mo-1,dy);
-      if(fromDay&&ld<fromDay)return false;
-      if(toDay_&&ld>toDay_)return false;
+      if(fromD&&ld<fromD)return false;
+      if(toD&&ld>toD)return false;
       if(filterUser&&l.user_id!==filterUser)return false;
       return true;
     });
   },[logs,filterMode,filterMonth,filterFrom,filterTo,filterUser]);
 
-  const totalHrs=filtered.reduce((s,l)=>s+(Number(l.hours)||0)+(Number(l.minutes)||0)/60,0);
-
+  // ── Aggregations — normalize hours + minutes properly
+  const toHrs=l=>Number(l.hours||0)+(Number(l.minutes||0)/60);
+  const totalHrs=filtered.reduce((s,l)=>s+toHrs(l),0);
   const byUser=useMemo(()=>{
     const m={};
     filtered.forEach(l=>{
       if(!m[l.user_id])m[l.user_id]={name:l.user_name||l.user_id,hrs:0};
-      m[l.user_id].hrs+=(Number(l.hours)||0)+(Number(l.minutes)||0)/60;
+      m[l.user_id].hrs+=toHrs(l);
     });
     return Object.values(m).sort((a,b)=>b.hrs-a.hrs);
   },[filtered]);
 
+  // ── Helpers
+  // Fix: fmtHrs correctly handles hours+minutes — no more "030 min" bug
+  const fmtHrs=h=>{
+    h=Math.max(0,h);
+    const wh=Math.floor(h);
+    const wm=Math.round((h-wh)*60);
+    if(wh>0&&wm>0)return wh+'h '+wm+'m';
+    if(wh>0)return wh+'h';
+    if(wm>0)return wm+'m';
+    return '0m';
+  };
+  const projName=id=>{const p=safe(projects).find(p=>p.id===id);return p?p.name:'';};
+
+  // ── Save new log
   const handleSave=async()=>{
-    // Validate
     if(form.tab==='project'&&!form.task_id)return setSaveMsg('⚠ Select a task');
     if(form.tab==='manual'&&!form.task_name.trim())return setSaveMsg('⚠ Enter task name');
-    if(!form.hours&&!form.minutes)return setSaveMsg('⚠ Enter time logged');
+    const h=Number(form.hours||0),m=Number(form.minutes||0);
+    if(!h&&!m)return setSaveMsg('⚠ Enter at least 1 minute');
     setBusy(true);
-    // Derive task_name from selected task if project tab
-    let payload={...form};
+    let payload={...form,hours:h,minutes:Math.min(59,m)};
     if(form.tab==='project'){
       const t=safe(tasks).find(t=>t.id===form.task_id);
-      payload.task_name=t?('['+form.project_id.slice(0,6)+'] '+t.title):form.task_id;
+      payload.task_name=t?t.title:form.task_id;
     }
     await api.post('/api/timelogs',payload);
     setForm(blankForm());
@@ -10303,38 +10337,42 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     setBusy(false);
   };
 
+  // ── Delete — optimistic + re-fetch
   const handleDelete=async(id)=>{
     if(!confirm('Delete this log entry?'))return;
+    setLogs(prev=>prev.filter(l=>l.id!==id));
     await api.del('/api/timelogs/'+id);
-    await load();
+    load();
   };
 
-  // CSV export — uses current filtered data
+  // ── Inline edit
+  const startEdit=l=>{setEditId(l.id);setEditForm({hours:String(l.hours||0),minutes:String(l.minutes||0),comments:l.comments||''}); };
+  const cancelEdit=()=>setEditId(null);
+  const saveEdit=async(l)=>{
+    const h=Number(editForm.hours||0),m=Number(editForm.minutes||0);
+    if(!h&&!m)return;
+    const r=await api.put('/api/timelogs/'+l.id,{hours:h,minutes:Math.min(59,m),comments:editForm.comments});
+    if(r&&(r.ok||r.id)){
+      setLogs(prev=>prev.map(x=>x.id===l.id?{...x,hours:h,minutes:Math.min(59,m),comments:editForm.comments}:x));
+    }
+    setEditId(null);
+  };
+
+  // ── CSV — filtered rows only, with project name
   const downloadCSV=()=>{
-    const headers=['Date','User','Project','Task','Hours','Minutes','Total Hrs','Comments'];
     const projMap=safe(projects).reduce((m,p)=>{m[p.id]=p.name;return m;},{});
-    const rows=filtered.map(l=>[
-      l.date,
-      '"'+(l.user_name||l.user_id)+'"',
-      '"'+(l.project_id?projMap[l.project_id]||l.project_id:'')+'"',
-      '"'+(l.task_name||'')+'"',
-      l.hours||0,
-      l.minutes||0,
-      ((Number(l.hours)||0)+(Number(l.minutes)||0)/60).toFixed(2),
-      '"'+(l.comments||'')+'"'
-    ]);
+    const headers=['Date','User','Project','Task','Hours','Minutes','Total Decimal Hrs','Comments'];
+    const rows=filtered.map(l=>[l.date,'"'+(l.user_name||l.user_id)+'"','"'+(l.project_id?projMap[l.project_id]||l.project_id:'')+'"','"'+(l.task_name||'')+'"',Number(l.hours||0),Number(l.minutes||0),toHrs(l).toFixed(2),'"'+(l.comments||'')+'"']);
     const csv='data:text/csv;charset=utf-8,'+[headers,...rows].map(r=>r.join(',')).join('\n');
     const a=document.createElement('a');
     a.setAttribute('href',encodeURI(csv));
-    const label=filterMode==='week'?'thisweek':filterMode==='month'?filterMonth:'custom';
-    a.setAttribute('download','vewit_timelogs_'+label+'.csv');
+    const lbl=filterMode==='week'?'thisweek':filterMode==='month'?filterMonth:'custom';
+    a.setAttribute('download','vewit_timelogs_'+lbl+'.csv');
     document.body.appendChild(a);a.click();document.body.removeChild(a);
   };
 
-  const fmtHrs=h=>{const wh=Math.floor(h);const wm=Math.round((h-wh)*60);return wh>0?wm>0?wh+'h '+wm+'m':wh+'h':wm>0?wm+'m':'0m';};
-  const projName=id=>{const p=safe(projects).find(p=>p.id===id);return p?p.name:'';};
+  return html`<div style=${{padding:'0 0 60px'}}>
 
-  return html`<div style=${{padding:'0 0 40px'}}>
     <!-- Header -->
     <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:20}}>
       <div>
@@ -10342,161 +10380,149 @@ function TimesheetView({cu,teams,users,projects,tasks}){
         <p style=${{fontSize:12,color:'var(--tx3)',margin:'3px 0 0'}}>Log daily hours · export reports · track productivity</p>
       </div>
       <div style=${{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-        ${saveMsg?html`<span style=${{fontSize:12,color:saveMsg.startsWith('⚠')?'var(--rd)':'#22c55e',fontWeight:600}}>${saveMsg}</span>`:null}
-        <button class="btn bg" style=${{fontSize:12,padding:'7px 14px',display:'flex',alignItems:'center',gap:5}}
-          onClick=${downloadCSV} title="Download filtered entries as CSV">
-          ⬇ CSV ${filtered.length?html`<span style=${{fontSize:10,background:'var(--ac)',color:'var(--ac-tx)',borderRadius:100,padding:'1px 5px'}}>${filtered.length}</span>`:null}
+        ${saveMsg?html`<span style=${{fontSize:12,color:saveMsg.startsWith('⚠')?'#ef4444':'#22c55e',fontWeight:600}}>${saveMsg}</span>`:null}
+        <button class="btn bg" style=${{fontSize:12,padding:'7px 14px',display:'flex',alignItems:'center',gap:5}} onClick=${downloadCSV} title="Export filtered entries">
+          ⬇ CSV ${filtered.length?html`<span style=${{fontSize:10,background:'var(--ac)',color:'var(--ac-tx)',borderRadius:100,padding:'1px 6px',fontWeight:700}}>${filtered.length}</span>`:null}
         </button>
-        <button class="btn bp" style=${{fontSize:12,padding:'7px 14px'}} onClick=${()=>{setShowForm(!showForm);setSaveMsg('');}}>
+        <button class="btn bp" style=${{fontSize:12,padding:'7px 16px'}} onClick=${()=>{setShowForm(v=>!v);setSaveMsg('');}}>
           ${showForm?'✕ Close':'+ Log Hours'}
         </button>
       </div>
     </div>
 
-    <!-- ── Log Hours Form ── -->
+    <!-- Log Hours Form -->
     ${showForm?html`
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:20,marginBottom:20,boxShadow:'0 4px 24px rgba(0,0,0,.18)'}}>
-      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+      <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:8}}>
         <h3 style=${{fontSize:14,fontWeight:700,color:'var(--tx)',margin:0}}>Log Hours</h3>
-        <!-- Project / Manual tabs -->
         <div style=${{display:'flex',background:'var(--bg)',borderRadius:8,padding:2,border:'1px solid var(--bd)'}}>
           ${['project','manual'].map(tab=>html`
-            <button key=${tab} onClick=${()=>setForm({...form,tab,project_id:'',task_id:'',task_name:''})}
-              style=${{padding:'5px 14px',borderRadius:6,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,
+            <button key=${tab} onClick=${()=>setForm(f=>({...f,tab,project_id:'',task_id:'',task_name:''}))}
+              style=${{padding:'5px 16px',borderRadius:6,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,
                 background:form.tab===tab?'var(--ac)':'transparent',
                 color:form.tab===tab?'var(--ac-tx)':'var(--tx2)',transition:'all .15s'}}>
               ${tab==='project'?'📁 Project':'✏ Manual'}
             </button>`)}
         </div>
       </div>
-
-      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
-
-        <!-- Date -->
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))',gap:12}}>
         <div>
           <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>📅 Date</label>
-          <input type="date" value=${form.date} onChange=${e=>setForm({...form,date:e.target.value})}
+          <input type="date" value=${form.date} onChange=${e=>setForm(f=>({...f,date:e.target.value}))}
             style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12,boxSizing:'border-box'}}/>
         </div>
-
-        <!-- Project Tab: Project dropdown -->
         ${form.tab==='project'?html`
           <div>
             <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>📁 Project *</label>
-            <select value=${form.project_id}
-              onChange=${e=>setForm({...form,project_id:e.target.value,task_id:''})}
-              style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:form.project_id?'var(--tx)':'var(--tx3)',fontSize:12,boxSizing:'border-box'}}>
+            <select value=${form.project_id} onChange=${e=>setForm(f=>({...f,project_id:e.target.value,task_id:''}))}
+              style=${{width:'100%',background:'var(--bg)',border:'1px solid '+(form.project_id?'var(--ac)':'var(--bd)'),borderRadius:8,padding:'8px 10px',color:form.project_id?'var(--tx)':'var(--tx3)',fontSize:12,boxSizing:'border-box'}}>
               <option value="">— Select Project —</option>
               ${myProjects.map(p=>html`<option key=${p.id} value=${p.id}>${p.name}</option>`)}
             </select>
           </div>
           <div>
             <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>✅ Task *</label>
-            <select value=${form.task_id}
-              onChange=${e=>setForm({...form,task_id:e.target.value})}
+            <select value=${form.task_id} onChange=${e=>setForm(f=>({...f,task_id:e.target.value}))}
               disabled=${!form.project_id}
-              style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:form.task_id?'var(--tx)':'var(--tx3)',fontSize:12,boxSizing:'border-box',opacity:form.project_id?1:0.5}}>
+              style=${{width:'100%',background:'var(--bg)',border:'1px solid '+(form.task_id?'var(--ac)':'var(--bd)'),borderRadius:8,padding:'8px 10px',color:form.task_id?'var(--tx)':'var(--tx3)',fontSize:12,boxSizing:'border-box',opacity:form.project_id?1:0.5}}>
               <option value="">${form.project_id?'— Select Task —':'Select project first'}</option>
               ${tasksForProject.map(t=>html`<option key=${t.id} value=${t.id}>${t.title}</option>`)}
             </select>
           </div>
         `:html`
-          <!-- Manual Tab: Free text task name -->
           <div style=${{gridColumn:'span 2'}}>
             <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>✏ Task Name *</label>
-            <input type="text" placeholder="e.g. Fix login API bug" value=${form.task_name}
-              onChange=${e=>setForm({...form,task_name:e.target.value})}
+            <input type="text" placeholder="e.g. Fix login bug, Code review, Standup…" value=${form.task_name}
+              onChange=${e=>setForm(f=>({...f,task_name:e.target.value}))}
               style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12,boxSizing:'border-box'}}/>
           </div>
         `}
-
-        <!-- Hours + Minutes side by side -->
-        <div style=${{display:'flex',gap:8}}>
+        <div style=${{display:'flex',gap:8,alignItems:'flex-end'}}>
           <div style=${{flex:1}}>
             <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>⏱ Hours</label>
-            <input type="number" min="0" max="24" value=${form.hours}
-              onChange=${e=>setForm({...form,hours:Math.max(0,Number(e.target.value))})}
+            <input type="number" min="0" max="23" placeholder="0" value=${form.hours}
+              onChange=${e=>setForm(f=>({...f,hours:e.target.value}))}
               style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12,boxSizing:'border-box'}}/>
           </div>
           <div style=${{flex:1}}>
             <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>Mins</label>
-            <input type="number" min="0" max="59" value=${form.minutes}
-              onChange=${e=>setForm({...form,minutes:Math.max(0,Math.min(59,Number(e.target.value)))})}
+            <input type="number" min="0" max="59" placeholder="0" value=${form.minutes}
+              onChange=${e=>setForm(f=>({...f,minutes:e.target.value}))}
               style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12,boxSizing:'border-box'}}/>
           </div>
+          <div style=${{flexShrink:0,fontSize:14,fontWeight:800,color:'var(--ac)',paddingBottom:9,minWidth:36,textAlign:'right'}}>
+            ${(()=>{const h=Number(form.hours||0),m=Number(form.minutes||0);return(h||m)?fmtHrs(h+m/60):'';})()}
+          </div>
         </div>
-
-        <!-- Comments full width -->
         <div style=${{gridColumn:'1/-1'}}>
           <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>💬 Comments</label>
           <textarea placeholder="What did you work on? (optional)" value=${form.comments}
-            onChange=${e=>setForm({...form,comments:e.target.value})}
-            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12,resize:'vertical',minHeight:56,fontFamily:'inherit',boxSizing:'border-box'}}></textarea>
+            onChange=${e=>setForm(f=>({...f,comments:e.target.value}))}
+            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12,resize:'vertical',minHeight:52,fontFamily:'inherit',boxSizing:'border-box'}}></textarea>
         </div>
       </div>
-
-      <div style=${{marginTop:14,display:'flex',gap:8,alignItems:'center'}}>
-        <button class="btn bp" style=${{fontSize:12,padding:'9px 20px',display:'flex',alignItems:'center',gap:6}}
-          onClick=${handleSave} disabled=${busy}>
-          ${busy?html`<span class="spin"></span>`:null}
-          Save Log
+      <div style=${{marginTop:14,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+        <button class="btn bp" style=${{fontSize:12,padding:'9px 22px',display:'flex',alignItems:'center',gap:6}} onClick=${handleSave} disabled=${busy}>
+          ${busy?html`<span class="spin"></span>`:null} Save Log
         </button>
         <button class="btn bg" style=${{fontSize:12,padding:'9px 14px'}} onClick=${()=>{setShowForm(false);setSaveMsg('');}}>Cancel</button>
-        ${saveMsg?html`<span style=${{fontSize:12,color:saveMsg.startsWith('⚠')?'var(--rd)':'#22c55e',fontWeight:600,marginLeft:4}}>${saveMsg}</span>`:null}
+        ${saveMsg?html`<span style=${{fontSize:12,color:saveMsg.startsWith('⚠')?'#ef4444':'#22c55e',fontWeight:600}}>${saveMsg}</span>`:null}
       </div>
     </div>`:null}
 
-    <!-- ── Admin: Required Hours Config ── -->
+    <!-- Admin: Workspace Hours Policy -->
     ${isAdmin?html`
-    <div style=${{background:'linear-gradient(135deg,rgba(90,140,255,.06),rgba(168,85,247,.06))',border:'1px solid rgba(90,140,255,.2)',borderRadius:12,padding:'12px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-      <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.03em'}}>⚙ WORKSPACE POLICY</span>
-      <span style=${{fontSize:12,color:'var(--tx2)'}}>Required hours/day:</span>
+    <div style=${{background:'linear-gradient(135deg,rgba(90,140,255,.07),rgba(168,85,247,.07))',border:'1px solid rgba(90,140,255,.22)',borderRadius:12,padding:'11px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+      <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.04em',flexShrink:0}}>⚙ WORKSPACE POLICY</span>
+      <span style=${{fontSize:12,color:'var(--tx2)',flexShrink:0}}>Required hours/day:</span>
       <input type="number" min="1" max="24" step="0.5" value=${adminHrsInput}
         onChange=${e=>setAdminHrsInput(e.target.value)}
-        style=${{width:68,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 8px',color:'var(--tx)',fontSize:12,textAlign:'center'}}/>
+        style=${{width:64,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 8px',color:'var(--tx)',fontSize:13,textAlign:'center',fontWeight:700}}/>
       <button class="btn bp" style=${{fontSize:11,padding:'5px 14px'}} onClick=${async()=>{
-        const r=await api.post('/api/timelogs/required-hours',{hours:parseFloat(adminHrsInput)||8});
-        if(r&&r.ok){setRequiredHrs(parseFloat(adminHrsInput)||8);setSaveMsg('✓ Policy saved for all users!');setTimeout(()=>setSaveMsg(''),3000);}
+        const hrs=parseFloat(adminHrsInput)||8;
+        const r=await api.post('/api/timelogs/required-hours',{hours:hrs});
+        if(r&&r.ok){
+          setRequiredHrs(hrs);
+          setSaveMsg('✓ Policy saved — applies to all workspace members');
+          setTimeout(()=>setSaveMsg(''),4000);
+        }
       }}>Save for All</button>
-      <span style=${{fontSize:11,color:'var(--tx3)'}}>Active: <b style=${{color:'var(--tx)'}}>${requiredHrs}h/day</b></span>
+      <!-- Fix: Active value comes from requiredHrs state, updated immediately on save -->
+      <span style=${{fontSize:12,color:'var(--tx3)'}}>Active: <b style=${{color:'var(--tx)',fontSize:13}}>${requiredHrs}h/day</b></span>
     </div>`:null}
 
-    <!-- ── Filters Row ── -->
+    <!-- Filters -->
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'10px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
       <span style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',flexShrink:0}}>Filter:</span>
       ${['week','month','custom'].map(m=>html`
         <button key=${m} onClick=${()=>setFilterMode(m)}
-          style=${{fontSize:11,padding:'5px 13px',borderRadius:100,
+          style=${{fontSize:11,padding:'5px 14px',borderRadius:100,cursor:'pointer',fontWeight:600,transition:'all .15s',
             border:'1px solid '+(filterMode===m?'var(--ac)':'var(--bd)'),
             background:filterMode===m?'var(--ac3)':'transparent',
-            color:filterMode===m?'var(--ac)':'var(--tx2)',
-            cursor:'pointer',fontWeight:600,transition:'all .15s'}}>
+            color:filterMode===m?'var(--ac)':'var(--tx2)'}}>
           ${m==='week'?'This Week':m==='month'?'Month':'Custom Range'}
         </button>`)}
-      ${filterMode==='month'?html`
-        <input type="month" value=${filterMonth} onChange=${e=>setFilterMonth(e.target.value)}
-          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 8px',color:'var(--tx)',fontSize:11}}/>
-      `:null}
+      ${filterMode==='month'?html`<input type="month" value=${filterMonth} onChange=${e=>setFilterMonth(e.target.value)}
+        style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>`:null}
       ${filterMode==='custom'?html`
         <input type="date" value=${filterFrom} onChange=${e=>setFilterFrom(e.target.value)}
-          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 8px',color:'var(--tx)',fontSize:11}}/>
-        <span style=${{color:'var(--tx3)',fontSize:11}}>→</span>
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>
+        <span style=${{color:'var(--tx3)',fontSize:12}}>→</span>
         <input type="date" value=${filterTo} onChange=${e=>setFilterTo(e.target.value)}
-          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 8px',color:'var(--tx)',fontSize:11}}/>
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>
       `:null}
       ${isAdmin&&users&&users.length>0?html`
         <div style=${{marginLeft:'auto'}}>
           <select value=${filterUser} onChange=${e=>setFilterUser(e.target.value)}
-            style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 8px',color:'var(--tx)',fontSize:11}}>
+            style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}>
             <option value="">All Users</option>
             ${(users||[]).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
           </select>
-        </div>
-      `:null}
+        </div>`:null}
     </div>
 
-    <!-- ── Summary Cards ── -->
-    <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:12,marginBottom:20}}>
+    <!-- Summary Cards -->
+    <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(145px,1fr))',gap:12,marginBottom:20}}>
       <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
         <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}}>Total Hours</div>
         <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)',lineHeight:1}}>${fmtHrs(totalHrs)}</div>
@@ -10515,46 +10541,46 @@ function TimesheetView({cu,teams,users,projects,tasks}){
           const days=filterMode==='week'?5:filterMode==='month'?22:1;
           const expected=days*requiredHrs;
           const pct=expected>0?Math.round(totalHrs/expected*100):0;
-          const col=pct>=100?'#22c55e':pct>=70?'var(--ac)':'var(--rd)';
-          return html`<div style=${{fontSize:24,fontWeight:800,color:col,lineHeight:1}}>${pct}%</div>`;
+          const col=pct>=100?'#22c55e':pct>=70?'var(--ac)':'#ef4444';
+          return html`<div style=${{fontSize:24,fontWeight:800,color:col,lineHeight:1}}>${pct}%</div><div style=${{fontSize:10,color:'var(--tx3)',marginTop:4}}>${fmtHrs(expected)} expected</div>`;
         })()}
       </div>
     </div>
 
-    <!-- ── Team Summary (admin) ── -->
+    <!-- Team Summary (admin) -->
     ${isAdmin&&byUser.length>0?html`
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 18px',marginBottom:16}}>
       <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
-        👥 Team Summary
-        <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:500}}>(${requiredHrs}h/day policy)</span>
+        👥 Team Summary <span style=${{fontSize:10,color:'var(--tx3)',fontWeight:500}}>policy: ${requiredHrs}h/day</span>
       </div>
       <div style=${{display:'flex',flexDirection:'column',gap:8}}>
         ${byUser.map(u=>{
           const days=filterMode==='week'?5:filterMode==='month'?22:1;
           const expected=days*requiredHrs;
           const pct=expected>0?Math.min(100,Math.round(u.hrs/expected*100)):0;
-          const col=pct>=100?'#22c55e':pct>=70?'var(--ac)':'var(--rd)';
+          const col=pct>=100?'#22c55e':pct>=70?'var(--ac)':'#ef4444';
           return html`<div key=${u.name} style=${{display:'flex',alignItems:'center',gap:10}}>
             <div style=${{width:110,fontSize:11,color:'var(--tx2)',fontWeight:600,flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div>
-            <div style=${{flex:1,height:7,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>\n              <div style=${{height:'100%',width:pct+'%',background:col,borderRadius:100,transition:'width .4s'}}></div>
+            <div style=${{flex:1,height:7,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+              <div style=${{height:'100%',width:pct+'%',background:col,borderRadius:100,transition:'width .4s'}}></div>
             </div>
-            <div style=${{fontSize:11,fontWeight:700,color:col,width:44,textAlign:'right',flexShrink:0}}>${fmtHrs(u.hrs)}</div>
-            <div style=${{fontSize:10,color:'var(--tx3)',width:32,textAlign:'right',flexShrink:0}}>${pct}%</div>
+            <div style=${{fontSize:11,fontWeight:700,color:col,width:46,textAlign:'right',flexShrink:0}}>${fmtHrs(u.hrs)}</div>
+            <div style=${{fontSize:10,color:'var(--tx3)',width:30,textAlign:'right',flexShrink:0}}>${pct}%</div>
           </div>`;
         })}
       </div>
     </div>`:null}
 
-    <!-- ── Entries Table ── -->
+    <!-- Entries Table -->
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
-      <div style=${{padding:'12px 18px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div style=${{padding:'11px 18px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Entries</span>
         <span style=${{fontSize:11,color:'var(--tx3)'}}>${filtered.length} record${filtered.length!==1?'s':''}</span>
       </div>
       ${filtered.length===0?html`
-        <div style=${{textAlign:'center',padding:'48px 20px',color:'var(--tx3)'}}>
-          <div style=${{fontSize:32,marginBottom:10}}>⏱</div>
-          <div style=${{fontSize:13,fontWeight:600,marginBottom:4}}>No entries for this period</div>
+        <div style=${{textAlign:'center',padding:'52px 20px',color:'var(--tx3)'}}>
+          <div style=${{fontSize:36,marginBottom:10}}>⏱</div>
+          <div style=${{fontSize:13,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>No entries for this period</div>
           <div style=${{fontSize:12}}>Click <b style=${{color:'var(--ac)'}}>+ Log Hours</b> to add your first entry.</div>
         </div>
       `:html`
@@ -10562,37 +10588,72 @@ function TimesheetView({cu,teams,users,projects,tasks}){
           <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
               <tr style=${{background:'var(--sf2)'}}>
-                ${isAdmin?html`<th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:11,whiteSpace:'nowrap'}}>USER</th>`:null}
-                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:11}}>DATE</th>
-                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:11}}>PROJECT</th>
-                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:11}}>TASK</th>
-                <th style=${{padding:'9px 14px',textAlign:'right',fontWeight:700,color:'var(--tx3)',fontSize:11}}>TIME</th>
-                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:11}}>COMMENTS</th>
-                <th style=${{padding:'9px 14px',textAlign:'center',fontWeight:700,color:'var(--tx3)',fontSize:11}}></th>
+                ${isAdmin?html`<th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,whiteSpace:'nowrap',letterSpacing:'.04em'}}>USER</th>`:null}
+                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>DATE</th>
+                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>PROJECT</th>
+                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>TASK</th>
+                <th style=${{padding:'9px 14px',textAlign:'right',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>TIME</th>
+                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>COMMENTS</th>
+                <th style=${{padding:'9px 10px',textAlign:'center',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em',whiteSpace:'nowrap'}}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               ${filtered.map((l,i)=>{
-                const hrs=(Number(l.hours)||0)+(Number(l.minutes)||0)/60;
+                const hrs=toHrs(l);
                 const pName=l.project_id?projName(l.project_id):'';
-                return html`<tr key=${l.id} style=${{borderTop:'1px solid var(--bd)',background:i%2?'var(--sf2)':'transparent',transition:'background .1s'}}
+                const isEditing=editId===l.id;
+                const canEdit=l.user_id===cu.id||isAdmin;
+                return html`<tr key=${l.id}
+                  style=${{borderTop:'1px solid var(--bd)',background:i%2?'rgba(0,0,0,.015)':'transparent',transition:'background .1s'}}
                   onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'}
-                  onMouseLeave=${e=>e.currentTarget.style.background=i%2?'var(--sf2)':'transparent'}>
-                  ${isAdmin?html`<td style=${{padding:'9px 14px',fontWeight:600,whiteSpace:'nowrap',color:'var(--tx)'}}>${l.user_name||l.user_id}</td>`:null}
-                  <td style=${{padding:'9px 14px',color:'var(--tx2)',whiteSpace:'nowrap'}}>${l.date}</td>
-                  <td style=${{padding:'9px 14px',color:'var(--tx3)',maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                    ${pName?html`<span style=${{fontSize:10,padding:'2px 6px',borderRadius:4,background:'var(--ac3)',color:'var(--ac)',fontWeight:600}}>${pName}</span>`:'—'}
+                  onMouseLeave=${e=>e.currentTarget.style.background=i%2?'rgba(0,0,0,.015)':'transparent'}>
+                  ${isAdmin?html`<td style=${{padding:'9px 14px',fontWeight:600,whiteSpace:'nowrap',color:'var(--tx)',fontSize:11}}>${l.user_name||l.user_id}</td>`:null}
+                  <td style=${{padding:'9px 14px',color:'var(--tx2)',whiteSpace:'nowrap',fontSize:11}}>${l.date}</td>
+                  <td style=${{padding:'9px 14px',maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    ${pName?html`<span style=${{fontSize:10,padding:'2px 7px',borderRadius:5,background:'var(--ac3)',color:'var(--ac)',fontWeight:700}}>${pName}</span>`
+                           :html`<span style=${{color:'var(--tx3)',fontSize:11}}>—</span>`}
                   </td>
-                  <td style=${{padding:'9px 14px',color:'var(--tx)',fontWeight:500,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${l.task_name||'—'}</td>
-                  <td style=${{padding:'9px 14px',textAlign:'right',color:'var(--ac)',fontWeight:800,whiteSpace:'nowrap'}}>${fmtHrs(hrs)}</td>
-                  <td style=${{padding:'9px 14px',color:'var(--tx3)',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${l.comments||'—'}</td>
-                  <td style=${{padding:'9px 14px',textAlign:'center'}}>
-                    ${(l.user_id===cu.id||isAdmin)?html`
-                    <button onClick=${()=>handleDelete(l.id)}
-                      style=${{background:'none',border:'1px solid transparent',cursor:'pointer',color:'var(--tx3)',fontSize:13,padding:'3px 7px',borderRadius:6,transition:'all .15s'}}
-                      onMouseEnter=${e=>{e.currentTarget.style.color='var(--rd)';e.currentTarget.style.borderColor='var(--rd)';e.currentTarget.style.background='rgba(239,68,68,.08)';}}
-                      onMouseLeave=${e=>{e.currentTarget.style.color='var(--tx3)';e.currentTarget.style.borderColor='transparent';e.currentTarget.style.background='none';}}
-                      title="Delete">✕</button>`:null}
+                  <td style=${{padding:'9px 14px',color:'var(--tx)',fontWeight:500,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12}}>${l.task_name||'—'}</td>
+                  <td style=${{padding:'9px 14px',textAlign:'right',whiteSpace:'nowrap'}}>
+                    ${isEditing?html`
+                      <div style=${{display:'flex',gap:4,justifyContent:'flex-end',alignItems:'center'}}>
+                        <input type="number" min="0" max="23" value=${editForm.hours}
+                          onChange=${e=>setEditForm(f=>({...f,hours:e.target.value}))}
+                          style=${{width:44,background:'var(--bg)',border:'1px solid var(--ac)',borderRadius:5,padding:'3px 5px',color:'var(--tx)',fontSize:11,textAlign:'center'}}/>
+                        <span style=${{color:'var(--tx3)',fontSize:10}}>h</span>
+                        <input type="number" min="0" max="59" value=${editForm.minutes}
+                          onChange=${e=>setEditForm(f=>({...f,minutes:e.target.value}))}
+                          style=${{width:40,background:'var(--bg)',border:'1px solid var(--ac)',borderRadius:5,padding:'3px 5px',color:'var(--tx)',fontSize:11,textAlign:'center'}}/>
+                        <span style=${{color:'var(--tx3)',fontSize:10}}>m</span>
+                      </div>
+                    `:html`<span style=${{color:'var(--ac)',fontWeight:800,fontSize:13}}>${fmtHrs(hrs)}</span>`}
+                  </td>
+                  <td style=${{padding:'9px 14px',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--tx3)',fontSize:11}}>
+                    ${isEditing?html`
+                      <input type="text" value=${editForm.comments} onChange=${e=>setEditForm(f=>({...f,comments:e.target.value}))}
+                        style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--ac)',borderRadius:5,padding:'3px 6px',color:'var(--tx)',fontSize:11}}/>
+                    `:l.comments||'—'}
+                  </td>
+                  <td style=${{padding:'7px 10px',textAlign:'center',whiteSpace:'nowrap'}}>
+                    ${canEdit?html`
+                      ${isEditing?html`
+                        <button onClick=${()=>saveEdit(l)}
+                          style=${{background:'var(--ac)',color:'var(--ac-tx)',border:'none',cursor:'pointer',fontSize:10,padding:'3px 9px',borderRadius:5,fontWeight:700,marginRight:3}}>✓ Save</button>
+                        <button onClick=${cancelEdit}
+                          style=${{background:'var(--sf2)',color:'var(--tx2)',border:'1px solid var(--bd)',cursor:'pointer',fontSize:10,padding:'3px 7px',borderRadius:5}}>✕</button>
+                      `:html`
+                        <button onClick=${()=>startEdit(l)}
+                          style=${{background:'none',border:'1px solid transparent',cursor:'pointer',color:'var(--tx3)',fontSize:12,padding:'3px 7px',borderRadius:5,marginRight:2,transition:'all .12s'}}
+                          onMouseEnter=${e=>{e.currentTarget.style.color='var(--ac)';e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.background='var(--ac3)';}}
+                          onMouseLeave=${e=>{e.currentTarget.style.color='var(--tx3)';e.currentTarget.style.borderColor='transparent';e.currentTarget.style.background='none';}}
+                          title="Edit">✎</button>
+                        <button onClick=${()=>handleDelete(l.id)}
+                          style=${{background:'none',border:'1px solid transparent',cursor:'pointer',color:'var(--tx3)',fontSize:12,padding:'3px 7px',borderRadius:5,transition:'all .12s'}}
+                          onMouseEnter=${e=>{e.currentTarget.style.color='#ef4444';e.currentTarget.style.borderColor='#ef4444';e.currentTarget.style.background='rgba(239,68,68,.08)';}}
+                          onMouseLeave=${e=>{e.currentTarget.style.color='var(--tx3)';e.currentTarget.style.borderColor='transparent';e.currentTarget.style.background='none';}}
+                          title="Delete">✕</button>
+                      `}
+                    `:null}
                   </td>
                 </tr>`;
               })}
