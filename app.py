@@ -3076,7 +3076,7 @@ LANDING_HTML = """<!DOCTYPE html>
 <title>VEWIT — AI-Powered Project Management & Team Collaboration</title>
 <meta name="description" content="VEWIT unifies projects, tasks, AI assistant, direct messages, support tickets, timeline and productivity analytics into one platform. Free to start."/>
 <meta name="robots" content="index,follow"/>
-<meta name="theme-color" content="#070b13"/>
+<meta name="theme-color" content="#06040f"/>
 <link rel="canonical" href="https://www.vewit.in/"/>
 <meta property="og:type" content="website"/>
 <meta property="og:title" content="VEWIT — AI-Powered Team Collaboration"/>
@@ -3089,22 +3089,26 @@ LANDING_HTML = """<!DOCTYPE html>
 /* ── Reset & Base ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#070b13; --bg2:#0c1220; --bg3:#111927; --bg4:#19243a;
+  /* Apple iPhone 17 Pro — Deep Space / Titanium Purple */
+  --bg:#06040f; --bg2:#0a0618; --bg3:#0f0a1e; --bg4:#160d2a;
   --s1:rgba(255,255,255,0.04); --s2:rgba(255,255,255,0.07); --s3:rgba(255,255,255,0.12);
   --b1:rgba(255,255,255,0.07); --b2:rgba(255,255,255,0.13); --b3:rgba(255,255,255,0.22);
-  --tx:#eef2ff; --tx2:#a8b8d0; --tx3:#526070;
-  --blue:#4f8ef7; --purple:#8b5cf6; --cyan:#22d3ee;
-  --green:#34d399; --amber:#fbbf24; --pink:#f472b6; --orange:#fb923c;
-  --gb:linear-gradient(135deg,#4f8ef7,#8b5cf6);
-  --gc:linear-gradient(135deg,#22d3ee,#4f8ef7);
-  --gg:linear-gradient(135deg,#34d399,#22d3ee);
-  --gw:linear-gradient(135deg,#fb923c,#f472b6);
+  --tx:#f5f5f7; --tx2:#aeaeb2; --tx3:#636366;
+  --blue:#5a8cff; --purple:#a855f7; --cyan:#64d2ff;
+  --green:#30d158; --amber:#ffd60a; --pink:#ec4899; --orange:#ff9f0a;
+  --gb:linear-gradient(135deg,#5a8cff,#a855f7);
+  --gc:linear-gradient(135deg,#64d2ff,#5a8cff);
+  --gg:linear-gradient(135deg,#30d158,#64d2ff);
+  --gw:linear-gradient(135deg,#a855f7,#ec4899);
   --r:20px; --rs:12px;
   --font:'Bricolage Grotesque',system-ui,sans-serif;
   --body:'Inter',system-ui,sans-serif;
 }
 html{scroll-behavior:smooth}
 body{font-family:var(--body);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.6}
+
+/* Apple iPhone 17 Pro titanium spectrum top bar */
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent 0%,#5a8cff 25%,#a855f7 50%,#ec4899 75%,transparent 100%);z-index:9998;box-shadow:0 0 20px rgba(90,140,255,0.5),0 0 40px rgba(168,85,247,0.2)}
 
 /* Grain texture */
 body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:.6}
@@ -3127,66 +3131,65 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 @keyframes bgScan{0%{transform:translateY(-100%)}100%{transform:translateY(200%)}}
 
 /* ── Nav ── */
-nav{position:fixed;top:0;left:0;right:0;z-index:500;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 48px;background:rgba(7,11,19,0.72);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);border-bottom:1px solid var(--b1);transition:background .4s}
-.nav-logo{font-family:var(--font);font-size:22px;font-weight:800;letter-spacing:-1px;text-decoration:none;background:var(--gb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+nav{position:fixed;top:0;left:0;right:0;z-index:500;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 48px;background:rgba(6,4,15,0.78);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);border-bottom:1px solid rgba(255,255,255,0.06);transition:background .4s}
+.nav-logo{font-family:var(--font);font-size:22px;font-weight:800;letter-spacing:-1px;text-decoration:none;background:linear-gradient(135deg,#5a8cff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .nav-links{display:flex;gap:32px;align-items:center}
 .nav-links a{color:var(--tx2);font-size:13.5px;font-weight:500;text-decoration:none;transition:color .2s}
 .nav-links a:hover{color:var(--tx)}
 .nav-right{display:flex;align-items:center;gap:10px}
 .nav-in{color:var(--tx2);font-size:13.5px;font-weight:500;text-decoration:none;padding:7px 16px;border-radius:980px;transition:all .2s}
 .nav-in:hover{color:var(--tx);background:var(--s2)}
-.nav-go{font-size:13.5px;font-weight:700;text-decoration:none;padding:9px 22px;border-radius:980px;background:var(--gb);color:#fff;transition:all .25s;font-family:var(--font);letter-spacing:-.2px;box-shadow:0 4px 20px rgba(79,142,247,0.35)}
-.nav-go:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 10px 36px rgba(79,142,247,0.5)}
+.nav-go{font-size:13.5px;font-weight:700;text-decoration:none;padding:9px 22px;border-radius:980px;background:linear-gradient(135deg,#5a8cff,#a855f7);color:#fff;transition:all .25s;font-family:var(--font);letter-spacing:-.2px;box-shadow:0 4px 20px rgba(90,140,255,0.4)}
+.nav-go:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 10px 36px rgba(90,140,255,0.55)}
 
 /* ── Hero ── */
 .hero{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:120px 24px 60px;overflow:hidden}
 .hero-canvas{position:absolute;inset:0;pointer-events:none;z-index:0}
 .orb{position:absolute;border-radius:50%;filter:blur(70px);will-change:transform}
-.orb1{width:680px;height:680px;background:radial-gradient(circle,rgba(79,142,247,.28) 0%,transparent 70%);top:-200px;left:-180px;animation:orbFloat 18s ease-in-out infinite}
-.orb2{width:560px;height:560px;background:radial-gradient(circle,rgba(139,92,246,.22) 0%,transparent 70%);top:-100px;right:-150px;animation:orbFloat2 22s ease-in-out infinite}
-.orb3{width:400px;height:400px;background:radial-gradient(circle,rgba(34,211,238,.16) 0%,transparent 70%);bottom:50px;left:15%;animation:orbFloat3 15s ease-in-out infinite}
-.orb4{width:300px;height:300px;background:radial-gradient(circle,rgba(244,114,182,.12) 0%,transparent 70%);bottom:100px;right:10%;animation:orbFloat 20s 5s ease-in-out infinite}
+.orb1{width:750px;height:750px;background:radial-gradient(circle,rgba(90,140,255,.32) 0%,transparent 70%);top:-220px;left:-200px;animation:orbFloat 20s ease-in-out infinite}
+.orb2{width:620px;height:620px;background:radial-gradient(circle,rgba(168,85,247,.26) 0%,transparent 70%);top:-120px;right:-180px;animation:orbFloat2 24s ease-in-out infinite}
+.orb3{width:460px;height:460px;background:radial-gradient(circle,rgba(236,72,153,.18) 0%,transparent 70%);bottom:30px;left:12%;animation:orbFloat3 17s ease-in-out infinite}
+.orb4{width:340px;height:340px;background:radial-gradient(circle,rgba(100,210,255,.14) 0%,transparent 70%);bottom:80px;right:8%;animation:orbFloat 22s 6s ease-in-out infinite}
 /* Grid lines */
-.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(79,142,247,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(79,142,247,.05) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 40%,transparent 100%)}
-/* Scan line */
-.hero-scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.4),rgba(139,92,246,.4),transparent);animation:bgScan 8s linear infinite}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(90,140,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(90,140,255,.06) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 40%,transparent 100%)}
+.hero-scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(90,140,255,.5),rgba(168,85,247,.5),transparent);animation:bgScan 9s linear infinite}
 
 .hero-inner{position:relative;z-index:1}
-.hero-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(79,142,247,0.1);border:1px solid rgba(79,142,247,.28);color:var(--blue);font-size:12px;font-weight:700;padding:6px 16px;border-radius:980px;margin-bottom:30px;letter-spacing:.05em;text-transform:uppercase;animation:fadeUp .8s ease both;font-family:var(--body)}
+.hero-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(90,140,255,0.1);border:1px solid rgba(90,140,255,.3);color:var(--blue);font-size:12px;font-weight:700;padding:6px 16px;border-radius:980px;margin-bottom:30px;letter-spacing:.05em;text-transform:uppercase;animation:fadeUp .8s ease both;font-family:var(--body)}
 .hero-chip-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2.5s ease-in-out infinite}
 h1.h-title{font-family:var(--font);font-size:clamp(46px,8vw,100px);font-weight:800;letter-spacing:-4px;line-height:1.0;margin-bottom:26px;max-width:950px;animation:fadeUp .8s .1s ease both}
 .gt{background:var(--gb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;background-size:200% auto;animation:gradShift 4s ease-in-out infinite}
 .gt2{background:var(--gc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .h-sub{font-size:clamp(16px,2.2vw,20px);color:var(--tx2);max-width:560px;margin:0 auto 48px;line-height:1.75;font-weight:400;animation:fadeUp .8s .2s ease both}
 .h-ctas{display:flex;align-items:center;gap:16px;justify-content:center;flex-wrap:wrap;animation:fadeUp .8s .3s ease both}
-.cta-p{font-family:var(--font);font-size:17px;font-weight:800;text-decoration:none;padding:16px 38px;border-radius:980px;background:var(--gb);color:#fff;transition:all .25s;letter-spacing:-.3px;box-shadow:0 8px 36px rgba(79,142,247,.45),inset 0 1px 0 rgba(255,255,255,.15)}
-.cta-p:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 16px 56px rgba(79,142,247,.6),inset 0 1px 0 rgba(255,255,255,.15)}
+.cta-p{font-family:var(--font);font-size:17px;font-weight:800;text-decoration:none;padding:16px 38px;border-radius:980px;background:linear-gradient(135deg,#5a8cff,#a855f7,#ec4899);background-size:200% auto;color:#fff;transition:all .25s;letter-spacing:-.3px;box-shadow:0 8px 36px rgba(90,140,255,.5),inset 0 1px 0 rgba(255,255,255,.2);animation:gradShift 4s ease-in-out infinite}
+.cta-p:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 16px 56px rgba(90,140,255,.65),inset 0 1px 0 rgba(255,255,255,.2)}
 .cta-s{font-family:var(--font);font-size:17px;font-weight:600;text-decoration:none;padding:16px 32px;border-radius:980px;color:var(--tx);border:1px solid var(--b3);transition:all .2s;letter-spacing:-.3px}
 .cta-s:hover{background:var(--s2);border-color:var(--b3);transform:translateY(-1px)}
 .h-trust{margin-top:52px;display:flex;gap:32px;justify-content:center;flex-wrap:wrap;animation:fadeUp .8s .4s ease both}
 .trust-i{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--tx3);font-family:var(--body)}
-.trust-ck{width:19px;height:19px;border-radius:50%;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--green);flex-shrink:0}
+.trust-ck{width:19px;height:19px;border-radius:50%;background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.35);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--green);flex-shrink:0}
 
 /* ── App Preview ── */
 .preview-section{padding:0 24px 100px;position:relative;z-index:1}
 .preview-outer{max-width:1140px;margin:0 auto;position:relative;animation:fadeUp .9s .6s ease both}
-.preview-halo{position:absolute;inset:-40px;background:conic-gradient(from 0deg,rgba(79,142,247,.15),rgba(139,92,246,.12),rgba(34,211,238,.1),rgba(79,142,247,.15));border-radius:40px;filter:blur(40px);pointer-events:none;animation:gradShift 6s ease-in-out infinite;background-size:200% auto}
-.preview-frame{background:var(--bg3);border:1px solid var(--b2);border-radius:22px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(79,142,247,.08);position:relative}
-.preview-frame::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.6),rgba(139,92,246,.6),transparent)}
+.preview-halo{position:absolute;inset:-40px;background:conic-gradient(from 0deg,rgba(90,140,255,.18),rgba(168,85,247,.15),rgba(236,72,153,.12),rgba(90,140,255,.18));border-radius:40px;filter:blur(40px);pointer-events:none;animation:gradShift 6s ease-in-out infinite;background-size:200% auto}
+.preview-frame{background:var(--bg3);border:1px solid var(--b2);border-radius:22px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.8),0 0 0 1px rgba(90,140,255,.1);position:relative}
+.preview-frame::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(90,140,255,.7),rgba(168,85,247,.7),transparent)}
 .pbar{display:flex;align-items:center;gap:8px;padding:14px 18px;background:rgba(0,0,0,.3);border-bottom:1px solid var(--b1)}
 .pdot{width:12px;height:12px;border-radius:50%}
 .purl{flex:1;text-align:center;font-size:11px;color:rgba(255,255,255,.2);font-family:monospace;letter-spacing:.02em}
 .pui{display:grid;grid-template-columns:210px 1fr;min-height:420px}
 .pnav{background:rgba(0,0,0,.45);border-right:1px solid var(--b1);padding:16px 10px;display:flex;flex-direction:column;gap:2px}
-.pnav-logo{font-family:var(--font);font-size:14px;font-weight:800;letter-spacing:-.5px;background:var(--gb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;padding:4px 10px;margin-bottom:16px}
+.pnav-logo{font-family:var(--font);font-size:14px;font-weight:800;letter-spacing:-.5px;background:linear-gradient(135deg,#5a8cff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;padding:4px 10px;margin-bottom:16px}
 .pni{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;color:var(--tx3);font-size:12px;font-weight:500;cursor:default;transition:background .15s}
-.pni.on{background:rgba(79,142,247,.15);color:var(--blue)}
+.pni.on{background:rgba(90,140,255,.15);color:#5a8cff}
 .pni:not(.on):hover{background:var(--s1);color:var(--tx2)}
 .psep{height:1px;background:var(--b1);margin:7px 6px}
 .pbody{padding:22px 24px;background:var(--bg2)}
 .pbh{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
 .pbt{font-family:var(--font);font-size:17px;font-weight:800;color:var(--tx);letter-spacing:-.5px}
-.pbadge{font-size:10px;font-weight:700;padding:4px 12px;border-radius:980px;background:rgba(52,211,153,.1);color:var(--green);border:1px solid rgba(52,211,153,.25)}
+.pbadge{font-size:10px;font-weight:700;padding:4px 12px;border-radius:980px;background:rgba(48,209,88,.1);color:var(--green);border:1px solid rgba(48,209,88,.25)}
 .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .kch{font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .kcd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
@@ -3218,8 +3221,8 @@ h2.st{font-family:var(--font);font-size:clamp(32px,5vw,58px);font-weight:800;let
 .ftag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:980px;margin-top:14px;position:relative;z-index:1;letter-spacing:.03em;font-family:var(--body)}
 
 /* ── Stats ── */
-.stats-band{background:var(--bg2);border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);padding:80px 0;position:relative;overflow:hidden}
-.stats-band::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(79,142,247,.04),rgba(139,92,246,.04),transparent);animation:gradShift 8s ease-in-out infinite;background-size:200%}
+.stats-band{background:linear-gradient(135deg,rgba(90,140,255,0.06),rgba(168,85,247,0.06));border-top:1px solid rgba(90,140,255,0.12);border-bottom:1px solid rgba(90,140,255,0.12);padding:80px 0;position:relative;overflow:hidden}
+.stats-band::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(90,140,255,.04),rgba(168,85,247,.04),transparent);animation:gradShift 8s ease-in-out infinite;background-size:200%}
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--b1);border:1px solid var(--b1);border-radius:var(--r);overflow:hidden;max-width:900px;margin:0 auto}
 .stat-c{background:var(--bg3);padding:46px 28px;text-align:center}
 .stat-n{font-family:var(--font);font-size:clamp(42px,6vw,68px);font-weight:800;letter-spacing:-3px;line-height:1;margin-bottom:8px;animation:countUp .6s ease both}
@@ -3240,7 +3243,7 @@ h2.st{font-family:var(--font);font-size:clamp(32px,5vw,58px);font-weight:800;let
 .plan-g{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start}
 .plan{background:var(--bg3);border:1px solid var(--b2);border-radius:22px;padding:36px 32px;position:relative;transition:transform .3s,box-shadow .3s}
 .plan:hover{transform:translateY(-6px);box-shadow:0 28px 70px rgba(0,0,0,.5)}
-.plan.best{background:linear-gradient(180deg,rgba(79,142,247,.07) 0%,var(--bg3) 50%);border-color:rgba(79,142,247,.45)}
+.plan.best{background:linear-gradient(180deg,rgba(90,140,255,.07) 0%,var(--bg3) 50%);border-color:rgba(90,140,255,.45)}
 .plan.best::before{content:'';position:absolute;inset:0;border-radius:22px;padding:1px;background:var(--gb);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.5}
 .plan-badge-row{position:absolute;top:-1px;left:50%;transform:translateX(-50%)}
 .plan-badge{background:var(--gb);color:#fff;font-size:11px;font-weight:700;padding:5px 18px;border-radius:0 0 12px 12px;letter-spacing:.04em;font-family:var(--body)}
@@ -3252,16 +3255,16 @@ h2.st{font-family:var(--font);font-size:clamp(32px,5vw,58px);font-weight:800;let
 .plan-custom{font-family:var(--font);font-size:40px;font-weight:800;letter-spacing:-2px;color:var(--tx);line-height:1;margin-bottom:4px}
 .plan-period{font-size:12.5px;color:var(--tx3);margin-bottom:28px;font-family:var(--body)}
 .plan-cta{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 24px;border-radius:980px;font-size:15px;font-weight:700;text-decoration:none;font-family:var(--font);letter-spacing:-.3px;transition:all .25s;margin-bottom:28px}
-.plan-cta.fill{background:var(--gb);color:#fff;box-shadow:0 8px 28px rgba(79,142,247,.35)}
-.plan-cta.fill:hover{transform:scale(1.04);box-shadow:0 14px 44px rgba(79,142,247,.55)}
+.plan-cta.fill{background:var(--gb);color:#fff;box-shadow:0 8px 28px rgba(90,140,255,.35)}
+.plan-cta.fill:hover{transform:scale(1.04);box-shadow:0 14px 44px rgba(90,140,255,.55)}
 .plan-cta.out{background:transparent;color:var(--tx);border:1.5px solid var(--b3)}
 .plan-cta.out:hover{background:var(--s2);transform:scale(1.02)}
 .plan-div{height:1px;background:linear-gradient(90deg,transparent,var(--b2),transparent);margin-bottom:24px}
 .plan-fhead{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px;font-family:var(--body)}
 .plan-feats{list-style:none;display:flex;flex-direction:column;gap:11px}
 .plan-feats li{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--tx2);font-family:var(--body);line-height:1.5}
-.plan-feats li .ck{width:18px;height:18px;border-radius:50%;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:9px;color:var(--green)}
-.plan-note{margin-top:28px;padding:18px 20px;background:rgba(79,142,247,.05);border:1px solid rgba(79,142,247,.12);border-radius:14px;font-size:13px;color:var(--tx2);line-height:1.7;font-family:var(--body)}
+.plan-feats li .ck{width:18px;height:18px;border-radius:50%;background:rgba(48,209,88,.1);border:1px solid rgba(48,209,88,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:9px;color:var(--green)}
+.plan-note{margin-top:28px;padding:18px 20px;background:rgba(90,140,255,.05);border:1px solid rgba(90,140,255,.12);border-radius:14px;font-size:13px;color:var(--tx2);line-height:1.7;font-family:var(--body)}
 .plan-note b{color:var(--tx)}
 
 /* ── FAQ ── */
@@ -3272,7 +3275,7 @@ h2.st{font-family:var(--font);font-size:clamp(32px,5vw,58px);font-weight:800;let
 .faq-q .arr{font-size:18px;color:var(--tx3);transition:transform .3s;flex-shrink:0;margin-left:16px}
 .faq-a{padding:0 28px 22px;font-size:14px;color:var(--tx2);line-height:1.8;font-family:var(--body);display:none}
 .faq-i.open .faq-a{display:block}
-.faq-i.open .faq-q{background:rgba(79,142,247,.04)}
+.faq-i.open .faq-q{background:rgba(90,140,255,.04)}
 .faq-i.open .arr{transform:rotate(180deg);color:var(--blue)}
 
 /* ── Contact ── */
@@ -3289,9 +3292,9 @@ h2.st{font-family:var(--font);font-size:clamp(32px,5vw,58px);font-weight:800;let
 /* ── CTA Banner ── */
 .cta-band{padding:80px 24px}
 .cta-box{max-width:940px;margin:0 auto;position:relative;border-radius:28px;overflow:hidden;padding:72px 48px;text-align:center}
-.cta-box-bg{position:absolute;inset:0;background:linear-gradient(135deg,rgba(79,142,247,.1),rgba(139,92,246,.1),rgba(34,211,238,.07));animation:gradShift 8s ease-in-out infinite;background-size:300%}
-.cta-box-border{position:absolute;inset:0;border-radius:28px;border:1px solid rgba(79,142,247,.25)}
-.cta-box-border::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.8),rgba(139,92,246,.6),transparent)}
+.cta-box-bg{position:absolute;inset:0;background:linear-gradient(135deg,rgba(90,140,255,.1),rgba(168,85,247,.1),rgba(100,210,255,.07));animation:gradShift 8s ease-in-out infinite;background-size:300%}
+.cta-box-border{position:absolute;inset:0;border-radius:28px;border:1px solid rgba(90,140,255,.25)}
+.cta-box-border::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(90,140,255,.8),rgba(168,85,247,.6),transparent)}
 .cta-box-content{position:relative;z-index:1}
 .cta-box h2{font-family:var(--font);font-size:clamp(28px,5vw,52px);font-weight:800;letter-spacing:-2.5px;margin-bottom:16px;line-height:1.06}
 .cta-box p{font-size:17px;color:var(--tx2);max-width:500px;margin:0 auto 40px;line-height:1.75;font-family:var(--body)}
@@ -3402,22 +3405,22 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
           </div>
           <div class="kanban">
             <div>
-              <div class="kch"><div class="kcd" style="background:#526070"></div>Backlog</div>
-              <div class="kt"><div class="ktt">Performance testing suite</div><div class="km"><div class="kav" style="background:#d97706">DK</div><div class="kp" style="background:rgba(82,96,112,.2);color:#526070">Low</div></div></div>
+              <div class="kch"><div class="kcd" style="background:#636366"></div>Backlog</div>
+              <div class="kt"><div class="ktt">Performance testing suite</div><div class="km"><div class="kav" style="background:#d97706">DK</div><div class="kp" style="background:rgba(82,96,112,.2);color:#636366">Low</div></div></div>
             </div>
             <div>
-              <div class="kch"><div class="kcd" style="background:#4f8ef7"></div>In Progress</div>
-              <div class="kt"><div class="ktt">Product catalog UI</div><div class="km"><div class="kav" style="background:#8b5cf6">AC</div><div class="kp" style="background:rgba(251,191,36,.15);color:#fbbf24">Med</div></div></div>
-              <div class="kt"><div class="ktt">Inventory management</div><div class="km"><div class="kav" style="background:#4f8ef7">BM</div><div class="kp" style="background:rgba(244,114,182,.15);color:#f472b6">High</div></div></div>
+              <div class="kch"><div class="kcd" style="background:#5a8cff"></div>In Progress</div>
+              <div class="kt"><div class="ktt">Product catalog UI</div><div class="km"><div class="kav" style="background:#a855f7">AC</div><div class="kp" style="background:rgba(251,191,36,.15);color:#ffd60a">Med</div></div></div>
+              <div class="kt"><div class="ktt">Inventory management</div><div class="km"><div class="kav" style="background:#5a8cff">BM</div><div class="kp" style="background:rgba(236,72,153,.15);color:#ec4899">High</div></div></div>
             </div>
             <div>
-              <div class="kch"><div class="kcd" style="background:#fb923c"></div>Review</div>
-              <div class="kt"><div class="ktt">Payment gateway (Stripe)</div><div class="km"><div class="kav" style="background:#34d399">CS</div><div class="kp" style="background:rgba(244,114,182,.15);color:#f472b6">High</div></div></div>
+              <div class="kch"><div class="kcd" style="background:#ff9f0a"></div>Review</div>
+              <div class="kt"><div class="ktt">Payment gateway (Stripe)</div><div class="km"><div class="kav" style="background:#30d158">CS</div><div class="kp" style="background:rgba(236,72,153,.15);color:#ec4899">High</div></div></div>
             </div>
             <div>
-              <div class="kch"><div class="kcd" style="background:#34d399"></div>Done</div>
-              <div class="kt"><div class="ktt">Design system ✓</div><div class="km"><div class="kav" style="background:#f472b6">EW</div><div class="kp" style="background:rgba(52,211,153,.15);color:#34d399">Done</div></div></div>
-              <div class="kt"><div class="ktt">Auth API ✓</div><div class="km"><div class="kav" style="background:#8b5cf6">AC</div><div class="kp" style="background:rgba(52,211,153,.15);color:#34d399">Done</div></div></div>
+              <div class="kch"><div class="kcd" style="background:#30d158"></div>Done</div>
+              <div class="kt"><div class="ktt">Design system ✓</div><div class="km"><div class="kav" style="background:#ec4899">EW</div><div class="kp" style="background:rgba(48,209,88,.15);color:#30d158">Done</div></div></div>
+              <div class="kt"><div class="ktt">Auth API ✓</div><div class="km"><div class="kav" style="background:#a855f7">AC</div><div class="kp" style="background:rgba(48,209,88,.15);color:#30d158">Done</div></div></div>
             </div>
           </div>
         </div>
@@ -3433,18 +3436,18 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
     <h2 class="st">Everything your team needs.<br/><span class="gt2">All 12 modules included.</span></h2>
     <p class="ssub">Every feature is designed to work together — tasks connect to projects, messages stay in context, and your AI assistant knows your entire workspace.</p>
     <div class="feat-g">
-      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.2)">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress tracking, target dates and priority management.</p><div class="ftag" style="background:rgba(79,142,247,.1);color:#4f8ef7;border:1px solid rgba(79,142,247,.2)">Core</div></div>
-      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.2)">✅</div><h3>Smart Kanban Board</h3><p>Custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders.</p><div class="ftag" style="background:rgba(139,92,246,.1);color:#8b5cf6;border:1px solid rgba(139,92,246,.2)">Core</div></div>
-      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.2)">🤖</div><h3>Claude AI Assistant</h3><p>Create tasks, generate EOD reports, update statuses and query your workspace in plain English.</p><div class="ftag" style="background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)">AI-Powered</div></div>
-      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.2)">💬</div><h3>Direct Messages</h3><p>Private 1-to-1 messaging with real-time online presence, unread badges and message history.</p><div class="ftag" style="background:rgba(34,211,238,.1);color:#22d3ee;border:1px solid rgba(34,211,238,.2)">Real-time</div></div>
-      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2)">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication — no scattered threads.</p><div class="ftag" style="background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)">Collaboration</div></div>
-      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(244,114,182,.12);border:1px solid rgba(244,114,182,.2)">🎫</div><h3>Support Tickets</h3><p>Bug reports, feature requests, priority levels, assignee tracking, status workflows and team filtering.</p><div class="ftag" style="background:rgba(244,114,182,.1);color:#f472b6;border:1px solid rgba(244,114,182,.2)">Support</div></div>
-      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.2)">📅</div><h3>Gantt Timeline</h3><p>Visual timeline to plan project schedules, track milestones and spot overlapping workloads.</p><div class="ftag" style="background:rgba(251,146,60,.1);color:#fb923c;border:1px solid rgba(251,146,60,.2)">Planning</div></div>
-      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.2)">📊</div><h3>Developer Productivity</h3><p>Team velocity, blocked work, sprint performance and individual contribution breakdowns.</p><div class="ftag" style="background:rgba(79,142,247,.1);color:#4f8ef7;border:1px solid rgba(79,142,247,.2)">Analytics</div></div>
-      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.2)">🔔</div><h3>Push Notifications</h3><p>Desktop notifications for assignments, comments, DMs and time-based reminders — even when minimised.</p><div class="ftag" style="background:rgba(139,92,246,.1);color:#8b5cf6;border:1px solid rgba(139,92,246,.2)">Notifications</div></div>
-      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.2)">📹</div><h3>Instant Meet (WebRTC)</h3><p>Launch instant video meetings, invite team members and collaborate without leaving VEWIT.</p><div class="ftag" style="background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)">Meetings</div></div>
-      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.2)">🏢</div><h3>Multi-Workspace</h3><p>Separate workspaces for different companies or clients — each isolated with its own team and settings.</p><div class="ftag" style="background:rgba(34,211,238,.1);color:#22d3ee;border:1px solid rgba(34,211,238,.2)">Enterprise</div></div>
-      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2)">🔐</div><h3>Security &amp; Access Control</h3><p>6 role types, bcrypt passwords, Google Authenticator TOTP 2FA and workspace-isolated data.</p><div class="ftag" style="background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)">Security</div></div>
+      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">📋</div><h3>Project Management</h3><p>Multi-project workspaces with team assignments, progress tracking, target dates and priority management.</p><div class="ftag" style="background:rgba(90,140,255,.1);color:#5a8cff;border:1px solid rgba(90,140,255,.2)">Core</div></div>
+      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">✅</div><h3>Smart Kanban Board</h3><p>Custom stages, story points, sprint planning, subtasks, file attachments, comments and due date reminders.</p><div class="ftag" style="background:rgba(168,85,247,.1);color:#a855f7;border:1px solid rgba(168,85,247,.2)">Core</div></div>
+      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">🤖</div><h3>Claude AI Assistant</h3><p>Create tasks, generate EOD reports, update statuses and query your workspace in plain English.</p><div class="ftag" style="background:rgba(48,209,88,.1);color:#30d158;border:1px solid rgba(48,209,88,.2)">AI-Powered</div></div>
+      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(100,210,255,.12);border:1px solid rgba(100,210,255,.2)">💬</div><h3>Direct Messages</h3><p>Private 1-to-1 messaging with real-time online presence, unread badges and message history.</p><div class="ftag" style="background:rgba(100,210,255,.1);color:#64d2ff;border:1px solid rgba(100,210,255,.2)">Real-time</div></div>
+      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2)">#️⃣</div><h3>Project Channels</h3><p>Dedicated message channels per project for focused team communication — no scattered threads.</p><div class="ftag" style="background:rgba(251,191,36,.1);color:#ffd60a;border:1px solid rgba(251,191,36,.2)">Collaboration</div></div>
+      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(236,72,153,.12);border:1px solid rgba(236,72,153,.2)">🎫</div><h3>Support Tickets</h3><p>Bug reports, feature requests, priority levels, assignee tracking, status workflows and team filtering.</p><div class="ftag" style="background:rgba(236,72,153,.1);color:#ec4899;border:1px solid rgba(236,72,153,.2)">Support</div></div>
+      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.2)">📅</div><h3>Gantt Timeline</h3><p>Visual timeline to plan project schedules, track milestones and spot overlapping workloads.</p><div class="ftag" style="background:rgba(255,159,10,.1);color:#ff9f0a;border:1px solid rgba(255,159,10,.2)">Planning</div></div>
+      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">📊</div><h3>Developer Productivity</h3><p>Team velocity, blocked work, sprint performance and individual contribution breakdowns.</p><div class="ftag" style="background:rgba(90,140,255,.1);color:#5a8cff;border:1px solid rgba(90,140,255,.2)">Analytics</div></div>
+      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">🔔</div><h3>Push Notifications</h3><p>Desktop notifications for assignments, comments, DMs and time-based reminders — even when minimised.</p><div class="ftag" style="background:rgba(168,85,247,.1);color:#a855f7;border:1px solid rgba(168,85,247,.2)">Notifications</div></div>
+      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">📹</div><h3>Instant Meet (WebRTC)</h3><p>Launch instant video meetings, invite team members and collaborate without leaving VEWIT.</p><div class="ftag" style="background:rgba(48,209,88,.1);color:#30d158;border:1px solid rgba(48,209,88,.2)">Meetings</div></div>
+      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(100,210,255,.12);border:1px solid rgba(100,210,255,.2)">🏢</div><h3>Multi-Workspace</h3><p>Separate workspaces for different companies or clients — each isolated with its own team and settings.</p><div class="ftag" style="background:rgba(100,210,255,.1);color:#64d2ff;border:1px solid rgba(100,210,255,.2)">Enterprise</div></div>
+      <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2)">🔐</div><h3>Security &amp; Access Control</h3><p>6 role types, bcrypt passwords, Google Authenticator TOTP 2FA and workspace-isolated data.</p><div class="ftag" style="background:rgba(251,191,36,.1);color:#ffd60a;border:1px solid rgba(251,191,36,.2)">Security</div></div>
     </div>
   </div>
 </section>
@@ -3468,9 +3471,9 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
     <h2 class="st">Loved by teams who <span class="gt2">ship fast.</span></h2>
     <p class="ssub">From early-stage startups to growing engineering orgs — what people say about replacing Jira, Slack and Linear with VEWIT.</p>
     <div class="tg">
-      <div class="tc reveal stagger-1"><div class="tc-stars">★★★★★</div><p class="tc-text">"We replaced Jira and Slack with VEWIT in one afternoon. The AI assistant saves us 2–3 hours per week — it generates our EOD reports automatically."</p><div class="tc-author"><div class="tc-av" style="background:linear-gradient(135deg,#8b5cf6,#4f8ef7)">PR</div><div><div class="tc-name">Priya R.</div><div class="tc-role">Engineering Manager · Fintech</div></div></div></div>
-      <div class="tc reveal stagger-2"><div class="tc-stars">★★★★★</div><p class="tc-text">"The Kanban board with sprint planning is exactly what a dev team needs. Story points, subtasks, file attachments — everything in one clean dark view."</p><div class="tc-author"><div class="tc-av" style="background:linear-gradient(135deg,#34d399,#22d3ee)">SK</div><div><div class="tc-name">Suresh K.</div><div class="tc-role">CTO · SaaS company</div></div></div></div>
-      <div class="tc reveal stagger-3"><div class="tc-stars">★★★★★</div><p class="tc-text">"The support ticket system and DMs work seamlessly together. Our team stays in the loop without any context-switching. Multi-workspace is a game changer."</p><div class="tc-author"><div class="tc-av" style="background:linear-gradient(135deg,#f472b6,#fb923c)">AM</div><div><div class="tc-name">Anika M.</div><div class="tc-role">Product Lead · E-commerce</div></div></div></div>
+      <div class="tc reveal stagger-1"><div class="tc-stars">★★★★★</div><p class="tc-text">"We replaced Jira and Slack with VEWIT in one afternoon. The AI assistant saves us 2–3 hours per week — it generates our EOD reports automatically."</p><div class="tc-author"><div class="tc-av" style="background:linear-gradient(135deg,#a855f7,#5a8cff)">PR</div><div><div class="tc-name">Priya R.</div><div class="tc-role">Engineering Manager · Fintech</div></div></div></div>
+      <div class="tc reveal stagger-2"><div class="tc-stars">★★★★★</div><p class="tc-text">"The Kanban board with sprint planning is exactly what a dev team needs. Story points, subtasks, file attachments — everything in one clean dark view."</p><div class="tc-author"><div class="tc-av" style="background:linear-gradient(135deg,#30d158,#64d2ff)">SK</div><div><div class="tc-name">Suresh K.</div><div class="tc-role">CTO · SaaS company</div></div></div></div>
+      <div class="tc reveal stagger-3"><div class="tc-stars">★★★★★</div><p class="tc-text">"The support ticket system and DMs work seamlessly together. Our team stays in the loop without any context-switching. Multi-workspace is a game changer."</p><div class="tc-author"><div class="tc-av" style="background:linear-gradient(135deg,#ec4899,#ff9f0a)">AM</div><div><div class="tc-name">Anika M.</div><div class="tc-role">Product Lead · E-commerce</div></div></div></div>
     </div>
   </div>
 </section>
@@ -3586,9 +3589,9 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
     <h2 class="st">We're here to help.</h2>
     <p class="ssub" style="margin-bottom:0">Have a question, need onboarding help or want to explore an Enterprise deal? Reach out — we respond fast.</p>
     <div class="contact-g">
-      <div class="cc reveal stagger-1"><div class="cc-icon" style="background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.2)">🤝</div><h3>Sales &amp; CEO</h3><p>Enterprise pricing, volume deals, custom contracts and strategic partnership discussions.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
-      <div class="cc reveal stagger-2"><div class="cc-icon" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding, API questions and general product support.</p><a href="mailto:support@vewit.in">support@vewit.in →</a></div>
-      <div class="cc reveal stagger-3"><div class="cc-icon" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we'd love to hear from you.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
+      <div class="cc reveal stagger-1"><div class="cc-icon" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">🤝</div><h3>Sales &amp; CEO</h3><p>Enterprise pricing, volume deals, custom contracts and strategic partnership discussions.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
+      <div class="cc reveal stagger-2"><div class="cc-icon" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding, API questions and general product support.</p><a href="mailto:support@vewit.in">support@vewit.in →</a></div>
+      <div class="cc reveal stagger-3"><div class="cc-icon" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we'd love to hear from you.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
     </div>
   </div>
 </section>
@@ -3676,7 +3679,7 @@ ABOUT_HTML = """<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#070b13;--bg2:#0c1220;--bg3:#111927;--b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);--s1:rgba(255,255,255,.04);--s2:rgba(255,255,255,.07);--tx:#eef2ff;--tx2:#a8b8d0;--tx3:#526070;--blue:#4f8ef7;--green:#34d399;--gb:linear-gradient(135deg,#4f8ef7,#8b5cf6);--font:'Bricolage Grotesque',system-ui,sans-serif;--body:'Inter',system-ui,sans-serif}
+:root{--bg:#06040f;--bg2:#0a0618;--bg3:#0f0a1e;--b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);--s1:rgba(255,255,255,.04);--s2:rgba(255,255,255,.07);--tx:#f5f5f7;--tx2:#aeaeb2;--tx3:#636366;--blue:#5a8cff;--green:#30d158;--gb:linear-gradient(135deg,#5a8cff,#a855f7);--font:'Bricolage Grotesque',system-ui,sans-serif;--body:'Inter',system-ui,sans-serif}
 html{scroll-behavior:smooth}body{font-family:var(--body);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
 @keyframes gradShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
@@ -3685,7 +3688,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:500;height:60px;display:flex;ali
 .nls{display:flex;gap:28px}.nls a{color:var(--tx2);font-size:13.5px;text-decoration:none;transition:color .2s}.nls a:hover,.nls a.cur{color:var(--tx)}
 .ngo{background:var(--gb);color:#fff;font-size:13.5px;font-weight:700;text-decoration:none;padding:8px 20px;border-radius:980px;font-family:var(--font);transition:opacity .2s}.ngo:hover{opacity:.88}
 .hero{padding:150px 24px 80px;text-align:center;position:relative;overflow:hidden;animation:fadeUp .7s ease both}
-.hero::before{content:'';position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:800px;height:600px;background:radial-gradient(ellipse,rgba(79,142,247,.1) 0%,transparent 70%);pointer-events:none}
+.hero::before{content:'';position:absolute;top:-100px;left:50%;transform:translateX(-50%);width:800px;height:600px;background:radial-gradient(ellipse,rgba(90,140,255,.1) 0%,transparent 70%);pointer-events:none}
 h1.ph{font-family:var(--font);font-size:clamp(40px,7vw,80px);font-weight:800;letter-spacing:-3.5px;line-height:1.05;margin-bottom:20px;position:relative;z-index:1}
 .gt{background:var(--gb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .ph-sub{font-size:18px;color:var(--tx2);max-width:580px;margin:0 auto;line-height:1.75;position:relative;z-index:1}
@@ -3718,13 +3721,13 @@ h1.ph{font-family:var(--font);font-size:clamp(40px,7vw,80px);font-weight:800;let
 .cc p{font-size:13px;color:var(--tx3);line-height:1.65;margin-bottom:14px}
 .cc a{font-size:14px;font-weight:700;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:5px;transition:opacity .2s}
 .cc a:hover{opacity:.75}
-.cta-box{background:linear-gradient(135deg,rgba(79,142,247,.08),rgba(139,92,246,.06));border:1px solid rgba(79,142,247,.2);border-radius:24px;padding:60px;text-align:center;margin-top:60px;position:relative;overflow:hidden}
-.cta-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(79,142,247,.6),transparent)}
+.cta-box{background:linear-gradient(135deg,rgba(90,140,255,.08),rgba(168,85,247,.06));border:1px solid rgba(90,140,255,.2);border-radius:24px;padding:60px;text-align:center;margin-top:60px;position:relative;overflow:hidden}
+.cta-box::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(90,140,255,.6),transparent)}
 .cta-box h2{font-family:var(--font);font-size:clamp(26px,4vw,42px);font-weight:800;letter-spacing:-2px;margin-bottom:12px}
 .cta-box p{font-size:16px;color:var(--tx2);max-width:440px;margin:0 auto 32px;line-height:1.75}
 .cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
-.cm{background:var(--gb);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:980px;font-family:var(--font);box-shadow:0 8px 24px rgba(79,142,247,.3);transition:all .25s}
-.cm:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(79,142,247,.45)}
+.cm{background:var(--gb);color:#fff;font-size:15px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:980px;font-family:var(--font);box-shadow:0 8px 24px rgba(90,140,255,.3);transition:all .25s}
+.cm:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(90,140,255,.45)}
 .co{color:var(--tx);font-size:15px;font-weight:600;text-decoration:none;padding:13px 24px;border-radius:980px;border:1.5px solid rgba(255,255,255,.2);font-family:var(--font);transition:background .2s}
 .co:hover{background:var(--s2)}
 .reveal{opacity:0;transform:translateY(28px);transition:opacity .65s ease,transform .65s ease}
@@ -3803,9 +3806,9 @@ footer a:hover{color:var(--blue)}
     <h2>Get in touch</h2>
     <p>Whether you need support, want to explore Enterprise pricing or just have a question — we'd love to hear from you.</p>
     <div class="cg">
-      <div class="cc"><div class="ico" style="background:rgba(79,142,247,.12);border:1px solid rgba(79,142,247,.2)">🤝</div><h3>CEO &amp; Sales</h3><p>Enterprise pricing, partnerships, custom contracts and strategic discussions.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
-      <div class="cc"><div class="ico" style="background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding help, API questions and product support.</p><a href="mailto:support@vewit.in">support@vewit.in →</a></div>
-      <div class="cc"><div class="ico" style="background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we respond to every message.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
+      <div class="cc"><div class="ico" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">🤝</div><h3>CEO &amp; Sales</h3><p>Enterprise pricing, partnerships, custom contracts and strategic discussions.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
+      <div class="cc"><div class="ico" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding help, API questions and product support.</p><a href="mailto:support@vewit.in">support@vewit.in →</a></div>
+      <div class="cc"><div class="ico" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we respond to every message.</p><a href="mailto:ceo@vewit.in">ceo@vewit.in →</a></div>
     </div>
   </div>
   <div class="cta-box reveal">
@@ -4946,7 +4949,7 @@ function AuthScreen({onLogin}){
                 <span style=${{width:17,height:17,border:'2.5px solid rgba(255,255,255,0.25)',borderTopColor:'#fff',borderRadius:'50%',animation:'ap-spin 0.7s linear infinite',display:'inline-block'}}></span>
                 <span>Please wait…</span>
               </span>`
-              :html`<span>${tab==='login'?'Sign In':'regMode'==='create'?'Create Workspace':'Join Workspace'} →</span>`}
+              :html`<span>${tab==='login'?'Sign In':regMode==='create'?'Create Workspace':'Join Workspace'} →</span>`}
           </button>
         </div>
 
