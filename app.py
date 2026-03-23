@@ -10221,8 +10221,10 @@ function TimesheetView({cu,teams,users,projects,tasks}){
   const [busy,setBusy]=useState(false);
 
   // ── Form state
+  // Use local date to avoid UTC offset issues (e.g. IST = UTC+5:30 shows yesterday at midnight)
+  const localToday=()=>{const d=new Date();const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const dy=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dy;};
   const blankForm=()=>({
-    date:new Date().toISOString().slice(0,10),
+    date:localToday(),
     tab:'project',
     project_id:'',task_id:'',task_name:'',
     hours:'',minutes:'',comments:''
@@ -10235,7 +10237,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
 
   // ── Filter state
   const [filterMode,setFilterMode]=useState('week');
-  const [filterMonth,setFilterMonth]=useState(new Date().toISOString().slice(0,7));
+  const [filterMonth,setFilterMonth]=useState(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');});
   const [filterFrom,setFilterFrom]=useState('');
   const [filterTo,setFilterTo]=useState('');
   const [filterUser,setFilterUser]=useState('');
@@ -10247,11 +10249,18 @@ function TimesheetView({cu,teams,users,projects,tasks}){
   const [saveMsg,setSaveMsg]=useState('');
 
   // ── Derived
-  const myProjects=useMemo(()=>safe(projects),[projects]);
+  // Exclude fully-completed projects and completed/backlog tasks from the log form
+  const ACTIVE_STAGES=new Set(['planning','development','code_review','testing','uat','release','production','blocked']);
+  const activeTasks=useMemo(()=>safe(tasks).filter(t=>ACTIVE_STAGES.has(t.stage)||!t.stage),[tasks]);
+  const myProjects=useMemo(()=>{
+    // Only show projects that have at least one active (non-completed) task
+    const projectsWithActive=new Set(activeTasks.map(t=>t.project));
+    return safe(projects).filter(p=>projectsWithActive.has(p.id));
+  },[projects,activeTasks]);
   const tasksForProject=useMemo(()=>{
     if(!form.project_id)return[];
-    return safe(tasks).filter(t=>t.project===form.project_id);
-  },[tasks,form.project_id]);
+    return activeTasks.filter(t=>t.project===form.project_id);
+  },[activeTasks,form.project_id]);
 
   // ── Load logs + policy together
   const load=async()=>{
@@ -10323,17 +10332,23 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     const h=Number(form.hours||0),m=Number(form.minutes||0);
     if(!h&&!m)return setSaveMsg('⚠ Enter at least 1 minute');
     setBusy(true);
-    let payload={...form,hours:h,minutes:Math.min(59,m)};
+    // Strip UI-only 'tab' field — not stored in DB
+    const {tab:_tab,...formData}=form;
+    let payload={...formData,hours:h,minutes:Math.min(59,m)};
     if(form.tab==='project'){
       const t=safe(tasks).find(t=>t.id===form.task_id);
       payload.task_name=t?t.title:form.task_id;
     }
-    await api.post('/api/timelogs',payload);
-    setForm(blankForm());
-    setShowForm(false);
-    setSaveMsg('✓ Hours logged!');
-    setTimeout(()=>setSaveMsg(''),3000);
-    await load();
+    const res=await api.post('/api/timelogs',payload);
+    if(res&&res.id){
+      setForm(blankForm());
+      setShowForm(false);
+      setSaveMsg('✓ Hours logged!');
+      setTimeout(()=>setSaveMsg(''),3000);
+      await load();   // re-fetch so new entry appears immediately in filtered list
+    } else {
+      setSaveMsg('⚠ Save failed — please retry');
+    }
     setBusy(false);
   };
 
@@ -10373,21 +10388,15 @@ function TimesheetView({cu,teams,users,projects,tasks}){
 
   return html`<div style=${{padding:'0 0 60px'}}>
 
-    <!-- Header -->
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:20}}>
-      <div>
-        <h2 style=${{fontSize:20,fontWeight:800,color:'var(--tx)',margin:0,letterSpacing:'-0.5px'}}>⏱ Timesheet</h2>
-        <p style=${{fontSize:12,color:'var(--tx3)',margin:'3px 0 0'}}>Log daily hours · export reports · track productivity</p>
-      </div>
-      <div style=${{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-        ${saveMsg?html`<span style=${{fontSize:12,color:saveMsg.startsWith('⚠')?'#ef4444':'#22c55e',fontWeight:600}}>${saveMsg}</span>`:null}
-        <button class="btn bg" style=${{fontSize:12,padding:'7px 14px',display:'flex',alignItems:'center',gap:5}} onClick=${downloadCSV} title="Export filtered entries">
-          ⬇ CSV ${filtered.length?html`<span style=${{fontSize:10,background:'var(--ac)',color:'var(--ac-tx)',borderRadius:100,padding:'1px 6px',fontWeight:700}}>${filtered.length}</span>`:null}
-        </button>
-        <button class="btn bp" style=${{fontSize:12,padding:'7px 16px'}} onClick=${()=>{setShowForm(v=>!v);setSaveMsg('');}}>
-          ${showForm?'✕ Close':'+ Log Hours'}
-        </button>
-      </div>
+    <!-- Action bar — title already shown by global Header -->
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'flex-end',flexWrap:'wrap',gap:8,marginBottom:20}}>
+      ${saveMsg?html`<span style=${{fontSize:12,color:saveMsg.startsWith('⚠')?'#ef4444':'#22c55e',fontWeight:600,marginRight:4}}>${saveMsg}</span>`:null}
+      <button class="btn bg" style=${{fontSize:12,padding:'7px 14px',display:'flex',alignItems:'center',gap:5}} onClick=${downloadCSV} title="Export filtered entries as CSV">
+        ⬇ CSV ${filtered.length?html`<span style=${{fontSize:10,background:'var(--ac)',color:'var(--ac-tx)',borderRadius:100,padding:'1px 6px',fontWeight:700}}>${filtered.length}</span>`:null}
+      </button>
+      <button class="btn bp" style=${{fontSize:12,padding:'7px 16px'}} onClick=${()=>{setShowForm(v=>!v);setSaveMsg('');}}>
+        ${showForm?'✕ Close':'+ Log Hours'}
+      </button>
     </div>
 
     <!-- Log Hours Form -->
