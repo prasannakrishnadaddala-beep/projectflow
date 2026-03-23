@@ -6902,12 +6902,35 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
     });
   },[filtered,sortCol,sortDir,users]);
 
-  const saveT=async p=>{let r;if(p.id&&safe(tasks).find(t=>t.id===p.id))r=await api.put('/api/tasks/'+p.id,p);else r=await api.post('/api/tasks',p);reload();return r;};
+  const [celebTask,setCelebTask]=useState(null);
+  const _celebTimeout=useRef(null);
+  const triggerTaskCelebration=(taskTitle,taskProjectId)=>{
+    // Show task celebration
+    setCelebTask({title:taskTitle,projectId:taskProjectId});
+    if(_celebTimeout.current)clearTimeout(_celebTimeout.current);
+    _celebTimeout.current=setTimeout(()=>setCelebTask(null),4000);
+  };
+  const saveT=async p=>{
+    let r;
+    if(p.id&&safe(tasks).find(t=>t.id===p.id))r=await api.put('/api/tasks/'+p.id,p);
+    else r=await api.post('/api/tasks',p);
+    // Trigger celebration if task just completed
+    if(p.stage==='completed'||p.stage==='production'){
+      const tTitle=p.title||(safe(tasks).find(t=>t.id===p.id)||{}).title||'Task';
+      triggerTaskCelebration(tTitle,p.project);
+    }
+    reload();return r;
+  };
   const delT=async id=>{await api.del('/api/tasks/'+id);reload();};
   const quickStage=async(tid,stage)=>{
     const autoPct=STAGE_PCT[stage];
     const payload={stage};
     if(autoPct!==null&&autoPct!==undefined)payload.pct=autoPct;
+    // Celebration for quick stage change
+    if(stage==='completed'||stage==='production'){
+      const tk=safe(tasks).find(t=>t.id===tid);
+      if(tk)triggerTaskCelebration(tk.title,tk.project);
+    }
     await api.put('/api/tasks/'+tid,payload);reload();
   };
 
@@ -6925,6 +6948,18 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
 
   return html`
     <div class="fi" style=${{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
+    ${celebTask?html`
+    <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}}
+      onClick=${()=>setCelebTask(null)}>
+      <div style=${{background:'var(--sf)',borderRadius:24,padding:'36px 44px',textAlign:'center',boxShadow:'0 24px 80px rgba(0,0,0,.4)',border:'1px solid var(--bd)',maxWidth:360,animation:'vwBoot-up .4s ease both'}}>
+        <div style=${{fontSize:52,marginBottom:10}}>🎉</div>
+        <div style=${{fontSize:20,fontWeight:800,color:'var(--tx)',marginBottom:8}}>Task Completed!</div>
+        <div style=${{fontSize:13,color:'var(--tx2)',fontWeight:600,maxWidth:280,margin:'0 auto 16px',wordBreak:'break-word'}}>${celebTask.title}</div>
+        <div style=${{display:'flex',gap:8,justifyContent:'center',fontSize:22}}>
+          ${['⭐','✨','🏅','🔥','💪','🎊'].map((e,i)=>html`<span key=${i}>${e}</span>`)}
+        </div>
+      </div>
+    </div>`:null}
       <div style=${{padding:'8px 18px',borderBottom:'1px solid var(--bd)',background:'var(--sf)',flexShrink:0}}>
         <div style=${{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           <div style=${{position:'relative',flex:'1 1 160px',minWidth:130}}>
@@ -10390,25 +10425,23 @@ function TimesheetView({cu,teams,users,projects,tasks}){
   const isAdmin=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const [logs,setLogs]=useState([]);
   const [busy,setBusy]=useState(false);
+  const [loading,setLoading]=useState(true);
+
+  // ── Local date helper
+  const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+  const localMonth=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');};
 
   // ── Form state
-  // Use local date to avoid UTC offset issues (e.g. IST = UTC+5:30 shows yesterday at midnight)
-  const localToday=()=>{const d=new Date();const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const dy=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dy;};
-  const blankForm=()=>({
-    date:localToday(),
-    tab:'project',
-    project_id:'',task_id:'',task_name:'',
-    hours:'',minutes:'',comments:''
-  });
+  const blankForm=()=>({date:localToday(),tab:'project',project_id:'',task_id:'',task_name:'',hours:'',minutes:'',comments:''});
   const [form,setForm]=useState(blankForm());
 
-  // ── Inline edit state
+  // ── Inline edit
   const [editId,setEditId]=useState(null);
   const [editForm,setEditForm]=useState({hours:'',minutes:'',comments:''});
 
-  // ── Filter state
-  const [filterMode,setFilterMode]=useState('week');
-  const [filterMonth,setFilterMonth]=useState(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');});
+  // ── Filter state — Today/Yesterday/Week/Month/Custom
+  const [filterMode,setFilterMode]=useState('today');
+  const [filterMonth,setFilterMonth]=useState(localMonth());
   const [filterFrom,setFilterFrom]=useState('');
   const [filterTo,setFilterTo]=useState('');
   const [filterUser,setFilterUser]=useState('');
@@ -10419,47 +10452,71 @@ function TimesheetView({cu,teams,users,projects,tasks}){
   const [showForm,setShowForm]=useState(false);
   const [saveMsg,setSaveMsg]=useState('');
 
-  // ── Derived
-  // Exclude fully-completed projects and completed/backlog tasks from the log form
+  // ── Celebration state
+  const [celebration,setCelebration]=useState(null); // {type:'task'|'project', name:'...'}
+
+  // ── Festival detection
+  const FESTIVALS={
+    '01-14':'🪁 Makar Sankranti','01-26':'🇮🇳 Republic Day',
+    '03-22':'🌸 Ugadi','04-14':'🌺 Tamil New Year',
+    '08-15':'🇮🇳 Independence Day','10-02':'🙏 Gandhi Jayanti',
+    '10-20':'🪔 Diwali','11-01':'🎊 Kannada Rajyotsava',
+  };
+  const todayKey=(()=>{const d=new Date();return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+  const todayFestival=FESTIVALS[todayKey]||null;
+
+  // ── Projects/tasks — exclude completed
   const ACTIVE_STAGES=new Set(['planning','development','code_review','testing','uat','release','production','blocked']);
   const activeTasks=useMemo(()=>safe(tasks).filter(t=>ACTIVE_STAGES.has(t.stage)||!t.stage),[tasks]);
   const myProjects=useMemo(()=>{
-    // Only show projects that have at least one active (non-completed) task
-    const projectsWithActive=new Set(activeTasks.map(t=>t.project));
-    return safe(projects).filter(p=>projectsWithActive.has(p.id));
+    const pids=new Set(activeTasks.map(t=>t.project));
+    return safe(projects).filter(p=>pids.has(p.id));
   },[projects,activeTasks]);
   const tasksForProject=useMemo(()=>{
     if(!form.project_id)return[];
     return activeTasks.filter(t=>t.project===form.project_id);
   },[activeTasks,form.project_id]);
 
-  // ── Load logs + policy together
-  const load=async()=>{
+  // ── Load — called on mount, on focus, after saves
+  const load=useCallback(async()=>{
     const [d,h]=await Promise.all([api.get('/api/timelogs'),api.get('/api/timelogs/required-hours')]);
-    if(Array.isArray(d))setLogs(d);
-    // Fix: always sync requiredHrs from server so "Active: Xh/day" updates after Save
+    if(Array.isArray(d)){setLogs(d);setLoading(false);}
     const hrs=Number((h&&h.hours!=null)?h.hours:8);
-    setRequiredHrs(hrs);
-    setAdminHrsInput(String(hrs));
-  };
-  // On first mount, ensure DB columns exist (handles old deployed databases)
+    setRequiredHrs(hrs);setAdminHrsInput(String(hrs));
+  },[]);
+
+  // Mount: setup schema → then load immediately
   useEffect(()=>{
     api.post('/api/timelogs/setup',{}).finally(()=>load());
   },[]);
 
-  // ── Filter — local date parse avoids UTC offset bug
+  // Refresh when user returns to tab (focus event)
+  useEffect(()=>{
+    const onFocus=()=>load();
+    window.addEventListener('focus',onFocus);
+    return()=>window.removeEventListener('focus',onFocus);
+  },[load]);
+
+  // ── Filter logic — Today / Yesterday / This Week / Month / Custom
   const filtered=useMemo(()=>{
-    const toLocal=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
     const now=new Date();
+    const toLocal=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    const todayD=toLocal(now);
     let fromD=null,toD=null;
-    if(filterMode==='week'){
-      const sun=new Date(now);sun.setDate(now.getDate()-now.getDay());
+
+    if(filterMode==='today'){
+      fromD=todayD; toD=todayD;
+    } else if(filterMode==='yesterday'){
+      const y=new Date(now); y.setDate(now.getDate()-1);
+      fromD=toLocal(y); toD=toLocal(y);
+    } else if(filterMode==='week'){
+      const sun=new Date(now); sun.setDate(now.getDate()-now.getDay());
       fromD=toLocal(sun);
-      const sat=new Date(sun);sat.setDate(sun.getDate()+6);
+      const sat=new Date(sun); sat.setDate(sun.getDate()+6);
       toD=toLocal(sat);
     } else if(filterMode==='month'){
       const [yr,mo]=filterMonth.split('-').map(Number);
-      fromD=new Date(yr,mo-1,1);toD=new Date(yr,mo,0);
+      fromD=new Date(yr,mo-1,1); toD=new Date(yr,mo,0);
     } else {
       fromD=filterFrom?toLocal(new Date(filterFrom)):null;
       toD=filterTo?toLocal(new Date(filterTo)):null;
@@ -10474,7 +10531,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     });
   },[logs,filterMode,filterMonth,filterFrom,filterTo,filterUser]);
 
-  // ── Aggregations — normalize hours + minutes properly
+  // ── Aggregations
   const toHrs=l=>Number(l.hours||0)+(Number(l.minutes||0)/60);
   const totalHrs=filtered.reduce((s,l)=>s+toHrs(l),0);
   const byUser=useMemo(()=>{
@@ -10487,46 +10544,56 @@ function TimesheetView({cu,teams,users,projects,tasks}){
   },[filtered]);
 
   // ── Helpers
-  // Fix: fmtHrs correctly handles hours+minutes — no more "030 min" bug
-  const fmtHrs=h=>{
-    h=Math.max(0,h);
-    const wh=Math.floor(h);
-    const wm=Math.round((h-wh)*60);
-    if(wh>0&&wm>0)return wh+'h '+wm+'m';
-    if(wh>0)return wh+'h';
-    if(wm>0)return wm+'m';
-    return '0m';
-  };
+  const fmtHrs=h=>{h=Math.max(0,h);const wh=Math.floor(h);const wm=Math.round((h-wh)*60);if(wh>0&&wm>0)return wh+'h '+wm+'m';if(wh>0)return wh+'h';if(wm>0)return wm+'m';return '0m';};
   const projName=id=>{const p=safe(projects).find(p=>p.id===id);return p?p.name:'';};
 
-  // ── Save new log
+  // ── Celebration trigger
+  const triggerCelebration=(type,name)=>{
+    setCelebration({type,name});
+    setTimeout(()=>setCelebration(null),4000);
+  };
+
+  // ── Check if project is fully complete after a task save
+  const checkProjectCompletion=(projectId,allTasks)=>{
+    const pt=safe(allTasks).filter(t=>t.project===projectId);
+    if(pt.length>0&&pt.every(t=>t.stage==='completed')){
+      const p=safe(projects).find(p=>p.id===projectId);
+      triggerCelebration('project',p?p.name:'Project');
+    }
+  };
+
+  // ── Save new log (optimistic update)
   const handleSave=async()=>{
     if(form.tab==='project'&&!form.task_id)return setSaveMsg('⚠ Select a task');
     if(form.tab==='manual'&&!form.task_name.trim())return setSaveMsg('⚠ Enter task name');
     const h=Number(form.hours||0),m=Number(form.minutes||0);
     if(!h&&!m)return setSaveMsg('⚠ Enter at least 1 minute');
     setBusy(true);
-    // Strip UI-only 'tab' field — not stored in DB
     const {tab:_tab,...formData}=form;
     let payload={...formData,hours:h,minutes:Math.min(59,m)};
     if(form.tab==='project'){
       const t=safe(tasks).find(t=>t.id===form.task_id);
       payload.task_name=t?t.title:form.task_id;
     }
+    // Optimistic — add to local list immediately
+    const tempId='tmp_'+Date.now();
+    const optimisticEntry={...payload,id:tempId,user_id:cu.id,user_name:cu.name};
+    setLogs(prev=>[optimisticEntry,...prev]);
     const res=await api.post('/api/timelogs',payload);
     if(res&&res.id){
       setForm(blankForm());
       setShowForm(false);
       setSaveMsg('✓ Hours logged!');
       setTimeout(()=>setSaveMsg(''),3000);
-      await load();   // re-fetch so new entry appears immediately in filtered list
+      load(); // refresh to get real ID and server data
     } else {
+      setLogs(prev=>prev.filter(l=>l.id!==tempId)); // rollback optimistic
       setSaveMsg('⚠ Save failed — please retry');
     }
     setBusy(false);
   };
 
-  // ── Delete — optimistic + re-fetch
+  // ── Delete optimistic
   const handleDelete=async(id)=>{
     if(!confirm('Delete this log entry?'))return;
     setLogs(prev=>prev.filter(l=>l.id!==id));
@@ -10547,7 +10614,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     setEditId(null);
   };
 
-  // ── CSV — filtered rows only, with project name
+  // ── CSV export
   const downloadCSV=()=>{
     const projMap=safe(projects).reduce((m,p)=>{m[p.id]=p.name;return m;},{});
     const headers=['Date','User','Project','Task','Hours','Minutes','Total Decimal Hrs','Comments'];
@@ -10555,17 +10622,54 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     const csv='data:text/csv;charset=utf-8,'+[headers,...rows].map(r=>r.join(',')).join('\n');
     const a=document.createElement('a');
     a.setAttribute('href',encodeURI(csv));
-    const lbl=filterMode==='week'?'thisweek':filterMode==='month'?filterMonth:'custom';
+    const lbl=filterMode==='today'?localToday():filterMode==='yesterday'?'yesterday':filterMode==='week'?'thisweek':filterMode==='month'?filterMonth:'custom';
     a.setAttribute('download','vewit_timelogs_'+lbl+'.csv');
     document.body.appendChild(a);a.click();document.body.removeChild(a);
   };
 
+  // ── Filter label for display
+  const filterLabels={today:'Today',yesterday:'Yesterday',week:'This Week',month:'Month',custom:'Custom'};
+
   return html`<div style=${{padding:'0 0 60px'}}>
 
-    <!-- Action bar — title already shown by global Header -->
-    <div style=${{display:'flex',alignItems:'center',justifyContent:'flex-end',flexWrap:'wrap',gap:8,marginBottom:20}}>
+    <!-- ══ Festival Banner ══ -->
+    ${todayFestival?html`
+    <div style=${{background:'linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b)',borderRadius:12,padding:'10px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:10,boxShadow:'0 4px 20px rgba(124,58,237,.3)'}}>
+      <span style=${{fontSize:20}}>🎊</span>
+      <span style=${{fontSize:13,fontWeight:700,color:'#fff',flex:1}}>
+        ${todayFestival} — Wishing you and your team a joyful celebration!
+      </span>
+      <span style=${{fontSize:18}}>✨</span>
+    </div>`:null}
+
+    <!-- ══ Celebration Overlay ══ -->
+    ${celebration?html`
+    <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}}
+      onClick=${()=>setCelebration(null)}>
+      <div style=${{background:'var(--sf)',borderRadius:24,padding:'40px 48px',textAlign:'center',boxShadow:'0 24px 80px rgba(0,0,0,.4)',border:'1px solid var(--bd)',maxWidth:380,animation:'vwBoot-up .5s ease both'}}>
+        <div style=${{fontSize:56,marginBottom:12,animation:'pulse 1s infinite'}}>
+          ${celebration.type==='project'?'🏆':'🎉'}
+        </div>
+        <div style=${{fontSize:22,fontWeight:800,color:'var(--tx)',marginBottom:8,letterSpacing:'-.5px'}}>
+          ${celebration.type==='project'?'Project Complete!':'Task Done!'}
+        </div>
+        <div style=${{fontSize:14,color:'var(--tx2)',marginBottom:20,fontWeight:500}}>
+          ${celebration.name}
+        </div>
+        <div style=${{fontSize:13,color:'var(--tx3)'}}>
+          ${celebration.type==='project'?'🎊 Outstanding teamwork! Every task is complete.':'⭐ Great work! Keep it up.'}
+        </div>
+        <div style=${{marginTop:20,display:'flex',gap:6,justifyContent:'center'}}>
+          ${['🎉','⭐','🏅','✨','🎊','💪','🔥','👏'].map((e,i)=>html`
+            <span key=${i} style=${{fontSize:18,animation:'vwBoot-orb'+(1+i%3)+' '+(1.2+i*0.15)+'s ease-in-out infinite'}}>${e}</span>`)}
+        </div>
+      </div>
+    </div>`:null}
+
+    <!-- ══ Action Bar ══ -->
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'flex-end',flexWrap:'wrap',gap:8,marginBottom:16}}>
       ${saveMsg?html`<span style=${{fontSize:12,color:saveMsg.startsWith('⚠')?'#ef4444':'#22c55e',fontWeight:600,marginRight:4}}>${saveMsg}</span>`:null}
-      <button class="btn bg" style=${{fontSize:12,padding:'7px 14px',display:'flex',alignItems:'center',gap:5}} onClick=${downloadCSV} title="Export filtered entries as CSV">
+      <button class="btn bg" style=${{fontSize:12,padding:'7px 14px',display:'flex',alignItems:'center',gap:5}} onClick=${downloadCSV}>
         ⬇ CSV ${filtered.length?html`<span style=${{fontSize:10,background:'var(--ac)',color:'var(--ac-tx)',borderRadius:100,padding:'1px 6px',fontWeight:700}}>${filtered.length}</span>`:null}
       </button>
       <button class="btn bp" style=${{fontSize:12,padding:'7px 16px'}} onClick=${()=>{setShowForm(v=>!v);setSaveMsg('');}}>
@@ -10573,7 +10677,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       </button>
     </div>
 
-    <!-- Log Hours Form -->
+    <!-- ══ Log Hours Form ══ -->
     ${showForm?html`
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:20,marginBottom:20,boxShadow:'0 4px 24px rgba(0,0,0,.18)'}}>
       <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:8}}>
@@ -10653,7 +10757,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       </div>
     </div>`:null}
 
-    <!-- Admin: Workspace Hours Policy -->
+    <!-- ══ Admin: Workspace Policy ══ -->
     ${isAdmin?html`
     <div style=${{background:'linear-gradient(135deg,rgba(90,140,255,.07),rgba(168,85,247,.07))',border:'1px solid rgba(90,140,255,.22)',borderRadius:12,padding:'11px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
       <span style=${{fontSize:11,fontWeight:700,color:'var(--ac)',letterSpacing:'.04em',flexShrink:0}}>⚙ WORKSPACE POLICY</span>
@@ -10664,36 +10768,31 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       <button class="btn bp" style=${{fontSize:11,padding:'5px 14px'}} onClick=${async()=>{
         const hrs=parseFloat(adminHrsInput)||8;
         const r=await api.post('/api/timelogs/required-hours',{hours:hrs});
-        if(r&&r.ok){
-          setRequiredHrs(hrs);
-          setSaveMsg('✓ Policy saved — applies to all workspace members');
-          setTimeout(()=>setSaveMsg(''),4000);
-        }
+        if(r&&r.ok){setRequiredHrs(hrs);setSaveMsg('✓ Policy saved for all members');setTimeout(()=>setSaveMsg(''),3000);}
       }}>Save for All</button>
-      <!-- Fix: Active value comes from requiredHrs state, updated immediately on save -->
       <span style=${{fontSize:12,color:'var(--tx3)'}}>Active: <b style=${{color:'var(--tx)',fontSize:13}}>${requiredHrs}h/day</b></span>
     </div>`:null}
 
-    <!-- Filters -->
+    <!-- ══ Filter Bar ══ -->
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'10px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
       <span style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',flexShrink:0}}>Filter:</span>
-      ${['week','month','custom'].map(m=>html`
+      ${['today','yesterday','week','month','custom'].map(m=>html`
         <button key=${m} onClick=${()=>setFilterMode(m)}
-          style=${{fontSize:11,padding:'5px 14px',borderRadius:100,cursor:'pointer',fontWeight:600,transition:'all .15s',
+          style=${{fontSize:11,padding:'5px 13px',borderRadius:100,cursor:'pointer',fontWeight:600,transition:'all .15s',
             border:'1px solid '+(filterMode===m?'var(--ac)':'var(--bd)'),
             background:filterMode===m?'var(--ac3)':'transparent',
             color:filterMode===m?'var(--ac)':'var(--tx2)'}}>
-          ${m==='week'?'This Week':m==='month'?'Month':'Custom Range'}
+          ${filterLabels[m]}
         </button>`)}
-      ${filterMode==='month'?html`<input type="month" value=${filterMonth} onChange=${e=>setFilterMonth(e.target.value)}
-        style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>`:null}
+      ${filterMode==='month'?html`
+        <input type="month" value=${filterMonth} onChange=${e=>setFilterMonth(e.target.value)}
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>`:null}
       ${filterMode==='custom'?html`
         <input type="date" value=${filterFrom} onChange=${e=>setFilterFrom(e.target.value)}
           style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>
         <span style=${{color:'var(--tx3)',fontSize:12}}>→</span>
         <input type="date" value=${filterTo} onChange=${e=>setFilterTo(e.target.value)}
-          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>
-      `:null}
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>`:null}
       ${isAdmin&&users&&users.length>0?html`
         <div style=${{marginLeft:'auto'}}>
           <select value=${filterUser} onChange=${e=>setFilterUser(e.target.value)}
@@ -10704,11 +10803,13 @@ function TimesheetView({cu,teams,users,projects,tasks}){
         </div>`:null}
     </div>
 
-    <!-- Summary Cards -->
+    <!-- ══ Summary Cards ══ -->
     <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(145px,1fr))',gap:12,marginBottom:20}}>
       <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
         <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}}>Total Hours</div>
-        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)',lineHeight:1}}>${fmtHrs(totalHrs)}</div>
+        <div style=${{fontSize:24,fontWeight:800,color:'var(--ac)',lineHeight:1}}>
+          ${loading?html`<span class="spin" style=${{display:'inline-block'}}></span>`:fmtHrs(totalHrs)}
+        </div>
       </div>
       <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
         <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}}>Log Entries</div>
@@ -10721,7 +10822,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
         <div style=${{fontSize:10,color:'var(--tx3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}}>vs Policy</div>
         ${(()=>{
-          const days=filterMode==='week'?5:filterMode==='month'?22:1;
+          const days=filterMode==='today'||filterMode==='yesterday'?1:filterMode==='week'?5:filterMode==='month'?22:1;
           const expected=days*requiredHrs;
           const pct=expected>0?Math.round(totalHrs/expected*100):0;
           const col=pct>=100?'#22c55e':pct>=70?'var(--ac)':'#ef4444';
@@ -10730,7 +10831,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       </div>
     </div>
 
-    <!-- Team Summary (admin) -->
+    <!-- ══ Team Summary (admin) ══ -->
     ${isAdmin&&byUser.length>0?html`
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 18px',marginBottom:16}}>
       <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
@@ -10738,7 +10839,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       </div>
       <div style=${{display:'flex',flexDirection:'column',gap:8}}>
         ${byUser.map(u=>{
-          const days=filterMode==='week'?5:filterMode==='month'?22:1;
+          const days=filterMode==='today'||filterMode==='yesterday'?1:filterMode==='week'?5:filterMode==='month'?22:1;
           const expected=days*requiredHrs;
           const pct=expected>0?Math.min(100,Math.round(u.hrs/expected*100)):0;
           const col=pct>=100?'#22c55e':pct>=70?'var(--ac)':'#ef4444';
@@ -10754,16 +10855,17 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       </div>
     </div>`:null}
 
-    <!-- Entries Table -->
+    <!-- ══ Entries Table ══ -->
     <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
       <div style=${{padding:'11px 18px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Entries</span>
+        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Entries <span style=${{fontSize:11,color:'var(--tx3)',fontWeight:400}}>· ${filterLabels[filterMode]}</span></span>
         <span style=${{fontSize:11,color:'var(--tx3)'}}>${filtered.length} record${filtered.length!==1?'s':''}</span>
       </div>
-      ${filtered.length===0?html`
+      ${loading?html`<div style=${{textAlign:'center',padding:'40px',color:'var(--tx3)'}}><span class="spin"></span></div>`
+      :filtered.length===0?html`
         <div style=${{textAlign:'center',padding:'52px 20px',color:'var(--tx3)'}}>
           <div style=${{fontSize:36,marginBottom:10}}>⏱</div>
-          <div style=${{fontSize:13,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>No entries for this period</div>
+          <div style=${{fontSize:13,fontWeight:600,color:'var(--tx2)',marginBottom:4}}>No entries for ${filterLabels[filterMode].toLowerCase()}</div>
           <div style=${{fontSize:12}}>Click <b style=${{color:'var(--ac)'}}>+ Log Hours</b> to add your first entry.</div>
         </div>
       `:html`
@@ -10771,13 +10873,13 @@ function TimesheetView({cu,teams,users,projects,tasks}){
           <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
               <tr style=${{background:'var(--sf2)'}}>
-                ${isAdmin?html`<th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,whiteSpace:'nowrap',letterSpacing:'.04em'}}>USER</th>`:null}
+                ${isAdmin?html`<th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>USER</th>`:null}
                 <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>DATE</th>
                 <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>PROJECT</th>
                 <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>TASK</th>
                 <th style=${{padding:'9px 14px',textAlign:'right',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>TIME</th>
                 <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>COMMENTS</th>
-                <th style=${{padding:'9px 10px',textAlign:'center',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em',whiteSpace:'nowrap'}}>ACTIONS</th>
+                <th style=${{padding:'9px 10px',textAlign:'center',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -10847,7 +10949,6 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     </div>
   </div>`;
 }
-
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
