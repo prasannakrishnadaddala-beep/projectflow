@@ -213,21 +213,36 @@ def _run_ddl(sql):
 
 def ensure_timelog_schema():
     """Ensure time_logs has ALL required columns. Safe to call repeatedly."""
-    # Step 1: create the base table (minimal columns only)
+    # Step 1: create minimal base table (id only — everything else added via ALTER)
     _run_ddl("""CREATE TABLE IF NOT EXISTS time_logs (
-        id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
-        hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0,
-        comments TEXT DEFAULT '', created TEXT)""")
-    # Step 2: add each column individually — each in own transaction
+        id TEXT PRIMARY KEY)""")
+    # Step 2: every column added individually — each gets its own fresh connection
+    # This handles ANY state of the live DB regardless of when it was created
     for ddl in [
-        "ALTER TABLE time_logs ADD COLUMN team_id     TEXT DEFAULT ''",
-        "ALTER TABLE time_logs ADD COLUMN date        TEXT DEFAULT ''",
-        "ALTER TABLE time_logs ADD COLUMN task_name   TEXT DEFAULT ''",
-        "ALTER TABLE time_logs ADD COLUMN project_id  TEXT DEFAULT ''",
-        "ALTER TABLE time_logs ADD COLUMN task_id     TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN workspace_id TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN user_id      TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN team_id      TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN date         TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN task_name    TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN project_id   TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN task_id      TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN hours        REAL DEFAULT 0",
+        "ALTER TABLE time_logs ADD COLUMN minutes      INTEGER DEFAULT 0",
+        "ALTER TABLE time_logs ADD COLUMN comments     TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN created      TEXT DEFAULT ''",
         "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
     ]:
         _run_ddl(ddl)
+
+
+def get_user_role():
+    """Fetch current user role from DB — role is not stored in session."""
+    try:
+        rows = _raw_pg("SELECT role FROM users WHERE id=?",
+                       (session.get("user_id",""),), fetch=True)
+        return rows[0]["role"] if rows else ""
+    except Exception:
+        return ""
 
 
 def hash_pw(p):
@@ -804,6 +819,7 @@ def login():
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
+        session["role"]=u.get("role","")  # cache role in session
         try:
             db.execute("UPDATE users SET last_active=? WHERE id=?",
                        (datetime.utcnow().isoformat(), u["id"]))
@@ -1310,6 +1326,7 @@ def register():
             session.permanent=True
             session["user_id"]=uid
             session["workspace_id"]=ws_id
+            session["role"]=u.get("role","") if u else ""  # cache role
             return jsonify({"id":uid,"workspace_id":ws_id,"name":d["name"],"email":d["email"],
                             "role":d.get("role","Developer"),"avatar":av,"color":c})
     except Exception as e:
@@ -2312,7 +2329,7 @@ def timelogs_setup():
 def get_timelogs():
     try:
         uid   = session["user_id"]
-        role  = session.get("role", "")
+        role  = get_user_role()
         wid_  = wid()
         if role in ("Admin", "Manager"):
             rows = _raw_pg(
@@ -2380,7 +2397,7 @@ def delete_timelog(log_id):
                    (log_id, wid()), fetch=True)
     if not rows:
         return jsonify({"error": "Not found"}), 404
-    if rows[0]["user_id"] != session["user_id"] and session.get("role") not in ("Admin","Manager"):
+    if rows[0]["user_id"] != session["user_id"] and get_user_role() not in ("Admin","Manager"):
         return jsonify({"error": "Forbidden"}), 403
     _raw_pg("DELETE FROM time_logs WHERE id=?", (log_id,))
     return jsonify({"ok": True})
@@ -2394,7 +2411,7 @@ def update_timelog(log_id):
                    (log_id, wid()), fetch=True)
     if not rows:
         return jsonify({"error": "Not found"}), 404
-    if rows[0]["user_id"] != session["user_id"] and session.get("role") not in ("Admin","Manager"):
+    if rows[0]["user_id"] != session["user_id"] and get_user_role() not in ("Admin","Manager"):
         return jsonify({"error": "Forbidden"}), 403
     _raw_pg("UPDATE time_logs SET hours=?, minutes=?, comments=? WHERE id=?",
             (float(d.get("hours") or 0), int(d.get("minutes") or 0),
@@ -2413,8 +2430,8 @@ def required_hours():
         except Exception:
             hrs = 8.0
         return jsonify({"hours": hrs})
-    # POST — Admin or Manager only
-    if session.get("role") not in ("Admin", "Manager"):
+    # POST — Admin or Manager only (role fetched from DB since not in session)
+    if get_user_role() not in ("Admin", "Manager"):
         return jsonify({"error": "Forbidden"}), 403
     hrs = float((request.json or {}).get("hours", 8))
     _run_ddl("ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8")
