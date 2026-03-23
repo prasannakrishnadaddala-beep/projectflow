@@ -581,6 +581,11 @@ def init_db():
             CREATE TABLE IF NOT EXISTS push_subscriptions (
                 id TEXT PRIMARY KEY, user_id TEXT, workspace_id TEXT,
                 endpoint TEXT UNIQUE, p256dh TEXT, auth TEXT, created TEXT);
+            CREATE TABLE IF NOT EXISTS time_logs (
+                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+                team_id TEXT DEFAULT '', date TEXT, task_name TEXT,
+                hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0,
+                comments TEXT DEFAULT '', created TEXT);
         """)
         # ── Consolidated migrations (safe — each wrapped in try/except) ──────
         for stmt in [
@@ -609,6 +614,8 @@ def init_db():
             "ALTER TABLE call_rooms ADD COLUMN invited_users TEXT DEFAULT '[]'",
             "ALTER TABLE notifications ADD COLUMN sender_id TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT ''",
+            "CREATE TABLE IF NOT EXISTS time_logs (id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT, team_id TEXT DEFAULT '', date TEXT, task_name TEXT, hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0, comments TEXT DEFAULT '', created TEXT)",
+            "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
         ]:
             try: db.execute(stmt)
             except: pass
@@ -2183,129 +2190,70 @@ def add_ticket_comment(tid):
         return jsonify(dict(db.execute("SELECT * FROM ticket_comments WHERE id=?",(cid,)).fetchone()))
 
 # ── Calls (Huddle) ────────────────────────────────────────────────────────────
-@app.route("/api/calls", methods=["GET"])
+# ── Time Logging API ──────────────────────────────────────────────────────────
+@app.route("/api/timelogs", methods=["GET"])
 @login_required
-def get_active_calls():
+def get_timelogs():
     with get_db() as db:
-        rooms=db.execute("SELECT * FROM call_rooms WHERE workspace_id=? AND status='active' ORDER BY created DESC",(wid(),)).fetchall()
-        result=[]
-        uid=session["user_id"]
-        for r in rooms:
-            rd=dict(r)
-            try:
-                created=datetime.fromisoformat(rd['created'].replace('Z',''))
-                if (datetime.utcnow()-created).total_seconds()>28800:
-                    db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(rd['id'],))
-                    continue
-            except: pass
-            # STRICT: only show room if user was explicitly invited or is already a participant
-            try:
-                invited=json.loads(rd.get("invited_users","[]") or "[]")
-                parts=json.loads(rd.get("participants","[]") or "[]")
-            except: invited=[]; parts=[]
-            if uid in invited or uid in parts or rd.get("initiator")==uid:
-                result.append(rd)
-        return jsonify(result)
-
-@app.route("/api/calls", methods=["POST"])
-@login_required
-def create_call():
-    d=request.json or {}
-    room_id=f"call{int(datetime.now().timestamp()*1000)}"
-    with get_db() as db:
-        caller=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        cname=caller["name"] if caller else "Someone"
-        room_name=d.get("name",f"{cname}'s Instant Meet")
-        db.execute("INSERT INTO call_rooms VALUES (?,?,?,?,?,?,?)",
-                   (room_id,wid(),room_name,session["user_id"],json.dumps([session["user_id"]]),"active",ts()))
-        users=db.execute("SELECT id FROM users WHERE workspace_id=? AND id!=?",(wid(),session["user_id"])).fetchall()
-        invited=[u["id"] for u in users]
-        db.execute("UPDATE call_rooms SET invited_users=? WHERE id=?",(json.dumps(invited),room_id))
-        for uid in invited:
-            nid=f"n{int(datetime.now().timestamp()*1000)}{uid}"
-            try:
-                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
-                           (nid,wid(),"call",f"📞 {cname} started an Instant Meet — Join now! ({room_name})",uid,0,ts(),session["user_id"]))
-            except:
-                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                           (nid,wid(),"call",f"📞 {cname} started an Instant Meet — Join now! ({room_name})",uid,0,ts()))
-        return jsonify({"room_id":room_id,"name":room_name})
-
-@app.route("/api/calls/<room_id>/join", methods=["POST"])
-@login_required
-def join_call(room_id):
-    with get_db() as db:
-        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
-        if not room: return jsonify({"error":"Room not found"}),404
-        if room["status"]!="active": return jsonify({"error":"Call has ended"}),410
-        parts=json.loads(room["participants"])
-        if session["user_id"] not in parts:
-            parts.append(session["user_id"])
-            db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
-        return jsonify({"participants":parts,"name":room["name"]})
-
-@app.route("/api/calls/<room_id>/leave", methods=["POST"])
-@login_required
-def leave_call(room_id):
-    with get_db() as db:
-        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
-        if not room: return jsonify({"ok":True})
-        parts=[p for p in json.loads(room["participants"]) if p!=session["user_id"]]
-        if not parts: db.execute("UPDATE call_rooms SET status='ended' WHERE id=?",(room_id,))
-        else: db.execute("UPDATE call_rooms SET participants=? WHERE id=?",(json.dumps(parts),room_id))
-        return jsonify({"ok":True})
-
-@app.route("/api/calls/<room_id>/invite/<target_id>", methods=["POST"])
-@login_required
-def invite_to_call(room_id, target_id):
-    with get_db() as db:
-        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
-        if not room: return jsonify({"error":"Room not found"}),404
-        caller=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        cname=caller["name"] if caller else "Someone"
-        nid=f"n{int(datetime.now().timestamp()*1000)}"
-        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                   (nid,wid(),"call",f"📞 {cname} invited you to: {room['name']} — Join now!",target_id,0,ts()))
-        # Add target to invited_users list
-        try:
-            inv=json.loads(room.get("invited_users","[]") or "[]")
-            if target_id not in inv:
-                inv.append(target_id)
-                db.execute("UPDATE call_rooms SET invited_users=? WHERE id=?",(json.dumps(inv),room_id))
-        except: pass
-        return jsonify({"ok":True})
-
-@app.route("/api/calls/<room_id>/signal", methods=["POST"])
-@login_required
-def send_signal(room_id):
-    d=request.json or {}
-    sid=f"sig{int(datetime.now().timestamp()*1000)}{secrets.token_hex(3)}"
-    with get_db() as db:
-        db.execute("INSERT INTO call_signals VALUES (?,?,?,?,?,?,?,?,?)",
-                   (sid,wid(),room_id,session["user_id"],d.get("to_user",""),
-                    d.get("type",""),json.dumps(d.get("data",{})),0,ts()))
-        old=db.execute("SELECT id FROM call_signals WHERE room_id=? AND consumed=1 ORDER BY created DESC LIMIT -1 OFFSET 200",(room_id,)).fetchall()
-        if old: db.execute(f"DELETE FROM call_signals WHERE id IN ({','.join('?'*len(old))})",[r['id'] for r in old])
-        return jsonify({"ok":True,"id":sid})
-
-@app.route("/api/calls/<room_id>/signals", methods=["GET"])
-@login_required
-def get_signals(room_id):
-    with get_db() as db:
-        rows=db.execute("""SELECT * FROM call_signals WHERE workspace_id=? AND room_id=? AND to_user=? AND consumed=0
-            ORDER BY created LIMIT 50""",(wid(),room_id,session["user_id"])).fetchall()
-        ids=[r["id"] for r in rows]
-        if ids: db.execute(f"UPDATE call_signals SET consumed=1 WHERE id IN ({','.join('?'*len(ids))})",ids)
+        uid = session["user_id"]
+        role = session.get("role","")
+        wid_ = wid()
+        # Admins/Managers see all; others see only their own
+        if role in ("Admin","Manager"):
+            rows = db.execute(
+                "SELECT tl.*, u.name as user_name FROM time_logs tl "
+                "LEFT JOIN users u ON tl.user_id=u.id "
+                "WHERE tl.workspace_id=? ORDER BY tl.date DESC, tl.created DESC",
+                (wid_,)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT tl.*, u.name as user_name FROM time_logs tl "
+                "LEFT JOIN users u ON tl.user_id=u.id "
+                "WHERE tl.workspace_id=? AND tl.user_id=? ORDER BY tl.date DESC, tl.created DESC",
+                (wid_, uid)).fetchall()
         return jsonify([dict(r) for r in rows])
 
-@app.route("/api/calls/<room_id>/ping", methods=["POST"])
+@app.route("/api/timelogs", methods=["POST"])
 @login_required
-def ping_call(room_id):
+def create_timelog():
+    d = request.json or {}
+    lid = f"tl{int(datetime.now().timestamp()*1000)}"
     with get_db() as db:
-        room=db.execute("SELECT * FROM call_rooms WHERE id=? AND workspace_id=?",(room_id,wid())).fetchone()
-        if not room: return jsonify({"error":"ended"}),404
-        if room["status"]!="active": return jsonify({"error":"ended"}),410
-        return jsonify({"participants":json.loads(room["participants"]),"status":room["status"],"name":room["name"]})
+        db.execute(
+            "INSERT INTO time_logs VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (lid, wid(), session["user_id"], d.get("team_id",""),
+             d.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
+             d.get("task_name",""), float(d.get("hours",0)),
+             int(d.get("minutes",0)), d.get("comments",""), ts()))
+    return jsonify({"id": lid})
+
+@app.route("/api/timelogs/<log_id>", methods=["DELETE"])
+@login_required
+def delete_timelog(log_id):
+    with get_db() as db:
+        row = db.execute("SELECT user_id FROM time_logs WHERE id=? AND workspace_id=?",
+                         (log_id, wid())).fetchone()
+        if not row:
+            return jsonify({"error":"Not found"}), 404
+        if row["user_id"] != session["user_id"] and session.get("role") not in ("Admin","Manager"):
+            return jsonify({"error":"Forbidden"}), 403
+        db.execute("DELETE FROM time_logs WHERE id=?", (log_id,))
+    return jsonify({"ok": True})
+
+@app.route("/api/timelogs/required-hours", methods=["GET","POST"])
+@login_required
+def required_hours():
+    with get_db() as db:
+        if request.method == "POST":
+            if session.get("role") != "Admin":
+                return jsonify({"error":"Forbidden"}), 403
+            hrs = float((request.json or {}).get("hours", 8))
+            db.execute("UPDATE workspaces SET required_hours_per_day=? WHERE id=?", (hrs, wid()))
+            return jsonify({"ok": True})
+        ws = db.execute("SELECT required_hours_per_day FROM workspaces WHERE id=?", (wid(),)).fetchone()
+        return jsonify({"hours": ws["required_hours_per_day"] if ws and ws["required_hours_per_day"] else 8})
+
+# [Calling/WebRTC mechanism removed — use Google Meet or external tools]
 
 @app.route("/api/reminders/due", methods=["GET"])
 @login_required
@@ -3445,7 +3393,7 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
       <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.2)">📅</div><h3>Gantt Timeline</h3><p>Visual timeline to plan project schedules, track milestones and spot overlapping workloads.</p><div class="ftag" style="background:rgba(255,159,10,.1);color:#ff9f0a;border:1px solid rgba(255,159,10,.2)">Planning</div></div>
       <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">📊</div><h3>Developer Productivity</h3><p>Team velocity, blocked work, sprint performance and individual contribution breakdowns.</p><div class="ftag" style="background:rgba(90,140,255,.1);color:#5a8cff;border:1px solid rgba(90,140,255,.2)">Analytics</div></div>
       <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">🔔</div><h3>Push Notifications</h3><p>Desktop notifications for assignments, comments, DMs and time-based reminders — even when minimised.</p><div class="ftag" style="background:rgba(168,85,247,.1);color:#a855f7;border:1px solid rgba(168,85,247,.2)">Notifications</div></div>
-      <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">📹</div><h3>Instant Meet (WebRTC)</h3><p>Launch instant video meetings, invite team members and collaborate without leaving VEWIT.</p><div class="ftag" style="background:rgba(48,209,88,.1);color:#30d158;border:1px solid rgba(48,209,88,.2)">Meetings</div></div>
+      
       <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(100,210,255,.12);border:1px solid rgba(100,210,255,.2)">🏢</div><h3>Multi-Workspace</h3><p>Separate workspaces for different companies or clients — each isolated with its own team and settings.</p><div class="ftag" style="background:rgba(100,210,255,.1);color:#64d2ff;border:1px solid rgba(100,210,255,.2)">Enterprise</div></div>
       <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2)">🔐</div><h3>Security &amp; Access Control</h3><p>6 role types, bcrypt passwords, Google Authenticator TOTP 2FA and workspace-isolated data.</p><div class="ftag" style="background:rgba(251,191,36,.1);color:#ffd60a;border:1px solid rgba(251,191,36,.2)">Security</div></div>
     </div>
@@ -3528,7 +3476,7 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
           <li><div class="ck">✓</div>Developer productivity analytics</li>
           <li><div class="ck">✓</div>Velocity &amp; sprint burn-down charts</li>
           <li><div class="ck">✓</div>Custom SMTP &amp; Resend email</li>
-          <li><div class="ck">✓</div>Instant Meet video calls (WebRTC)</li>
+          
           <li><div class="ck">✓</div>Task labels, story points &amp; sprints</li>
           <li><div class="ck">✓</div>EOD report automation via AI</li>
           <li><div class="ck">✓</div>Priority email support</li>
@@ -3793,7 +3741,7 @@ footer a:hover{color:var(--blue)}
     <h2>Modern, reliable stack</h2>
     <p>VEWIT is built on battle-tested technologies — fast, secure and deployable anywhere. React 18 runs via CDN, the entire backend is a single Python file serving both the REST API and the frontend shell.</p>
     <div class="pills">
-      <span class="pill">Python 3 · Flask</span><span class="pill">PostgreSQL · pg8000</span><span class="pill">React 18 · HTM</span><span class="pill">Anthropic Claude API</span><span class="pill">Recharts</span><span class="pill">Web Push (VAPID)</span><span class="pill">WebRTC Instant Meet</span><span class="pill">Google Authenticator TOTP 2FA</span><span class="pill">SMTP · Resend API</span><span class="pill">Railway · Docker</span><span class="pill">bcrypt</span>
+      <span class="pill">Python 3 · Flask</span><span class="pill">PostgreSQL · pg8000</span><span class="pill">React 18 · HTM</span><span class="pill">Anthropic Claude API</span><span class="pill">Recharts</span><span class="pill">Web Push (VAPID)</span><span class="pill">Google Authenticator TOTP 2FA</span><span class="pill">SMTP · Resend API</span><span class="pill">Railway · Docker</span><span class="pill">bcrypt</span>
     </div>
   </div>
   <div class="sec reveal">
@@ -4453,6 +4401,40 @@ const html=htm.bind(React.createElement);
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
 const RC=Recharts;
 
+/* ─── AppLoader — single gradient loading screen (replaces old plain white loader) ── */
+function AppLoader(){
+  return html`<div style=${{
+    position:'fixed',inset:0,zIndex:99998,
+    background:'linear-gradient(135deg,#06040f 0%,#0a0618 40%,#060412 100%)',
+    display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+    fontFamily:"'Bricolage Grotesque',system-ui,sans-serif"
+  }}>
+    <div style=${{position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none'}}>
+      <div style=${{position:'absolute',width:400,height:400,borderRadius:'50%',background:'radial-gradient(circle,rgba(90,140,255,0.18) 0%,transparent 70%)',top:-120,left:-80,animation:'vwBoot-orb1 8s ease-in-out infinite'}}></div>
+      <div style=${{position:'absolute',width:320,height:320,borderRadius:'50%',background:'radial-gradient(circle,rgba(168,85,247,0.15) 0%,transparent 70%)',bottom:-80,right:-60,animation:'vwBoot-orb2 10s ease-in-out infinite'}}></div>
+    </div>
+    <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#5a8cff 25%,#a855f7 50%,#ec4899 75%,transparent)',boxShadow:'0 0 20px rgba(90,140,255,0.6)'}}></div>
+    <div style=${{position:'relative',zIndex:1,textAlign:'center'}}>
+      <div style=${{width:64,height:64,borderRadius:20,margin:'0 auto 20px',background:'linear-gradient(135deg,#5a8cff,#a855f7)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(90,140,255,0.5),0 0 0 1px rgba(255,255,255,0.1)'}}>
+        <svg width="34" height="34" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="8.5" fill="white"/>
+          <circle cx="32" cy="11" r="5.5" fill="white" opacity=".9"/>
+          <circle cx="51" cy="43" r="5.5" fill="white" opacity=".9"/>
+          <circle cx="13" cy="43" r="5.5" fill="white" opacity=".9"/>
+          <line x1="32" y1="16.5" x2="32" y2="23.5" stroke="white" strokeWidth="3.5" strokeLinecap="round"/>
+          <line x1="46" y1="40" x2="40.5" y2="36.5" stroke="white" strokeWidth="3.5" strokeLinecap="round"/>
+          <line x1="18" y1="40" x2="23.5" y2="36.5" stroke="white" strokeWidth="3.5" strokeLinecap="round"/>
+        </svg>
+      </div>
+      <div style=${{fontSize:28,fontWeight:800,color:'#f5f5f7',letterSpacing:'-1.5px',marginBottom:6}}>VEWIT</div>
+      <div style=${{fontSize:13,color:'rgba(174,174,178,0.6)',letterSpacing:'0.05em',marginBottom:36}}>AI-Powered Workspace</div>
+      <div style=${{width:180,height:2,background:'rgba(255,255,255,0.06)',borderRadius:2,overflow:'hidden',margin:'0 auto'}}>
+        <div style=${{height:'100%',borderRadius:2,background:'linear-gradient(90deg,#5a8cff,#a855f7,#ec4899)',animation:'vwBoot-bar 1.8s cubic-bezier(0.4,0,0.2,1) infinite'}}></div>
+      </div>
+    </div>
+  </div>`;
+}
+
 const api={
   get:u=>fetch(u,{credentials:'include'}).then(r=>r.json()).catch(()=>({})), post:(u,b)=>fetch(u,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), put:(u,b)=>fetch(u,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), del:u=>fetch(u,{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(()=>({})), upload:(u,fd)=>fetch(u,{method:'POST',credentials:'include',body:fd}).then(r=>r.json()).catch(()=>({})),
 };
@@ -5096,45 +5078,6 @@ function AuthScreen({onLogin}){
 }
 
 
-/* ─── SidebarCallsList ─────────────────────────────────────────────────────── */
-function SidebarCallsList({cu,onJoin,currentRoomId}){
-  const [calls,setCalls]=useState([]);
-  useEffect(()=>{
-    const load=()=>api.get('/api/calls').then(d=>{if(Array.isArray(d))setCalls(d);});
-    load();
-    const id=setInterval(load,5000);
-    return()=>clearInterval(id);
-  },[]);
-  const joinable=calls.filter(c=>{
-    const parts=JSON.parse(c.participants||'[]');
-    return !parts.includes(cu.id) && c.id!==currentRoomId;
-  });
-  if(!joinable.length)return html`
-    <div style=${{textAlign:'center',padding:'14px 8px'}}>
-      <div style=${{fontSize:22,marginBottom:5}}>📞</div>
-      <p style=${{fontSize:10,color:'var(--tx3)',lineHeight:1.5}}>No active meetings.<br/>Start one to connect with your team.</p>
-    </div>`;
-  return html`<div style=${{display:'flex',flexDirection:'column',gap:5}}>
-    ${joinable.map(c=>{
-      const parts=JSON.parse(c.participants||'[]');
-      return html`<div key=${c.id} style=${{background:'rgba(34,197,94,.06)',border:'1px solid rgba(34,197,94,.2)',borderRadius:10,padding:'9px 10px'}}>
-        <div style=${{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
-          <div style=${{width:7,height:7,borderRadius:'50%',background:'var(--gn)',animation:'pulse 1.5s infinite',flexShrink:0}}></div>
-          <div style=${{flex:1,minWidth:0}}>
-            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${c.name}</div>
-            <div style=${{fontSize:9,color:'var(--tx3)'}}>${parts.length} participant${parts.length!==1?'s':''}</div>
-          </div>
-        </div>
-        <button style=${{width:'100%',height:28,borderRadius:7,border:'none',background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'#fff',cursor:'pointer',fontWeight:700,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',gap:5}}
-          onClick=${()=>onJoin(c.id,c.name)}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.28a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6.29 6.29l1.24-.82a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          Join Instant Meet
-        </button>
-      </div>`;
-    })}
-  </div>`;
-}
-
 /* ─── TeamSidePanel ────────────────────────────────────────────────────────── */
 function TeamSidePanel({cu,onClose,onSelectTeam,selectedTeam,teams,users,projects,tasks,onSetView,onReloadTeams,teamCtx,setTeamCtx,activeTeam}){
   const umap=safe(users).reduce((a,u)=>{a[u.id]=u;return a;},{});
@@ -5493,7 +5436,6 @@ function PersonalTwoFAToggle({cu,setCu}){
 }
 
 function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dark,setDark,teams,users,projects,tasks,teamCtx,setTeamCtx,activeTeam,wsDmEnabled=true,onlineUsers=new Set()}){
-  const inCall=false; // Google Meet handles calls externally
   const fmtTime=s=>{const m=Math.floor(s/60);const sec=s%60;return m+':'+(sec<10?'0':'')+sec;};
   const isAdminManager=cu&&(cu.role==='Admin'||cu.role==='Manager');
   const baseView=(view||'dashboard').split(':')[0];
@@ -5501,11 +5443,12 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   const NAV_ICONS={
     dashboard:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`, projects:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`, tasks:        html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`, messages:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`, tickets:      html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`, timeline:     html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="8" y1="18" x2="14" y2="18"/></svg>`, productivity: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`, reminders:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, team:         html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, dm:           html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
     'ai-docs':    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="10" cy="13" r="2"/><path d="M20 21l-4.35-4.35"/></svg>`,
+    timesheet:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="4" x2="9" y2="9"/><path d="M7 13h2l1 2 2-4 1 2h2"/></svg>`,
   };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, {id:'timesheet', label:'Timesheet', badge:'New'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'timesheet', label:'Timesheet'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -10251,13 +10194,302 @@ function RemindersPanel({onClose,onReload}){
     </div>`;
 }
 
-function HuddleCall(){return null;}
+
+/* ─── TimesheetView ─────────────────────────────────────────────────────────── */
+function TimesheetView({cu,teams,users}){
+  const isAdmin=cu&&(cu.role==='Admin'||cu.role==='Manager');
+  const [logs,setLogs]=useState([]);
+  const [busy,setBusy]=useState(false);
+  const [form,setForm]=useState({date:new Date().toISOString().slice(0,10),task_name:'',hours:0,minutes:0,comments:'',team_id:''});
+  const [filterMode,setFilterMode]=useState('week'); // week|month|custom
+  const [filterMonth,setFilterMonth]=useState(new Date().toISOString().slice(0,7));
+  const [filterFrom,setFilterFrom]=useState('');
+  const [filterTo,setFilterTo]=useState('');
+  const [filterUser,setFilterUser]=useState('');
+  const [requiredHrs,setRequiredHrs]=useState(8);
+  const [adminHrsInput,setAdminHrsInput]=useState('8');
+  const [showForm,setShowForm]=useState(false);
+  const [saveMsg,setSaveMsg]=useState('');
+
+  const load=async()=>{
+    const d=await api.get('/api/timelogs');
+    if(Array.isArray(d))setLogs(d);
+    const h=await api.get('/api/timelogs/required-hours');
+    if(h&&h.hours){setRequiredHrs(h.hours);setAdminHrsInput(String(h.hours));}
+  };
+  useEffect(()=>{load();},[]);
+
+  const filtered=useMemo(()=>{
+    const now=new Date();
+    let from,to;
+    if(filterMode==='week'){
+      const day=now.getDay();
+      from=new Date(now);from.setDate(now.getDate()-day);
+      to=new Date(now);to.setDate(now.getDate()+(6-day));
+    } else if(filterMode==='month'){
+      from=new Date(filterMonth+'-01');
+      to=new Date(from.getFullYear(),from.getMonth()+1,0);
+    } else {
+      from=filterFrom?new Date(filterFrom):null;
+      to=filterTo?new Date(filterTo):null;
+    }
+    return logs.filter(l=>{
+      const d=new Date(l.date);
+      if(from&&d<from)return false;
+      if(to&&d>to)return false;
+      if(filterUser&&l.user_id!==filterUser)return false;
+      return true;
+    });
+  },[logs,filterMode,filterMonth,filterFrom,filterTo,filterUser]);
+
+  const totalHrs=filtered.reduce((s,l)=>s+(Number(l.hours)||0)+(Number(l.minutes)||0)/60,0);
+
+  const byUser=useMemo(()=>{
+    const m={};
+    filtered.forEach(l=>{
+      if(!m[l.user_id])m[l.user_id]={name:l.user_name||l.user_id,hrs:0};
+      m[l.user_id].hrs+=(Number(l.hours)||0)+(Number(l.minutes)||0)/60;
+    });
+    return Object.values(m).sort((a,b)=>b.hrs-a.hrs);
+  },[filtered]);
+
+  const handleSave=async()=>{
+    if(!form.task_name.trim())return;
+    setBusy(true);
+    await api.post('/api/timelogs',form);
+    setForm({date:new Date().toISOString().slice(0,10),task_name:'',hours:0,minutes:0,comments:'',team_id:''});
+    setShowForm(false);
+    setSaveMsg('✓ Hours logged!');
+    setTimeout(()=>setSaveMsg(''),2500);
+    await load();
+    setBusy(false);
+  };
+
+  const handleDelete=async(id)=>{
+    if(!confirm('Delete this log?'))return;
+    await api.del('/api/timelogs/'+id);
+    await load();
+  };
+
+  const downloadCSV=()=>{
+    const headers=['Date','User','Task','Hours','Minutes','Total Hrs','Comments'];
+    const rows=filtered.map(l=>[
+      l.date, l.user_name||l.user_id, '"'+(l.task_name||'')+'"',
+      l.hours||0, l.minutes||0,
+      ((Number(l.hours)||0)+(Number(l.minutes)||0)/60).toFixed(2),
+      '"'+(l.comments||'')+'"'
+    ]);
+    const csv='data:text/csv;charset=utf-8,'+[headers,...rows].map(r=>r.join(',')).join('\n');
+    const a=document.createElement('a');
+    a.setAttribute('href',encodeURI(csv));
+    a.setAttribute('download','vewit_timelogs.csv');
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  };
+
+  const fmtHrs=h=>{const wh=Math.floor(h);const wm=Math.round((h-wh)*60);return wh>0?wm>0?wh+'h '+wm+'m':wh+'h':wm+'m';};
+
+  return html`<div style=${{padding:'0 0 40px'}}>
+    <!-- Header -->
+    <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10,marginBottom:20}}>
+      <div>
+        <h2 style=${{fontSize:20,fontWeight:800,color:'var(--tx)',margin:0,letterSpacing:'-0.5px'}}>⏱ Timesheet</h2>
+        <p style=${{fontSize:12,color:'var(--tx3)',margin:'3px 0 0'}}>Log daily hours · export reports · track productivity</p>
+      </div>
+      <div style=${{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+        ${saveMsg?html`<span style=${{fontSize:12,color:'#22c55e',fontWeight:600}}>${saveMsg}</span>`:null}
+        <button class="btn bg" style=${{fontSize:12,padding:'7px 14px'}} onClick=${downloadCSV}>⬇ CSV</button>
+        <button class="btn bp" style=${{fontSize:12,padding:'7px 14px'}} onClick=${()=>setShowForm(!showForm)}>
+          ${showForm?'✕ Close':'+ Log Hours'}
+        </button>
+      </div>
+    </div>
+
+    <!-- Log Hours Form -->
+    ${showForm?html`
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:20,marginBottom:20,boxShadow:'0 4px 20px rgba(0,0,0,.15)'}}>
+      <h3 style=${{fontSize:14,fontWeight:700,color:'var(--tx)',margin:'0 0 14px'}}>Log Hours</h3>
+      <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:12}}>
+        <div>
+          <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>Date</label>
+          <input type="date" value=${form.date} onChange=${e=>setForm({...form,date:e.target.value})}
+            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12}}/>
+        </div>
+        <div>
+          <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>Task Name *</label>
+          <input type="text" placeholder="e.g. Fix API bug" value=${form.task_name}
+            onChange=${e=>setForm({...form,task_name:e.target.value})}
+            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12}}/>
+        </div>
+        <div>
+          <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>Hours</label>
+          <input type="number" min="0" max="24" value=${form.hours}
+            onChange=${e=>setForm({...form,hours:Number(e.target.value)})}
+            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12}}/>
+        </div>
+        <div>
+          <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>Minutes</label>
+          <input type="number" min="0" max="59" value=${form.minutes}
+            onChange=${e=>setForm({...form,minutes:Number(e.target.value)})}
+            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12}}/>
+        </div>
+        ${teams&&teams.length>0?html`<div>
+          <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>Team</label>
+          <select value=${form.team_id} onChange=${e=>setForm({...form,team_id:e.target.value})}
+            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12}}>
+            <option value="">No Team</option>
+            ${(teams||[]).map(t=>html`<option key=${t.id} value=${t.id}>${t.name}</option>`)}
+          </select>
+        </div>`:null}
+        <div style=${{gridColumn:'1/-1'}}>
+          <label style=${{fontSize:11,fontWeight:600,color:'var(--tx2)',display:'block',marginBottom:4}}>Comments</label>
+          <textarea placeholder="Optional notes..." value=${form.comments}
+            onChange=${e=>setForm({...form,comments:e.target.value})}
+            style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 10px',color:'var(--tx)',fontSize:12,resize:'vertical',minHeight:60,fontFamily:'inherit'}}></textarea>
+        </div>
+      </div>
+      <div style=${{marginTop:14,display:'flex',gap:8}}>
+        <button class="btn bp" style=${{fontSize:12,padding:'8px 18px'}} onClick=${handleSave} disabled=${busy}>
+          ${busy?html`<span class="spin"></span>`:null} Save Log
+        </button>
+        <button class="btn bg" style=${{fontSize:12,padding:'8px 14px'}} onClick=${()=>setShowForm(false)}>Cancel</button>
+      </div>
+    </div>`:null}
+
+    <!-- Admin: Required Hours Config -->
+    ${isAdmin?html`
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+      <span style=${{fontSize:12,fontWeight:600,color:'var(--tx2)'}}>⚙ Required hours/day:</span>
+      <input type="number" min="1" max="24" step="0.5" value=${adminHrsInput}
+        onChange=${e=>setAdminHrsInput(e.target.value)}
+        style=${{width:70,background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 8px',color:'var(--tx)',fontSize:12}}/>
+      <button class="btn bg" style=${{fontSize:11,padding:'5px 12px'}} onClick=${async()=>{
+        await api.post('/api/timelogs/required-hours',{hours:parseFloat(adminHrsInput)||8});
+        setRequiredHrs(parseFloat(adminHrsInput)||8);
+        setSaveMsg('✓ Saved!');setTimeout(()=>setSaveMsg(''),2000);
+      }}>Save</button>
+      <span style=${{fontSize:11,color:'var(--tx3)'}}>Currently: ${requiredHrs}h/day</span>
+    </div>`:null}
+
+    <!-- Filters -->
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+      <span style=${{fontSize:11,fontWeight:700,color:'var(--tx3)',flexShrink:0}}>Filter:</span>
+      ${['week','month','custom'].map(m=>html`
+        <button key=${m} onClick=${()=>setFilterMode(m)}
+          style=${{fontSize:11,padding:'4px 12px',borderRadius:100,border:'1px solid '+(filterMode===m?'var(--ac)':'var(--bd)'),
+            background:filterMode===m?'var(--ac3)':'transparent',color:filterMode===m?'var(--ac)':'var(--tx2)',cursor:'pointer',fontWeight:600,textTransform:'capitalize'}}>
+          ${m==='week'?'This Week':m==='month'?'Month':'Custom'}
+        </button>`)}
+      ${filterMode==='month'?html`<input type="month" value=${filterMonth}
+        onChange=${e=>setFilterMonth(e.target.value)}
+        style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'4px 8px',color:'var(--tx)',fontSize:11}}/>`:null}
+      ${filterMode==='custom'?html`
+        <input type="date" value=${filterFrom} onChange=${e=>setFilterFrom(e.target.value)}
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'4px 8px',color:'var(--tx)',fontSize:11}}/>
+        <span style=${{color:'var(--tx3)',fontSize:11}}>to</span>
+        <input type="date" value=${filterTo} onChange=${e=>setFilterTo(e.target.value)}
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'4px 8px',color:'var(--tx)',fontSize:11}}/>
+      `:null}
+      ${isAdmin&&users&&users.length>0?html`
+        <select value=${filterUser} onChange=${e=>setFilterUser(e.target.value)}
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'4px 8px',color:'var(--tx)',fontSize:11,marginLeft:'auto'}}>
+          <option value="">All Users</option>
+          ${(users||[]).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
+        </select>`:null}
+    </div>
+
+    <!-- Summary Cards -->
+    <div style=${{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12,marginBottom:20}}>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
+        <div style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginBottom:4}}>Total Hours</div>
+        <div style=${{fontSize:22,fontWeight:800,color:'var(--ac)'}}>${fmtHrs(totalHrs)}</div>
+      </div>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
+        <div style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginBottom:4}}>Log Entries</div>
+        <div style=${{fontSize:22,fontWeight:800,color:'var(--tx)'}}>${filtered.length}</div>
+      </div>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
+        <div style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginBottom:4}}>Avg / Entry</div>
+        <div style=${{fontSize:22,fontWeight:800,color:'var(--tx)'}}>${filtered.length?fmtHrs(totalHrs/filtered.length):'—'}</div>
+      </div>
+      ${isAdmin&&byUser.length>0?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px'}}>
+        <div style=${{fontSize:11,color:'var(--tx3)',fontWeight:600,marginBottom:4}}>Top Logger</div>
+        <div style=${{fontSize:14,fontWeight:800,color:'var(--tx)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${byUser[0].name}</div>
+        <div style=${{fontSize:11,color:'var(--ac)'}}>${fmtHrs(byUser[0].hrs)}</div>
+      </div>`:null}
+    </div>
+
+    <!-- Per-user summary (admin only) -->
+    ${isAdmin&&byUser.length>0?html`
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,padding:'14px 16px',marginBottom:16}}>
+      <div style=${{fontSize:12,fontWeight:700,color:'var(--tx)',marginBottom:10}}>Team Summary</div>
+      <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+        ${byUser.map(u=>{
+          const pct=Math.min(100,Math.round(u.hrs/requiredHrs*100));
+          return html`<div key=${u.name} style=${{display:'flex',alignItems:'center',gap:10}}>
+            <div style=${{width:90,fontSize:11,color:'var(--tx2)',fontWeight:600,flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${u.name}</div>
+            <div style=${{flex:1,height:6,background:'var(--bd)',borderRadius:100,overflow:'hidden'}}>
+              <div style=${{height:'100%',width:pct+'%',background:pct>=100?'#22c55e':'var(--ac)',borderRadius:100,transition:'width .3s'}}></div>
+            </div>
+            <div style=${{fontSize:11,fontWeight:700,color:'var(--tx)',width:40,textAlign:'right',flexShrink:0}}>${fmtHrs(u.hrs)}</div>
+          </div>`;
+        })}
+      </div>
+    </div>`:null}
+
+    <!-- Log Table -->
+    <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
+      <div style=${{padding:'12px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <span style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>Entries</span>
+        <span style=${{fontSize:11,color:'var(--tx3)'}}>${filtered.length} records</span>
+      </div>
+      ${filtered.length===0?html`
+        <div style=${{textAlign:'center',padding:'40px 20px',color:'var(--tx3)',fontSize:12}}>
+          No logs found for this period. Click <b>+ Log Hours</b> to add your first entry.
+        </div>
+      `:html`
+        <div style=${{overflowX:'auto'}}>
+          <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead>
+              <tr style=${{background:'var(--sf2)'}}>
+                ${isAdmin?html`<th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx2)',fontSize:11,whiteSpace:'nowrap'}}>User</th>`:null}
+                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx2)',fontSize:11}}>Date</th>
+                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx2)',fontSize:11}}>Task</th>
+                <th style=${{padding:'9px 14px',textAlign:'right',fontWeight:700,color:'var(--tx2)',fontSize:11}}>Time</th>
+                <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx2)',fontSize:11}}>Comments</th>
+                <th style=${{padding:'9px 14px',textAlign:'center',fontWeight:700,color:'var(--tx2)',fontSize:11}}>Del</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map((l,i)=>{
+                const hrs=(Number(l.hours)||0)+(Number(l.minutes)||0)/60;
+                return html`<tr key=${l.id} style=${{borderTop:'1px solid var(--bd)',background:i%2===0?'transparent':'var(--sf2)'}}>
+                  ${isAdmin?html`<td style=${{padding:'9px 14px',color:'var(--tx)',fontWeight:600,whiteSpace:'nowrap'}}>${l.user_name||l.user_id}</td>`:null}
+                  <td style=${{padding:'9px 14px',color:'var(--tx2)',whiteSpace:'nowrap'}}>${l.date}</td>
+                  <td style=${{padding:'9px 14px',color:'var(--tx)',fontWeight:500,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${l.task_name}</td>
+                  <td style=${{padding:'9px 14px',textAlign:'right',color:'var(--ac)',fontWeight:700,whiteSpace:'nowrap'}}>${fmtHrs(hrs)}</td>
+                  <td style=${{padding:'9px 14px',color:'var(--tx3)',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${l.comments||'—'}</td>
+                  <td style=${{padding:'9px 14px',textAlign:'center'}}>
+                    ${(l.user_id===cu.id||isAdmin)?html`
+                    <button onClick=${()=>handleDelete(l.id)}
+                      style=${{background:'none',border:'none',cursor:'pointer',color:'var(--rd)',fontSize:14,padding:'2px 6px',borderRadius:6}}
+                      title="Delete">✕</button>`:null}
+                  </td>
+                </tr>`;
+              })}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+  </div>`;
+}
 
 
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','ai-docs'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','ai-docs','timesheet'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -10677,18 +10909,7 @@ function App(){
     return safe(data.users).filter(u=>teamMemberIds.has(u.id));
   },[data.users,activeTeam,teamMemberIds]);
 
-  if(loading)return html`<div style=${{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#ffffff',flexDirection:'column',gap:0}}>
-    <div style=${{position:'fixed',inset:0,background:'linear-gradient(180deg,#ffffff 0%,#f0f9ff 40%,#dbeafe 70%,#bfdbfe 100%)',zIndex:0}}></div>
-    <div style=${{position:'relative',zIndex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:0}}>
-      <div style=${{width:72,height:72,background:'#2563eb',borderRadius:18,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 32px rgba(37,99,235,0.3)',animation:'sp .9s linear infinite'}}>
-        <svg width="38" height="38" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
-      </div>
-      <p style=${{color:'#475569',fontSize:13,marginTop:16,fontFamily:"'DM Sans',sans-serif",letterSpacing:'.3px',fontWeight:500}}>Loading VEWIT...</p>
-      <div style=${{marginTop:10,width:110,height:3,background:'#e2e8f0',borderRadius:100,overflow:'hidden'}}>
-        <div style=${{height:'100%',background:'#2563eb',borderRadius:100,animation:'loadBar 1.4s ease-in-out infinite'}}></div>
-      </div>
-    </div>
-  </div>`;
+  if(loading)return html`<${AppLoader}/>`;
   if(!cu)return html`<${AuthScreen} onLogin=${u=>{setCu(u);}}/>`;
 
   if(isDevRole && devNoTeam && safe(data.teams).length>0) return html`
@@ -10709,7 +10930,7 @@ function App(){
 
   const activeTeamName=activeTeam?activeTeam.name:'';
   const TITLES={
-    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, 'ai-docs':{title:'AI Documentation',sub:'Generate docs & architecture diagrams'}, };
+    dashboard:{title:'Dashboard',sub:activeTeamName?activeTeamName+' Team Dashboard':'Overview of your work'}, projects:{title:'Projects',sub:scopedProjects.length+' projects'+(activeTeamName?' · '+activeTeamName:'')}, tasks:{title:'Kanban Board',sub:scopedTasks.filter(t=>t.stage!=='completed'&&t.stage!=='backlog').length+' active · '+scopedTasks.length+' total'+(activeTeamName?' · '+activeTeamName:'')}, messages:{title:'Channels',sub:(activeTeamName?activeTeamName+' · ':'')+'Project channels'}, dm:{title:'Direct Messages',sub:totalDm>0?totalDm+' unread':'Private conversations'}, reminders:{title:'Reminders',sub:'Upcoming task reminders'}, notifs:{title:'Notifications',sub:unread+' unread'}, team:{title:'Team Management',sub:'Members & sub-teams'}, settings:{title:'Settings',sub:wsName||'Workspace configuration'}, timeline:{title:'Timeline Tracker',sub:activeTeamName?activeTeamName+' project timeline':'Project schedule'}, productivity:{title:'Dev Productivity',sub:activeTeamName?activeTeamName+' performance':'Team performance analytics'}, tickets:{title:'Tickets',sub:activeTeamName?activeTeamName+' tickets':'Support tickets'}, 'ai-docs':{title:'AI Documentation',sub:'Generate docs & architecture diagrams'}, timesheet:{title:'Timesheet',sub:'Log hours · export reports · track productivity'}, };
 
   const baseView=(view||'dashboard').split(':')[0];
   const viewParts=view.split(':');
@@ -10781,6 +11002,7 @@ function App(){
             ${baseView==='timeline'?html`<${TimelineView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} onNav=${(v,pid)=>{setView(v);if(pid)setInitialProjectId(pid);else setInitialProjectId(null);}}/>`:null}
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             ${baseView==='ai-docs'?html`<${AiDocsView} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users}/>`:null}
+            ${baseView==='timesheet'?html`<${TimesheetView} cu=${cu} teams=${data.teams} users=${data.users}/>`:null}
             </div>
           <//>
         </div>
