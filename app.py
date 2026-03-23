@@ -9492,6 +9492,106 @@ function AIAssistant({cu,projects,tasks,users}){
       </div>`:null}`;
 }
 
+/* ─── Toast System ────────────────────────────────────────────────────────── */
+const TOAST_CFG={
+  dm:      {icon:'💬', color:'var(--ac)', bg:'var(--ac3)', nav:'dm'}, call:    {icon:'📞', color:'var(--gn)', bg:'rgba(62,207,110,.12)', nav:'dashboard'}, task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'}, status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'}, comment: {icon:'💬', color:'var(--pu)', bg:'rgba(167,139,250,.1)', nav:'tasks'}, deadline:{icon:'⏰', color:'var(--am)', bg:'rgba(245,158,11,.1)', nav:'tasks'}, project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'}, reminder:{icon:'⏰', color:'var(--rd)', bg:'rgba(255,68,68,.1)', nav:'reminders'}, message: {icon:'#️⃣', color:'#a78bfa', bg:'rgba(167,139,250,.1)', nav:'messages'}, default: {icon:'🔔', color:'var(--ac)', bg:'var(--ac3)', nav:'notifs'},
+};
+
+function ToastStack({toasts,onDismiss,onNav}){
+  return html`
+    <div class="toast-stack">
+      ${toasts.map(t=>{
+        const cfg=TOAST_CFG[t.type]||TOAST_CFG.default;
+        return html`
+          <div key=${t.id} class=${'toast'+(t.leaving?' leaving':'')}
+            onClick=${()=>{onDismiss(t.id);onNav&&onNav(cfg.nav);}}>
+            <div class="toast-bar" style=${{width:t.progress+'%',background:cfg.color}}></div>
+            <div class="toast-icon" style=${{background:cfg.bg,color:cfg.color}}>${cfg.icon}</div>
+            <div class="toast-body">
+              <div class="toast-title">${t.title}</div>
+              <div class="toast-msg">${t.body}</div>
+              <div class="toast-time">${t.timeStr}</div>
+            </div>
+            <button class="toast-close" onClick=${e=>{e.stopPropagation();onDismiss(t.id);}}>✕</button>
+          </div>`;
+      })}
+    </div>`;
+}
+
+/* ─── ReminderModal ───────────────────────────────────────────────────────── */
+function ReminderModal({task,onClose,onSaved}){
+  const [remindAt,setRemindAt]=useState('');
+  const [minBefore,setMinBefore]=useState('10');
+  const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState('');
+
+  useEffect(()=>{
+    if(task&&task.due){
+      try{
+        const d=new Date(task.due);
+        if(!isNaN(d)){
+          d.setHours(9,0,0,0);
+          setRemindAt(d.toISOString().slice(0,16));
+        }
+      }catch(e){}
+    } else {
+      const d=new Date();d.setHours(d.getHours()+1,0,0,0);
+      setRemindAt(d.toISOString().slice(0,16));
+    }
+  },[task]);
+
+  const save=async()=>{
+    if(!remindAt){setErr('Please set a reminder date and time.');return;}
+    const remindUtc=new Date(remindAt);
+    const alertAt=new Date(remindUtc.getTime()-parseInt(minBefore)*60000);
+    setSaving(true);
+    const r=await api.post('/api/reminders',{
+      task_id:task?task.id:'', task_title:task?task.title:'Reminder', remind_at:alertAt.toISOString(), minutes_before:parseInt(minBefore), });
+    setSaving(false);
+    if(r.error){setErr(r.error);return;}
+    playSound('reminder');onSaved&&onSaved(r);
+    onClose();
+  };
+
+  return html`
+    <div class="ov" onClick=${e=>e.target===e.currentTarget&&onClose()}>
+      <div class="mo" style=${{maxWidth:420}}>
+        <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+          <h2 style=${{fontSize:17,fontWeight:700,color:'var(--tx)'}}>⏰ Set Reminder</h2>
+          <button class="btn bg" style=${{padding:'7px 10px'}} onClick=${onClose}>✕</button>
+        </div>
+        ${task?html`<div style=${{padding:'10px 13px',background:'var(--sf2)',borderRadius:9,border:'1px solid var(--bd)',marginBottom:16,fontSize:13,color:'var(--tx2)'}}>
+          Task: <b style=${{color:'var(--tx)'}}>${task.title}</b>
+        </div>`:null}
+        <div style=${{display:'grid',gap:14}}>
+          <div>
+            <label class="lbl">Remind me at (date & time)</label>
+            <input class="inp" type="datetime-local" value=${remindAt}
+              onChange=${e=>setRemindAt(e.target.value)}/>
+          </div>
+          <div>
+            <label class="lbl">Notify me how early?</label>
+            <select class="inp" value=${minBefore} onChange=${e=>setMinBefore(e.target.value)}>
+              <option value="5">5 minutes before</option>
+              <option value="10">10 minutes before</option>
+              <option value="15">15 minutes before</option>
+              <option value="30">30 minutes before</option>
+              <option value="60">1 hour before</option>
+              <option value="0">At exact time</option>
+            </select>
+          </div>
+        </div>
+        ${err?html`<p style=${{color:'var(--rd)',fontSize:12,marginTop:10}}>${err}</p>`:null}
+        <div style=${{display:'flex',gap:9,justifyContent:'flex-end',marginTop:18}}>
+          <button class="btn bg" onClick=${onClose}>Cancel</button>
+          <button class="btn bp" onClick=${save} disabled=${saving}>
+            ${saving?html`<span class="spin"></span>`:'⏰ Set Reminder'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
 /* ─── Notification Utilities ──────────────────────────────────────────────── */
 const NOTIF_ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Ccircle cx='32' cy='32' r='9' fill='white'/%3E%3Ccircle cx='32' cy='11' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='51' cy='43' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='13' cy='43' r='6' fill='white' opacity='.95'/%3E%3Cline x1='32' y1='17' x2='32' y2='23' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='46' y1='40' x2='40' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='18' y1='40' x2='24' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
 
