@@ -4007,7 +4007,8 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
 /* === DARK THEME (default) — precise HubSpot CRM workspace colours === */
 html,body{height:100%;width:100%;overflow:auto}
-body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;background-image:radial-gradient(rgba(90,94,247,0.055) 1px,transparent 1px);background-size:24px 24px}
+.dm body,.dm{background-image:none!important}
 
 /* ═══════════════════════════════════════════════
    VEWIT WORKSPACE — Apple iPhone 17 Pro Inspired
@@ -4017,80 +4018,77 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
 /* === LIGHT THEME (default) === */
 :root{
-  /* Canvas & Surfaces */
-  --bg:#f5f5f7;          /* Apple light grey */
-  --sf:#ffffff;           /* Pure white cards */
-  --sf2:#f5f5f7;          /* Secondary surface */
-  --sf3:#e8e8ed;          /* Tertiary surface */
-  /* Borders */
-  --bd:rgba(0,0,0,0.08);
-  --bd2:rgba(0,0,0,0.05);
-  /* Text */
-  --tx:#1d1d1f;           /* Apple near-black */
-  --tx2:#424245;          /* Secondary text */
-  --tx3:#86868b;          /* Tertiary text */
-  /* Sidebar */
-  --sb:#1d1d1f;           /* Dark sidebar */
-  --sb2:#2c2c2e;
-  --sb3:#3a3a3c;
-  --sbt:#98989d;
-  /* Accent — iPhone 17 Pro Blue */
-  --ac:#0071e3;           /* Apple blue */
-  --ac2:#0077ed;
-  --ac3:rgba(0,113,227,0.10);
-  --ac4:rgba(0,113,227,0.06);
+  /* ── Canvas & Surfaces ── */
+  --bg:#eff1fb;
+  --sf:#ffffff;
+  --sf2:#f5f7ff;
+  --sf3:#eaedf8;
+  /* ── Borders ── */
+  --bd:rgba(99,102,241,0.13);
+  --bd2:rgba(99,102,241,0.07);
+  /* ── Text ── */
+  --tx:#0f0e17;
+  --tx2:#3d3b54;
+  --tx3:#9494a8;
+  /* ── Sidebar — rich deep purple/indigo ── */
+  --sb:#0d0b1e;
+  --sb2:#13112b;
+  --sb3:#1e1b38;
+  --sbt:#7b7898;
+  /* ── Primary accent ── */
+  --ac:#5a5ef7;
+  --ac2:#4347f5;
+  --ac3:rgba(90,94,247,0.12);
+  --ac4:rgba(90,94,247,0.06);
   --ac-tx:#ffffff;
-  /* Semantic */
-  --rd:#ff3b30;  --rd2:#ff453a;
-  --gn:#34c759;  --gn2:#30d158;
-  --am:#ff9500;  --cy:#32ade6;
-  --pu:#7e5bc2;  --or:#ff6b00;
-  --pk:#e91e8c;
-  /* Shadows — Apple elevation */
-  --sh:0 2px 8px rgba(0,0,0,0.07),0 1px 2px rgba(0,0,0,0.05);
-  --sh2:0 8px 32px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.06);
-  --sh3:0 0 0 1px rgba(0,0,0,0.06);
-  /* Purple/Blue spectrum for decorative use */
-  --ap:#a855f7;   /* accent purple */
-  --ab:#3b82f6;   /* accent blue */
-  --apk:#ec4899;  /* accent pink */
-  --grad-main:linear-gradient(135deg,#0071e3,#7e5bc2);
-  --grad-hero:linear-gradient(135deg,#0071e3 0%,#7e5bc2 50%,#e91e8c 100%);
-  --grad-subtle:linear-gradient(135deg,rgba(0,113,227,0.08),rgba(126,91,194,0.06));
+  /* ── Semantic ── */
+  --rd:#ef4444;  --rd2:#f87171;
+  --gn:#10b981;  --gn2:#34d399;
+  --am:#f59e0b;  --cy:#06b6d4;
+  --pu:#a855f7;  --or:#f97316;
+  --pk:#ec4899;
+  /* ── Shadows ── */
+  --sh:0 1px 3px rgba(15,14,23,0.06),0 4px 16px rgba(90,94,247,0.06);
+  --sh2:0 8px 40px rgba(15,14,23,0.12),0 2px 8px rgba(90,94,247,0.08);
+  --sh3:0 0 0 1px rgba(90,94,247,0.12);
+  --ap:#a855f7; --ab:#5a5ef7; --apk:#ec4899;
+  --grad-main:linear-gradient(135deg,#5a5ef7,#a855f7);
+  --grad-hero:linear-gradient(135deg,#5a5ef7 0%,#a855f7 50%,#ec4899 100%);
+  --grad-subtle:linear-gradient(135deg,rgba(90,94,247,0.08),rgba(168,85,247,0.05));
 }
 
 /* === LIGHT THEME explicit .lm === */
 .lm{
-  --bg:#f5f5f7;
+  --bg:#eff1fb;
   --sf:#ffffff;
-  --sf2:#f5f5f7;
-  --sf3:#e8e8ed;
-  --bd:rgba(0,0,0,0.08);
-  --bd2:rgba(0,0,0,0.05);
-  --tx:#1d1d1f;
-  --tx2:#424245;
-  --tx3:#86868b;
-  --sb:#1d1d1f;
-  --sb2:#2c2c2e;
-  --sb3:#3a3a3c;
-  --sbt:#98989d;
-  --ac:#0071e3;
-  --ac2:#0077ed;
-  --ac3:rgba(0,113,227,0.10);
-  --ac4:rgba(0,113,227,0.06);
+  --sf2:#f5f7ff;
+  --sf3:#eaedf8;
+  --bd:rgba(99,102,241,0.13);
+  --bd2:rgba(99,102,241,0.07);
+  --tx:#0f0e17;
+  --tx2:#3d3b54;
+  --tx3:#9494a8;
+  --sb:#0d0b1e;
+  --sb2:#13112b;
+  --sb3:#1e1b38;
+  --sbt:#7b7898;
+  --ac:#5a5ef7;
+  --ac2:#4347f5;
+  --ac3:rgba(90,94,247,0.12);
+  --ac4:rgba(90,94,247,0.06);
   --ac-tx:#ffffff;
-  --rd:#ff3b30;  --rd2:#ff453a;
-  --gn:#34c759;  --gn2:#30d158;
-  --am:#ff9500;  --cy:#32ade6;
-  --pu:#7e5bc2;  --or:#ff6b00;
-  --pk:#e91e8c;
-  --sh:0 2px 8px rgba(0,0,0,0.07),0 1px 2px rgba(0,0,0,0.05);
-  --sh2:0 8px 32px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.06);
-  --sh3:0 0 0 1px rgba(0,0,0,0.06);
-  --ap:#a855f7; --ab:#3b82f6; --apk:#ec4899;
-  --grad-main:linear-gradient(135deg,#0071e3,#7e5bc2);
-  --grad-hero:linear-gradient(135deg,#0071e3 0%,#7e5bc2 50%,#e91e8c 100%);
-  --grad-subtle:linear-gradient(135deg,rgba(0,113,227,0.08),rgba(126,91,194,0.06));
+  --rd:#ef4444;  --rd2:#f87171;
+  --gn:#10b981;  --gn2:#34d399;
+  --am:#f59e0b;  --cy:#06b6d4;
+  --pu:#a855f7;  --or:#f97316;
+  --pk:#ec4899;
+  --sh:0 1px 3px rgba(15,14,23,0.06),0 4px 16px rgba(90,94,247,0.06);
+  --sh2:0 8px 40px rgba(15,14,23,0.12),0 2px 8px rgba(90,94,247,0.08);
+  --sh3:0 0 0 1px rgba(90,94,247,0.12);
+  --ap:#a855f7; --ab:#5a5ef7; --apk:#ec4899;
+  --grad-main:linear-gradient(135deg,#5a5ef7,#a855f7);
+  --grad-hero:linear-gradient(135deg,#5a5ef7 0%,#a855f7 50%,#ec4899 100%);
+  --grad-subtle:linear-gradient(135deg,rgba(90,94,247,0.08),rgba(168,85,247,0.05));
 }
 
 /* === DARK THEME .dm — Deep Space / Titanium === */
@@ -4138,115 +4136,209 @@ input[type=date]{color-scheme:dark}
 input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.45;filter:invert(1)}
 .lm input[type=date]::-webkit-calendar-picker-indicator{filter:none;opacity:.5}
 
-.card{background:var(--sf);border-radius:16px;padding:18px;border:1px solid var(--bd2);transition:border-color .15s,box-shadow .15s;box-shadow:var(--sh)}
-.card:hover{border-color:var(--bd);box-shadow:var(--sh2)}
+/* ─── Rich Card Styles ─────────────────────────────────────────── */
+.card{
+  background:var(--sf);border-radius:18px;padding:20px;
+  border:1px solid var(--bd2);
+  transition:border-color .22s,box-shadow .22s,transform .22s;
+  box-shadow:var(--sh);
+  position:relative;overflow:hidden;
+}
+.card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(90,94,247,0.25),rgba(168,85,247,0.2),transparent);
+  pointer-events:none;border-radius:inherit;
+}
+.card::after{
+  content:'';position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(135deg,rgba(90,94,247,0.025) 0%,transparent 55%);
+  pointer-events:none;
+}
+.card:hover{
+  border-color:rgba(90,94,247,0.25);
+  box-shadow:var(--sh2),0 0 0 1px rgba(90,94,247,0.1),0 0 40px rgba(90,94,247,0.07);
+  transform:translateY(-2px);
+}
+.lm .card:hover{border-color:rgba(90,94,247,0.2)}
 
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:100px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .14s;white-space:nowrap;line-height:1;font-family:inherit;letter-spacing:.01em}
-.bp{background:var(--ac);color:var(--ac-tx)!important}
-.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(90,140,255,0.45)}
+/* ─── Buttons ──────────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:100px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .18s cubic-bezier(0.4,0,0.2,1);white-space:nowrap;line-height:1;font-family:inherit;letter-spacing:.01em}
+.bp{
+  background:linear-gradient(135deg,#5a5ef7 0%,#a855f7 50%,#ec4899 100%);
+  background-size:200% auto;
+  color:#fff!important;
+  box-shadow:0 3px 16px rgba(90,94,247,0.4),inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.bp:hover{
+  background-position:right center;
+  transform:translateY(-2px);
+  box-shadow:0 8px 28px rgba(90,94,247,0.5),inset 0 1px 0 rgba(255,255,255,0.15);
+}
 .bp:active{transform:translateY(0)}
-.bp:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.bp:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 .bg{background:transparent;color:var(--tx2)!important;border:1px solid var(--bd)}
-.bg:hover{background:var(--sf2);color:var(--tx)!important;border-color:var(--tx3)}
-.brd{background:rgba(185,28,28,0.10);color:var(--rd)!important;border:1px solid rgba(255,68,68,.2)}
-.brd:hover{background:rgba(255,68,68,.14)}
-.bam{background:rgba(180,83,9,0.10);color:var(--am)!important;border:1px solid rgba(245,158,11,.25)}
-.bam:hover{background:rgba(245,158,11,.16)}
-.bdk{background:var(--sb);color:#fff!important;border:1px solid var(--bd)}
-.bdk:hover{background:var(--sb2);transform:translateY(-1px)}
-.bwh{background:#ffffff;color:#111111!important;border:none}
-.bwh:hover{background:#e8e8e8;transform:translateY(-1px)}
+.bg:hover{background:var(--sf2);color:var(--tx)!important;border-color:rgba(90,94,247,0.3)}
+.brd{background:rgba(185,28,28,0.08);color:var(--rd)!important;border:1px solid rgba(255,68,68,.18)}
+.brd:hover{background:rgba(255,68,68,.14);transform:translateY(-1px)}
+.bam{background:rgba(180,83,9,0.08);color:var(--am)!important;border:1px solid rgba(245,158,11,.22)}
+.bam:hover{background:rgba(245,158,11,.14);transform:translateY(-1px)}
+.bdk{background:linear-gradient(135deg,var(--sb),var(--sb2));color:#fff!important;border:1px solid rgba(255,255,255,0.08)}
+.bdk:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.3)}
+.bwh{background:#ffffff;color:#111111!important;border:none;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.bwh:hover{background:#f0f0f0;transform:translateY(-1px)}
 
-.inp{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;transition:border-color .14s,box-shadow .14s;font-family:inherit;line-height:1.4}
-.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(90,140,255,0.18)}
+/* ─── Inputs ───────────────────────────────────────────────────── */
+.inp{
+  background:var(--sf2);border:1.5px solid var(--bd);border-radius:11px;
+  padding:9px 13px;color:var(--tx);font-size:13px;width:100%;
+  outline:none;transition:all .18s;font-family:inherit;line-height:1.4;
+}
+.inp:focus{
+  border-color:var(--ac);
+  background:var(--sf);
+  box-shadow:0 0 0 3px rgba(90,94,247,0.14),0 0 16px rgba(90,94,247,0.08);
+}
 .inp::placeholder{color:var(--tx3)}
 textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
-.sel{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:9px 30px 9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;transition:border-color .14s}
-.sel:focus{border-color:var(--ac);outline:none;box-shadow:0 0 0 3px rgba(90,140,255,0.18)}
+.sel{
+  background:var(--sf2);border:1.5px solid var(--bd);border-radius:11px;
+  padding:9px 30px 9px 13px;color:var(--tx);font-size:13px;width:100%;
+  outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  transition:all .18s;
+}
+.sel:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(90,94,247,0.14)}
 
-.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.2px;text-transform:uppercase;line-height:1.5}
+/* ─── Badges / Nav ─────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.2px;text-transform:uppercase;line-height:1.5}
 .nb{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:10px;cursor:pointer;color:var(--tx2);font-size:12px;font-weight:500;transition:all .12s;border:none;background:transparent;width:100%;text-align:left;position:relative}
 .nb:hover{background:var(--sf2);color:var(--tx)}
-.nb.act{background:var(--ac);color:var(--ac-tx)!important;font-weight:600}
-.nb.act svg{stroke:var(--ac-tx)!important}
+.nb.act{background:linear-gradient(135deg,rgba(90,94,247,0.22),rgba(168,85,247,0.16));color:#c4b5fd!important;font-weight:700;box-shadow:none;border:1px solid rgba(90,94,247,0.3)!important}
+.nb.act svg{stroke:#a5b4fc!important}
 
-.ov{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(14px)}
-.mo{background:var(--sf);border-radius:22px;padding:26px;width:100%;max-width:640px;max-height:94vh;overflow-y:auto;box-shadow:var(--sh2);border:1px solid var(--bd2)}
+/* ─── Modals ───────────────────────────────────────────────────── */
+.ov{position:fixed;inset:0;background:rgba(7,5,20,.75);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px;backdrop-filter:blur(20px) saturate(180%)}
+.mo{
+  background:var(--sf);border-radius:24px;padding:28px;width:100%;
+  max-width:640px;max-height:94vh;overflow-y:auto;
+  box-shadow:0 24px 80px rgba(0,0,0,0.35),0 0 0 1px rgba(90,94,247,0.12);
+  border:1px solid var(--bd2);
+}
 .mo-xl{max-width:920px}
 
-.tkc{background:var(--sf);border-radius:16px;padding:14px;cursor:pointer;transition:all .16s;border:1px solid var(--bd2)}
-.tkc:hover{transform:translateY(-2px);box-shadow:var(--sh2);border-color:var(--bd)}
+/* ─── Task Cards ───────────────────────────────────────────────── */
+.tkc{
+  background:var(--sf);border-radius:16px;padding:14px;cursor:pointer;
+  transition:all .18s;border:1px solid var(--bd2);
+  box-shadow:var(--sh);
+}
+.tkc:hover{transform:translateY(-3px);box-shadow:var(--sh2),0 0 0 1px rgba(90,94,247,0.1);border-color:rgba(90,94,247,0.2)}
 
-.prog{height:3px;background:var(--bd);border-radius:100px;overflow:hidden}
-.progf{height:100%;border-radius:100px;transition:width .5s ease}
+/* ─── Progress bar ─────────────────────────────────────────────── */
+.prog{height:4px;background:var(--bd);border-radius:100px;overflow:hidden}
+.progf{height:100%;border-radius:100px;transition:width .6s cubic-bezier(0.4,0,0.2,1);background:linear-gradient(90deg,#5a5ef7,#a855f7,#ec4899);background-size:200% auto;animation:progShimmer 3s linear infinite}
+@keyframes progShimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}
 
-.tb{padding:5px 13px;border-radius:100px;cursor:pointer;font-size:11px;font-weight:600;border:1px solid var(--bd);background:transparent;color:var(--tx2);transition:all .12s;font-family:inherit;letter-spacing:.01em;white-space:nowrap}
-.tb.act{background:var(--tx);color:var(--bg)!important;border-color:transparent}
-.lm .tb.act{background:#111111;color:#ffffff!important;border-color:#111111}
-.tb:hover:not(.act){background:var(--sf2);color:var(--tx);border-color:var(--tx3)}
+/* ─── Tab pills ────────────────────────────────────────────────── */
+.tb{padding:5px 14px;border-radius:100px;cursor:pointer;font-size:11px;font-weight:600;border:1px solid var(--bd);background:transparent;color:var(--tx2);transition:all .15s;font-family:inherit;letter-spacing:.01em;white-space:nowrap}
+.tb.act{background:linear-gradient(135deg,var(--ac),var(--pu));color:#fff!important;border-color:transparent;box-shadow:0 2px 10px rgba(90,94,247,0.3)}
+.lm .tb.act{background:linear-gradient(135deg,var(--ac),var(--pu));color:#fff!important}
+.tb:hover:not(.act){background:var(--sf2);color:var(--tx);border-color:rgba(90,94,247,0.2)}
 
+/* ─── Misc ─────────────────────────────────────────────────────── */
 .av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;letter-spacing:-.3px}
-
-.lbl{color:var(--tx3);font-size:10px;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.8px;font-weight:700}
-.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:600;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;transition:all .12s}
-.chip:hover{border-color:var(--ac);color:var(--ac);background:var(--ac3)}
+.lbl{color:var(--tx3);font-size:10px;margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.9px;font-weight:700}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:100px;font-size:11px;font-weight:600;background:var(--sf2);border:1px solid var(--bd);color:var(--tx2);cursor:pointer;transition:all .14s}
+.chip:hover{border-color:var(--ac);color:var(--ac);background:var(--ac3);transform:translateY(-1px)}
 .chip.on{background:var(--ac3);border-color:var(--ac);color:var(--ac)}
-
-.drop-zone{border:1.5px dashed var(--bd);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .16s;color:var(--tx3);font-size:13px}
+.drop-zone{border:1.5px dashed var(--bd);border-radius:13px;padding:20px;text-align:center;cursor:pointer;transition:all .18s;color:var(--tx3);font-size:13px}
 .drop-zone:hover,.drop-zone.over{border-color:var(--ac);color:var(--ac);background:var(--ac4)}
 
-@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.fi{animation:fi .18s ease forwards}
-@keyframes sp{to{transform:rotate(360deg)}}
-.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .5s linear infinite;vertical-align:middle}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.pulse{animation:pulse 1.4s ease-in-out infinite}
-@keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-
-  .ai-btn{position:fixed;bottom:80px;right:20px;z-index:1800;width:46px;height:46px;border-radius:50%;background:var(--ac);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:0 4px 18px var(--ac3);transition:all .18s}
-.ai-btn:hover{transform:scale(1.1);box-shadow:0 6px 26px var(--ac3)}
-.ai-panel{position:fixed;bottom:136px;right:20px;z-index:1800;width:370px;height:520px;background:var(--sf);border-radius:20px;display:flex;flex-direction:column;box-shadow:var(--sh2);overflow:hidden;border:1px solid var(--bd);animation:slideUp .18s ease}
-.ai-msg-user{align-self:flex-end;background:var(--ac);color:var(--ac-tx);border-radius:16px 16px 4px 16px;padding:9px 13px;font-size:12px;max-width:80%;line-height:1.5;font-weight:600}
-.ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border-radius:16px 16px 16px 4px;padding:9px 13px;font-size:12px;max-width:90%;line-height:1.55;white-space:pre-wrap;border:1px solid var(--bd2)}
-.ai-action{background:var(--ac3);border:1px solid rgba(90,140,255,0.3);border-radius:8px;padding:7px 10px;font-size:10px;color:var(--ac);font-family:monospace;margin-top:4px}
-
-.snb{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--sbt);transition:all .12s;flex-shrink:0}
-.snb:hover{background:rgba(37,99,235,0.12);color:#93c5fd}
-.snb.act{background:var(--ac)}
-.snb.act svg{stroke:var(--ac-tx)!important}
-
-.pri-hi{background:rgba(255,68,68,.1);color:var(--rd);border:1px solid rgba(255,68,68,.2)}
-.pri-md{background:rgba(167,139,250,.1);color:var(--pu);border:1px solid rgba(167,139,250,.2)}
-.pri-lo{background:rgba(34,211,238,.1);color:var(--cy);border:1px solid rgba(34,211,238,.2)}
-.pri-gn{background:rgba(62,207,110,.1);color:var(--gn);border:1px solid rgba(62,207,110,.2)}
-
-.stat-num{font-family:'Space Grotesk',sans-serif;font-weight:700;line-height:1;letter-spacing:-1.5px}
-.int-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
-
-.sched-pill{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd);cursor:pointer;transition:all .13s;flex-shrink:0}
-.sched-pill:hover{border-color:var(--tx3)}
-.sched-pill.active{background:var(--ac);border-color:var(--ac)}
-.sched-pill.active span{color:var(--ac-tx)!important}
-
-.status-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:100px;font-size:10px;font-weight:600;border:1px solid var(--bd);background:var(--sf2);color:var(--tx2);cursor:pointer;transition:all .12s}
-.status-pill:hover{border-color:var(--tx3);color:var(--tx)}
-
-.section-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--tx);letter-spacing:-.4px}
-.section-count{font-size:11px;font-weight:600;color:var(--tx3);padding:2px 7px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd)}
-
-.hs-card{background:var(--sf);border:1px solid var(--bd2);border-radius:18px;padding:16px;transition:all .16s;position:relative;overflow:hidden}
-.hs-card:hover{border-color:var(--bd);transform:translateY(-1px);box-shadow:var(--sh)}
+/* ─── Stat cards (dashboard) ───────────────────────────────────── */
+.hs-card{
+  background:var(--sf);border:1px solid var(--bd2);border-radius:18px;
+  padding:16px 18px;transition:all .2s;position:relative;overflow:hidden;
+  box-shadow:var(--sh);
+}
+.hs-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:var(--grad-main);opacity:0;transition:opacity .22s;
+  border-radius:0 0 18px 18px;
+}
+.hs-card:hover{border-color:rgba(90,94,247,0.22);box-shadow:var(--sh2),0 0 0 1px rgba(90,94,247,0.08);transform:translateY(-2px)}
+.hs-card:hover::after{opacity:1}
 .hs-card-accent{position:absolute;top:0;left:0;width:100%;height:3px;border-radius:18px 18px 0 0}
 
-/* ═══════════════════════════════════════════════════════════════════
-   IN-APP TOAST / BANNER NOTIFICATIONS
-   Stacks from top-right, auto-dismisses, click to navigate
-   ═══════════════════════════════════════════════════════════════════ */
+/* ─── Animations ───────────────────────────────────────────────── */
+@keyframes fi{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fi .2s ease forwards}
+@keyframes sp{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .65s linear infinite;vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.pulse{animation:pulse 1.4s ease-in-out infinite}
+@keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* ─── AI panel ─────────────────────────────────────────────────── */
+.ai-btn{
+  position:fixed;bottom:80px;right:20px;z-index:1800;
+  width:48px;height:48px;border-radius:50%;
+  background:linear-gradient(135deg,var(--ac),var(--pu));
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:19px;
+  box-shadow:0 4px 20px rgba(90,94,247,0.5),0 0 0 1px rgba(255,255,255,0.1);
+  transition:all .2s;
+}
+.ai-btn:hover{transform:scale(1.1) translateY(-2px);box-shadow:0 8px 30px rgba(90,94,247,0.65)}
+.ai-panel{
+  position:fixed;bottom:140px;right:20px;z-index:1800;
+  width:370px;height:520px;background:var(--sf);border-radius:22px;
+  display:flex;flex-direction:column;
+  box-shadow:0 24px 80px rgba(0,0,0,0.35),0 0 0 1px rgba(90,94,247,0.15);
+  overflow:hidden;border:1px solid var(--bd);animation:slideUp .2s ease;
+}
+.ai-msg-user{align-self:flex-end;background:linear-gradient(135deg,var(--ac),var(--pu));color:#fff;border-radius:18px 18px 4px 18px;padding:10px 14px;font-size:12px;max-width:82%;line-height:1.5;font-weight:600;box-shadow:0 2px 10px rgba(90,94,247,0.3)}
+.ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border-radius:18px 18px 18px 4px;padding:10px 14px;font-size:12px;max-width:90%;line-height:1.6;white-space:pre-wrap;border:1px solid var(--bd2)}
+.ai-action{background:var(--ac3);border:1px solid rgba(90,94,247,0.25);border-radius:9px;padding:7px 10px;font-size:10px;color:var(--ac);font-family:monospace;margin-top:4px}
+
+/* ─── Sidebar collapsed buttons ───────────────────────────────── */
+.snb{width:38px;height:38px;border-radius:11px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--sbt);transition:all .14s;flex-shrink:0}
+.snb:hover{background:rgba(90,94,247,0.14);color:#a5b4fc}
+.snb.act{background:linear-gradient(135deg,var(--ac),var(--pu))}
+.snb.act svg{stroke:#fff!important}
+
+/* ─── Priority / status chips ──────────────────────────────────── */
+.pri-hi{background:rgba(255,68,68,.08);color:var(--rd);border:1px solid rgba(255,68,68,.18)}
+.pri-md{background:rgba(168,85,247,.1);color:var(--pu);border:1px solid rgba(168,85,247,.2)}
+.pri-lo{background:rgba(34,211,238,.08);color:var(--cy);border:1px solid rgba(34,211,238,.18)}
+.pri-gn{background:rgba(16,185,129,.08);color:var(--gn);border:1px solid rgba(16,185,129,.18)}
+
+/* ─── Typography helpers ───────────────────────────────────────── */
+.stat-num{font-family:'Space Grotesk',sans-serif;font-weight:800;line-height:1;letter-spacing:-2px}
+.int-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.sched-pill{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd);cursor:pointer;transition:all .14s;flex-shrink:0}
+.sched-pill:hover{border-color:rgba(90,94,247,0.3)}
+.sched-pill.active{background:linear-gradient(135deg,var(--ac),var(--pu));border-color:transparent}
+.sched-pill.active span{color:#fff!important}
+.status-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:100px;font-size:10px;font-weight:600;border:1px solid var(--bd);background:var(--sf2);color:var(--tx2);cursor:pointer;transition:all .13s}
+.status-pill:hover{border-color:rgba(90,94,247,0.3);color:var(--ac)}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--tx);letter-spacing:-.5px}
+.section-count{font-size:11px;font-weight:600;color:var(--tx3);padding:2px 8px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd)}
+
+/* ─── Toast system ─────────────────────────────────────────────── */
 .toast-stack{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:9px;pointer-events:none;max-width:360px;width:360px}
-.toast{pointer-events:all;display:flex;align-items:flex-start;gap:11px;padding:13px 14px;border-radius:14px;border:1px solid var(--bd);background:var(--sf);box-shadow:0 4px 24px rgba(0,0,0,.55),0 1px 4px rgba(0,0,0,.3);cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
-.lm .toast{box-shadow:0 4px 24px rgba(0,0,0,.18),0 1px 4px rgba(0,0,0,.1)}
-.toast:hover{transform:translateX(-3px);box-shadow:0 6px 28px rgba(0,0,0,.65)}
-.toast-bar{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 14px 14px;transition:width linear}
+.toast{
+  pointer-events:all;display:flex;align-items:flex-start;gap:11px;
+  padding:13px 14px;border-radius:16px;border:1px solid var(--bd);
+  background:var(--sf);
+  box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 0 1px rgba(90,94,247,0.1);
+  cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+  backdrop-filter:blur(20px);
+}
+.lm .toast{box-shadow:0 8px 32px rgba(0,0,0,.12),0 0 0 1px rgba(90,94,247,0.08)}
+.toast:hover{transform:translateX(-4px);box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.toast-bar{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 16px 16px;transition:width linear}
 .toast-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .toast-body{flex:1;min-width:0}
 .toast-title{font-size:12px;font-weight:700;color:var(--tx);line-height:1.3;margin-bottom:2px}
@@ -4254,28 +4346,24 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .toast-time{font-size:9px;color:var(--tx3);margin-top:3px;font-family:monospace}
 .toast-close{width:20px;height:20px;border-radius:6px;border:none;background:transparent;color:var(--tx3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;transition:all .12s;padding:0}
 .toast-close:hover{background:var(--sf2);color:var(--tx)}
-@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}70%{opacity:.8;transform:translateY(-60px) scale(1.2)}100%{opacity:0;transform:translateY(-110px) scale(.8)}}
-@keyframes toastIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
 
-/* ── Utility classes for repeated inline styles ── */
+/* ─── Utility classes ──────────────────────────────────────────── */
 .tx3-11{font-size:11px;color:var(--tx3)}
 .tx3-10{font-size:10px;color:var(--tx3)}
 .mono-10{font-size:10px;color:var(--tx3);font-family:monospace}
 .id-badge{display:inline-flex;align-items:center;font-size:10px;font-family:'JetBrains Mono',monospace,sans-serif;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.02em;white-space:nowrap;flex-shrink:0}
-.id-task{background:rgba(29,78,216,0.10);color:#1d4ed8;border:1px solid rgba(29,78,216,0.2)}
-.id-ticket{background:rgba(194,65,12,0.10);color:#c2410c;border:1px solid rgba(194,65,12,0.2)}
+.id-task{background:rgba(90,94,247,0.10);color:var(--ac);border:1px solid rgba(90,94,247,0.2)}
+.id-ticket{background:rgba(168,85,247,0.10);color:var(--pu);border:1px solid rgba(168,85,247,0.2)}
 .id-subtask{background:rgba(71,85,105,0.10);color:#475569;border:1px solid rgba(71,85,105,0.2)}
-.id-epic{background:rgba(109,40,217,0.10);color:#6d28d9;border:1px solid rgba(109,40,217,0.2)}
-.f1-mw0{flex:1;min-width:0}
-.jc-sb{display:flex;justify-content:space-between}
-.fc-g8{display:flex;flex-direction:column;gap:8px}
-.fc-g4{display:flex;flex-direction:column;gap:4px}
-.fc-g3{display:flex;flex-direction:column;gap:3px}
+.id-epic{background:rgba(236,72,153,0.10);color:var(--pk);border:1px solid rgba(236,72,153,0.2)}
+.f1-mw0{flex:1;min-width:0}.jc-sb{display:flex;justify-content:space-between}
+.fc-g8{display:flex;flex-direction:column;gap:8px}.fc-g4{display:flex;flex-direction:column;gap:4px}.fc-g3{display:flex;flex-direction:column;gap:3px}
 
 @keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(110%)}}
-.toast{animation:toastIn .25s cubic-bezier(.34,1.56,.64,1) forwards}
-.toast.leaving{animation:toastOut .2s ease forwards}
-@keyframes pageEnter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.toast{animation:toastIn .28s cubic-bezier(.34,1.56,.64,1) forwards}
+.toast.leaving{animation:toastOut .22s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
+@keyframes pageEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .page-enter{animation:pageEnter .22s ease forwards}
 @keyframes teamSwitch{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
 .team-switch-enter{animation:teamSwitch .25s ease forwards}
@@ -5431,19 +5519,19 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
   return html`
     <aside style=${{
       width:W,minWidth:W,maxWidth:W,
-      background:'linear-gradient(180deg,#0c1425 0%,#0f172a 100%)',
+      background:'linear-gradient(180deg,#0d0b1e 0%,#13112b 60%,#0d0b1e 100%)',
       display:'flex',flexDirection:'column',
       height:'100vh',flexShrink:0,overflow:'visible',
-      borderRight:'1px solid rgba(37,99,235,0.2)',
+      borderRight:'1px solid rgba(90,94,247,0.18)',
       transition:'width .2s ease,min-width .2s ease,max-width .2s ease',
       position:'relative',
-      boxShadow:'2px 0 24px rgba(0,0,0,0.25)'
+      boxShadow:'2px 0 32px rgba(10,8,30,0.45),inset -1px 0 0 rgba(90,94,247,0.08)'
     }}>
 
             <div style=${{
-        padding:col?'14px 0':'12px 14px', display:'flex',alignItems:'center', gap:8,flexShrink:0, borderBottom:'1px solid rgba(37,99,235,0.15)', justifyContent:col?'center':'flex-start', minHeight:52
+        padding:col?'14px 0':'12px 14px', display:'flex',alignItems:'center', gap:8,flexShrink:0, borderBottom:'1px solid rgba(90,94,247,0.12)', justifyContent:col?'center':'flex-start', minHeight:52
       }}>
-        <div style=${{width:28,height:28,borderRadius:8,background:'#2563eb',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 2px 8px rgba(37,99,235,0.4)'}}>
+        <div style=${{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#5a5ef7,#a855f7)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 2px 12px rgba(90,94,247,0.5),0 0 0 1px rgba(255,255,255,0.1)'}}>
           <svg width="14" height="14" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white" opacity=".9"/><circle cx="51" cy="43" r="6" fill="white" opacity=".9"/><circle cx="13" cy="43" r="6" fill="white" opacity=".9"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" strokeWidth="3.5" strokeLinecap="round"/></svg>
         </div>
         ${!col?html`<div style=${{flex:1,minWidth:0}}>
@@ -5463,19 +5551,19 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
             onClick=${()=>setView(it.id)}
             style=${{
               display:'flex',alignItems:'center', gap:col?0:10, width:'100%', padding:col?'10px 0':'9px 10px', borderRadius:9,border:'none',cursor:'pointer',
-              background:baseView===it.id?'rgba(37,99,235,0.22)':'transparent',
-              color:baseView===it.id?'#93c5fd':'rgba(203,213,225,0.75)',
+              background:baseView===it.id?'rgba(90,94,247,0.18)':'transparent',
+              color:baseView===it.id?'#a5b4fc':'rgba(200,195,240,0.65)',
               fontSize:12,fontWeight:baseView===it.id?700:500,
               transition:'all .12s',textAlign:'left',
-              borderLeft:baseView===it.id&&!col?'2px solid #60a5fa':'2px solid transparent',
+              borderLeft:baseView===it.id&&!col?'2px solid #818cf8':'2px solid transparent',
               justifyContent:col?'center':'flex-start', position:'relative',
-              boxShadow:baseView===it.id?'inset 0 0 0 1px rgba(96,165,250,0.12)':'none'
+              boxShadow:baseView===it.id?'inset 0 0 0 1px rgba(129,140,248,0.15),0 0 20px rgba(90,94,247,0.1)':'none'
             }}
-            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(37,99,235,0.12)';e.currentTarget.style.color='#93c5fd';}}}
-            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.75)';}}}>
+            onMouseEnter=${e=>{if(baseView!==it.id){e.currentTarget.style.background='rgba(90,94,247,0.10)';e.currentTarget.style.color='#a5b4fc';}}}
+            onMouseLeave=${e=>{if(baseView!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(200,195,240,0.65)';}}}>
             <span style=${{flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center',opacity:baseView===it.id?1:.8}}>${NAV_ICONS[it.id]||null}</span>
             ${!col?html`<span style=${{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:12,flex:1}}>${it.label}</span>`:null}
-            ${it.badge&&!col?html`<span style=${{fontSize:8,fontWeight:800,padding:'1px 5px',borderRadius:4,background:'linear-gradient(135deg,#2563eb,#7c3aed)',color:'#fff',letterSpacing:'.04em',flexShrink:0}}>${it.badge}</span>`:null}
+            ${it.badge&&!col?html`<span style=${{fontSize:8,fontWeight:800,padding:'1px 5px',borderRadius:4,background:'linear-gradient(135deg,#5a5ef7,#a855f7)',color:'#fff',letterSpacing:'.04em',flexShrink:0}}>${it.badge}</span>`:null}
             ${it.id==='notifs'&&unread>0?html`<span style=${{
               position:'absolute',top:6,right:col?6:10, minWidth:16,height:16,borderRadius:8, background:'var(--rd)',color:'#fff', fontSize:9,fontWeight:700, display:'flex',alignItems:'center',justifyContent:'center', padding:'0 4px'
             }}>${unread>9?'9+':unread}</span>`:null}
@@ -5486,11 +5574,11 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
 
       </nav>
 
-            <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(37,99,235,0.15)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
+            <div style=${{padding:'8px 6px',borderTop:'1px solid rgba(90,94,247,0.12)',display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
 
         <button title=${dark?'Light Mode':'Dark Mode'} onClick=${()=>{setDark(d=>{const n=!d;try{localStorage.setItem('pf_dark',n?'1':'0');}catch{}return n;})}}
           style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer',background:'transparent',color:'rgba(203,213,225,0.65)',transition:'all .12s',justifyContent:col?'center':'flex-start'}}
-          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}
+          onMouseEnter=${e=>{e.currentTarget.style.background='rgba(90,94,247,0.12)';e.currentTarget.style.color='#a5b4fc';}}
           onMouseLeave=${e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(203,213,225,0.65)';}}>
           <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,display:'flex',alignItems:'center',justifyContent:'center'}}>${themeIcon}</span>
           ${!col?html`<span style=${{fontSize:12}}>${dark?'Light Mode':'Dark Mode'}</span>`:null}
@@ -5498,7 +5586,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
         ${(cu&&(cu.role==='Admin'||cu.role==='Manager'||cu.role==='TeamLead'))?html`
           <button title=${col?'Settings':''} onClick=${()=>setView('settings')}
             style=${{display:'flex',alignItems:'center',gap:col?0:9,width:'100%',padding:col?'9px 0':'8px 10px',borderRadius:9,border:'none',cursor:'pointer', background:baseView==='settings'?'rgba(37,99,235,0.18)':'transparent', color:baseView==='settings'?'var(--ac)':'rgba(255,255,255,.35)', transition:'all .12s',justifyContent:col?'center':'flex-start'}}
-            onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(37,99,235,0.15)';e.currentTarget.style.color='#93c5fd';}}}
+            onMouseEnter=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='rgba(90,94,247,0.12)';e.currentTarget.style.color='#a5b4fc';}}}
             onMouseLeave=${e=>{if(baseView!=='settings'){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.35)';}}}>
             <span style=${{fontSize:15,flexShrink:0,width:col?'auto':18,textAlign:'center'}}>⚙️</span>
             ${!col?html`<span style=${{fontSize:12}}>Settings</span>`:null}
@@ -5511,9 +5599,11 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
           ${!col?html`<span style=${{fontSize:12}}>Sign out</span>`:null}
         </button>
       </div>
+      <!-- Sidebar orb decoration -->
+      ${!col?html`<div style=${{position:'absolute',bottom:100,left:-40,width:120,height:120,borderRadius:'50%',background:'radial-gradient(circle,rgba(90,94,247,0.12) 0%,transparent 70%)',pointerEvents:'none',zIndex:0}}></div>`:null}
       <button title=${col?'Expand sidebar':'Collapse sidebar'} onClick=${()=>setCol(c=>!c)}
         style=${{
-          position:'absolute', left:col?64:200, top:'50%', transform:'translateY(-50%)', zIndex:200, width:14, height:40, background:'#0f0f0f', border:'1px solid rgba(255,255,255,.1)', borderLeft:'none', borderRadius:'0 6px 6px 0', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,.35)', transition:'left .2s ease, background .12s, color .12s', padding:0, }}
+          position:'absolute', left:col?64:200, top:'50%', transform:'translateY(-50%)', zIndex:200, width:14, height:40, background:'#0d0b1e', border:'1px solid rgba(90,94,247,0.2)', borderLeft:'none', borderRadius:'0 6px 6px 0', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'rgba(255,255,255,.35)', transition:'left .2s ease, background .12s, color .12s', padding:0, }}
         onMouseEnter=${e=>{e.currentTarget.style.background='#1a1a1a';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
         onMouseLeave=${e=>{e.currentTarget.style.background='#0f172a';e.currentTarget.style.color='rgba(148,163,184,0.5)';}}>
         <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -5551,7 +5641,7 @@ function Header({title,sub,dark,setDark,extra,cu,setCu,upcomingReminders,onViewR
     document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
   },[showProfile]);
   return html`
-    <div style=${{flexShrink:0,background:'var(--bg)',borderBottom:'1px solid var(--bd2)',position:'relative',zIndex:100}}>
+    <div style=${{flexShrink:0,background:'var(--sf)',borderBottom:'1px solid var(--bd)',position:'relative',zIndex:100,boxShadow:'0 1px 0 rgba(99,102,241,0.08),0 2px 12px rgba(15,14,23,0.05)'}}>
       <div style=${{padding:'0 18px',height:54,display:'flex',alignItems:'center',gap:10}}>
                 <div style=${{display:'flex',alignItems:'center',gap:8,flexShrink:0,padding:'5px 14px 5px 10px',background:'#1e3a5f',borderRadius:100,cursor:'pointer',border:'1px solid rgba(37,99,235,0.25)',transition:'all .14s'}} onClick=${onViewReminders}>
           <svg width="13" height="13" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="7" fill="#60a5fa"/><circle cx="32" cy="13" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="48" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><circle cx="16" cy="43" r="4" fill="#60a5fa" opacity="0.9"/><line x1="32" y1="17" x2="32" y2="25" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round"/><line x1="44" y1="40" x2="38" y2="36" stroke="#5a8cff" strokeWidth="2.5" strokeLinecap="round"/><line x1="20" y1="40" x2="26" y2="36" stroke="#5a8cff" strokeWidth="2.5" strokeLinecap="round"/></svg>
@@ -9095,27 +9185,74 @@ function AiDocsView({cu,projects,tasks,users}){
   const [messages,setMessages]=useState([]);
   const [input,setInput]=useState('');
   const [sending,setSending]=useState(false);
-  const [searchQ,setSearchQ]=useState('');
-  const [sideTab,setSideTab]=useState('prompts'); // prompts | history | context
+  const [sideTab,setSideTab]=useState('recents');
   const [copied,setCopied]=useState(null);
   const bottomRef=useRef(null);
   const inputRef=useRef(null);
   const chatRef=useRef(null);
 
-  const SUGGESTIONS=[
-    {icon:'🏗️',label:'Architecture Diagram',color:'#8b5cf6',prompt:'Generate a Mermaid.js architecture diagram for my project. Show all the main components, services, databases, and their connections. Include API gateway, auth layer, and data flow.'},
-    {icon:'📋',label:'Project Documentation',color:'#ff6433',prompt:'Create comprehensive project documentation including executive summary, scope, team structure, current task status, risks, and next steps. Use the workspace data to fill in real details.'},
-    {icon:'⚙️',label:'Technical Specification',color:'#14b8a6',prompt:'Write a detailed technical specification document with API design, data models, database schema, tech stack justification, and integration points.'},
-    {icon:'🔌',label:'API Reference',color:'#fbbf24',prompt:'Generate a complete API documentation reference with all endpoints, HTTP methods, request/response schemas, authentication details, and code examples in Python and JavaScript.'},
-    {icon:'🧪',label:'Test Plan',color:'#fc4f7c',prompt:'Create a comprehensive test plan covering unit tests, integration tests, end-to-end scenarios, and QA checklist for the current sprint tasks.'},
-    {icon:'🗺️',label:'User Journey Map',color:'#6366f1',prompt:'Map out the complete user journey from onboarding to core feature usage, including touchpoints, friction points, and improvement opportunities.'},
-    {icon:'📊',label:'Sprint Report',color:'#34d399',prompt:'Generate a sprint retrospective report summarizing completed tasks, velocity metrics, blockers encountered, team performance, and recommendations for next sprint.'},
-    {icon:'🔐',label:'Security Checklist',color:'#f59e0b',prompt:'Create a security audit checklist covering authentication, authorization, data validation, encryption, API security, and OWASP top 10 vulnerabilities.'},
-  ];
+  // ── Recents: stored in localStorage, keyed by user ──────────────────────
+  const STORAGE_KEY='vw_ai_recents_'+(cu&&cu.id||'x');
+  const loadRecents=()=>{try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch{return [];}};
+  const saveRecents=(list)=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(list.slice(0,30)));}catch{}};
 
-  const filteredSuggestions=SUGGESTIONS.filter(s=>!searchQ||s.label.toLowerCase().includes(searchQ.toLowerCase())||s.prompt.toLowerCase().includes(searchQ.toLowerCase()));
+  const [recents,setRecents]=useState(()=>loadRecents());
+  const [activeRecent,setActiveRecent]=useState(null); // id of loaded conversation
+
+  const saveCurrentAsRecent=(msgs)=>{
+    if(!msgs||msgs.length<=1)return;
+    const userMsgs=msgs.filter(m=>m.role==='user');
+    if(!userMsgs.length)return;
+    const title=userMsgs[0].content.slice(0,60)+(userMsgs[0].content.length>60?'…':'');
+    const id=activeRecent||('r'+Date.now());
+    setActiveRecent(id);
+    const entry={id,title,ts:new Date().toISOString(),msgs};
+    setRecents(prev=>{
+      const filtered=prev.filter(r=>r.id!==id);
+      const next=[entry,...filtered];
+      saveRecents(next);
+      return next;
+    });
+  };
+
+  const loadRecent=(r)=>{
+    setMessages(r.msgs||[]);
+    setActiveRecent(r.id);
+    setInput('');
+    scrollToBottom();
+  };
+
+  const deleteRecent=(id,e)=>{
+    e.stopPropagation();
+    setRecents(prev=>{
+      const next=prev.filter(r=>r.id!==id);
+      saveRecents(next);
+      return next;
+    });
+    if(activeRecent===id){setActiveRecent(null);}
+  };
+
+  const newChat=()=>{
+    saveCurrentAsRecent(messages);
+    setMessages([{role:'assistant',id:'w'+Date.now(),ts:new Date(),
+      content:'New chat started. What would you like to create today?',type:'assistant'}]);
+    setActiveRecent(null);
+    setInput('');
+  };
 
   const scrollToBottom=()=>{ setTimeout(()=>{ if(bottomRef.current) bottomRef.current.scrollIntoView({behavior:'smooth'}); },80); };
+
+  const fmtRecent=(iso)=>{
+    try{
+      const d=new Date(iso),now=new Date();
+      const diff=now-d;
+      if(diff<60000)return'Just now';
+      if(diff<3600000)return Math.floor(diff/60000)+'m ago';
+      if(diff<86400000)return Math.floor(diff/3600000)+'h ago';
+      if(diff<604800000)return Math.floor(diff/86400000)+'d ago';
+      return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    }catch{return'';}
+  };
 
   useEffect(()=>{
     // Welcome message
@@ -9202,6 +9339,8 @@ INSTRUCTIONS:
       setMessages(m=>m.map(msg=>msg.id===thinkingId?{...msg,type:'error',content:`**Error:** ${errMsg}\n\nPlease check your API key in Workspace Settings.`}:msg));
     }
     setSending(false);scrollToBottom();
+    // Auto-save to recents after AI responds
+    setMessages(current=>{saveCurrentAsRecent(current);return current;});
   };
 
   const copyMsg=(content,id)=>{
@@ -9253,68 +9392,95 @@ INSTRUCTIONS:
   return html`
     <div style=${{display:'flex',height:'100%',overflow:'hidden',background:'var(--bg)'}}>
 
-      <!-- LEFT SIDEBAR — search + templates -->
-      <div style=${{width:280,flexShrink:0,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',background:'var(--sf)',overflow:'hidden'}}>
+      <!-- LEFT SIDEBAR — Claude/ChatGPT-style recents -->
+      <div style=${{width:260,flexShrink:0,borderRight:'1px solid var(--bd)',display:'flex',flexDirection:'column',background:'var(--sf)',overflow:'hidden'}}>
 
-        <!-- Search bar -->
-        <div style=${{padding:'14px 14px 10px',borderBottom:'1px solid var(--bd)'}}>
-          <div style=${{position:'relative'}}>
-            <svg style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',opacity:.4}} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input value=${searchQ} onInput=${e=>setSearchQ(e.target.value)}
-              placeholder="Search templates…"
-              style=${{width:'100%',padding:'8px 10px 8px 32px',borderRadius:10,fontSize:12.5,outline:'none',background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx)',fontFamily:'inherit',boxSizing:'border-box',transition:'border-color .15s'}}
-              onFocus=${e=>{e.target.style.borderColor='var(--ac)';}}
-              onBlur=${e=>{e.target.style.borderColor='var(--bd)';}}/>
-          </div>
+        <!-- Header: New Chat -->
+        <div style=${{padding:'12px 12px 10px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+          <button onClick=${newChat}
+            style=${{width:'100%',height:36,borderRadius:10,border:'1px dashed var(--bd)',background:'var(--sf2)',cursor:'pointer',
+              display:'flex',alignItems:'center',justifyContent:'center',gap:8,
+              color:'var(--tx3)',fontSize:12.5,fontWeight:600,fontFamily:'inherit',transition:'all .15s'}}
+            onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='var(--ac4)';}}
+            onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx3)';e.currentTarget.style.background='var(--sf2)';}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New chat
+          </button>
         </div>
 
-        <!-- Sidebar tabs -->
-        <div style=${{display:'flex',padding:'6px 10px',gap:4,borderBottom:'1px solid var(--bd)'}}>
-          ${['prompts','context'].map(t=>html`
-            <button key=${t} onClick=${()=>setSideTab(t)}
-              style=${{flex:1,height:28,fontSize:11,fontWeight:700,border:'none',cursor:'pointer',borderRadius:7,fontFamily:'inherit',
-                background:sideTab===t?'var(--ac3)':'transparent',color:sideTab===t?'var(--ac)':'var(--tx3)',transition:'all .15s',textTransform:'capitalize'}}>
-              ${t==='prompts'?'📄 Templates':'📊 Context'}
-            </button>`)}
-        </div>
-
-        <!-- Sidebar content -->
-        <div style=${{flex:1,overflowY:'auto',padding:'10px'}}>
-          ${sideTab==='prompts'?html`
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:10,padding:'0 4px'}}>
-              ${filteredSuggestions.length} template${filteredSuggestions.length!==1?'s':''}
+        <!-- Recents list — Claude/ChatGPT style -->
+        <div style=${{flex:1,overflowY:'auto',padding:'8px 8px'}}>
+          ${recents.length===0?html`
+            <div style=${{textAlign:'center',padding:'32px 16px',color:'var(--tx3)'}}>
+              <div style=${{fontSize:32,marginBottom:12,opacity:.4}}>💬</div>
+              <div style=${{fontSize:12,fontWeight:600,marginBottom:6}}>No recent chats</div>
+              <div style=${{fontSize:11,lineHeight:1.6}}>Your conversations will appear here. Start chatting to create docs, diagrams, and specs.</div>
             </div>
-            ${filteredSuggestions.map((s,i)=>html`
-              <div key=${i} onClick=${()=>send(s.prompt)}
-                style=${{padding:'10px 12px',borderRadius:10,cursor:'pointer',marginBottom:6,border:'1px solid var(--bd)',background:'var(--sf2)',transition:'all .15s'}}
-                onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color+'66';e.currentTarget.style.background=s.color+'0d';}}
-                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.background='var(--sf2)';}}>
-                <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                  <span style=${{fontSize:16,width:22,textAlign:'center'}}>${s.icon}</span>
-                  <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',letterSpacing:'-.2px'}}>${s.label}</span>
-                </div>
-                <div style=${{fontSize:11,color:'var(--tx3)',lineHeight:1.5,paddingLeft:30,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>
-                  ${s.prompt.slice(0,80)}…
-                </div>
-              </div>`)}`:null}
+          `:html`
+            <!-- Group by Today / Yesterday / Older -->
+            ${(()=>{
+              const now=new Date();
+              const today=now.toDateString();
+              const yesterday=new Date(now-86400000).toDateString();
+              const groups={Today:[],Yesterday:[],'Previous 7 days':[],'Older':[]};
+              recents.forEach(r=>{
+                const d=new Date(r.ts).toDateString();
+                const diff=(now-new Date(r.ts))/86400000;
+                if(d===today)groups['Today'].push(r);
+                else if(d===yesterday)groups['Yesterday'].push(r);
+                else if(diff<7)groups['Previous 7 days'].push(r);
+                else groups['Older'].push(r);
+              });
+              return Object.entries(groups).filter(([,v])=>v.length>0).map(([gname,items])=>html`
+                <div key=${gname} style=${{marginBottom:4}}>
+                  <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,padding:'8px 8px 4px'}}>${gname}</div>
+                  ${items.map(r=>html`
+                    <div key=${r.id}
+                      onClick=${()=>loadRecent(r)}
+                      style=${{
+                        padding:'8px 10px',borderRadius:9,cursor:'pointer',marginBottom:1,
+                        display:'flex',alignItems:'center',gap:8,
+                        background:activeRecent===r.id?'var(--ac3)':'transparent',
+                        border:'1px solid '+(activeRecent===r.id?'var(--ac3)':'transparent'),
+                        transition:'all .12s',position:'relative',
+                        color:activeRecent===r.id?'var(--ac)':'var(--tx2)',
+                        group:'r'+r.id
+                      }}
+                      onMouseEnter=${e=>{if(activeRecent!==r.id){e.currentTarget.style.background='var(--sf2)';e.currentTarget.querySelectorAll('.del-btn').forEach(b=>b.style.opacity='1');}}}
+                      onMouseLeave=${e=>{if(activeRecent!==r.id){e.currentTarget.style.background='transparent';e.currentTarget.querySelectorAll('.del-btn').forEach(b=>b.style.opacity='0');}}}>
+                      <!-- Chat icon -->
+                      <svg style=${{flexShrink:0,opacity:.55}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      <!-- Title -->
+                      <span style=${{flex:1,fontSize:12.5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.4}}>
+                        ${r.title}
+                      </span>
+                      <!-- Delete button — hidden until hover -->
+                      <button class="del-btn" onClick=${(e)=>deleteRecent(r.id,e)}
+                        style=${{opacity:0,background:'none',border:'none',cursor:'pointer',
+                          color:'var(--tx3)',padding:'2px 4px',borderRadius:5,fontSize:13,
+                          transition:'opacity .15s,color .15s',flexShrink:0,lineHeight:1}}
+                        onMouseEnter=${e=>{e.target.style.color='var(--rd)';}}
+                        onMouseLeave=${e=>{e.target.style.color='var(--tx3)';}}>
+                        ✕
+                      </button>
+                    </div>`)}
+                </div>`);
+            })()}
+          `}
+        </div>
 
-          ${sideTab==='context'?html`
-            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:12,padding:'0 4px'}}>Workspace Context</div>
+        <!-- Footer: workspace stats pill -->
+        <div style=${{padding:'8px 12px',borderTop:'1px solid var(--bd)',flexShrink:0,display:'flex',gap:10,alignItems:'center'}}>
+          <div style=${{display:'flex',gap:8,flex:1,flexWrap:'wrap'}}>
             ${[
-              {label:'Projects',val:safe(projects).length,icon:'📁',color:'var(--ac)'},
-              {label:'Total Tasks',val:safe(tasks).length,icon:'✅',color:'var(--cy)'},
-              {label:'Active Tasks',val:safe(tasks).filter(t=>!['completed','backlog'].includes(t.stage)).length,icon:'⚡',color:'#ff6433'},
-              {label:'Team Members',val:safe(users).length,icon:'👥',color:'var(--gn)'},
-              {label:'Blocked',val:safe(tasks).filter(t=>t.stage==='blocked').length,icon:'🚫',color:'var(--rd)'},
+              {val:safe(projects).length,label:'proj',color:'var(--ac)'},
+              {val:safe(tasks).filter(t=>!['completed','backlog'].includes(t.stage)).length,label:'active',color:'var(--gn)'},
+              {val:safe(users).length,label:'members',color:'var(--pu)'},
             ].map((s,i)=>html`
-              <div key=${i} style=${{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:9,background:'var(--sf2)',border:'1px solid var(--bd)',marginBottom:6}}>
-                <span style=${{fontSize:16,width:22,textAlign:'center'}}>${s.icon}</span>
-                <span style=${{flex:1,fontSize:12.5,color:'var(--tx2)'}}>${s.label}</span>
-                <span style=${{fontSize:16,fontWeight:800,color:s.color,fontFamily:'monospace'}}>${s.val}</span>
-              </div>`)}
-            <div style=${{marginTop:14,padding:'10px 12px',background:'var(--ac4)',borderRadius:9,border:'1px solid var(--ac3)',fontSize:11,color:'var(--tx3)',lineHeight:1.6}}>
-              💡 This data is automatically included when you chat with AI.
-            </div>`:null}
+              <span key=${i} style=${{fontSize:10.5,color:'var(--tx3)',display:'flex',alignItems:'center',gap:3}}>
+                <b style=${{color:s.color,fontWeight:700}}>${s.val}</b> ${s.label}
+              </span>`)}
+          </div>
         </div>
       </div>
 
@@ -9324,7 +9490,7 @@ INSTRUCTIONS:
         <!-- Chat header -->
         <div style=${{padding:'14px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--sf)',flexShrink:0}}>
           <div style=${{display:'flex',alignItems:'center',gap:12}}>
-            <div style=${{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#ff6433,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 14px rgba(255,100,60,.3)'}}>🤖</div>
+            <div style=${{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#5a5ef7,#a855f7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 14px rgba(90,94,247,.35)'}}>🤖</div>
             <div>
               <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)',letterSpacing:'-.3px'}}>AI Documentation Studio</div>
               <div style=${{fontSize:11,color:'var(--tx3)'}}>Powered by Claude · Chat to create docs, diagrams &amp; specs</div>
@@ -9342,7 +9508,7 @@ INSTRUCTIONS:
 
               <!-- Avatar -->
               <div style=${{width:36,height:36,borderRadius:11,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,
-                background:msg.role==='user'?`linear-gradient(135deg,${cu.color||'#6366f1'},${cu.color||'#6366f1'}aa)`:'linear-gradient(135deg,#ff6433,#8b5cf6)',
+                background:msg.role==='user'?`linear-gradient(135deg,${cu.color||'#5a5ef7'},${cu.color||'#5a5ef7'}bb)`:'linear-gradient(135deg,#5a5ef7,#a855f7)',
                 boxShadow:msg.role==='user'?'none':'0 3px 12px rgba(255,100,60,.25)',
                 fontWeight:800,color:'#fff',fontFamily:'inherit',fontSize:13}}>
                 ${msg.role==='user'?(cu.avatar||cu.name?.charAt(0)||'U'):'🤖'}
@@ -9422,9 +9588,9 @@ INSTRUCTIONS:
             </div>
             <button onClick=${()=>send()} disabled=${sending||!input.trim()}
               style=${{height:46,width:46,borderRadius:13,border:'none',cursor:sending||!input.trim()?'not-allowed':'pointer',
-                background:sending||!input.trim()?'var(--sf3)':'linear-gradient(135deg,#ff6433,#8b5cf6)',
+                background:sending||!input.trim()?'var(--sf3)':'linear-gradient(135deg,#5a5ef7,#a855f7)',
                 color:'#fff',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
-                transition:'all .2s',boxShadow:sending||!input.trim()?'none':'0 4px 16px rgba(255,100,60,.4)'}}>
+                transition:'all .2s',boxShadow:sending||!input.trim()?'none':'0 4px 16px rgba(90,94,247,.45)'}}>
               ${sending
                 ?html`<span style=${{width:16,height:16,border:'2px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'sp .7s linear infinite',display:'block'}}></span>`
                 :'↑'}
