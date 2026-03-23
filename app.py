@@ -5,8 +5,13 @@ Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 """
 import os, sys, json, hashlib, secrets, random, urllib.request, urllib.error
 import socket, threading, time, webbrowser, mimetypes, base64, smtplib
+import re, struct, traceback, hmac, math, zlib
 from datetime import datetime, timedelta
 from functools import wraps
+try:
+    import bcrypt as _bcrypt
+except ImportError:
+    _bcrypt = None
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, jsonify, session, Response, send_file
@@ -353,7 +358,7 @@ def send_otp_email(to_email, otp_code, user_name):
     </html>
     """
     try:
-        send_email(to_email, subject, body)
+        threading.Thread(target=send_email, args=(to_email, subject, body), daemon=True).start()
         return True
     except Exception as e:
         print(f"[OTP] Email send error: {e}")
@@ -721,6 +726,11 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_timelogs_date   ON time_logs(workspace_id, date);
             CREATE INDEX IF NOT EXISTS idx_reminders_user  ON reminders(workspace_id, user_id, fired);
             CREATE INDEX IF NOT EXISTS idx_tickets_ws      ON tickets(workspace_id, status);
+            CREATE TABLE IF NOT EXISTS task_events (
+                id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
+                user_id TEXT, event_type TEXT, old_val TEXT DEFAULT '',
+                new_val TEXT DEFAULT '', ts TEXT);
+            CREATE INDEX IF NOT EXISTS idx_task_events ON task_events(task_id, ts);
         """)
         # ── Consolidated migrations (safe — each wrapped in try/except) ──────
         for stmt in [
@@ -756,6 +766,8 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_notifs_user ON notifications(workspace_id, user_id, read)",
             "CREATE INDEX IF NOT EXISTS idx_timelogs_user ON time_logs(workspace_id, user_id)",
             "CREATE INDEX IF NOT EXISTS idx_timelogs_date ON time_logs(workspace_id, date)",
+            "CREATE TABLE IF NOT EXISTS task_events (id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT, user_id TEXT, event_type TEXT, old_val TEXT DEFAULT \'\', new_val TEXT DEFAULT \'\', ts TEXT)",
+            "CREATE INDEX IF NOT EXISTS idx_task_events ON task_events(task_id, ts)",
             "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
             "ALTER TABLE time_logs ADD COLUMN task_id TEXT DEFAULT ''",
             "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
@@ -1558,7 +1570,11 @@ def test_email():
 @login_required
 def get_users():
     with get_db() as db:
-        rows = db.execute("SELECT * FROM users WHERE workspace_id=? ORDER BY name",(wid(),)).fetchall()
+        rows = db.execute(
+            """SELECT id,workspace_id,name,email,role,avatar,color,created,
+               two_fa_enabled,totp_verified,last_active
+               FROM users WHERE workspace_id=? ORDER BY name""",
+            (wid(),)).fetchall()
         caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
         caller_role = caller["role"] if caller else "Developer"
         can_see_passwords = caller_role in ("Admin", "Manager")
@@ -1586,9 +1602,9 @@ def add_user():
     c=random.choice(CLRS)
     try:
         with get_db() as db:
-            db.execute("INSERT INTO users (id,workspace_id,name,email,password,role,avatar,color,created,avatar_data,plain_password) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            db.execute("INSERT INTO users (id,workspace_id,name,email,password,role,avatar,color,created,avatar_data) VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (uid,wid(),d["name"],d["email"],hash_pw(d["password"]),
-                        d.get("role","Developer"),av,c,ts(),None,d["password"]))
+                        d.get("role","Developer"),av,c,ts(),None))
             return jsonify({"id":uid,"workspace_id":wid(),"name":d["name"],
                             "email":d["email"],"role":d.get("role","Developer"),"avatar":av,"color":c})
     except Exception as e:
@@ -1756,15 +1772,16 @@ def get_tasks():
             team_projects = db.execute(
                 "SELECT id FROM projects WHERE workspace_id=? AND team_id=?",(wid(),team_id)).fetchall()
             proj_ids = [p["id"] for p in team_projects]
-            all_tasks = db.execute(
-                "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()
-            proj_set = set(proj_ids)
-            mem_set = set(member_ids)
-            filtered = [t for t in all_tasks if
-                (t["team_id"] and t["team_id"]==team_id) or
-                (t["assignee"] and t["assignee"] in mem_set) or
-                (t["project"] and t["project"] in proj_set)]
-            return jsonify([dict(r) for r in filtered])
+            # Use SQL WHERE IN instead of Python-side filtering — much faster
+            placeholders_p = ",".join("?" * len(proj_ids)) if proj_ids else "''"
+            placeholders_m = ",".join("?" * len(member_ids)) if member_ids else "''"
+            sql = f"""SELECT * FROM tasks WHERE workspace_id=? AND (
+                team_id=? OR
+                {f"project IN ({placeholders_p})" if proj_ids else "1=0"} OR
+                {f"assignee IN ({placeholders_m})" if member_ids else "1=0"}
+            ) ORDER BY created DESC LIMIT 500"""
+            params = [wid(), team_id] + proj_ids + member_ids
+            return jsonify([dict(r) for r in db.execute(sql, params).fetchall()])
         # Limit to 500 most recent — prevents huge payloads on large workspaces
         return jsonify([dict(r) for r in db.execute(
             "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC LIMIT 500",(wid(),)).fetchall()])
@@ -1831,6 +1848,29 @@ def create_task():
                        (sysmid,wid(),"system",d["project"],msg,ts(),1))
         return jsonify(dict(t))
 
+
+@app.route("/api/tasks/<tid>/events", methods=["GET"])
+@login_required
+def get_task_events(tid):
+    """Get activity log for a task."""
+    with get_db() as db:
+        rows = db.execute(
+            """SELECT te.*, u.name as user_name, u.avatar as user_avatar, u.color as user_color
+               FROM task_events te LEFT JOIN users u ON te.user_id=u.id
+               WHERE te.task_id=? AND te.workspace_id=? ORDER BY te.ts DESC LIMIT 50""",
+            (tid, wid())).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+def log_task_event(db, workspace_id, task_id, user_id, event_type, old_val="", new_val=""):
+    """Insert a task activity event."""
+    try:
+        eid = f"te{int(datetime.now().timestamp()*1000)}{secrets.token_hex(2)}"
+        db.execute("INSERT INTO task_events VALUES (?,?,?,?,?,?,?,?)",
+                   (eid, workspace_id, task_id, user_id, event_type,
+                    str(old_val), str(new_val), ts()))
+    except Exception as e:
+        print(f"[task_event] {e}")
+
 @app.route("/api/tasks/<tid>",methods=["PUT"])
 @login_required
 def update_task(tid):
@@ -1856,7 +1896,7 @@ def update_task(tid):
                 return jsonify({"error":"You do not have permission to edit this task. Only the assignee, project owner, or managers can edit tasks."}),403
 
         old_stage=t["stage"]
-        old_stage=t["stage"]
+        old_assignee=t["assignee"]
         def tf(key,default=''):
             return t[key] if key in t.keys() else default
         labels_val=d.get("labels",None)
@@ -1878,6 +1918,14 @@ def update_task(tid):
                     labels_val,
                     d.get("sprint",tf("sprint","")),
                     tid,wid()))
+        # Log activity events
+        new_stage_val = d.get("stage", old_stage)
+        new_assignee_val = d.get("assignee", old_assignee)
+        if new_stage_val != old_stage:
+            log_task_event(db, wid(), tid, session["user_id"], "stage_change", old_stage, new_stage_val)
+        if new_assignee_val != old_assignee and new_assignee_val:
+            assignee_name = (db.execute("SELECT name FROM users WHERE id=?", (new_assignee_val,)).fetchone() or {}).get("name","?")
+            log_task_event(db, wid(), tid, session["user_id"], "assigned", old_assignee or "", assignee_name)
         if d.get("stage") and d["stage"]!=old_stage:
             base_ts2=int(datetime.now().timestamp()*1000)
             if t["assignee"] and t["assignee"]!=session["user_id"]:
@@ -6072,6 +6120,18 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
   const [ass,setAss]=useState((task&&task.assignee)||'');
   const [pri,setPri]=useState((task&&task.priority)||'medium');
   const [stage,setStage]=useState((task&&task.stage)||'backlog');
+  const [activeTab,setActiveTab]=useState('details'); // 'details' | 'activity'
+  const [events,setEvents]=useState([]);
+  const [evLoading,setEvLoading]=useState(false);
+  useEffect(()=>{
+    if(task&&task.id&&activeTab==='activity'){
+      setEvLoading(true);
+      api.get('/api/tasks/'+task.id+'/events').then(d=>{
+        if(Array.isArray(d))setEvents(d);
+        setEvLoading(false);
+      });
+    }
+  },[task&&task.id,activeTab]);
   const [due,setDue]=useState((task&&task.due)||'');
   const [pct,setPct]=useState((task&&task.pct)||0);
   const [sprint,setSprint]=useState((task&&task.sprint)||'');
@@ -6212,9 +6272,9 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
         </div>
         ${isEdit?html`
           <div style=${{display:'flex',gap:2,background:'var(--sf2)',borderRadius:9,padding:3,marginBottom:14,width:'fit-content',flexWrap:'wrap'}}>
-            ${['details','subtasks','comments','files'].map(t=>html`
+            ${['details','subtasks','comments','files','activity'].map(t=>html`
               <button key=${t} class=${'tb'+(tab===t?' act':'')} onClick=${()=>setTab(t)} style=${{fontSize:11}}>
-                ${t==='details'?'Details':t==='subtasks'?html`Subtasks${subtasks.length>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${subtasks.filter(s=>s.done).length}/${subtasks.length}</span>`:''}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):'Files'}
+                ${t==='details'?'Details':t==='subtasks'?html`Subtasks${subtasks.length>0?html` <span style=${{background:'var(--ac)',color:'#fff',borderRadius:8,padding:'0 5px',fontSize:9}}>${subtasks.filter(s=>s.done).length}/${subtasks.length}</span>`:''}`:t==='comments'?'Comments'+(cmts.length?' ('+cmts.length+')':''):t==='activity'?'📋 Activity':'Files'}
               </button>`)}
           </div>`:null}
 
@@ -6581,6 +6641,37 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
               </div>`;
             })}`:null}
           ${tab==='files'?html`<${FileAttachments} projectId=${project.id} readOnly=${cu&&cu.role==='Viewer'}/>`:null}
+          ${tab==='activity'?html`
+          <div style=${{padding:'4px 0'}}>
+            ${evLoading?html`<div style=${{textAlign:'center',padding:20}}><span class="spin"></span></div>`
+            :events.length===0?html`
+              <div style=${{textAlign:'center',padding:'32px 16px',color:'var(--tx3)'}}>
+                <div style=${{fontSize:28,marginBottom:8}}>📋</div>
+                <div style=${{fontSize:12}}>No activity yet. Changes to stage, assignee, and comments will appear here.</div>
+              </div>`
+            :html`<div style=${{display:'flex',flexDirection:'column',gap:2}}>
+              ${events.map((ev,i)=>{
+                const evIcons={stage_change:'🔄',assigned:'👤',created:'✨',comment:'💬'};
+                const evColors={stage_change:'var(--ac)',assigned:'var(--pu)',created:'var(--gn)',comment:'var(--am)'};
+                const icon=evIcons[ev.event_type]||'📌';
+                const color=evColors[ev.event_type]||'var(--tx3)';
+                const label=(()=>{
+                  if(ev.event_type==='stage_change')return html`moved stage <b>${ev.old_val||'—'}</b> → <b style=${{color:'var(--gn)'}}>${ev.new_val}</b>`;
+                  if(ev.event_type==='assigned')return html`assigned to <b>${ev.new_val}</b>`;
+                  if(ev.event_type==='comment')return html`added a comment`;
+                  return html`${ev.event_type.replace(/_/g,' ')}`;
+                })();
+                return html`<div key=${i} style=${{display:'flex',gap:10,alignItems:'flex-start',padding:'8px 4px',borderBottom:'1px solid var(--bd)'}}>
+                  <div style=${{width:26,height:26,borderRadius:'50%',background:color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,flexShrink:0}}>${icon}</div>
+                  <div style=${{flex:1,minWidth:0}}>
+                    <span style=${{fontSize:12,fontWeight:600,color:'var(--tx)'}}>${ev.user_name||'Someone'}</span>
+                    <span style=${{fontSize:12,color:'var(--tx2)',marginLeft:4}}>${label}</span>
+                    <div style=${{fontSize:10,color:'var(--tx3)',marginTop:2}}>${ev.ts?new Date(ev.ts).toLocaleString():''}</div>
+                  </div>
+                </div>`;
+              })}
+            </div>`}
+          </div>`:null}
           ${tab==='members'?html`
             <div style=${{display:'flex',flexDirection:'column',gap:8}}>
               <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
@@ -7035,6 +7126,32 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
     await api.put('/api/tasks/'+tid,payload);reload();
   };
 
+  // Export filtered tasks as CSV
+  const exportTasksCsv=()=>{
+    const projMap=safe(projects).reduce((m,p)=>{m[p.id]=p.name;return m;},{});
+    const userMap=safe(users).reduce((m,u)=>{m[u.id]=u.name;return m;},{});
+    const headers=['ID','Title','Project','Assignee','Priority','Stage','Due Date','Progress %','Type','Sprint','Story Points'];
+    const rows=sorted.map(t=>[
+      t.id,
+      '"'+(t.title||'')+'"',
+      '"'+(projMap[t.project]||'')+'"',
+      '"'+(userMap[t.assignee]||'')+'"',
+      t.priority||'',
+      t.stage||'',
+      t.due||'',
+      t.pct||0,
+      t.task_type||'task',
+      t.sprint||'',
+      t.story_points||0
+    ]);
+    const csv='data:text/csv;charset=utf-8,'+[headers,...rows].map(r=>r.join(',')).join('
+');
+    const a=document.createElement('a');
+    a.setAttribute('href',encodeURI(csv));
+    a.setAttribute('download','vewit_tasks_'+new Date().toISOString().slice(0,10)+'.csv');
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  };
+
   const importCsv=async(e)=>{
     const file=e.target.files&&e.target.files[0];
     if(!file)return;
@@ -7092,12 +7209,12 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
               ${csvImporting?html`<span class="spin"></span>`:html`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`}
               Import
             </button>
-            <a href="/api/export/csv" style=${{fontSize:12,padding:'7px 12px',background:'transparent',color:'var(--tx2)',fontWeight:600,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:5,transition:'background .12s'}}
-              title="Export tasks to CSV"
+            <button onClick=${exportTasksCsv} style=${{fontSize:12,padding:'7px 12px',background:'transparent',border:'none',cursor:'pointer',color:'var(--tx2)',fontWeight:600,display:'inline-flex',alignItems:'center',gap:5,transition:'background .12s'}}
+              title="Export filtered tasks as CSV"
               onMouseEnter=${e=>e.currentTarget.style.background='var(--sf2)'} onMouseLeave=${e=>e.currentTarget.style.background='transparent'}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Export
-            </a>
+            </button>
           </div>`:null}
           <button class=${'btn '+(showResolved?'bg':'bp')} style=${{flex:'0 0 auto',fontSize:12,padding:'7px 13px'}}
             onClick=${()=>setShowResolved(v=>!v)}
@@ -7365,6 +7482,24 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
   ];
   const stats=[
     {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'}, {label:"Today's Hours",val:todayHrs,color:'#0891b2',bg:'rgba(8,145,178,0.10)',strVal:true,icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:'timesheet'}, ];
+  // ── Last 7 days hours sparkline data ────────────────────────────────────────
+  const [hoursChart,setHoursChart]=useState([]);
+  useEffect(()=>{
+    api.get('/api/timelogs').then(logs=>{
+      if(!Array.isArray(logs))return;
+      const days=[];
+      for(let i=6;i>=0;i--){
+        const d=new Date();d.setDate(d.getDate()-i);
+        const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        const label=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+        const myLogs=logs.filter(l=>l.user_id===cu.id&&l.date===key);
+        const hrs=myLogs.reduce((s,l)=>s+(Number(l.hours||0))+(Number(l.minutes||0)/60),0);
+        days.push({day:label,hrs:Math.round(hrs*10)/10,date:key});
+      }
+      setHoursChart(days);
+    });
+  },[cu.id]);
+
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
       <div style=${{padding:'10px 14px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:10}}>
@@ -7438,6 +7573,28 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
             <div style=${{fontSize:11,color:'var(--tx2)',marginTop:5,fontWeight:500}}>${s.label}</div>
           </div>`)}
       </div>
+
+      <!-- Hours Logged — Last 7 Days sparkline -->
+      ${hoursChart.length>0?html`
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,padding:'14px 18px',marginTop:4}}>
+        <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <div style=${{fontSize:13,fontWeight:700,color:'var(--tx)'}}>⏱ Hours Logged — Last 7 Days</div>
+          <span style=${{fontSize:11,color:'var(--ac)',cursor:'pointer',fontWeight:600}} onClick=${()=>onNav('timesheet')}>View Timesheet →</span>
+        </div>
+        <div style=${{display:'flex',alignItems:'flex-end',gap:5,height:72,paddingBottom:2}}>
+          ${hoursChart.map((d,i)=>{
+            const maxH=Math.max(...hoursChart.map(x=>x.hrs),1);
+            const barH=Math.max(4,Math.round((d.hrs/maxH)*54));
+            const isToday=i===6;
+            const barCol=isToday?'var(--ac)':d.hrs>0?'rgba(90,140,255,.35)':'var(--bd)';
+            return html`<div key=${d.day} style=${{display:'flex',flexDirection:'column',alignItems:'center',gap:3,flex:1}}>
+              <div style=${{fontSize:9,fontWeight:700,color:isToday?'var(--ac)':'var(--tx3)',minHeight:12}}>${d.hrs>0?d.hrs+'h':''}</div>
+              <div style=${{width:'100%',height:barH+'px',background:barCol,borderRadius:'3px 3px 0 0',transition:'height .3s'}}></div>
+              <div style=${{fontSize:9,color:isToday?'var(--ac)':'var(--tx3)',fontWeight:isToday?700:400}}>${isToday?'Today':d.day}</div>
+            </div>`;
+          })}
+        </div>
+      </div>`:null}
       <div style=${{display:'grid',gridTemplateColumns:'240px 1fr 1fr',gap:14}}>
         <div class="card">
           <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:11}}>Priority Split</h3>
@@ -8523,28 +8680,7 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
             <button class="btn bg" style=${{padding:'4px 8px',fontSize:11,flexShrink:0}} onClick=${()=>{setEditPw(false);setNewPw('');}}>✕</button>
           </div>`:html`
           <div style=${{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-            ${u.plain_password?html`
-              <span style=${{fontFamily:'monospace',fontSize:12,color:showPw?'var(--tx2)':'transparent',background:showPw?'transparent':'var(--bd)',borderRadius:4,padding:'2px 6px',letterSpacing:showPw?'.5px':'.1px',userSelect:showPw?'text':'none',transition:'all .15s',minWidth:70,display:'inline-block'}}>
-                ${showPw?u.plain_password:'••••••••'}
-              </span>
-              <button title=${showPw?'Hide':'Show'} style=${{background:'none',border:'none',cursor:'pointer',padding:'2px 4px',color:'var(--tx3)',fontSize:12}} onClick=${()=>setShowPw(v=>!v)}>
-                ${showPw?'🙈':'👁'}
-              </button>`:html`<span style=${{fontSize:11,color:'var(--tx3)',fontStyle:'italic'}}>—</span>`}
-            <button title="Reset password" class="btn bg" style=${{padding:'3px 9px',fontSize:10}} onClick=${()=>setEditPw(true)}>✏️ Reset</button>
-          </div>`}
-      </td>
-
-      <!-- 2FA / Authenticator column -->
-      <td style=${{padding:'12px 14px',minWidth:220}}>
-        <div style=${{display:'flex',flexDirection:'column',gap:6}}>
-
-          <!-- Status badges -->
-          <div style=${{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
-            ${totpConfigured?html`
-              <span style=${{fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:100,background:'rgba(74,222,128,0.15)',color:'#4ade80',border:'1px solid rgba(74,222,128,0.3)'}}>🔒 TOTP ON</span>`:html`
-              <span style=${{fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:100,background:'rgba(255,255,255,0.05)',color:'var(--tx3)',border:'1px solid var(--bd)'}}>TOTP OFF</span>`}
-            ${u.two_fa_enabled&&!totpConfigured?html`
-              <span style=${{fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:100,background:'rgba(59,130,246,0.12)',color:'#60a5fa',border:'1px solid rgba(59,130,246,0.3)'}}>📧 EMAIL 2FA</span>`:null}
+            
           </div>
 
           <!-- Action buttons -->
@@ -8754,7 +8890,7 @@ function TeamView({users,cu,reload}){
                     <${Av} u=${m} size=${18}/>
                     <div>
                       <div style=${{fontSize:11,color:'var(--tx2)',fontWeight:500}}>${m.name}</div>
-                      ${m.plain_password?html`<div style=${{fontSize:9,color:'var(--tx3)',fontFamily:'monospace',letterSpacing:.3}}>pw: ${m.plain_password}</div>`:null}
+                      
                     </div>
                   </div>`)}
               </div>
@@ -10558,6 +10694,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
   const [filterFrom,setFilterFrom]=useState('');
   const [filterTo,setFilterTo]=useState('');
   const [filterUser,setFilterUser]=useState('');
+  const [searchQ,setSearchQ]=useState('');
 
   // ── Policy
   const [requiredHrs,setRequiredHrs]=useState(8);
@@ -10654,9 +10791,16 @@ function TimesheetView({cu,teams,users,projects,tasks}){
       if(fromD&&ld<fromD)return false;
       if(toD&&ld>toD)return false;
       if(filterUser&&l.user_id!==filterUser)return false;
+      if(searchQ){
+        const q=searchQ.toLowerCase();
+        const match=(l.task_name||'').toLowerCase().includes(q)||
+                     (l.comments||'').toLowerCase().includes(q)||
+                     (l.user_name||'').toLowerCase().includes(q);
+        if(!match)return false;
+      }
       return true;
     });
-  },[logs,filterMode,filterMonth,filterFrom,filterTo,filterUser]);
+  },[logs,filterMode,filterMonth,filterFrom,filterTo,filterUser,searchQ]);
 
   // ── Aggregations
   const toHrs=l=>Number(l.hours||0)+(Number(l.minutes||0)/60);
@@ -10920,14 +11064,16 @@ function TimesheetView({cu,teams,users,projects,tasks}){
         <span style=${{color:'var(--tx3)',fontSize:12}}>→</span>
         <input type="date" value=${filterTo} onChange=${e=>setFilterTo(e.target.value)}
           style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>`:null}
-      ${isAdmin&&users&&users.length>0?html`
-        <div style=${{marginLeft:'auto'}}>
+      <div style=${{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>        <input type="search" placeholder="🔍 Search tasks, comments…" value=${searchQ}
+          onChange=${e=>setSearchQ(e.target.value)}
+          style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 10px',color:'var(--tx)',fontSize:11,width:180}}/>
+        ${isAdmin&&users&&users.length>0?html`
           <select value=${filterUser} onChange=${e=>setFilterUser(e.target.value)}
             style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}>
             <option value="">All Users</option>
             ${(users||[]).map(u=>html`<option key=${u.id} value=${u.id}>${u.name}</option>`)}
-          </select>
-        </div>`:null}
+          </select>`:null}
+      </div>
     </div>
 
     <!-- ══ Summary Cards ══ -->
