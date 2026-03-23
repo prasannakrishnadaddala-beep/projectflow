@@ -4003,104 +4003,125 @@ html,body{height:100%;width:100%;overflow:auto}
 body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 
 /* === DARK THEME (default) — precise HubSpot CRM workspace colours === */
+html,body{height:100%;width:100%;overflow:auto}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+
+/* ═══════════════════════════════════════════════
+   VEWIT WORKSPACE — Apple iPhone 17 Pro Inspired
+   Light: Luminous white + blue/purple/pink accents
+   Dark: Deep space black + titanium purple/blue
+   ═══════════════════════════════════════════════ */
+
+/* === LIGHT THEME (default) === */
 :root{
-  --bg:#eef2f7;
-  --sf:#ffffff;
-  --sf2:#f1f5f9;
-  --sf3:#e2e8f0;
-  --bd:rgba(15,23,42,0.12);
-  --bd2:rgba(15,23,42,0.07);
-  --tx:#0a0f1e;
-  --tx2:#1e293b;
-  --tx3:#64748b;
-  --sb:#0f172a;
-  --sb2:#1e293b;
-  --sb3:#334155;
-  --sbt:#94a3b8;
-  --ac:#1d4ed8;
-  --ac2:#1e40af;
-  --ac3:rgba(29,78,216,0.10);
-  --ac4:rgba(29,78,216,0.06);
+  /* Canvas & Surfaces */
+  --bg:#f5f5f7;          /* Apple light grey */
+  --sf:#ffffff;           /* Pure white cards */
+  --sf2:#f5f5f7;          /* Secondary surface */
+  --sf3:#e8e8ed;          /* Tertiary surface */
+  /* Borders */
+  --bd:rgba(0,0,0,0.08);
+  --bd2:rgba(0,0,0,0.05);
+  /* Text */
+  --tx:#1d1d1f;           /* Apple near-black */
+  --tx2:#424245;          /* Secondary text */
+  --tx3:#86868b;          /* Tertiary text */
+  /* Sidebar */
+  --sb:#1d1d1f;           /* Dark sidebar */
+  --sb2:#2c2c2e;
+  --sb3:#3a3a3c;
+  --sbt:#98989d;
+  /* Accent — iPhone 17 Pro Blue */
+  --ac:#0071e3;           /* Apple blue */
+  --ac2:#0077ed;
+  --ac3:rgba(0,113,227,0.10);
+  --ac4:rgba(0,113,227,0.06);
   --ac-tx:#ffffff;
-  --rd:#b91c1c;
-  --rd2:#dc2626;
-  --gn:#15803d;
-  --gn2:#16a34a;
-  --am:#b45309;
-  --cy:#0e7490;
-  --pu:#6d28d9;
-  --or:#c2410c;
-  --pk:#be185d;
-  --sh:0 1px 3px rgba(15,23,42,0.08),0 4px 12px rgba(15,23,42,0.06);
-  --sh2:0 4px 24px rgba(15,23,42,0.10),0 12px 40px rgba(15,23,42,0.07);
-  --sh3:0 0 0 1px var(--bd);
+  /* Semantic */
+  --rd:#ff3b30;  --rd2:#ff453a;
+  --gn:#34c759;  --gn2:#30d158;
+  --am:#ff9500;  --cy:#32ade6;
+  --pu:#7e5bc2;  --or:#ff6b00;
+  --pk:#e91e8c;
+  /* Shadows — Apple elevation */
+  --sh:0 2px 8px rgba(0,0,0,0.07),0 1px 2px rgba(0,0,0,0.05);
+  --sh2:0 8px 32px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.06);
+  --sh3:0 0 0 1px rgba(0,0,0,0.06);
+  /* Purple/Blue spectrum for decorative use */
+  --ap:#a855f7;   /* accent purple */
+  --ab:#3b82f6;   /* accent blue */
+  --apk:#ec4899;  /* accent pink */
+  --grad-main:linear-gradient(135deg,#0071e3,#7e5bc2);
+  --grad-hero:linear-gradient(135deg,#0071e3 0%,#7e5bc2 50%,#e91e8c 100%);
+  --grad-subtle:linear-gradient(135deg,rgba(0,113,227,0.08),rgba(126,91,194,0.06));
 }
 
-/* === LIGHT THEME — via .lm on body. Cards: white on #ebebeb canvas === */
+/* === LIGHT THEME explicit .lm === */
 .lm{
-  --bg:#eef2f7;
+  --bg:#f5f5f7;
   --sf:#ffffff;
-  --sf2:#f1f5f9;
-  --sf3:#e2e8f0;
-  --bd:rgba(15,23,42,0.12);
-  --bd2:rgba(15,23,42,0.07);
-  --tx:#0a0f1e;
-  --tx2:#1e293b;
-  --tx3:#64748b;
-  --sb:#0f172a;
-  --sb2:#1e293b;
-  --sb3:#334155;
-  --sbt:#94a3b8;
-  --ac:#1d4ed8;
-  --ac2:#1e40af;
-  --ac3:rgba(29,78,216,0.10);
-  --ac4:rgba(29,78,216,0.06);
+  --sf2:#f5f5f7;
+  --sf3:#e8e8ed;
+  --bd:rgba(0,0,0,0.08);
+  --bd2:rgba(0,0,0,0.05);
+  --tx:#1d1d1f;
+  --tx2:#424245;
+  --tx3:#86868b;
+  --sb:#1d1d1f;
+  --sb2:#2c2c2e;
+  --sb3:#3a3a3c;
+  --sbt:#98989d;
+  --ac:#0071e3;
+  --ac2:#0077ed;
+  --ac3:rgba(0,113,227,0.10);
+  --ac4:rgba(0,113,227,0.06);
   --ac-tx:#ffffff;
-  --rd:#b91c1c;
-  --rd2:#dc2626;
-  --gn:#15803d;
-  --gn2:#16a34a;
-  --am:#b45309;
-  --cy:#0e7490;
-  --pu:#6d28d9;
-  --or:#c2410c;
-  --pk:#be185d;
-  --sh:0 1px 3px rgba(15,23,42,0.08),0 4px 12px rgba(15,23,42,0.06);
-  --sh2:0 4px 24px rgba(15,23,42,0.10),0 12px 40px rgba(15,23,42,0.07);
-  --sh3:0 0 0 1px var(--bd);
+  --rd:#ff3b30;  --rd2:#ff453a;
+  --gn:#34c759;  --gn2:#30d158;
+  --am:#ff9500;  --cy:#32ade6;
+  --pu:#7e5bc2;  --or:#ff6b00;
+  --pk:#e91e8c;
+  --sh:0 2px 8px rgba(0,0,0,0.07),0 1px 2px rgba(0,0,0,0.05);
+  --sh2:0 8px 32px rgba(0,0,0,0.10),0 2px 8px rgba(0,0,0,0.06);
+  --sh3:0 0 0 1px rgba(0,0,0,0.06);
+  --ap:#a855f7; --ab:#3b82f6; --apk:#ec4899;
+  --grad-main:linear-gradient(135deg,#0071e3,#7e5bc2);
+  --grad-hero:linear-gradient(135deg,#0071e3 0%,#7e5bc2 50%,#e91e8c 100%);
+  --grad-subtle:linear-gradient(135deg,rgba(0,113,227,0.08),rgba(126,91,194,0.06));
 }
-/* === DARK THEME — .dm class === */
+
+/* === DARK THEME .dm — Deep Space / Titanium === */
 .dm{
-  --bg:#0d1117;
-  --sf:#161b22;
-  --sf2:#1c2230;
-  --sf3:#2d333b;
-  --bd:rgba(255,255,255,0.08);
-  --bd2:rgba(255,255,255,0.05);
-  --tx:#e6edf3;
-  --tx2:#94a3b8;
-  --tx3:#4b5563;
-  --sb:#0d1117;
-  --sb2:#161b22;
-  --sb3:#21262d;
-  --sbt:#6e7681;
-  --ac:#3b82f6;
-  --ac2:#2563eb;
-  --ac3:rgba(59,130,246,0.15);
-  --ac4:rgba(59,130,246,0.08);
+  --bg:#000000;           /* True Apple black */
+  --sf:#1c1c1e;           /* iOS dark card */
+  --sf2:#2c2c2e;          /* Secondary dark */
+  --sf3:#3a3a3c;
+  --bd:rgba(255,255,255,0.10);
+  --bd2:rgba(255,255,255,0.06);
+  --tx:#f5f5f7;
+  --tx2:#aeaeb2;
+  --tx3:#636366;
+  --sb:#000000;
+  --sb2:#1c1c1e;
+  --sb3:#2c2c2e;
+  --sbt:#636366;
+  --ac:#0a84ff;           /* iOS blue dark */
+  --ac2:#0071e3;
+  --ac3:rgba(10,132,255,0.15);
+  --ac4:rgba(10,132,255,0.08);
   --ac-tx:#ffffff;
-  --rd:#f85149;
-  --rd2:#ff7b72;
-  --gn:#3fb950;
-  --gn2:#56d364;
-  --am:#d29922;
-  --cy:#39c5cf;
-  --pu:#bc8cff;
-  --or:#ffa657;
-  --pk:#ff7eb3;
-  --sh:0 1px 3px rgba(0,0,0,0.4),0 4px 12px rgba(0,0,0,0.3);
-  --sh2:0 4px 24px rgba(0,0,0,0.5),0 12px 40px rgba(0,0,0,0.4);
+  --rd:#ff453a;  --rd2:#ff6961;
+  --gn:#30d158;  --gn2:#34c759;
+  --am:#ffd60a;  --cy:#64d2ff;
+  --pu:#bf5af2;  --or:#ff9f0a;
+  --pk:#ff375f;
+  --sh:0 2px 12px rgba(0,0,0,0.6),0 1px 3px rgba(0,0,0,0.4);
+  --sh2:0 8px 40px rgba(0,0,0,0.7),0 4px 16px rgba(0,0,0,0.5);
   --sh3:0 0 0 1px rgba(255,255,255,0.08);
+  --ap:#bf5af2; --ab:#0a84ff; --apk:#ff375f;
+  --grad-main:linear-gradient(135deg,#0a84ff,#bf5af2);
+  --grad-hero:linear-gradient(135deg,#0a84ff 0%,#bf5af2 50%,#ff375f 100%);
+  --grad-subtle:linear-gradient(135deg,rgba(10,132,255,0.12),rgba(191,90,242,0.08));
 }
 
 ::-webkit-scrollbar{width:3px;height:3px}
@@ -4110,6 +4131,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 
 input[type=date]{color-scheme:dark}
 .lm input[type=date]{color-scheme:light}
+.lm input[type=date]{color-scheme:light}
 input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.45;filter:invert(1)}
 .lm input[type=date]::-webkit-calendar-picker-indicator{filter:none;opacity:.5}
 
@@ -4118,7 +4140,7 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.45;f
 
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:100px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all .14s;white-space:nowrap;line-height:1;font-family:inherit;letter-spacing:.01em}
 .bp{background:var(--ac);color:var(--ac-tx)!important}
-.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(29,78,216,.35)}
+.bp:hover{background:var(--ac2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(90,140,255,0.45)}
 .bp:active{transform:translateY(0)}
 .bp:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .bg{background:transparent;color:var(--tx2)!important;border:1px solid var(--bd)}
@@ -4133,11 +4155,11 @@ input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.45;f
 .bwh:hover{background:#e8e8e8;transform:translateY(-1px)}
 
 .inp{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;transition:border-color .14s,box-shadow .14s;font-family:inherit;line-height:1.4}
-.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(170,255,0,.12)}
+.inp:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(90,140,255,0.18)}
 .inp::placeholder{color:var(--tx3)}
 textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .sel{background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:9px 30px 9px 13px;color:var(--tx);font-size:13px;width:100%;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;transition:border-color .14s}
-.sel:focus{border-color:var(--ac);outline:none;box-shadow:0 0 0 3px rgba(170,255,0,.12)}
+.sel:focus{border-color:var(--ac);outline:none;box-shadow:0 0 0 3px rgba(90,140,255,0.18)}
 
 .badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:700;letter-spacing:.2px;text-transform:uppercase;line-height:1.5}
 .nb{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:10px;cursor:pointer;color:var(--tx2);font-size:12px;font-weight:500;transition:all .12s;border:none;background:transparent;width:100%;text-align:left;position:relative}
@@ -4183,7 +4205,7 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .ai-panel{position:fixed;bottom:136px;right:20px;z-index:1800;width:370px;height:520px;background:var(--sf);border-radius:20px;display:flex;flex-direction:column;box-shadow:var(--sh2);overflow:hidden;border:1px solid var(--bd);animation:slideUp .18s ease}
 .ai-msg-user{align-self:flex-end;background:var(--ac);color:var(--ac-tx);border-radius:16px 16px 4px 16px;padding:9px 13px;font-size:12px;max-width:80%;line-height:1.5;font-weight:600}
 .ai-msg-ai{align-self:flex-start;background:var(--sf2);color:var(--tx);border-radius:16px 16px 16px 4px;padding:9px 13px;font-size:12px;max-width:90%;line-height:1.55;white-space:pre-wrap;border:1px solid var(--bd2)}
-.ai-action{background:var(--ac3);border:1px solid rgba(170,255,0,.2);border-radius:8px;padding:7px 10px;font-size:10px;color:var(--ac);font-family:monospace;margin-top:4px}
+.ai-action{background:var(--ac3);border:1px solid rgba(90,140,255,0.3);border-radius:8px;padding:7px 10px;font-size:10px;color:var(--ac);font-family:monospace;margin-top:4px}
 
 .snb{width:38px;height:38px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--sbt);transition:all .12s;flex-shrink:0}
 .snb:hover{background:rgba(37,99,235,0.12);color:#93c5fd}
@@ -4345,6 +4367,8 @@ class ErrorBoundary extends React.Component{
 /* ─── AuthScreen — Dark Magical Login ──────────────────────────────────────── */
 
 /* ─── AuthScreen — Strava/Apple inspired rich design ─────────────────────── */
+
+/* ─── AuthScreen — Apple iPhone 17 Pro Design Language ──────────────────── */
 function AuthScreen({onLogin}){
   const _initTab=(()=>{try{const p=new URLSearchParams(window.location.search);return p.get('action')==='register'?'register':'login';}catch{return 'login';}})();
   const [tab,setTabRaw]=useState(_initTab);
@@ -4364,166 +4388,253 @@ function AuthScreen({onLogin}){
   const [totpUserName,setTotpUserName]=useState('');
   const [totpToken,setTotpToken]=useState('');
   const canvasRef=useRef(null);
-  const otpRefs=[useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+  const formRef=useRef(null);
 
   const setTab=(t)=>{
     setTabRaw(t);setEmail('');setPw('');setErr('');setName('');setWsName('');setInviteCode('');setPhase('idle');
     try{history.replaceState(null,'','/?action='+t);}catch{}
   };
 
-  // Inject CSS once
+  /* ── Inject CSS ── */
   useEffect(()=>{
-    const id='vw-auth-css';
+    const id='vw-ap-css';
     if(document.getElementById(id))return;
     const s=document.createElement('style');
     s.id=id;
     s.textContent=`
-      @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;600;700;800&family=Inter:wght@400;500;600&display=swap');
-      @keyframes vw-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-      @keyframes vw-in{from{opacity:0}to{opacity:1}}
-      @keyframes vw-scale{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
-      @keyframes vw-slide{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
-      @keyframes vw-spin{to{transform:rotate(360deg)}}
-      @keyframes vw-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-      @keyframes vw-bounce{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.15)}80%{transform:scale(.95)}100%{transform:scale(1);opacity:1}}
-      @keyframes vw-check{from{stroke-dashoffset:80}to{stroke-dashoffset:0}}
-      @keyframes vw-ring{0%{transform:scale(1);opacity:.5}100%{transform:scale(2.4);opacity:0}}
-      @keyframes vw-prog{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-      @keyframes vw-float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-18px) scale(1.04)}}
-      @keyframes vw-grad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-      @keyframes vw-shimmer{0%{left:-100%}100%{left:200%}}
-      @keyframes vw-particle{0%{opacity:0;transform:translate(0,0) scale(0)}20%{opacity:1;transform:scale(1)}80%{opacity:.7}100%{opacity:0;transform:translate(var(--px),var(--py)) scale(0)}}
-      .vw-inp{
-        width:100%;padding:13px 16px;border-radius:14px;font-size:14.5px;outline:none;
-        font-family:'Inter',inherit;letter-spacing:-.1px;transition:all .22s;box-sizing:border-box;
-        background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);color:#f0f0f8;
+      @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,300;400;700;800&family=Inter:wght@300;400;500;600&display=swap');
+
+      /* ── Apple keyframes ── */
+      @keyframes ap-fadeUp{0%{opacity:0;transform:translateY(30px)}100%{opacity:1;transform:translateY(0)}}
+      @keyframes ap-fadeIn{0%{opacity:0}100%{opacity:1}}
+      @keyframes ap-scale{0%{opacity:0;transform:scale(0.88)}100%{opacity:1;transform:scale(1)}}
+      @keyframes ap-slideDown{0%{opacity:0;transform:translateY(-14px)}100%{opacity:1;transform:translateY(0)}}
+      @keyframes ap-spin{to{transform:rotate(360deg)}}
+      @keyframes ap-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.92)}}
+      @keyframes ap-orb1{0%{transform:translate(0,0) scale(1)}25%{transform:translate(60px,-40px) scale(1.08)}50%{transform:translate(-30px,50px) scale(0.94)}75%{transform:translate(40px,20px) scale(1.04)}100%{transform:translate(0,0) scale(1)}}
+      @keyframes ap-orb2{0%{transform:translate(0,0) scale(1)}33%{transform:translate(-50px,30px) scale(1.06)}66%{transform:translate(30px,-50px) scale(0.96)}100%{transform:translate(0,0) scale(1)}}
+      @keyframes ap-orb3{0%,100%{transform:translate(0,0)}50%{transform:translate(25px,-35px)}}
+      @keyframes ap-shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
+      @keyframes ap-float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-16px) rotate(1.5deg)}}
+      @keyframes ap-ring{0%{transform:scale(1);opacity:0.6}100%{transform:scale(2.8);opacity:0}}
+      @keyframes ap-check{0%{stroke-dashoffset:100}100%{stroke-dashoffset:0}}
+      @keyframes ap-progress{0%{transform:scaleX(0);opacity:0}20%{opacity:1}100%{transform:scaleX(1);opacity:1}}
+      @keyframes ap-grain{0%,100%{transform:translate(0,0)}20%{transform:translate(-1px,1px)}40%{transform:translate(1px,-1px)}60%{transform:translate(-1px,-1px)}80%{transform:translate(1px,1px)}}
+      @keyframes ap-glow{0%,100%{box-shadow:0 0 40px rgba(90,140,255,0.25),0 0 80px rgba(168,85,247,0.12)}50%{box-shadow:0 0 60px rgba(90,140,255,0.4),0 0 120px rgba(168,85,247,0.2)}}
+      @keyframes ap-line{0%{transform:translateX(-100%)}100%{transform:translateX(100vw)}}
+      @keyframes ap-badge{0%{opacity:0;transform:scale(0.6) translateY(8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+
+      /* ── Inputs ── */
+      .ap-inp{
+        width:100%;padding:14px 18px;border-radius:13px;font-size:15px;
+        outline:none;font-family:'Inter',system-ui;letter-spacing:-0.1px;
+        transition:all 0.25s cubic-bezier(0.4,0,0.2,1);box-sizing:border-box;
+        background:rgba(255,255,255,0.07);
+        border:1px solid rgba(255,255,255,0.12);
+        color:#f5f5f7;
+        backdrop-filter:blur(20px);
+        -webkit-backdrop-filter:blur(20px);
       }
-      .vw-inp:focus{border-color:rgba(139,92,246,.75);background:rgba(139,92,246,0.06);box-shadow:0 0 0 3px rgba(139,92,246,.18),0 0 20px rgba(139,92,246,.1);}
-      .vw-inp::placeholder{color:rgba(180,180,210,0.35)}
-      .vw-inp option{background:#1a1030;color:#f0f0f8}
-      .vw-btn{transition:all .22s!important}
-      .vw-btn:hover:not(:disabled){transform:translateY(-2px)!important}
-      .vw-btn:active:not(:disabled){transform:translateY(0)!important}
-      .vw-btn:disabled{opacity:.5!important;cursor:not-allowed!important}
-      .vw-tab{transition:all .22s!important;border:none!important;cursor:pointer!important;font-family:inherit!important}
-      .vw-link{background:none!important;border:none!important;cursor:pointer!important;font-family:inherit!important;transition:opacity .2s!important}
-      .vw-link:hover{opacity:.7!important}
-      .vw-pill{transition:all .2s!important}
-      .vw-pill:hover{transform:translateY(-2px)!important;box-shadow:0 6px 20px rgba(0,0,0,.3)!important}
+      .ap-inp:focus{
+        border-color:rgba(90,140,255,0.7);
+        background:rgba(90,140,255,0.06);
+        box-shadow:0 0 0 4px rgba(90,140,255,0.15),0 0 24px rgba(90,140,255,0.08);
+      }
+      .ap-inp::placeholder{color:rgba(200,200,210,0.3)}
+      .ap-inp option{background:#1c1c2e;color:#f5f5f7}
+      .ap-inp select{-webkit-appearance:none}
+
+      /* ── Buttons ── */
+      .ap-btn-primary{
+        width:100%;height:52px;border:none;cursor:pointer;
+        border-radius:14px;font-size:16px;font-weight:700;
+        letter-spacing:-0.3px;font-family:'Bricolage Grotesque','Inter',system-ui;
+        background:linear-gradient(135deg,#5a8cff 0%,#a855f7 50%,#ec4899 100%);
+        background-size:200% auto;
+        color:#fff;
+        box-shadow:0 8px 32px rgba(90,140,255,0.45),0 2px 8px rgba(168,85,247,0.3),inset 0 1px 0 rgba(255,255,255,0.2);
+        transition:all 0.3s cubic-bezier(0.4,0,0.2,1);
+        animation:ap-shimmer 4s linear infinite;
+        position:relative;overflow:hidden;
+      }
+      .ap-btn-primary::before{
+        content:'';position:absolute;inset:0;
+        background:linear-gradient(135deg,rgba(255,255,255,0.15) 0%,transparent 50%);
+        border-radius:inherit;pointer-events:none;
+      }
+      .ap-btn-primary:hover:not(:disabled){
+        transform:translateY(-2px) scale(1.01);
+        box-shadow:0 16px 48px rgba(90,140,255,0.55),0 4px 16px rgba(168,85,247,0.4),inset 0 1px 0 rgba(255,255,255,0.2);
+        background-position:right center;
+      }
+      .ap-btn-primary:active:not(:disabled){transform:translateY(0) scale(0.99)}
+      .ap-btn-primary:disabled{opacity:0.45;cursor:not-allowed;transform:none}
+
+      .ap-tab{
+        flex:1;height:38px;border:none;cursor:pointer;
+        border-radius:10px;font-size:13.5px;font-weight:600;
+        font-family:'Inter',system-ui;letter-spacing:-0.1px;
+        transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+        background:transparent;
+      }
+      .ap-tab-active{
+        background:rgba(255,255,255,0.10);
+        color:#f5f5f7;
+        box-shadow:0 2px 8px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.1);
+      }
+      .ap-tab-inactive{color:rgba(200,200,210,0.4)}
+      .ap-tab-inactive:hover{color:rgba(200,200,210,0.7)}
+
+      .ap-link{background:none;border:none;cursor:pointer;font-family:'Inter',system-ui;transition:all 0.2s;padding:0}
+      .ap-link:hover{opacity:0.7}
+
+      /* ── Chips/pills ── */
+      .ap-chip{
+        display:inline-flex;align-items:center;gap:8px;
+        padding:7px 16px;border-radius:100px;
+        font-size:11.5px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
+        font-family:'Inter',system-ui;
+        backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+        transition:all 0.2s;
+      }
+      .ap-feat-pill{
+        display:inline-flex;align-items:center;gap:7px;
+        padding:7px 14px;border-radius:100px;
+        font-size:11.5px;font-weight:600;
+        font-family:'Inter',system-ui;
+        backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+        transition:all 0.22s cubic-bezier(0.4,0,0.2,1);
+        cursor:default;
+      }
+      .ap-feat-pill:hover{transform:translateY(-3px);filter:brightness(1.15)}
     `;
     document.head.appendChild(s);
   },[]);
 
-  // Canvas — Strava-style energetic gradient mesh with flowing particles
+  /* ── WebGL-like Canvas: Apple Deep Space ── */
   useEffect(()=>{
     const cv=canvasRef.current;if(!cv)return;
     const ctx=cv.getContext('2d');
     let raf,t=0;
-    const resize=()=>{cv.width=cv.offsetWidth||700;cv.height=cv.offsetHeight||900;};
+    const resize=()=>{cv.width=cv.offsetWidth||720;cv.height=cv.offsetHeight||900;};
     resize();
     const ro=new ResizeObserver(resize);ro.observe(cv);
 
-    // Strava-inspired palette: coral, orange, purple, teal, gold
-    const PALETTE=[
-      {r:255,g:100,b:60,a:.22},   // strava coral/orange
-      {r:139,g:92,b:246,a:.2},    // purple
-      {r:251,g:191,b:36,a:.15},   // gold/amber
-      {r:20,g:184,b:166,a:.17},   // teal
-      {r:244,g:63,b:94,a:.14},    // rose
-      {r:99,g:102,b:241,a:.18},   // indigo
+    // iPhone 17 Pro color palette: Deep Navy, Titanium Purple, Desert Titanium, Black Titanium
+    const ORB_DEFS=[
+      {cx:.18,cy:.22,rx:.38,ry:.42,r:255,g:100,b:255,a:.22,sp:.0014,ph:0},   // purple
+      {cx:.75,cy:.18,rx:.36,ry:.40,r:90,g:140,b:255,a:.20,sp:.0018,ph:1.8},  // blue
+      {cx:.5, cy:.7, rx:.34,ry:.36,r:236,g:72,b:153,a:.16,sp:.0012,ph:3.6},  // pink
+      {cx:.1, cy:.8, rx:.28,ry:.30,r:160,g:100,b:255,a:.14,sp:.0022,ph:5.4}, // violet
+      {cx:.9, cy:.65,rx:.25,ry:.28,r:50, g:200,b:255,a:.10,sp:.0016,ph:2.1}, // cyan
     ];
-    const orbs=PALETTE.map((c,i)=>({
-      x:.1+Math.random()*.8, y:.1+Math.random()*.8,
-      vx:(Math.random()-.5)*.00022, vy:(Math.random()-.5)*.00018,
-      r:.28+Math.random()*.2, ph:i*1.05, sp:.0022+Math.random()*.003, c
-    }));
-    const pts=Array.from({length:36},(_,i)=>({
+    const orbs=ORB_DEFS.map(o=>({...o}));
+
+    // Fine particle field
+    const pts=Array.from({length:55},()=>({
       x:Math.random(),y:Math.random(),
-      vx:(Math.random()-.5)*.00015,vy:(Math.random()-.5)*.00012,
-      ph:Math.random()*6.28,sp:.004+Math.random()*.007,ci:i%PALETTE.length
+      vx:(Math.random()-.5)*.00012,vy:(Math.random()-.5)*.00010,
+      ph:Math.random()*6.28,sp:.003+Math.random()*.008,
+      r:Math.floor(Math.random()*3),
+      ci:Math.floor(Math.random()*4)
     }));
-    const streaks=Array.from({length:12},()=>({
-      x:Math.random(),y:Math.random(),angle:Math.random()*Math.PI*2,
-      len:.05+Math.random()*.08,sp:.0008+Math.random()*.001,ph:Math.random()*6.28
-    }));
+    const PCOLS=[[90,140,255],[168,85,247],[236,72,153],[139,92,246]];
+
+    // Scanning light lines — Apple product reveal style
+    const scanLines=[
+      {y:.35,sp:.00018,a:.18,w:1.2},
+      {y:.62,sp:.00012,a:.12,w:.8},
+      {y:.12,sp:.00022,a:.14,w:.6},
+    ];
 
     const draw=()=>{
       const W=cv.width,H=cv.height;t+=.01;
 
-      // Rich dark warm base — not flat black
-      const bg=ctx.createLinearGradient(0,0,W,H);
-      bg.addColorStop(0,'#0f0a1e');   // deep purple-black
-      bg.addColorStop(.35,'#130d28'); // dark violet
-      bg.addColorStop(.65,'#0a1520'); // dark teal-black
-      bg.addColorStop(1,'#12060f');   // deep rose-black
-      ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+      // Deep space base — Apple's signature gradient
+      const base=ctx.createLinearGradient(0,0,W*.6,H);
+      base.addColorStop(0,'#06040f');   // near-black with violet hint
+      base.addColorStop(.3,'#0a0618'); // deep purple-black
+      base.addColorStop(.6,'#04060f'); // deep blue-black
+      base.addColorStop(1,'#080410'); // violet-black
+      ctx.fillStyle=base;ctx.fillRect(0,0,W,H);
 
-      // Animated diagonal gradient overlay
-      const ang=Math.sin(t*.15)*Math.PI*.25;
-      const gx=ctx.createLinearGradient(0,0,W*Math.cos(ang),H*Math.sin(ang));
-      gx.addColorStop(0,`rgba(255,100,60,${.06+Math.sin(t*.3)*.02})`);
-      gx.addColorStop(.5,`rgba(139,92,246,${.04+Math.sin(t*.2)*.02})`);
-      gx.addColorStop(1,`rgba(20,184,166,${.05+Math.sin(t*.25)*.02})`);
-      ctx.fillStyle=gx;ctx.fillRect(0,0,W,H);
+      // Subtle diagonal shimmer overlay — titanium sheen
+      const ti=ctx.createLinearGradient(0,H*.3,W,H*.7);
+      const tAlpha=(.025+Math.sin(t*.2)*.01);
+      ti.addColorStop(0,`rgba(200,180,255,0)`);
+      ti.addColorStop(.4,`rgba(200,180,255,${tAlpha})`);
+      ti.addColorStop(.6,`rgba(180,200,255,${tAlpha*.7})`);
+      ti.addColorStop(1,`rgba(200,180,255,0)`);
+      ctx.fillStyle=ti;ctx.fillRect(0,0,W,H);
 
-      // Pulsing color orbs
+      // Animated color orbs — cinematic haze
       orbs.forEach(o=>{
-        o.x+=o.vx;o.y+=o.vy;o.ph+=o.sp;
-        if(o.x<-.15)o.x=1.15;if(o.x>1.15)o.x=-.15;
-        if(o.y<-.15)o.y=1.15;if(o.y>1.15)o.y=-.15;
-        const ox=o.x*W+Math.sin(o.ph*.7)*W*.07;
-        const oy=o.y*H+Math.cos(o.ph*.5)*H*.07;
-        const rr=o.r*Math.min(W,H)*(1+Math.sin(o.ph*1.8)*.15);
-        const g=ctx.createRadialGradient(ox,oy,0,ox,oy,rr);
-        const pulse=.6+Math.sin(o.ph*2.3)*.4;
-        g.addColorStop(0,`rgba(${o.c.r},${o.c.g},${o.c.b},${o.c.a*pulse})`);
-        g.addColorStop(.4,`rgba(${o.c.r},${o.c.g},${o.c.b},${o.c.a*pulse*.3})`);
+        o.ph+=o.sp;
+        const ox=(o.cx+Math.sin(o.ph*.7)*.12)*W;
+        const oy=(o.cy+Math.cos(o.ph*.5)*.10)*H;
+        const rw=o.rx*W*(1+Math.sin(o.ph*1.4)*.12);
+        const rh=o.ry*H*(1+Math.cos(o.ph*1.6)*.10);
+        const pulse=.65+Math.sin(o.ph*2.1)*.35;
+        ctx.save();
+        ctx.translate(ox,oy);ctx.scale(rw/Math.min(rw,rh),rh/Math.min(rw,rh));
+        const g=ctx.createRadialGradient(0,0,0,0,0,Math.min(rw,rh));
+        g.addColorStop(0,`rgba(${o.r},${o.g},${o.b},${o.a*pulse})`);
+        g.addColorStop(.45,`rgba(${o.r},${o.g},${o.b},${o.a*pulse*.25})`);
         g.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,Math.min(rw,rh),0,6.28);ctx.fill();
+        ctx.restore();
       });
 
-      // Particle mesh with glow
+      // Fine star/particle grid
       pts.forEach(p=>{
         p.x+=p.vx;p.y+=p.vy;p.ph+=p.sp;
-        if(p.x<0)p.x=1;if(p.x>1)p.x=0;
-        if(p.y<0)p.y=1;if(p.y>1)p.y=0;
+        if(p.x<0)p.x=1;if(p.x>1)p.x=0;if(p.y<0)p.y=1;if(p.y>1)p.y=0;
+        const [pr,pg,pb]=PCOLS[p.ci];
+        const a=(.15+Math.sin(p.ph)*.1)*(p.r===0?.5:p.r===1?.7:1);
+        ctx.fillStyle=`rgba(${pr},${pg},${pb},${a})`;
+        ctx.beginPath();ctx.arc(p.x*W,p.y*H,p.r===0?.5:p.r===1?1:1.4,0,6.28);ctx.fill();
       });
-      ctx.lineWidth=.5;
-      for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
-        const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H,d=Math.sqrt(dx*dx+dy*dy);
-        if(d<W*.1){
-          const {r,g,b}=PALETTE[pts[i].ci];
-          const a=.12*(1-d/(W*.1));
-          ctx.strokeStyle=`rgba(${r},${g},${b},${a})`;
-          ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.stroke();
-          if(Math.sin(pts[i].ph)>.6){
-            ctx.beginPath();ctx.arc(pts[i].x*W,pts[i].y*H,1.5+Math.sin(pts[i].ph)*.7,0,6.28);
-            ctx.fillStyle=`rgba(${r},${g},${b},${.3*(1-d/(W*.1))})`;ctx.fill();
+
+      // Particle mesh lines
+      ctx.lineWidth=.4;
+      for(let i=0;i<pts.length;i++){
+        for(let j=i+1;j<pts.length;j++){
+          const dx=(pts[i].x-pts[j].x)*W,dy=(pts[i].y-pts[j].y)*H;
+          const d=Math.sqrt(dx*dx+dy*dy);
+          if(d<90){
+            const [pr,pg,pb]=PCOLS[pts[i].ci];
+            ctx.strokeStyle=`rgba(${pr},${pg},${pb},${.08*(1-d/90)})`;
+            ctx.beginPath();ctx.moveTo(pts[i].x*W,pts[i].y*H);ctx.lineTo(pts[j].x*W,pts[j].y*H);ctx.stroke();
           }
         }
       }
 
-      // Strava-style speed streaks
-      streaks.forEach(s=>{
-        s.ph+=s.sp;const alpha=(.04+Math.sin(s.ph)*.03)*(.5+Math.sin(s.ph*.3)*.5);
-        if(alpha<.01)return;
-        const sx=s.x*W+Math.cos(s.angle+s.ph*.1)*W*.03;
-        const sy=s.y*H+Math.sin(s.angle+s.ph*.1)*H*.03;
-        const ex=sx+Math.cos(s.angle)*s.len*W;
-        const ey=sy+Math.sin(s.angle)*s.len*H;
-        const lg=ctx.createLinearGradient(sx,sy,ex,ey);
-        lg.addColorStop(0,'rgba(255,140,60,0)');
-        lg.addColorStop(.3,`rgba(255,140,60,${alpha})`);
-        lg.addColorStop(1,'rgba(255,200,100,0)');
-        ctx.strokeStyle=lg;ctx.lineWidth=1.2;
-        ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+      // Apple product scan lines — horizontal light sweeps
+      scanLines.forEach(sl=>{
+        sl.y+=sl.sp;if(sl.y>1.1)sl.y=-.1;
+        const sy=sl.y*H;
+        const sg=ctx.createLinearGradient(0,sy-20,0,sy+20);
+        sg.addColorStop(0,'rgba(180,180,255,0)');
+        sg.addColorStop(.5,`rgba(180,180,255,${sl.a})`);
+        sg.addColorStop(1,'rgba(180,180,255,0)');
+        ctx.fillStyle=sg;ctx.fillRect(0,sy-20,W,40);
+        // Thin bright center line
+        ctx.strokeStyle=`rgba(220,210,255,${sl.a*1.8})`;
+        ctx.lineWidth=sl.w;
+        ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(W,sy);ctx.stroke();
       });
 
-      // Subtle grid
-      ctx.save();ctx.strokeStyle='rgba(139,92,246,0.035)';ctx.lineWidth=.4;
-      const gs=Math.floor(W/10);
-      for(let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-      for(let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+      // Subtle grid — Apple's fine dot grid
+      ctx.save();
+      for(let x=0;x<W;x+=44){
+        for(let y=0;y<H;y+=44){
+          const dx=x/W-.5,dy=y/H-.5;
+          const dist=Math.sqrt(dx*dx+dy*dy);
+          const da=Math.max(0,.08-dist*.1);
+          ctx.fillStyle=`rgba(120,100,200,${da})`;
+          ctx.beginPath();ctx.arc(x,y,.7,0,6.28);ctx.fill();
+        }
+      }
       ctx.restore();
 
       raf=requestAnimationFrame(draw);
@@ -4532,22 +4643,20 @@ function AuthScreen({onLogin}){
     return()=>{ro.disconnect();cancelAnimationFrame(raf);};
   },[]);
 
-  useEffect(()=>{if(totpStep)setTotpToken('');},[totpStep]);
-
   const go=async()=>{
     setErr('');setPhase('loading');
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
-      if(r.error){setErr(r.error);setPhase('error');setTimeout(()=>setPhase('idle'),300);}
+      if(r.error){setErr(r.error);setPhase('error');setTimeout(()=>setPhase('idle'),350);}
       else if(r.totp_required){setTotpUserId(r.user_id);setTotpUserName(r.name);setTotpStep(true);setPhase('idle');}
-      else{setSuccessMsg('Welcome back, '+r.name+'!');setPhase('success');setTimeout(()=>onLogin(r),1800);}
+      else{setSuccessMsg('Welcome back, '+r.name);setPhase('success');setTimeout(()=>onLogin(r),1900);}
     } else {
-      if(!name||!email||!pw){setErr('All fields required.');setPhase('error');setTimeout(()=>setPhase('idle'),300);return;}
-      if(regMode==='create'&&!wsName){setErr('Workspace name required.');setPhase('error');setTimeout(()=>setPhase('idle'),300);return;}
-      if(regMode==='join'&&!inviteCode){setErr('Invite code required.');setPhase('error');setTimeout(()=>setPhase('idle'),300);return;}
+      if(!name||!email||!pw){setErr('All fields required.');setPhase('error');setTimeout(()=>setPhase('idle'),350);return;}
+      if(regMode==='create'&&!wsName){setErr('Workspace name is required.');setPhase('error');setTimeout(()=>setPhase('idle'),350);return;}
+      if(regMode==='join'&&!inviteCode){setErr('Enter the invite code.');setPhase('error');setTimeout(()=>setPhase('idle'),350);return;}
       const r=await api.post('/api/auth/register',{mode:regMode,workspace_name:wsName,invite_code:inviteCode,name,email,password:pw,role});
-      if(r.error){setErr(r.error);setPhase('error');setTimeout(()=>setPhase('idle'),300);}
-      else{setSuccessMsg('Workspace ready! Welcome, '+r.name);setPhase('success');setTimeout(()=>onLogin(r),1800);}
+      if(r.error){setErr(r.error);setPhase('error');setTimeout(()=>setPhase('idle'),350);}
+      else{setSuccessMsg('Welcome to VEWIT, '+r.name+'!');setPhase('success');setTimeout(()=>onLogin(r),1900);}
     }
   };
 
@@ -4557,183 +4666,314 @@ function AuthScreen({onLogin}){
     setErr('');setPhase('loading');
     const r=await api.post('/api/auth/totp/verify',{user_id:totpUserId,token:tok});
     if(r.error){setErr(r.error);setTotpToken('');setPhase('idle');}
-    else{setSuccessMsg('Verified! Signing you in…');setPhase('success');setTimeout(()=>onLogin(r),1600);}
+    else{setSuccessMsg('Verified! Welcome back, '+totpUserName);setPhase('success');setTimeout(()=>onLogin(r),1800);}
   };
 
-  const inp={width:'100%',padding:'13px 16px',borderRadius:14,fontSize:14.5,outline:'none',fontFamily:"'Inter',inherit",letterSpacing:'-.1px',transition:'all .22s',boxSizing:'border-box',background:'rgba(255,255,255,0.06)',border:'1.5px solid rgba(255,255,255,0.1)',color:'#f0f0f8'};
-  const lbl={display:'block',fontSize:10.5,fontWeight:700,letterSpacing:.9,textTransform:'uppercase',color:'rgba(190,180,220,0.6)',marginBottom:7};
+  const LBL=({children})=>html`<label style=${{display:'block',fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',color:'rgba(180,170,210,0.55)',marginBottom:8}}>${children}</label>`;
 
-  // Left panel — shared across all states
-  const leftPanel=html`
-    <div style=${{width:'50%',flexShrink:0,position:'relative',overflow:'hidden',minHeight:'100vh'}}>
+  // ── LEFT PANEL (canvas + hero copy) ──
+  const LEFT=html`
+    <div style=${{position:'relative',width:'52%',flexShrink:0,minHeight:'100vh',overflow:'hidden'}}>
       <canvas ref=${canvasRef} style=${{position:'absolute',inset:0,width:'100%',height:'100%'}}></canvas>
 
-      <!-- Strava-style top accent line -->
-      <div style=${{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#ff6433,#fc4f7c,#8b5cf6,#14b8a6)',zIndex:10,boxShadow:'0 2px 20px rgba(255,100,60,.4)'}}></div>
+      <!-- Top accent: iPhone 17 Pro titanium spectrum line -->
+      <div style=${{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent 0%,#5a8cff 20%,#a855f7 50%,#ec4899 80%,transparent 100%)',zIndex:10,boxShadow:'0 0 20px rgba(90,140,255,0.6),0 0 40px rgba(168,85,247,0.3)'}}></div>
 
       <!-- Logo -->
-      <div style=${{position:'absolute',top:28,left:28,zIndex:10,display:'flex',alignItems:'center',gap:11,animation:'vw-in .8s ease both'}}>
-        <div style=${{width:38,height:38,borderRadius:12,background:'linear-gradient(135deg,#ff6433,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(255,100,60,.45)'}}>
-          <svg width="20" height="20" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+      <div style=${{position:'absolute',top:28,left:32,zIndex:10,display:'flex',alignItems:'center',gap:11,animation:'ap-fadeIn 1s ease both'}}>
+        <div style=${{width:36,height:36,borderRadius:11,background:'linear-gradient(135deg,#5a8cff,#a855f7)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 20px rgba(90,140,255,0.5)',flexShrink:0}}>
+          <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
+            <circle cx="32" cy="32" r="8.5" fill="white"/>
+            <circle cx="32" cy="11" r="5.5" fill="white" opacity=".9"/>
+            <circle cx="51" cy="43" r="5.5" fill="white" opacity=".9"/>
+            <circle cx="13" cy="43" r="5.5" fill="white" opacity=".9"/>
+            <line x1="32" y1="16.5" x2="32" y2="23.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+            <line x1="46" y1="40" x2="40.5" y2="36.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+            <line x1="18" y1="40" x2="23.5" y2="36.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+          </svg>
         </div>
-        <span style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:18,color:'#fff',letterSpacing:'-.5px',textShadow:'0 2px 10px rgba(0,0,0,.3)'}}>VEWIT</span>
+        <span style=${{fontFamily:"'Bricolage Grotesque',system-ui",fontWeight:800,fontSize:17,color:'#f5f5f7',letterSpacing:'-0.6px'}}>VEWIT</span>
       </div>
 
-      <!-- Hero copy — center -->
-      <div style=${{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center',zIndex:10,pointerEvents:'none',width:'85%'}}>
-        <!-- Activity ring — Strava/Apple Watch inspired -->
-        <div style=${{width:90,height:90,margin:'0 auto 28px',position:'relative',animation:'vw-float 4s ease-in-out infinite'}}>
-          <svg width="90" height="90" viewBox="0 0 90 90" style=${{transform:'rotate(-90deg)'}}>
-            <circle cx="45" cy="45" r="36" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8"/>
-            <circle cx="45" cy="45" r="36" fill="none" stroke="url(#ring1)" strokeWidth="8" strokeLinecap="round" strokeDasharray="226" strokeDashoffset="56"/>
+      <!-- Center hero -->
+      <div style=${{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center',zIndex:10,width:'84%',pointerEvents:'none'}}>
+
+        <!-- Floating device ring — Apple Watch / iPhone silhouette -->
+        <div style=${{margin:'0 auto 32px',width:100,height:100,position:'relative',animation:'ap-float 5s ease-in-out infinite'}}>
+          <!-- Outer glow ring -->
+          <div style=${{position:'absolute',inset:-8,borderRadius:'50%',background:'transparent',boxShadow:'0 0 0 1.5px rgba(90,140,255,0.25),0 0 40px rgba(90,140,255,0.18),0 0 80px rgba(168,85,247,0.12)',animation:'ap-glow 4s ease-in-out infinite'}}></div>
+          <!-- Titanium ring — iPhone bezel aesthetic -->
+          <svg width="100" height="100" viewBox="0 0 100 100" style=${{position:'absolute',inset:0}}>
             <defs>
-              <linearGradient id="ring1" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#ff6433"/>
-                <stop offset="50%" stopColor="#fc4f7c"/>
-                <stop offset="100%" stopColor="#8b5cf6"/>
+              <linearGradient id="rg1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#5a8cff" stop-opacity="0.8"/>
+                <stop offset="40%" stop-color="#a855f7" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#ec4899" stop-opacity="0.7"/>
+              </linearGradient>
+              <linearGradient id="rg2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#1a1a2e" stop-opacity="0.7"/>
+                <stop offset="100%" stop-color="#16213e" stop-opacity="0.5"/>
               </linearGradient>
             </defs>
+            <!-- Background disc -->
+            <circle cx="50" cy="50" r="46" fill="url(#rg2)" stroke="url(#rg1)" stroke-width="1.5"/>
+            <!-- Progress arcs — like Apple Watch rings -->
+            <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="url(#rg1)" stroke-width="5" stroke-linecap="round" stroke-dasharray="238" stroke-dashoffset="60" transform="rotate(-90 50 50)"/>
+            <circle cx="50" cy="50" r="28" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="4"/>
+            <circle cx="50" cy="50" r="28" fill="none" stroke="rgba(90,140,255,0.6)" stroke-width="4" stroke-linecap="round" stroke-dasharray="176" stroke-dashoffset="50" transform="rotate(-90 50 50)"/>
           </svg>
-          <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:30}}>⚡</div>
+          <div style=${{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28}}>⚡</div>
         </div>
 
-        <div style=${{display:'inline-flex',alignItems:'center',gap:7,background:'rgba(255,100,60,0.15)',border:'1px solid rgba(255,100,60,0.3)',padding:'5px 16px',borderRadius:100,marginBottom:22,backdropFilter:'blur(12px)',animation:'vw-up .8s .1s ease both',opacity:0}}>
-          <span style=${{width:6,height:6,borderRadius:'50%',background:'#ff6433',boxShadow:'0 0 10px #ff6433',display:'inline-block',animation:'vw-pulse 2s infinite'}}></span>
-          <span style=${{fontSize:11,color:'rgba(255,160,100,.95)',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase'}}>AI-Powered · Free to Start</span>
+        <!-- Badge chip -->
+        <div style=${{display:'flex',justifyContent:'center',marginBottom:22,animation:'ap-badge 0.8s 0.3s cubic-bezier(0.34,1.56,0.64,1) both',opacity:0}}>
+          <span class="ap-chip" style=${{background:'rgba(90,140,255,0.12)',border:'1px solid rgba(90,140,255,0.28)',color:'rgba(160,185,255,0.95)'}}>
+            <span style=${{width:6,height:6,borderRadius:'50%',background:'#5aff8c',boxShadow:'0 0 8px #5aff8c',display:'inline-block',animation:'ap-pulse 2.2s ease-in-out infinite'}}></span>
+            AI-Powered · Now Live
+          </span>
         </div>
 
-        <h2 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:'clamp(1.7rem,2.8vw,2.4rem)',fontWeight:800,color:'#fff',lineHeight:1.12,marginBottom:16,letterSpacing:'-1.5px',textShadow:'0 4px 30px rgba(0,0,0,.4)',animation:'vw-up .8s .2s ease both',opacity:0}}>
-          Where teams<br/><span style=${{background:'linear-gradient(90deg,#ff6433,#fc4f7c,#8b5cf6)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>ship together.</span>
-        </h2>
+        <!-- Hero headline — Apple's large, confident typography -->
+        <h1 style=${{fontFamily:"'Bricolage Grotesque',system-ui",fontSize:'clamp(2rem,3.2vw,2.8rem)',fontWeight:800,lineHeight:1.06,letterSpacing:'-2px',color:'#f5f5f7',marginBottom:18,animation:'ap-fadeUp 0.9s 0.2s ease both',opacity:0}}>
+          Built for teams<br/>
+          <span style=${{background:'linear-gradient(135deg,#5a8cff 0%,#a855f7 45%,#ec4899 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',backgroundSize:'200% auto',animation:'ap-shimmer 5s linear infinite'}}>
+            that ship fast.
+          </span>
+        </h1>
 
-        <p style=${{fontSize:13.5,color:'rgba(200,190,230,0.65)',lineHeight:1.8,animation:'vw-up .8s .3s ease both',opacity:0}}>
-          Projects · Tasks · AI Assistant<br/>Timeline · Tickets · Direct Messages
+        <p style=${{fontSize:14,color:'rgba(180,175,210,0.6)',lineHeight:1.85,letterSpacing:'-0.1px',animation:'ap-fadeUp 0.9s 0.35s ease both',opacity:0}}>
+          Projects · AI Docs · Timeline<br/>Kanban · WebRTC · Analytics
         </p>
       </div>
 
-      <!-- Bottom feature pills — Strava activity-badge style -->
-      <div style=${{position:'absolute',bottom:28,left:0,right:0,display:'flex',justifyContent:'center',gap:7,flexWrap:'wrap',padding:'0 20px',zIndex:10,animation:'vw-up .8s .5s ease both',opacity:0}}>
-        ${[
-          {icon:'📋',label:'Kanban',color:'#ff6433'},
-          {icon:'🤖',label:'AI',color:'#8b5cf6'},
-          {icon:'📅',label:'Timeline',color:'#14b8a6'},
-          {icon:'📞',label:'Meet',color:'#fbbf24'},
-          {icon:'🎫',label:'Tickets',color:'#fc4f7c'},
-          {icon:'📊',label:'Analytics',color:'#6366f1'},
-        ].map(f=>html`
-          <div key=${f.label} class="vw-pill" style=${{
-            background:'rgba(15,10,30,0.7)',
-            border:`1px solid ${f.color}44`,
-            backdropFilter:'blur(16px)',padding:'6px 14px',borderRadius:100,
-            fontSize:11,fontWeight:700,color:'rgba(220,210,240,.85)',
-            display:'flex',alignItems:'center',gap:6,
-            boxShadow:`0 2px 12px ${f.color}22`
-          }}>
-            <span style=${{fontSize:12}}>${f.icon}</span>${f.label}
-          </div>
-        `)}
+      <!-- Feature pills — bottom bar -->
+      <div style=${{position:'absolute',bottom:28,left:0,right:0,zIndex:10,padding:'0 20px',animation:'ap-fadeUp 0.9s 0.6s ease both',opacity:0}}>
+        <!-- Frosted separator line -->
+        <div style=${{height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent)',marginBottom:18}}></div>
+        <div style=${{display:'flex',justifyContent:'center',gap:8,flexWrap:'wrap'}}>
+          ${[
+            {e:'📋',l:'Kanban',c:'rgba(90,140,255,0.18)',b:'rgba(90,140,255,0.35)',t:'rgba(160,190,255,0.9)'},
+            {e:'🤖',l:'AI Studio',c:'rgba(168,85,247,0.18)',b:'rgba(168,85,247,0.35)',t:'rgba(200,160,255,0.9)'},
+            {e:'📅',l:'Timeline',c:'rgba(52,199,89,0.15)',b:'rgba(52,199,89,0.35)',t:'rgba(130,230,160,0.9)'},
+            {e:'📞',l:'Meet',c:'rgba(100,210,255,0.15)',b:'rgba(100,210,255,0.35)',t:'rgba(140,220,255,0.9)'},
+            {e:'🎫',l:'Tickets',c:'rgba(236,72,153,0.15)',b:'rgba(236,72,153,0.35)',t:'rgba(255,150,200,0.9)'},
+            {e:'📊',l:'Analytics',c:'rgba(255,159,10,0.15)',b:'rgba(255,159,10,0.35)',t:'rgba(255,200,130,0.9)'},
+          ].map(f=>html`
+            <span key=${f.l} class="ap-feat-pill" style=${{background:f.c,border:`1px solid ${f.b}`,color:f.t,boxShadow:`0 2px 12px ${f.c}`}}>
+              <span style=${{fontSize:13}}>${f.e}</span>${f.l}
+            </span>
+          `)}
+        </div>
       </div>
     </div>`;
 
-  // RIGHT panel wrapper
-  const rightPanel=(child)=>html`
-    <div style=${{flex:1,minHeight:'100vh',background:'linear-gradient(135deg,#0f0a1e 0%,#130d28 50%,#0d1525 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 36px',overflowY:'auto',borderLeft:'1px solid rgba(255,255,255,0.04)'}}>
-      <div style=${{width:'100%',maxWidth:420}}>
-        ${child}
+  // ── RIGHT PANEL wrapper ──
+  const RIGHT=(content)=>html`
+    <div style=${{flex:1,minHeight:'100vh',overflowY:'auto',display:'flex',alignItems:'center',justifyContent:'center',padding:'48px 40px',
+      background:'linear-gradient(160deg,#06040f 0%,#0a0618 40%,#060412 100%)',
+      borderLeft:'1px solid rgba(255,255,255,0.05)'}}>
+      <div style=${{width:'100%',maxWidth:400}}>
+        ${content}
       </div>
     </div>`;
 
-  // SUCCESS state
+  // ── SUCCESS ──
   if(phase==='success') return html`
-    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
-      ${leftPanel}
-      ${rightPanel(html`
-        <div style=${{textAlign:'center',animation:'vw-scale .5s cubic-bezier(.34,1.56,.64,1) both'}}>
-          <div style=${{position:'relative',width:120,height:120,margin:'0 auto 32px'}}>
-            <div style=${{position:'absolute',inset:0,borderRadius:'50%',border:'2px solid rgba(255,100,60,.4)',animation:'vw-ring 1.2s .1s ease-out both'}}></div>
-            <div style=${{position:'absolute',inset:0,borderRadius:'50%',border:'2px solid rgba(139,92,246,.3)',animation:'vw-ring 1.2s .4s ease-out both'}}></div>
-            <div style=${{position:'absolute',inset:12,borderRadius:'50%',background:'linear-gradient(135deg,rgba(255,100,60,.15),rgba(139,92,246,.15))',border:'2px solid rgba(255,100,60,.5)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <svg width="48" height="48" viewBox="0 0 56 56" fill="none">
-                <polyline points="14,29 24,39 42,19" stroke="url(#cg)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="80" stroke-dashoffset="80" style=${{animation:'vw-check .6s .4s cubic-bezier(.4,0,.2,1) both'}}/>
-                <defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ff6433"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs>
-              </svg>
-            </div>
-          </div>
-          <div style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:26,fontWeight:800,color:'#fff',letterSpacing:'-1px',marginBottom:10}}>${successMsg}</div>
-          <div style=${{fontSize:14,color:'rgba(180,170,220,.6)',marginBottom:28}}>Redirecting to your workspace…</div>
-          <div style=${{height:3,background:'rgba(255,255,255,0.07)',borderRadius:3,overflow:'hidden',margin:'0 auto',maxWidth:200}}>
-            <div style=${{height:'100%',background:'linear-gradient(90deg,#ff6433,#fc4f7c,#8b5cf6)',borderRadius:3,transformOrigin:'left',animation:'vw-prog 1.7s cubic-bezier(.4,0,.2,1) both'}}></div>
+    <div style=${{display:'flex',width:'100vw',minHeight:'100vh',overflow:'hidden'}}>${LEFT}
+    ${RIGHT(html`
+      <div style=${{textAlign:'center',animation:'ap-scale 0.55s cubic-bezier(0.34,1.56,0.64,1) both'}}>
+        <!-- Concentric ripple rings -->
+        <div style=${{position:'relative',width:130,height:130,margin:'0 auto 36px'}}>
+          <div style=${{position:'absolute',inset:0,borderRadius:'50%',border:'1.5px solid rgba(90,140,255,0.4)',animation:'ap-ring 1.4s 0s ease-out forwards'}}></div>
+          <div style=${{position:'absolute',inset:0,borderRadius:'50%',border:'1.5px solid rgba(168,85,247,0.35)',animation:'ap-ring 1.4s 0.25s ease-out forwards'}}></div>
+          <div style=${{position:'absolute',inset:0,borderRadius:'50%',border:'1.5px solid rgba(236,72,153,0.25)',animation:'ap-ring 1.4s 0.5s ease-out forwards'}}></div>
+          <div style=${{position:'absolute',inset:18,borderRadius:'50%',background:'linear-gradient(135deg,rgba(90,140,255,0.15),rgba(168,85,247,0.15))',border:'1.5px solid rgba(90,140,255,0.4)',display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(20px)'}}>
+            <svg width="46" height="46" viewBox="0 0 56 56" fill="none">
+              <polyline points="14,29 24,39 42,19" stroke="url(#sg)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="100" stroke-dashoffset="100" style=${{animation:'ap-check 0.65s 0.45s cubic-bezier(0.4,0,0.2,1) forwards'}}/>
+              <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#5a8cff"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
+            </svg>
           </div>
         </div>
-      `)}
+        <h2 style=${{fontFamily:"'Bricolage Grotesque',system-ui",fontSize:26,fontWeight:800,color:'#f5f5f7',letterSpacing:'-1.5px',marginBottom:10}}>${successMsg}</h2>
+        <p style=${{fontSize:14,color:'rgba(180,175,210,0.55)',marginBottom:32}}>Loading your workspace…</p>
+        <!-- Apple-style thin progress bar -->
+        <div style=${{height:2,background:'rgba(255,255,255,0.06)',borderRadius:2,overflow:'hidden',maxWidth:220,margin:'0 auto'}}>
+          <div style=${{height:'100%',borderRadius:2,transformOrigin:'left',background:'linear-gradient(90deg,#5a8cff,#a855f7,#ec4899)',animation:'ap-progress 1.8s cubic-bezier(0.4,0,0.2,1) forwards'}}></div>
+        </div>
+      </div>
+    `)}
     </div>`;
 
-  // TOTP state
+  // ── TOTP ──
   if(totpStep) return html`
-    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
-      ${leftPanel}
-      ${rightPanel(html`
-        <div style=${{animation:'vw-up .5s ease both'}}>
-          <div style=${{width:58,height:58,borderRadius:17,background:'linear-gradient(135deg,#ff6433,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:22,boxShadow:'0 6px 28px rgba(255,100,60,.35)'}}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1" fill="white"/></svg>
-          </div>
-          <h2 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:24,fontWeight:800,color:'#fff',marginBottom:8,letterSpacing:'-1px'}}>Two-Factor Auth</h2>
-          <p style=${{fontSize:13.5,color:'rgba(190,180,220,.7)',marginBottom:22,lineHeight:1.65}}>Hi <b style=${{color:'#ff6433'}}>${totpUserName}</b> — open your authenticator and enter the 6-digit VEWIT code.</p>
-
-          <div style=${{background:'rgba(255,100,60,.07)',border:'1px solid rgba(255,100,60,.2)',borderRadius:12,padding:'12px 15px',marginBottom:22,display:'flex',gap:10,alignItems:'center'}}>
-            <span style=${{fontSize:24}}>📱</span>
-            <span style=${{fontSize:13,color:'rgba(190,180,220,.8)',lineHeight:1.55}}>Use <b style=${{color:'#fff'}}>Google Authenticator</b> or <b style=${{color:'#fff'}}>Authy</b></span>
-          </div>
-
-          <div style=${{marginBottom:20}}>
-            <label style=${lbl}>6-Digit Code</label>
-            <input class="vw-inp" style=${{height:64,textAlign:'center',fontSize:30,fontWeight:800,fontFamily:'monospace',letterSpacing:10,background:totpToken.length===6?'rgba(255,100,60,.08)':'rgba(255,255,255,.06)',borderColor:totpToken.length===6?'rgba(255,100,60,.65)':'rgba(255,255,255,.1)',boxShadow:totpToken.length===6?'0 0 0 3px rgba(255,100,60,.18),0 0 20px rgba(255,100,60,.1)':'none'}}
-              value=${totpToken} placeholder="000 000" maxLength=6 autoFocus
-              onInput=${e=>setTotpToken(e.target.value.replace(/\D/g,'').slice(0,6))}
-              onKeyDown=${e=>e.key==='Enter'&&submitTotp()}/>
-          </div>
-
-          ${err?html`<div style=${{padding:'11px 14px',background:'rgba(244,63,94,.07)',border:'1px solid rgba(244,63,94,.2)',borderRadius:10,fontSize:13,color:'#fb7185',marginBottom:16,display:'flex',gap:8,alignItems:'center',animation:'vw-slide .2s ease both'}}><span>⚠️</span>${err}</div>`:null}
-
-          <button class="vw-btn" onClick=${submitTotp} disabled=${phase==='loading'||totpToken.length!==6}
-            style=${{width:'100%',height:52,borderRadius:14,border:'none',fontFamily:"'Bricolage Grotesque',inherit",fontSize:15,fontWeight:800,letterSpacing:'-.3px',cursor:totpToken.length===6?'pointer':'not-allowed',
-              background:totpToken.length===6?'linear-gradient(135deg,#ff6433,#8b5cf6)':'rgba(255,255,255,.05)',
-              color:totpToken.length===6?'#fff':'rgba(180,170,220,.3)',
-              boxShadow:totpToken.length===6?'0 6px 28px rgba(255,100,60,.4)':'none',marginBottom:16}}>
-            ${phase==='loading'
-              ?html`<span style=${{display:'inline-flex',alignItems:'center',gap:10}}><span style=${{width:16,height:16,border:'2.5px solid rgba(255,255,255,.25)',borderTopColor:'#fff',borderRadius:'50%',animation:'vw-spin .7s linear infinite',display:'inline-block'}}></span>Verifying…</span>`
-              :'Verify & Sign In →'}
-          </button>
-          <div style=${{textAlign:'center'}}><button class="vw-link" onClick=${()=>{setTotpStep(false);setTotpToken('');setErr('');setPhase('idle');}} style=${{color:'rgba(180,170,220,.45)',fontSize:13}}>← Back to login</button></div>
+    <div style=${{display:'flex',width:'100vw',minHeight:'100vh',overflow:'hidden'}}>${LEFT}
+    ${RIGHT(html`
+      <div style=${{animation:'ap-fadeUp 0.55s ease both'}}>
+        <div style=${{width:54,height:54,borderRadius:16,background:'linear-gradient(135deg,#5a8cff,#a855f7)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:24,boxShadow:'0 6px 28px rgba(90,140,255,0.45)'}}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/><circle cx="12" cy="16" r="1" fill="white"/>
+          </svg>
         </div>
-      `)}
+        <h2 style=${{fontFamily:"'Bricolage Grotesque',system-ui",fontSize:26,fontWeight:800,color:'#f5f5f7',letterSpacing:'-1.5px',marginBottom:8}}>Two-Factor Verification</h2>
+        <p style=${{fontSize:14,color:'rgba(175,170,210,0.6)',marginBottom:24,lineHeight:1.7}}>
+          Hello <b style=${{color:'#a78bfa',fontWeight:700}}>${totpUserName}</b> — open your authenticator app and enter the 6-digit code.
+        </p>
+        <div style=${{background:'rgba(90,140,255,0.07)',border:'1px solid rgba(90,140,255,0.2)',borderRadius:13,padding:'12px 16px',marginBottom:24,display:'flex',gap:12,alignItems:'center'}}>
+          <span style=${{fontSize:22}}>📱</span>
+          <span style=${{fontSize:13,color:'rgba(180,175,210,0.8)',lineHeight:1.55}}>Use <b style=${{color:'#f5f5f7'}}>Google Authenticator</b> or <b style=${{color:'#f5f5f7'}}>Authy</b></span>
+        </div>
+        <div style=${{marginBottom:20}}>
+          <${LBL}>Verification Code</${LBL}>
+          <input class="ap-inp" style=${{height:64,textAlign:'center',fontSize:32,fontWeight:800,fontFamily:'monospace',letterSpacing:12,
+            borderColor:totpToken.length===6?'rgba(90,140,255,0.7)':'rgba(255,255,255,0.12)',
+            background:totpToken.length===6?'rgba(90,140,255,0.08)':'rgba(255,255,255,0.07)',
+            boxShadow:totpToken.length===6?'0 0 0 4px rgba(90,140,255,0.15)':'none'}}
+            value=${totpToken} placeholder="000000" maxLength=6 autoFocus
+            onInput=${e=>setTotpToken(e.target.value.replace(/\D/g,'').slice(0,6))}
+            onKeyDown=${e=>e.key==='Enter'&&submitTotp()}/>
+        </div>
+        ${err?html`<div style=${{display:'flex',gap:9,padding:'12px 15px',background:'rgba(255,69,58,0.08)',border:'1px solid rgba(255,69,58,0.22)',borderRadius:12,marginBottom:16,animation:'ap-slideDown 0.2s ease both'}}>
+          <span>⚠️</span><span style=${{fontSize:13,color:'#ff6b6b',lineHeight:1.45}}>${err}</span>
+        </div>`:null}
+        <button class="ap-btn-primary" onClick=${submitTotp} disabled=${phase==='loading'||totpToken.length!==6}>
+          ${phase==='loading'
+            ?html`<span style=${{display:'inline-flex',alignItems:'center',gap:10}}><span style=${{width:16,height:16,border:'2px solid rgba(255,255,255,0.25)',borderTopColor:'#fff',borderRadius:'50%',animation:'ap-spin 0.7s linear infinite',display:'inline-block'}}></span>Verifying…</span>`
+            :'Verify & Continue →'}
+        </button>
+        <div style=${{textAlign:'center',marginTop:16}}>
+          <button class="ap-link" onClick=${()=>{setTotpStep(false);setTotpToken('');setErr('');setPhase('idle');}} style=${{color:'rgba(175,170,210,0.4)',fontSize:13}}>← Back to sign in</button>
+        </div>
+      </div>
+    `)}
     </div>`;
 
-  // MAIN form
+  // ── MAIN FORM ──
   return html`
-    <div style=${{width:'100vw',minHeight:'100vh',display:'flex',overflow:'hidden'}}>
-      ${leftPanel}
-      ${rightPanel(html`
-        <div style=${{animation:'vw-up .6s ease both'}}>
+    <div style=${{display:'flex',width:'100vw',minHeight:'100vh',overflow:'hidden'}}>${LEFT}
+    ${RIGHT(html`
+      <div ref=${formRef} style=${{animation:'ap-fadeUp 0.65s ease both'}}>
 
-          <!-- Logo -->
-          <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:32}}>
-            <div style=${{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#ff6433,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 3px 16px rgba(255,100,60,.4)'}}>
-              <svg width="18" height="18" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="9" fill="white"/><circle cx="32" cy="11" r="6" fill="white"/><circle cx="51" cy="43" r="6" fill="white"/><circle cx="13" cy="43" r="6" fill="white"/><line x1="32" y1="17" x2="32" y2="23" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="24" y2="36" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
-            </div>
-            <span style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontWeight:800,fontSize:17,color:'#fff',letterSpacing:'-.5px'}}>VEWIT</span>
+        <!-- Wordmark -->
+        <div style=${{display:'flex',alignItems:'center',gap:9,marginBottom:36}}>
+          <div style=${{width:30,height:30,borderRadius:9,background:'linear-gradient(135deg,#5a8cff,#a855f7)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 3px 14px rgba(90,140,255,0.45)'}}>
+            <svg width="17" height="17" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="8.5" fill="white"/><circle cx="32" cy="11" r="5.5" fill="white" opacity=".9"/><circle cx="51" cy="43" r="5.5" fill="white" opacity=".9"/><circle cx="13" cy="43" r="5.5" fill="white" opacity=".9"/><line x1="32" y1="16.5" x2="32" y2="23.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="46" y1="40" x2="40.5" y2="36.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/><line x1="18" y1="40" x2="23.5" y2="36.5" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>
+          </div>
+          <span style=${{fontFamily:"'Bricolage Grotesque',system-ui",fontWeight:800,fontSize:16,color:'#f5f5f7',letterSpacing:'-0.5px'}}>VEWIT</span>
+        </div>
+
+        <!-- Headline -->
+        <h1 style=${{fontFamily:"'Bricolage Grotesque',system-ui",fontSize:'clamp(1.75rem,3vw,2.2rem)',fontWeight:800,letterSpacing:'-1.8px',lineHeight:1.08,color:'#f5f5f7',marginBottom:10}}>
+          ${tab==='login'?'Sign in.':'Get started.'}
+        </h1>
+        <p style=${{fontSize:14,color:'rgba(175,170,210,0.5)',marginBottom:28,lineHeight:1.6}}>
+          ${tab==='login'?'Access your VEWIT workspace.':'Create your team workspace.'}
+        </p>
+
+        <!-- Tab switcher — Apple segmented control -->
+        <div style=${{display:'flex',background:'rgba(255,255,255,0.05)',borderRadius:13,padding:'3px',border:'1px solid rgba(255,255,255,0.07)',marginBottom:24,backdropFilter:'blur(20px)'}}>
+          ${['login','register'].map(tp=>html`
+            <button key=${tp} class=${'ap-tab '+(tab===tp?'ap-tab-active':'ap-tab-inactive')} onClick=${()=>setTab(tp)}>
+              ${tp==='login'?'Sign In':'Create Account'}
+            </button>`)}
+        </div>
+
+        <!-- Register mode picker -->
+        ${tab==='register'?html`
+          <div style=${{display:'flex',background:'rgba(255,255,255,0.03)',borderRadius:11,padding:'3px',border:'1px solid rgba(255,255,255,0.05)',marginBottom:18,animation:'ap-slideDown 0.22s ease both'}}>
+            ${[['create','🏢 New Workspace'],['join','🔗 Join Workspace']].map(([m,l])=>html`
+              <button key=${m} class=${'ap-tab '+(regMode===m?'ap-tab-active':'ap-tab-inactive')} style=${{height:33,fontSize:12,borderRadius:9}} onClick=${()=>setRegMode(m)}>${l}</button>`)}
+          </div>
+          ${regMode==='create'?html`
+            <div style=${{marginBottom:16,animation:'ap-slideDown 0.2s ease both'}}>
+              <${LBL}>Workspace Name</${LBL}>
+              <input class="ap-inp" placeholder="e.g. Acme Corp" value=${wsName} onInput=${e=>setWsName(e.target.value)}/>
+            </div>`:null}
+          ${regMode==='join'?html`
+            <div style=${{marginBottom:16,padding:'14px 16px',background:'rgba(90,140,255,0.06)',borderRadius:13,border:'1px solid rgba(90,140,255,0.18)',animation:'ap-slideDown 0.2s ease both'}}>
+              <${LBL}>Invite Code</${LBL}>
+              <input class="ap-inp" style=${{fontFamily:'monospace',letterSpacing:8,fontSize:20,textAlign:'center'}} placeholder="XXXXXXXX" value=${inviteCode} onInput=${e=>setInviteCode(e.target.value.toUpperCase())}/>
+            </div>`:null}`:null}
+
+        <!-- Fields -->
+        <div style=${{display:'flex',flexDirection:'column',gap:14,marginBottom:6}}>
+          ${tab==='register'?html`
+            <div>
+              <${LBL}>Full Name</${LBL}>
+              <input class="ap-inp" placeholder="Alice Chen" value=${name} onInput=${e=>setName(e.target.value)}/>
+            </div>`:null}
+
+          <div>
+            <${LBL}>Email Address</${LBL}>
+            <input class="ap-inp" type="email" placeholder="you@company.com" value=${email}
+              autoComplete="username" onInput=${e=>setEmail(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
           </div>
 
-          <!-- Heading -->
-          <h1 style=${{fontFamily:"'Bricolage Grotesque',sans-serif",fontSize:'clamp(1.7rem,2.6vw,2.1rem)',fontWeight:800,color:'#fff',marginBottom:8,letterSpacing:'-1.5px',lineHeight:1.1}}>
-            ${tab==='login'?html`Welcome back <span style=${{fontSize:'1.1em'}}>👋</span>`:'Create your account'}
-          </h1>
-          <p style=${{fontSize:14,color:'rgba(180,170,220,.55)',marginBottom:28,lineHeight:1.6}}>${tab==='login'?'Sign in to your VEWIT workspace.':'Set up your workspace and start shipping.'}</p>
+          <div>
+            <${LBL}>Password</${LBL}>
+            <div style=${{position:'relative'}}>
+              <input class="ap-inp" style=${{paddingRight:48}} type=${showPw?'text':'password'}
+                placeholder="••••••••••" value=${pw} autoComplete="current-password"
+                onInput=${e=>setPw(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&go()}/>
+              <button onClick=${()=>setShowPw(!showPw)}
+                style=${{position:'absolute',right:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(175,170,210,0.4)',fontSize:14,lineHeight:1,padding:2,transition:'color 0.2s'}}
+                onMouseEnter=${e=>e.target.style.color='rgba(175,170,210,0.8)'}
+                onMouseLeave=${e=>e.target.style.color='rgba(175,170,210,0.4)'}>
+                ${showPw?'🙈':'👁'}
+              </button>
+            </div>
+          </div>
 
-          <!-- Tab switcher — pill style like Strava -->
-          <div style=${{display:'flex',background:'rgba(255,255,255,0.035)',borderRadius:14,padding:3,marginBottom:26,border:'1px solid rgba(255,255,255,0.07)'}}>
-            ${['login','register'].map(tp=>html`
-              <button key=${tp} class="vw-tab" onClick=${()=>setTab(tp)}
+          ${tab==='register'?html`
+            <div>
+              <${LBL}>Role</${LBL}>
+              <select class="ap-inp" style=${{cursor:'pointer',backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23aeaeb2' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",backgroundRepeat:'no-repeat',backgroundPosition:'right 14px center',WebkitAppearance:'none',appearance:'none'}}
+                value=${role} onChange=${e=>setRole(e.target.value)}>
+                ${(regMode==='join'?JOIN_ROLES:ROLES).map(r=>html`<option key=${r}>${r}</option>`)}
+              </select>
+            </div>`:null}
+
+          ${err?html`
+            <div style=${{display:'flex',alignItems:'flex-start',gap:10,padding:'12px 16px',background:'rgba(255,69,58,0.08)',border:'1px solid rgba(255,69,58,0.22)',borderRadius:12,animation:'ap-slideDown 0.2s ease both'}}>
+              <span style=${{fontSize:15,marginTop:1}}>⚠️</span>
+              <span style=${{fontSize:13,color:'#ff7a76',lineHeight:1.5}}>${err}</span>
+            </div>`:null}
+
+          <!-- CTA — Apple-style shimmer gradient button -->
+          <button class="ap-btn-primary" onClick=${go} disabled=${phase==='loading'} style=${{marginTop:4}}>
+            ${phase==='loading'
+              ?html`<span style=${{display:'inline-flex',alignItems:'center',gap:10,justifyContent:'center'}}>
+                <span style=${{width:17,height:17,border:'2.5px solid rgba(255,255,255,0.25)',borderTopColor:'#fff',borderRadius:'50%',animation:'ap-spin 0.7s linear infinite',display:'inline-block'}}></span>
+                <span>Please wait…</span>
+              </span>`
+              :html`<span>${tab==='login'?'Sign In':'regMode'==='create'?'Create Workspace':'Join Workspace'} →</span>`}
+          </button>
+        </div>
+
+        <!-- Switch tab -->
+        <p style=${{fontSize:13.5,color:'rgba(175,170,210,0.4)',textAlign:'center',marginTop:22,lineHeight:1.7}}>
+          ${tab==='login'
+            ?html`New to VEWIT? <button class="ap-link" onClick=${()=>setTab('register')} style=${{color:'#7e9fff',fontSize:13.5,fontWeight:600}}>Create account</button>`
+            :html`Already have an account? <button class="ap-link" onClick=${()=>setTab('login')} style=${{color:'#7e9fff',fontSize:13.5,fontWeight:600}}>Sign in</button>`}
+        </p>
+
+        <!-- Help / legal -->
+        <div style=${{marginTop:28,paddingTop:20,borderTop:'1px solid rgba(255,255,255,0.05)',display:'flex',justifyContent:'center',gap:20,flexWrap:'wrap'}}>
+          <a href="mailto:support@vewit.in" style=${{fontSize:11.5,color:'rgba(160,150,200,0.45)',textDecoration:'none',transition:'color 0.2s',display:'flex',alignItems:'center',gap:5}}
+            onMouseEnter=${e=>e.target.style.color='rgba(90,140,255,0.9)'} onMouseLeave=${e=>e.target.style.color='rgba(160,150,200,0.45)'}>
+            🛟 support@vewit.in
+          </a>
+          <a href="mailto:ceo@vewit.in" style=${{fontSize:11.5,color:'rgba(160,150,200,0.45)',textDecoration:'none',transition:'color 0.2s',display:'flex',alignItems:'center',gap:5}}
+            onMouseEnter=${e=>e.target.style.color='rgba(168,85,247,0.9)'} onMouseLeave=${e=>e.target.style.color='rgba(160,150,200,0.45)'}>
+            🤝 ceo@vewit.in
+          </a>
+        </div>
+
+      </div>
+    `)}
+    </div>`;
+}
+
                 style=${{flex:1,height:40,fontSize:13.5,fontWeight:700,borderRadius:12,letterSpacing:'-.2px',
                   background:tab===tp?'linear-gradient(135deg,rgba(255,100,60,.25),rgba(139,92,246,.2))':'transparent',
                   color:tab===tp?'#fff':'rgba(180,170,220,.45)',
@@ -8918,6 +9158,8 @@ function WorkspaceSettings({cu,onReload}){
 /* ─── AiDocsView ──────────────────────────────────────────────────────────── */
 
 /* ─── AiDocsView — Chat-first AI Documentation Studio ─────────────────────── */
+
+/* ─── AiDocsView — Chat-first AI Documentation Studio ─────────────────────── */
 function AiDocsView({cu,projects,tasks,users}){
   const [messages,setMessages]=useState([]);
   const [input,setInput]=useState('');
@@ -9100,6 +9342,171 @@ INSTRUCTIONS:
           ${['prompts','context'].map(t=>html`
             <button key=${t} onClick=${()=>setSideTab(t)}
               style=${{flex:1,height:28,fontSize:11,fontWeight:700,border:'none',cursor:'pointer',borderRadius:7,fontFamily:'inherit',
+                background:sideTab===t?'var(--ac3)':'transparent',color:sideTab===t?'var(--ac)':'var(--tx3)',transition:'all .15s',textTransform:'capitalize'}}>
+              ${t==='prompts'?'📄 Templates':'📊 Context'}
+            </button>`)}
+        </div>
+
+        <!-- Sidebar content -->
+        <div style=${{flex:1,overflowY:'auto',padding:'10px'}}>
+          ${sideTab==='prompts'?html`
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:10,padding:'0 4px'}}>
+              ${filteredSuggestions.length} template${filteredSuggestions.length!==1?'s':''}
+            </div>
+            ${filteredSuggestions.map((s,i)=>html`
+              <div key=${i} onClick=${()=>send(s.prompt)}
+                style=${{padding:'10px 12px',borderRadius:10,cursor:'pointer',marginBottom:6,border:'1px solid var(--bd)',background:'var(--sf2)',transition:'all .15s'}}
+                onMouseEnter=${e=>{e.currentTarget.style.borderColor=s.color+'66';e.currentTarget.style.background=s.color+'0d';}}
+                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.background='var(--sf2)';}}>
+                <div style=${{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                  <span style=${{fontSize:16,width:22,textAlign:'center'}}>${s.icon}</span>
+                  <span style=${{fontSize:12,fontWeight:700,color:'var(--tx)',letterSpacing:'-.2px'}}>${s.label}</span>
+                </div>
+                <div style=${{fontSize:11,color:'var(--tx3)',lineHeight:1.5,paddingLeft:30,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>
+                  ${s.prompt.slice(0,80)}…
+                </div>
+              </div>`)}`:null}
+
+          ${sideTab==='context'?html`
+            <div style=${{fontSize:10,fontWeight:700,color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.7,marginBottom:12,padding:'0 4px'}}>Workspace Context</div>
+            ${[
+              {label:'Projects',val:safe(projects).length,icon:'📁',color:'var(--ac)'},
+              {label:'Total Tasks',val:safe(tasks).length,icon:'✅',color:'var(--cy)'},
+              {label:'Active Tasks',val:safe(tasks).filter(t=>!['completed','backlog'].includes(t.stage)).length,icon:'⚡',color:'#ff6433'},
+              {label:'Team Members',val:safe(users).length,icon:'👥',color:'var(--gn)'},
+              {label:'Blocked',val:safe(tasks).filter(t=>t.stage==='blocked').length,icon:'🚫',color:'var(--rd)'},
+            ].map((s,i)=>html`
+              <div key=${i} style=${{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:9,background:'var(--sf2)',border:'1px solid var(--bd)',marginBottom:6}}>
+                <span style=${{fontSize:16,width:22,textAlign:'center'}}>${s.icon}</span>
+                <span style=${{flex:1,fontSize:12.5,color:'var(--tx2)'}}>${s.label}</span>
+                <span style=${{fontSize:16,fontWeight:800,color:s.color,fontFamily:'monospace'}}>${s.val}</span>
+              </div>`)}
+            <div style=${{marginTop:14,padding:'10px 12px',background:'var(--ac4)',borderRadius:9,border:'1px solid var(--ac3)',fontSize:11,color:'var(--tx3)',lineHeight:1.6}}>
+              💡 This data is automatically included when you chat with AI.
+            </div>`:null}
+        </div>
+      </div>
+
+      <!-- MAIN CHAT AREA -->
+      <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+
+        <!-- Chat header -->
+        <div style=${{padding:'14px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--sf)',flexShrink:0}}>
+          <div style=${{display:'flex',alignItems:'center',gap:12}}>
+            <div style=${{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#ff6433,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 14px rgba(255,100,60,.3)'}}>🤖</div>
+            <div>
+              <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)',letterSpacing:'-.3px'}}>AI Documentation Studio</div>
+              <div style=${{fontSize:11,color:'var(--tx3)'}}>Powered by Claude · Chat to create docs, diagrams &amp; specs</div>
+            </div>
+          </div>
+          <div style=${{display:'flex',gap:7}}>
+            <button class="btn bg" style=${{fontSize:11,padding:'5px 12px'}} onClick=${clearChat}>🗑 Clear</button>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div ref=${chatRef} style=${{flex:1,overflowY:'auto',padding:'20px',display:'flex',flexDirection:'column',gap:16}}>
+          ${messages.map(msg=>html`
+            <div key=${msg.id} style=${{display:'flex',gap:12,flexDirection:msg.role==='user'?'row-reverse':'row',animation:'fadeIn .3s ease both'}}>
+
+              <!-- Avatar -->
+              <div style=${{width:36,height:36,borderRadius:11,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,
+                background:msg.role==='user'?`linear-gradient(135deg,${cu.color||'#6366f1'},${cu.color||'#6366f1'}aa)`:'linear-gradient(135deg,#ff6433,#8b5cf6)',
+                boxShadow:msg.role==='user'?'none':'0 3px 12px rgba(255,100,60,.25)',
+                fontWeight:800,color:'#fff',fontFamily:'inherit',fontSize:13}}>
+                ${msg.role==='user'?(cu.avatar||cu.name?.charAt(0)||'U'):'🤖'}
+              </div>
+
+              <!-- Bubble -->
+              <div style=${{maxWidth:'78%',flex:1}}>
+                ${msg.type==='thinking'?html`
+                  <div style=${{display:'inline-flex',alignItems:'center',gap:8,padding:'12px 18px',borderRadius:14,background:'var(--sf)',border:'1px solid var(--bd)',color:'var(--tx3)',fontSize:13}}>
+                    <span style=${{width:16,height:16,border:'2px solid var(--bd)',borderTopColor:'var(--ac)',borderRadius:'50%',animation:'sp .7s linear infinite',display:'inline-block'}}></span>
+                    Claude is thinking…
+                  </div>`:
+
+                msg.type==='error'?html`
+                  <div style=${{padding:'14px 18px',borderRadius:14,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',fontSize:13,color:'#f87171',lineHeight:1.6}}>
+                    <div dangerouslySetInnerHTML=${{__html:renderMd(msg.content)}}></div>
+                  </div>`:
+
+                msg.role==='user'?html`
+                  <div style=${{padding:'12px 16px',borderRadius:14,borderBottomRightRadius:4,background:'var(--ac)',color:'#fff',fontSize:13.5,lineHeight:1.6,wordBreak:'break-word'}}>
+                    ${msg.content}
+                  </div>`:html`
+
+                  <!-- Assistant message -->
+                  <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,borderBottomLeftRadius:4,overflow:'hidden'}}>
+                    <div style=${{padding:'16px 18px',fontSize:13.5,color:'var(--tx2)',lineHeight:1.75,wordBreak:'break-word'}}>
+                      <div dangerouslySetInnerHTML=${{__html:renderMd(msg.content)}}></div>
+                    </div>
+                    ${msg.content&&msg.content.length>50?html`
+                      <div style=${{borderTop:'1px solid var(--bd)',padding:'8px 12px',display:'flex',gap:6,flexWrap:'wrap'}}>
+                        <button class="btn bg" style=${{fontSize:10,padding:'3px 10px'}} onClick=${()=>copyMsg(msg.content,msg.id)}>
+                          ${copied===msg.id?'✓ Copied':'📋 Copy'}
+                        </button>
+                        <button class="btn bg" style=${{fontSize:10,padding:'3px 10px'}} onClick=${()=>downloadMsg(msg.content,'document')}>⬇ Download .md</button>
+                        ${extractMermaid(msg.content)?html`
+                          <a href="https://mermaid.live" target="_blank" rel="noopener"
+                            style=${{fontSize:10,padding:'3px 10px',borderRadius:100,border:'1px solid rgba(139,92,246,.3)',color:'#a78bfa',background:'rgba(139,92,246,.08)',textDecoration:'none',display:'inline-flex',alignItems:'center'}}>
+                            🏗️ Open Diagram ↗
+                          </a>`:null}
+                      </div>`:null}
+                  </div>`}
+              </div>
+            </div>`)}
+          <div ref=${bottomRef}></div>
+        </div>
+
+        <!-- Input bar -->
+        <div style=${{padding:'14px 20px',borderTop:'1px solid var(--bd)',background:'var(--sf)',flexShrink:0}}>
+          <!-- Quick action chips -->
+          <div style=${{display:'flex',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+            ${[
+              {label:'Architecture',icon:'🏗️',q:'Create a Mermaid architecture diagram for my workspace'},
+              {label:'Sprint Report',icon:'📊',q:'Generate a sprint status report with task progress'},
+              {label:'API Docs',icon:'🔌',q:'Write API documentation for the main endpoints'},
+              {label:'Tech Spec',icon:'⚙️',q:'Create a technical specification document'},
+            ].map((c,i)=>html`
+              <button key=${i} onClick=${()=>send(c.q)} disabled=${sending}
+                style=${{display:'flex',alignItems:'center',gap:5,padding:'5px 12px',borderRadius:100,border:'1px solid var(--bd)',background:'var(--sf2)',color:'var(--tx3)',fontSize:11,fontWeight:600,cursor:'pointer',transition:'all .15s',fontFamily:'inherit'}}
+                onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='var(--ac4)';}}
+                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx3)';e.currentTarget.style.background='var(--sf2)';}}>
+                ${c.icon} ${c.label}
+              </button>`)}
+          </div>
+
+          <!-- Text input row -->
+          <div style=${{display:'flex',gap:10,alignItems:'flex-end'}}>
+            <div style=${{flex:1,position:'relative'}}>
+              <textarea ref=${inputRef} value=${input}
+                onInput=${e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,160)+'px';}}
+                onKeyDown=${e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}}
+                placeholder="Describe what you need… (Enter to send, Shift+Enter for new line)"
+                rows=1
+                style=${{width:'100%',padding:'12px 16px',borderRadius:14,fontSize:13.5,outline:'none',background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx)',fontFamily:'inherit',resize:'none',lineHeight:1.55,boxSizing:'border-box',maxHeight:'160px',overflow:'hidden auto',transition:'border-color .15s'}}
+                onFocus=${e=>e.target.style.borderColor='var(--ac)'}
+                onBlur=${e=>e.target.style.borderColor='var(--bd)'}
+              ></textarea>
+            </div>
+            <button onClick=${()=>send()} disabled=${sending||!input.trim()}
+              style=${{height:46,width:46,borderRadius:13,border:'none',cursor:sending||!input.trim()?'not-allowed':'pointer',
+                background:sending||!input.trim()?'var(--sf3)':'linear-gradient(135deg,#ff6433,#8b5cf6)',
+                color:'#fff',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
+                transition:'all .2s',boxShadow:sending||!input.trim()?'none':'0 4px 16px rgba(255,100,60,.4)'}}>
+              ${sending
+                ?html`<span style=${{width:16,height:16,border:'2px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'sp .7s linear infinite',display:'block'}}></span>`
+                :'↑'}
+            </button>
+          </div>
+          <div style=${{marginTop:7,fontSize:10.5,color:'var(--tx3)',textAlign:'center'}}>
+            AI uses your workspace data automatically · Diagrams open in mermaid.live · Press Enter to send
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
                 background:sideTab===t?'var(--ac3)':'transparent',color:sideTab===t?'var(--ac)':'var(--tx3)',transition:'all .15s',textTransform:'capitalize'}}>
               ${t==='prompts'?'📄 Templates':'📊 Context'}
             </button>`)}
@@ -9729,6 +10136,7 @@ function RemindersPanel({onClose,onReload}){
 }
 
 function HuddleCall(){return null;}
+
 
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
