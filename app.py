@@ -616,6 +616,8 @@ def init_db():
             "ALTER TABLE notifications ADD COLUMN sender_id TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT ''",
             "CREATE TABLE IF NOT EXISTS time_logs (id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT, team_id TEXT DEFAULT '', date TEXT, task_name TEXT, project_id TEXT DEFAULT '', task_id TEXT DEFAULT '', hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0, comments TEXT DEFAULT '', created TEXT)",
+            "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
+            "ALTER TABLE time_logs ADD COLUMN task_id TEXT DEFAULT ''",
             "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
         ]:
             try: db.execute(stmt)
@@ -2219,15 +2221,30 @@ def get_timelogs():
 def create_timelog():
     d = request.json or {}
     lid = f"tl{int(datetime.now().timestamp()*1000)}"
-    with get_db() as db:
-        db.execute(
-            "INSERT INTO time_logs VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (lid, wid(), session["user_id"], d.get("team_id",""),
-             d.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
-             d.get("task_name",""), d.get("project_id",""), d.get("task_id",""),
-             float(d.get("hours",0)),
-             int(d.get("minutes",0)), d.get("comments",""), ts()))
-    return jsonify({"id": lid})
+    try:
+        with get_db() as db:
+            db.execute(
+                """INSERT INTO time_logs
+                   (id, workspace_id, user_id, team_id, date, task_name,
+                    project_id, task_id, hours, minutes, comments, created)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (lid,
+                 wid(),
+                 session["user_id"],
+                 d.get("team_id", ""),
+                 d.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
+                 d.get("task_name", ""),
+                 d.get("project_id", ""),
+                 d.get("task_id", ""),
+                 float(d.get("hours", 0) or 0),
+                 int(d.get("minutes", 0) or 0),
+                 d.get("comments", ""),
+                 ts()))
+        return jsonify({"id": lid, "ok": True})
+    except Exception as e:
+        print(f"[timelog create error] {type(e).__name__}: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/timelogs/<log_id>", methods=["DELETE"])
 @login_required
@@ -2267,10 +2284,22 @@ def required_hours():
             if session.get("role") != "Admin":
                 return jsonify({"error":"Forbidden"}), 403
             hrs = float((request.json or {}).get("hours", 8))
-            db.execute("UPDATE workspaces SET required_hours_per_day=? WHERE id=?", (hrs, wid()))
+            try:
+                db.execute("UPDATE workspaces SET required_hours_per_day=? WHERE id=?", (hrs, wid()))
+            except Exception as e:
+                print(f"[required_hours update error] {e}")
+                # Column may not exist yet — run migration then retry
+                try:
+                    db.execute("ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8")
+                    db.execute("UPDATE workspaces SET required_hours_per_day=? WHERE id=?", (hrs, wid()))
+                except Exception: pass
             return jsonify({"ok": True})
-        ws = db.execute("SELECT required_hours_per_day FROM workspaces WHERE id=?", (wid(),)).fetchone()
-        return jsonify({"hours": ws["required_hours_per_day"] if ws and ws["required_hours_per_day"] else 8})
+        try:
+            ws = db.execute("SELECT required_hours_per_day FROM workspaces WHERE id=?", (wid(),)).fetchone()
+            hrs = float(ws["required_hours_per_day"]) if ws and ws["required_hours_per_day"] is not None else 8.0
+        except Exception:
+            hrs = 8.0
+        return jsonify({"hours": hrs})
 
 # [Calling/WebRTC mechanism removed — use Google Meet or external tools]
 
