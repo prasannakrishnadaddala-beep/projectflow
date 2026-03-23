@@ -9409,6 +9409,89 @@ INSTRUCTIONS:
 }
 
 
+/* ─── AIAssistant floating panel ──────────────────────────────────────────── */
+function AIAssistant({cu,projects,tasks,users}){
+  const [open,setOpen]=useState(false);const [msgs,setMsgs]=useState([]);const [input,setInput]=useState('');const [busy,setBusy]=useState(false);const ref=useRef(null);const iref=useRef(null);
+
+  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs]);
+
+  const QUICK=[
+    {label:'📊 EOD Report',msg:'Generate an end-of-day status report for all projects'}, {label:'🔴 Blocked tasks',msg:'What tasks are blocked and need attention?'}, {label:'📈 Progress summary',msg:'Give me a quick summary of overall project progress'}, {label:'⚠️ Overdue',msg:'Are there any overdue tasks?'}, ];
+
+  const send=async(text)=>{
+    const m=text||input.trim();
+    if(!m||busy)return;
+    setInput('');
+    const userMsg={role:'user',content:m};
+    setMsgs(prev=>[...prev,userMsg]);
+    setBusy(true);
+    const history=[...msgs,userMsg];
+    const r=await api.post('/api/ai/chat',{message:m,history:history.slice(-10)});
+    setBusy(false);
+    if(r.error&&r.error==='NO_KEY'){
+      setMsgs(prev=>[...prev,{role:'ai',content:'⚙️ No API key configured.\n\nGo to **Settings → AI Assistant** and paste your Anthropic API key to get started.',actions:[]}]);
+    } else if(r.error){
+      setMsgs(prev=>[...prev,{role:'ai',content:'Error: '+(r.message||r.error),actions:[]}]);
+    } else {
+      setMsgs(prev=>[...prev,{role:'ai',content:r.message||'',actions:r.actions||[]}]);
+    }
+  };
+
+  const actionLabel=a=>{
+    if(a.type==='create_task')return'✅ Created task: '+a.title+' ('+a.id+')';
+    if(a.type==='update_task')return'✏️ Updated task: '+a.id;
+    if(a.type==='create_project')return'📁 Created project: '+a.name;
+    if(a.type==='eod_report')return'📊 EOD Report generated';
+    if(a.type==='error')return'⚠️ Error: '+a.message;
+    return'✓ '+a.type;
+  };
+
+  return html`
+    <button class="ai-btn" onClick=${()=>setOpen(!open)} title="AI Assistant">
+      ${open?'✕':'🤖'}
+    </button>
+    ${open?html`
+      <div class="ai-panel">
+        <div style=${{padding:'14px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+          <div style=${{width:32,height:32,background:'linear-gradient(135deg,var(--ac),var(--pu))',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,boxShadow:'0 2px 8px rgba(0,113,227,0.3)'}}>🤖</div>
+          <div style=${{flex:1}}>
+            <div style=${{fontSize:14,fontWeight:700,color:'var(--tx)'}}>AI Assistant</div>
+            <div style=${{fontSize:10,color:'var(--tx3)'}}>Powered by Claude</div>
+          </div>
+          ${msgs.length>0?html`<button class="btn bg" style=${{fontSize:10,padding:'4px 9px'}} onClick=${()=>setMsgs([])}>Clear</button>`:null}
+        </div>
+
+        <div ref=${ref} style=${{flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:10}}>
+          ${msgs.length===0?html`
+            <div style=${{paddingTop:8}}>
+              <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:12,textAlign:'center'}}>Ask me anything about your projects, or try a quick action:</p>
+              <div style=${{display:'flex',flexDirection:'column',gap:6}}>
+                ${QUICK.map(q=>html`<button key=${q.label} class="btn bg" style=${{justifyContent:'flex-start',fontSize:12,padding:'8px 12px',textAlign:'left'}} onClick=${()=>send(q.msg)}>${q.label}</button>`)}
+              </div>
+            </div>`:null}
+          ${msgs.map((m,i)=>html`
+            <div key=${i}>
+              ${m.role==='user'?html`<div class="ai-msg-user">${m.content}</div>`:null}
+              ${m.role==='ai'?html`
+                <div class="ai-msg-ai">${m.content}</div>
+                ${(m.actions||[]).length>0?html`<div style=${{display:'flex',flexDirection:'column',gap:5,marginTop:6}}>
+                  ${(m.actions||[]).map((a,j)=>html`<div key=${j} class="ai-action">${actionLabel(a)}${a.type==='eod_report'&&a.summary?html`<pre style=${{marginTop:6,fontSize:10,whiteSpace:'pre-wrap',color:'var(--gn)',lineHeight:1.6}}>${a.summary}</pre>`:null}</div>`)}
+                </div>`:null}`:null}
+            </div>`)}
+          ${busy?html`<div class="ai-msg-ai pulse" style=${{display:'flex',gap:4,alignItems:'center'}}><span style=${{fontSize:16}}>🤖</span><span style=${{fontSize:12}}>Thinking...</span><span class="spin" style=${{width:12,height:12,borderWidth:2}}></span></div>`:null}
+        </div>
+
+        <div style=${{padding:'10px 12px',borderTop:'1px solid var(--bd)',flexShrink:0}}>
+          <div style=${{display:'flex',gap:7}}>
+            <input ref=${iref} class="inp" style=${{flex:1,fontSize:13}} placeholder="Ask about your projects..." value=${input}
+              onInput=${e=>setInput(e.target.value)} onKeyDown=${e=>e.key==='Enter'&&!e.shiftKey&&send()}
+              disabled=${busy}/>
+            <button class="btn bp" style=${{padding:'8px 12px',flexShrink:0}} onClick=${()=>send()} disabled=${!input.trim()||busy}>➤</button>
+          </div>
+        </div>
+      </div>`:null}`;
+}
+
 /* ─── Notification Utilities ──────────────────────────────────────────────── */
 const NOTIF_ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Ccircle cx='32' cy='32' r='9' fill='white'/%3E%3Ccircle cx='32' cy='11' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='51' cy='43' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='13' cy='43' r='6' fill='white' opacity='.95'/%3E%3Cline x1='32' y1='17' x2='32' y2='23' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='46' y1='40' x2='40' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='18' y1='40' x2='24' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
 
