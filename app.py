@@ -11,6 +11,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, jsonify, session, Response, send_file
 from flask_cors import CORS
+from queue import Queue, Empty
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR   = "/data" if os.path.isdir("/data") else BASE_DIR
@@ -96,10 +97,95 @@ class _Cursor:
     def __iter__(self):
         return iter(self.fetchall())
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONNECTION POOL - Fixes 502 Bad Gateway errors
+# ══════════════════════════════════════════════════════════════════════════════
+class ConnectionPool:
+    """Thread-safe PostgreSQL connection pool."""
+    def __init__(self, max_connections=20):
+        self._pool = Queue(maxsize=max_connections)
+        self._lock = threading.Lock()
+        self._max_connections = max_connections
+        self._current_connections = 0
+        self._stats = {"created": 0, "reused": 0, "errors": 0}
+        
+    def get_connection(self):
+        """Get a connection from the pool or create a new one."""
+        try:
+            conn = self._pool.get_nowait()
+            try:
+                conn.run("SELECT 1")
+                self._stats["reused"] += 1
+                return conn
+            except:
+                try: conn.close()
+                except: pass
+        except Empty:
+            pass
+        
+        with self._lock:
+            if self._current_connections < self._max_connections:
+                try:
+                    conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+                    self._current_connections += 1
+                    self._stats["created"] += 1
+                    return conn
+                except Exception as e:
+                    self._stats["errors"] += 1
+                    raise
+        
+        try:
+            conn = self._pool.get(timeout=10)
+            try:
+                conn.run("SELECT 1")
+                self._stats["reused"] += 1
+                return conn
+            except:
+                try: conn.close()
+                except: pass
+                raise RuntimeError("Retrieved dead connection from pool")
+        except Empty:
+            raise RuntimeError("Connection pool timeout - all connections busy")
+    
+    def return_connection(self, conn):
+        """Return a connection to the pool."""
+        try:
+            if conn and hasattr(conn, 'run'):
+                try:
+                    conn.run("SELECT 1")
+                    self._pool.put_nowait(conn)
+                except:
+                    try: conn.close()
+                    except: pass
+                    with self._lock:
+                        self._current_connections -= 1
+            else:
+                with self._lock:
+                    self._current_connections -= 1
+        except:
+            try: conn.close()
+            except: pass
+            with self._lock:
+                self._current_connections -= 1
+    
+    def get_stats(self):
+        """Get connection pool statistics."""
+        return {
+            "active": self._current_connections,
+            "max": self._max_connections,
+            "available": self._pool.qsize(),
+            **self._stats
+        }
+
+# Global connection pool instance
+_conn_pool = ConnectionPool(max_connections=20)
+
 class _DB:
     """Context-manager wrapper matching 'with get_db() as db:' pattern."""
-    def __init__(self, conn):
+    def __init__(self, conn):, pool=None):
         self._conn = conn
+        self._pool = pool
     def execute(self, sql, params=()):
         return _Cursor(self._conn).execute(sql, params)
     def executescript(self, sql):
@@ -121,8 +207,11 @@ class _DB:
             try: self._conn.run("COMMIT")
             except Exception: pass
     def close(self):
-        try: self._conn.close()
-        except Exception: pass
+        if self._pool:
+            self._pool.return_connection(self._conn)
+        else:
+            try: self._conn.close()
+            except: pass
     def __enter__(self): return self
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not getattr(self._conn, 'autocommit', False):
@@ -159,13 +248,15 @@ CORS(app, supports_credentials=True)
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#5a8cff"]
 
 def get_db(autocommit=False):
-    conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
-    conn.autocommit = autocommit  # pg8000 supports autocommit property
-    return _DB(conn)
+    """Get database connection from pool."""
+    conn = _conn_pool.get_connection()
+    conn.autocommit = autocommit
+    return _DB(conn, pool=_conn_pool)
 def _run_ddl(sql):
     """Run a single DDL statement in its own fresh connection. Never raises."""
+    conn = None
     try:
-        conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+        conn = _conn_pool.get_connection()
         try:
             # pg8000 native does NOT auto-wrap in transactions — DDL runs directly
             conn.run(sql)
@@ -179,8 +270,8 @@ def _run_ddl(sql):
             else:
                 print(f"  [DDL WARN] {sql[:60]!r}: {type(e).__name__}: {e}")
         finally:
-            try: conn.close()
-            except: pass
+            if conn:
+                _conn_pool.return_connection(conn)
     except Exception as e:
         print(f"  [DDL connect error] {e}")
 
@@ -201,6 +292,26 @@ def ensure_timelog_schema():
         "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
     ]:
         _run_ddl(ddl)
+
+
+def retry_with_backoff(func, max_attempts=3, initial_delay=0.1):
+    """Retry a function with exponential backoff on transient errors."""
+    for attempt in range(max_attempts):
+        try:
+            return func()
+        except Exception as e:
+            error_msg = str(e).lower()
+            is_transient = any(x in error_msg for x in [
+                "connection", "timeout", "502", "503", "temporarily",
+                "deadlock", "lock", "busy", "pool", "network"
+            ])
+            
+            if not is_transient or attempt == max_attempts - 1:
+                raise
+            
+            delay = initial_delay * (2 ** attempt)
+            print(f"  [Retry {attempt+1}/{max_attempts}] Wait {delay:.1f}s: {e}")
+            time.sleep(delay)
 
 
 def hash_pw(p):
@@ -2265,8 +2376,8 @@ def migrate_timelog_public():
                 else:
                     results.append({"step": label, "status": "error", "msg": str(e)})
             finally:
-                try: conn.close()
-                except: pass
+            if conn:
+                _conn_pool.return_connection(conn)
         except Exception as e:
             results.append({"step": label, "status": "connect_error", "msg": str(e)})
     print(f"[migrate-timelog] {results}")
@@ -2315,7 +2426,12 @@ def get_timelogs():
 def create_timelog():
     d = request.json or {}
     lid = f"tl{int(datetime.now().timestamp()*1000)}"
-    try:
+    
+    # Validate required fields
+    if not d.get("date"):
+        return jsonify({"error": "Date is required"}), 400
+    
+    def _save():
         with get_db() as db:
             db.execute(
                 """INSERT INTO time_logs
@@ -2334,35 +2450,28 @@ def create_timelog():
                  int(d.get("minutes") or 0),
                  d.get("comments", "") or "",
                  ts()))
-        return jsonify({"id": lid, "ok": True})
+        return {"id": lid, "ok": True}
+    
+    try:
+        result = retry_with_backoff(_save, max_attempts=3)
+        return jsonify(result)
     except Exception as e:
         import traceback
+        error_msg = str(e)
         print(f"[timelog create error] {type(e).__name__}: {e}")
         traceback.print_exc()
-        # Schema missing — run migration and retry ONCE
-        try:
-            ensure_timelog_schema()
-            with get_db() as db:
-                db.execute(
-                    """INSERT INTO time_logs
-                       (id, workspace_id, user_id, team_id, date, task_name,
-                        project_id, task_id, hours, minutes, comments, created)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (lid, wid(), session["user_id"],
-                     d.get("team_id","") or "",
-                     d.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
-                     d.get("task_name","") or "",
-                     d.get("project_id","") or "",
-                     d.get("task_id","") or "",
-                     float(d.get("hours") or 0),
-                     int(d.get("minutes") or 0),
-                     d.get("comments","") or "",
-                     ts()))
-            print(f"[timelog] Retry after schema fix succeeded: {lid}")
-            return jsonify({"id": lid, "ok": True})
-        except Exception as e2:
-            print(f"[timelog create retry failed] {e2}")
-            return jsonify({"error": str(e2)}), 500
+        
+        # Return meaningful errors
+        if "column" in error_msg.lower() and "does not exist" in error_msg.lower():
+            return jsonify({"error": "Database schema error - please contact admin"}), 500
+        elif "foreign key" in error_msg.lower():
+            return jsonify({"error": "Invalid reference data"}), 400
+        elif "duplicate" in error_msg.lower() or "unique" in error_msg.lower():
+            return jsonify({"error": "Duplicate entry"}), 409
+        elif "pool" in error_msg.lower() or "timeout" in error_msg.lower():
+            return jsonify({"error": "Server busy - please try again"}), 503
+        else:
+            return jsonify({"error": "Failed to save timelog"}), 500
 
 @app.route("/api/timelogs/<log_id>", methods=["DELETE"])
 @login_required
@@ -2408,8 +2517,28 @@ def required_hours():
             hrs = 8.0
         return jsonify({"hours": hrs})
     # POST — Admin OR Manager can update workspace policy
-    if session.get("role") not in ("Admin", "Manager"):
-        return jsonify({"error": "Forbidden"}), 403
+    user_role = session.get("role", "").strip()
+    
+    # Refresh role from database if missing or stale
+    if not user_role:
+        try:
+            with get_db() as db:
+                user = db.execute(
+                    "SELECT role FROM users WHERE id=? AND workspace_id=?",
+                    (session["user_id"], wid())
+                ).fetchone()
+                if user:
+                    user_role = user["role"]
+                    session["role"] = user_role
+        except Exception as e:
+            print(f"[required_hours role check error] {e}")
+            return jsonify({"error": "Permission check failed"}), 500
+    
+    if user_role not in ("Admin", "Manager"):
+        return jsonify({
+            "error": "Only Admin or Manager can update required hours",
+            "current_role": user_role
+        }), 403
     hrs = float((request.json or {}).get("hours", 8))
     # Use _run_ddl to ensure column exists first (fresh conn, own commit)
     _run_ddl("ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8")
@@ -11488,17 +11617,81 @@ waitForLibs(window._pfStartApp);
 </body>
 </html>"""
 
+
+
+@app.route("/api/health")
+def health_check():
+    """Health check endpoint with database connectivity test."""
+    try:
+        with get_db() as db:
+            db.execute("SELECT 1")
+        
+        pool_stats = _conn_pool.get_stats()
+        
+        return jsonify({
+            "status": "healthy",
+            "timestamp": ts(),
+            "database": "connected",
+            "pool": pool_stats
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": ts()
+        }), 503
+
+@app.route("/api/pool-stats")
+@login_required
+def pool_stats():
+    """Get connection pool statistics (admin only)."""
+    if session.get("role") != "Admin":
+        return jsonify({"error": "Admin only"}), 403
+    return jsonify(_conn_pool.get_stats())
+
 # ── Utilities ─────────────────────────────────────────────────────────────────
 # Module-level init — runs when gunicorn imports app, ensures DB is ready
 try:
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(JS_DIR, exist_ok=True)
+    
+    print("🔧 Initializing database schema...")
     init_db()
-    ensure_timelog_schema()   # always run — adds any missing time_log columns
+    
+    print("🔧 Ensuring timelog schema...")
+    ensure_timelog_schema()
+    
+    # Validate schema completeness
+    print("🔧 Validating schema...")
+    with get_db() as db:
+        try:
+            # Test all time_logs columns exist
+            db.execute("""SELECT id, workspace_id, user_id, team_id, date, 
+                          task_name, project_id, task_id, hours, minutes, 
+                          comments, created FROM time_logs LIMIT 0""")
+            print("✅ Timelog schema validated")
+            
+            # Test workspaces required_hours column
+            db.execute("""SELECT required_hours_per_day FROM workspaces LIMIT 0""")
+            print("✅ Workspaces schema validated")
+            
+        except Exception as e:
+            print(f"❌ Schema validation failed: {e}")
+            print("   Run migration endpoint: POST /api/migrate-timelog")
+    
+    # Create indexes for performance
+    print("🔧 Creating indexes...")
+    _run_ddl("CREATE INDEX IF NOT EXISTS idx_timelogs_workspace_date ON time_logs(workspace_id, date)")
+    _run_ddl("CREATE INDEX IF NOT EXISTS idx_timelogs_user_date ON time_logs(user_id, date)")
+    _run_ddl("CREATE INDEX IF NOT EXISTS idx_timelogs_team ON time_logs(team_id)")
+    
+    print("✅ Initialization complete")
+    print(f"📊 Connection pool: {_conn_pool.get_stats()}")
+    
 except Exception as _ie:
     import traceback
-    print(f"  ⚠ Init error: {_ie}")
+    print(f"⚠️ Init error: {_ie}")
     traceback.print_exc()
 def find_free_port(preferred=5000):
     for port in range(preferred, preferred+10):
