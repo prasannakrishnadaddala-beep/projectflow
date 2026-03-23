@@ -162,6 +162,46 @@ def get_db(autocommit=False):
     conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
     conn.autocommit = autocommit  # pg8000 supports autocommit property
     return _DB(conn)
+def _run_ddl(sql):
+    """Run a single DDL statement in its own connection+commit. Never raises."""
+    try:
+        conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+        try:
+            conn.run(sql)
+            conn.run("COMMIT")
+        except Exception as e:
+            msg = str(e).lower()
+            # Ignore "already exists" / "duplicate column" errors
+            if any(x in msg for x in ["already exists","duplicate","column already",
+                                       "relation already","index already"]):
+                pass
+            else:
+                print(f"  _run_ddl warning: {sql[:60]!r}: {e}")
+        finally:
+            try: conn.close()
+            except: pass
+    except Exception as e:
+        print(f"  _run_ddl connect error: {e}")
+
+def ensure_timelog_schema():
+    """Ensure time_logs has ALL required columns. Safe to call repeatedly."""
+    # Step 1: create the base table (minimal columns only)
+    _run_ddl("""CREATE TABLE IF NOT EXISTS time_logs (
+        id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+        hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0,
+        comments TEXT DEFAULT '', created TEXT)""")
+    # Step 2: add each column individually — each in own transaction
+    for ddl in [
+        "ALTER TABLE time_logs ADD COLUMN team_id     TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN date        TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN task_name   TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN project_id  TEXT DEFAULT ''",
+        "ALTER TABLE time_logs ADD COLUMN task_id     TEXT DEFAULT ''",
+        "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
+    ]:
+        _run_ddl(ddl)
+
+
 def hash_pw(p):
     """Hash password with bcrypt (falls back to sha256 for legacy check)."""
     try:
@@ -2199,46 +2239,37 @@ def add_ticket_comment(tid):
 def timelogs_setup():
     """Ensure time_logs table and all columns exist — safe to call any time."""
     try:
-        with get_db(autocommit=True) as db:
-            # Create table if it never existed
-            db.execute("""CREATE TABLE IF NOT EXISTS time_logs (
-                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
-                team_id TEXT DEFAULT '', date TEXT, task_name TEXT,
-                hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0,
-                comments TEXT DEFAULT '', created TEXT)""")
-            # Add optional columns idempotently
-            for col_sql in [
-                "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
-                "ALTER TABLE time_logs ADD COLUMN task_id    TEXT DEFAULT ''",
-                "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
-            ]:
-                try: db.execute(col_sql)
-                except: pass
+        ensure_timelog_schema()
         return jsonify({"ok": True})
     except Exception as e:
+        print(f"[timelogs_setup error] {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/timelogs", methods=["GET"])
 @login_required
 def get_timelogs():
-    with get_db() as db:
+    try:
         uid = session["user_id"]
         role = session.get("role","")
         wid_ = wid()
-        # Admins/Managers see all; others see only their own
-        if role in ("Admin","Manager"):
-            rows = db.execute(
-                "SELECT tl.*, u.name as user_name FROM time_logs tl "
-                "LEFT JOIN users u ON tl.user_id=u.id "
-                "WHERE tl.workspace_id=? ORDER BY tl.date DESC, tl.created DESC",
-                (wid_,)).fetchall()
-        else:
-            rows = db.execute(
-                "SELECT tl.*, u.name as user_name FROM time_logs tl "
-                "LEFT JOIN users u ON tl.user_id=u.id "
-                "WHERE tl.workspace_id=? AND tl.user_id=? ORDER BY tl.date DESC, tl.created DESC",
-                (wid_, uid)).fetchall()
-        return jsonify([dict(r) for r in rows])
+        with get_db() as db:
+            if role in ("Admin","Manager"):
+                rows = db.execute(
+                    "SELECT tl.*, u.name as user_name FROM time_logs tl "
+                    "LEFT JOIN users u ON tl.user_id=u.id "
+                    "WHERE tl.workspace_id=? ORDER BY tl.date DESC, tl.created DESC",
+                    (wid_,)).fetchall()
+            else:
+                rows = db.execute(
+                    "SELECT tl.*, u.name as user_name FROM time_logs tl "
+                    "LEFT JOIN users u ON tl.user_id=u.id "
+                    "WHERE tl.workspace_id=? AND tl.user_id=? ORDER BY tl.date DESC, tl.created DESC",
+                    (wid_, uid)).fetchall()
+            return jsonify([dict(r) for r in rows])
+    except Exception as e:
+        print(f"[get_timelogs error] {e} — running schema fix")
+        ensure_timelog_schema()
+        return jsonify([])   # return empty list; client will retry on next load
 
 @app.route("/api/timelogs", methods=["POST"])
 @login_required
@@ -2246,14 +2277,6 @@ def create_timelog():
     d = request.json or {}
     lid = f"tl{int(datetime.now().timestamp()*1000)}"
     try:
-        with get_db(autocommit=True) as db:
-            # ── Ensure optional columns exist (safe on any DB state) ──────────
-            for col_sql in [
-                "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
-                "ALTER TABLE time_logs ADD COLUMN task_id    TEXT DEFAULT ''",
-            ]:
-                try: db.execute(col_sql)
-                except: pass
         with get_db() as db:
             db.execute(
                 """INSERT INTO time_logs
@@ -2277,7 +2300,30 @@ def create_timelog():
         import traceback
         print(f"[timelog create error] {type(e).__name__}: {e}")
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        # Schema missing — run migration and retry ONCE
+        try:
+            ensure_timelog_schema()
+            with get_db() as db:
+                db.execute(
+                    """INSERT INTO time_logs
+                       (id, workspace_id, user_id, team_id, date, task_name,
+                        project_id, task_id, hours, minutes, comments, created)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (lid, wid(), session["user_id"],
+                     d.get("team_id","") or "",
+                     d.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
+                     d.get("task_name","") or "",
+                     d.get("project_id","") or "",
+                     d.get("task_id","") or "",
+                     float(d.get("hours") or 0),
+                     int(d.get("minutes") or 0),
+                     d.get("comments","") or "",
+                     ts()))
+            print(f"[timelog] Retry after schema fix succeeded: {lid}")
+            return jsonify({"id": lid, "ok": True})
+        except Exception as e2:
+            print(f"[timelog create retry failed] {e2}")
+            return jsonify({"error": str(e2)}), 500
 
 @app.route("/api/timelogs/<log_id>", methods=["DELETE"])
 @login_required
@@ -2312,27 +2358,29 @@ def update_timelog(log_id):
 @app.route("/api/timelogs/required-hours", methods=["GET","POST"])
 @login_required
 def required_hours():
-    with get_db() as db:
-        if request.method == "POST":
-            if session.get("role") != "Admin":
-                return jsonify({"error":"Forbidden"}), 403
-            hrs = float((request.json or {}).get("hours", 8))
-            try:
-                db.execute("UPDATE workspaces SET required_hours_per_day=? WHERE id=?", (hrs, wid()))
-            except Exception as e:
-                print(f"[required_hours update error] {e}")
-                # Column may not exist yet — run migration then retry
-                try:
-                    db.execute("ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8")
-                    db.execute("UPDATE workspaces SET required_hours_per_day=? WHERE id=?", (hrs, wid()))
-                except Exception: pass
-            return jsonify({"ok": True})
+    # GET — anyone can read the workspace policy
+    if request.method == "GET":
         try:
-            ws = db.execute("SELECT required_hours_per_day FROM workspaces WHERE id=?", (wid(),)).fetchone()
-            hrs = float(ws["required_hours_per_day"]) if ws and ws["required_hours_per_day"] is not None else 8.0
+            with get_db() as db:
+                ws = db.execute("SELECT required_hours_per_day FROM workspaces WHERE id=?",
+                                (wid(),)).fetchone()
+                hrs = float(ws["required_hours_per_day"]) if ws and ws["required_hours_per_day"] is not None else 8.0
         except Exception:
             hrs = 8.0
         return jsonify({"hours": hrs})
+    # POST — Admin OR Manager can update workspace policy
+    if session.get("role") not in ("Admin", "Manager"):
+        return jsonify({"error": "Forbidden"}), 403
+    hrs = float((request.json or {}).get("hours", 8))
+    # Use _run_ddl to ensure column exists first (fresh conn, own commit)
+    _run_ddl("ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8")
+    try:
+        with get_db() as db:
+            db.execute("UPDATE workspaces SET required_hours_per_day=? WHERE id=?", (hrs, wid()))
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[required_hours POST error] {e}")
+        return jsonify({"error": str(e)}), 500
 
 # [Calling/WebRTC mechanism removed — use Google Meet or external tools]
 
@@ -11408,6 +11456,7 @@ try:
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(JS_DIR, exist_ok=True)
     init_db()
+    ensure_timelog_schema()   # always run — adds any missing time_log columns
 except Exception as _ie:
     import traceback
     print(f"  ⚠ Init error: {_ie}")
