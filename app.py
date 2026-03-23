@@ -7144,8 +7144,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
       t.sprint||'',
       t.story_points||0
     ]);
-    const csv='data:text/csv;charset=utf-8,'+[headers,...rows].map(r=>r.join(',')).join('
-');
+    const csv='data:text/csv;charset=utf-8,'+[headers,...rows].map(r=>r.join(',')).join('\n');
     const a=document.createElement('a');
     a.setAttribute('href',encodeURI(csv));
     a.setAttribute('download','vewit_tasks_'+new Date().toISOString().slice(0,10)+'.csv');
@@ -7469,7 +7468,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
       const mine=logs.filter(l=>l.user_id===cu.id&&l.date===today);
       const total=mine.reduce((s,l)=>s+(Number(l.hours||0))+(Number(l.minutes||0)/60),0);
       const wh=Math.floor(total);const wm=Math.round((total-wh)*60);
-      setTodayHrs(total>0?(wh>0?wh+'h'+(wm>0?' '+wm+'m':'')):wm+'m'):'0m');
+      setTodayHrs(total>0?(wh>0?wh+'h'+(wm>0?' '+wm+'m':''):wm+'m'):'0m');
     });
   },[cu.id]);
   const openTickets=tickets.filter(x=>x.status==='open').length;
@@ -11064,7 +11063,8 @@ function TimesheetView({cu,teams,users,projects,tasks}){
         <span style=${{color:'var(--tx3)',fontSize:12}}>→</span>
         <input type="date" value=${filterTo} onChange=${e=>setFilterTo(e.target.value)}
           style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 9px',color:'var(--tx)',fontSize:11}}/>`:null}
-      <div style=${{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>        <input type="search" placeholder="🔍 Search tasks, comments…" value=${searchQ}
+      <div style=${{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
+        <input type="search" placeholder="🔍 Search tasks, comments…" value=${searchQ}
           onChange=${e=>setSearchQ(e.target.value)}
           style=${{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:7,padding:'5px 10px',color:'var(--tx)',fontSize:11,width:180}}/>
         ${isAdmin&&users&&users.length>0?html`
