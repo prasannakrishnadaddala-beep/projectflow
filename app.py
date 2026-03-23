@@ -8761,6 +8761,7 @@ function MemberRow({u,cu,i,total,reload,ROLE_COLORS}){
               </div>
             </div>
           </div>`:null}
+          `}
       </td>
 
       <td style=${{padding:'12px 14px'}}>
