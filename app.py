@@ -2194,6 +2194,30 @@ def add_ticket_comment(tid):
 
 # ── Calls (Huddle) ────────────────────────────────────────────────────────────
 # ── Time Logging API ──────────────────────────────────────────────────────────
+@app.route("/api/timelogs/setup", methods=["POST"])
+@login_required
+def timelogs_setup():
+    """Ensure time_logs table and all columns exist — safe to call any time."""
+    try:
+        with get_db(autocommit=True) as db:
+            # Create table if it never existed
+            db.execute("""CREATE TABLE IF NOT EXISTS time_logs (
+                id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+                team_id TEXT DEFAULT '', date TEXT, task_name TEXT,
+                hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0,
+                comments TEXT DEFAULT '', created TEXT)""")
+            # Add optional columns idempotently
+            for col_sql in [
+                "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
+                "ALTER TABLE time_logs ADD COLUMN task_id    TEXT DEFAULT ''",
+                "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
+            ]:
+                try: db.execute(col_sql)
+                except: pass
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/timelogs", methods=["GET"])
 @login_required
 def get_timelogs():
@@ -2222,6 +2246,14 @@ def create_timelog():
     d = request.json or {}
     lid = f"tl{int(datetime.now().timestamp()*1000)}"
     try:
+        with get_db(autocommit=True) as db:
+            # ── Ensure optional columns exist (safe on any DB state) ──────────
+            for col_sql in [
+                "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
+                "ALTER TABLE time_logs ADD COLUMN task_id    TEXT DEFAULT ''",
+            ]:
+                try: db.execute(col_sql)
+                except: pass
         with get_db() as db:
             db.execute(
                 """INSERT INTO time_logs
@@ -2231,19 +2263,20 @@ def create_timelog():
                 (lid,
                  wid(),
                  session["user_id"],
-                 d.get("team_id", ""),
+                 d.get("team_id", "") or "",
                  d.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
-                 d.get("task_name", ""),
-                 d.get("project_id", ""),
-                 d.get("task_id", ""),
-                 float(d.get("hours", 0) or 0),
-                 int(d.get("minutes", 0) or 0),
-                 d.get("comments", ""),
+                 d.get("task_name", "") or "",
+                 d.get("project_id", "") or "",
+                 d.get("task_id", "") or "",
+                 float(d.get("hours") or 0),
+                 int(d.get("minutes") or 0),
+                 d.get("comments", "") or "",
                  ts()))
         return jsonify({"id": lid, "ok": True})
     except Exception as e:
+        import traceback
         print(f"[timelog create error] {type(e).__name__}: {e}")
-        import traceback; traceback.print_exc()
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/timelogs/<log_id>", methods=["DELETE"])
@@ -2272,8 +2305,8 @@ def update_timelog(log_id):
             return jsonify({"error":"Forbidden"}), 403
         db.execute(
             "UPDATE time_logs SET hours=?, minutes=?, comments=? WHERE id=?",
-            (float(d.get("hours", 0)), int(d.get("minutes", 0)),
-             d.get("comments", ""), log_id))
+            (float(d.get("hours") or 0), int(d.get("minutes") or 0),
+             d.get("comments", "") or "", log_id))
     return jsonify({"ok": True, "id": log_id})
 
 @app.route("/api/timelogs/required-hours", methods=["GET","POST"])
@@ -10300,7 +10333,10 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     setRequiredHrs(hrs);
     setAdminHrsInput(String(hrs));
   };
-  useEffect(()=>{load();},[]);
+  // On first mount, ensure DB columns exist (handles old deployed databases)
+  useEffect(()=>{
+    api.post('/api/timelogs/setup',{}).finally(()=>load());
+  },[]);
 
   // ── Filter — local date parse avoids UTC offset bug
   const filtered=useMemo(()=>{
