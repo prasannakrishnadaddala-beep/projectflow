@@ -156,6 +156,18 @@ app.config.update(
     MAX_CONTENT_LENGTH=150*1024*1024)
 CORS(app, supports_credentials=True)
 
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to every response."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Only set HSTS on HTTPS
+    if request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#5a8cff"]
 
 def get_db(autocommit=False):
@@ -163,31 +175,59 @@ def get_db(autocommit=False):
     conn.autocommit = autocommit  # pg8000 supports autocommit property
     return _DB(conn)
 
-def _raw_pg(sql, params=(), fetch=False):
-    """Execute SQL via fresh pg8000 native connection, bypassing _DB wrapper.
-    Returns rows if fetch=True, else None. Raises on error."""
+# ── Simple pg8000 connection pool (3 reusable connections) ──────────────────
+import queue as _queue, threading as _poollock
+_PG_POOL = _queue.Queue(maxsize=5)
+_PG_POOL_LOCK = _poollock.Lock()
+
+def _get_pool_conn():
+    """Get a connection from pool or create a new one."""
     from pg8000.native import Connection as _PGConn
-    kwargs = _parse_db_url(DATABASE_URL)
-    conn = _PGConn(**kwargs)
     try:
-        # Convert ? placeholders to :p0, :p1 ... for pg8000 native
-        import re as _re
-        pdict = {}
-        idx = [0]
-        def _rep(m):
-            k = f"p{idx[0]}"
-            pdict[k] = params[idx[0]] if idx[0] < len(params) else None
-            idx[0] += 1
-            return f":{k}"
-        pg_sql = _re.sub(r"\?", _rep, sql)
-        rows = conn.run(pg_sql, **pdict) if pdict else conn.run(pg_sql)
-        cols = [c["name"] for c in (conn.columns or [])]
-        if fetch:
-            return [dict(zip(cols, r)) for r in (rows or [])]
-        return None
-    finally:
+        conn = _PG_POOL.get_nowait()
+        # Test connection is still alive
+        try:
+            conn.run("SELECT 1")
+            return conn
+        except Exception:
+            try: conn.close()
+            except: pass
+    except _queue.Empty:
+        pass
+    return _PGConn(**_parse_db_url(DATABASE_URL))
+
+def _return_pool_conn(conn):
+    """Return connection to pool, or close it if pool is full."""
+    try:
+        _PG_POOL.put_nowait(conn)
+    except _queue.Full:
         try: conn.close()
         except: pass
+
+def _raw_pg(sql, params=(), fetch=False):
+    """Execute SQL via pooled pg8000 native connection, bypassing _DB wrapper.
+    Returns rows if fetch=True, else None. Raises on error."""
+    import re as _re
+    pdict = {}
+    idx = [0]
+    def _rep(m):
+        k = f"p{idx[0]}"
+        pdict[k] = params[idx[0]] if idx[0] < len(params) else None
+        idx[0] += 1
+        return f":{k}"
+    pg_sql = _re.sub(r"\?", _rep, sql)
+    conn = _get_pool_conn()
+    try:
+        rows = conn.run(pg_sql, **pdict) if pdict else conn.run(pg_sql)
+        cols = [c["name"] for c in (conn.columns or [])]
+        result = [dict(zip(cols, r)) for r in (rows or [])] if fetch else None
+        _return_pool_conn(conn)
+        return result
+    except Exception:
+        # Don't return broken connections to pool
+        try: conn.close()
+        except: pass
+        raise
 
 def _run_ddl(sql):
     """Run a single DDL statement in its own fresh connection. Never raises."""
@@ -670,6 +710,17 @@ def init_db():
                 project_id TEXT DEFAULT '', task_id TEXT DEFAULT '',
                 hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0,
                 comments TEXT DEFAULT '', created TEXT);
+            CREATE INDEX IF NOT EXISTS idx_tasks_ws        ON tasks(workspace_id);
+            CREATE INDEX IF NOT EXISTS idx_tasks_assignee  ON tasks(workspace_id, assignee);
+            CREATE INDEX IF NOT EXISTS idx_tasks_project   ON tasks(workspace_id, project);
+            CREATE INDEX IF NOT EXISTS idx_tasks_stage     ON tasks(workspace_id, stage);
+            CREATE INDEX IF NOT EXISTS idx_notifs_user     ON notifications(workspace_id, user_id, read);
+            CREATE INDEX IF NOT EXISTS idx_dm_recipient    ON direct_messages(workspace_id, recipient, read);
+            CREATE INDEX IF NOT EXISTS idx_messages_proj   ON messages(workspace_id, project);
+            CREATE INDEX IF NOT EXISTS idx_timelogs_user   ON time_logs(workspace_id, user_id);
+            CREATE INDEX IF NOT EXISTS idx_timelogs_date   ON time_logs(workspace_id, date);
+            CREATE INDEX IF NOT EXISTS idx_reminders_user  ON reminders(workspace_id, user_id, fired);
+            CREATE INDEX IF NOT EXISTS idx_tickets_ws      ON tickets(workspace_id, status);
         """)
         # ── Consolidated migrations (safe — each wrapped in try/except) ──────
         for stmt in [
@@ -699,6 +750,12 @@ def init_db():
             "ALTER TABLE notifications ADD COLUMN sender_id TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN last_active TEXT DEFAULT ''",
             "CREATE TABLE IF NOT EXISTS time_logs (id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT, team_id TEXT DEFAULT '', date TEXT, task_name TEXT, project_id TEXT DEFAULT '', task_id TEXT DEFAULT '', hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0, comments TEXT DEFAULT '', created TEXT)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_ws ON tasks(workspace_id)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(workspace_id, assignee)",
+            "CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(workspace_id, stage)",
+            "CREATE INDEX IF NOT EXISTS idx_notifs_user ON notifications(workspace_id, user_id, read)",
+            "CREATE INDEX IF NOT EXISTS idx_timelogs_user ON time_logs(workspace_id, user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_timelogs_date ON time_logs(workspace_id, date)",
             "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
             "ALTER TABLE time_logs ADD COLUMN task_id TEXT DEFAULT ''",
             "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
@@ -795,15 +852,46 @@ def login_required(f):
 def wid(): return session.get("workspace_id","")
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
+
+# ── Login rate limiter (brute-force protection) ───────────────────────────────
+import time as _time_mod
+_login_attempts = {}   # {key: [timestamp, ...]}
+_LOGIN_MAX = 5         # max attempts
+_LOGIN_WINDOW = 60     # seconds
+
+def _check_rate_limit(key):
+    """Return (allowed, seconds_until_reset). Cleans up old entries."""
+    now = _time_mod.time()
+    attempts = [t for t in _login_attempts.get(key, []) if now - t < _LOGIN_WINDOW]
+    _login_attempts[key] = attempts
+    if len(attempts) >= _LOGIN_MAX:
+        wait = int(_LOGIN_WINDOW - (now - attempts[0]))
+        return False, max(1, wait)
+    return True, 0
+
+def _record_attempt(key):
+    _login_attempts.setdefault(key, []).append(_time_mod.time())
+
+def _clear_attempts(key):
+    _login_attempts.pop(key, None)
+
 @app.route("/api/auth/login",methods=["POST"])
 def login():
     d=request.json or {}
     email=d.get("email","").strip().lower()
     password=d.get("password","")
+    # Rate-limit: block brute force after 5 wrong attempts per 60s
+    rl_key = f"login:{request.remote_addr}:{email}"
+    allowed, wait = _check_rate_limit(rl_key)
+    if not allowed:
+        return jsonify({"error": f"Too many attempts. Try again in {wait}s."}), 429
     with get_db() as db:
         u=db.execute("SELECT * FROM users WHERE email=?",(email,)).fetchone()
-        if not u: return jsonify({"error":"Invalid email or password"}),401
+        if not u:
+            _record_attempt(rl_key)
+            return jsonify({"error":"Invalid email or password"}),401
         if not verify_pw(password, u["password"]):
+            _record_attempt(rl_key)
             return jsonify({"error":"Invalid email or password"}),401
         # Upgrade legacy sha256 hash to bcrypt
         if not (u["password"].startswith("$2b$") or u["password"].startswith("$2a$")):
@@ -816,6 +904,7 @@ def login():
         if totp_active:
             return jsonify({"totp_required": True, "user_id": u["id"], "name": u["name"]}), 200
         # ── No 2FA configured — direct login ─────────────────────────────────
+        _clear_attempts(rl_key)  # reset limiter on success
         session.permanent=True
         session["user_id"]=u["id"]
         session["workspace_id"]=u["workspace_id"]
@@ -1386,7 +1475,10 @@ def me():
         u=db.execute("SELECT * FROM users WHERE id=?",(session["user_id"],)).fetchone()
         if not u: session.clear(); return jsonify({"error":"Not found"}),404
         if u["workspace_id"]: session["workspace_id"]=u["workspace_id"]
-        return jsonify(dict(u))
+        result = dict(u)
+        for k in ("password","plain_password","totp_secret"):
+            result.pop(k, None)
+        return jsonify(result)
 
 # ── Workspace ─────────────────────────────────────────────────────────────────
 @app.route("/api/workspace")
@@ -1673,8 +1765,9 @@ def get_tasks():
                 (t["assignee"] and t["assignee"] in mem_set) or
                 (t["project"] and t["project"] in proj_set)]
             return jsonify([dict(r) for r in filtered])
+        # Limit to 500 most recent — prevents huge payloads on large workspaces
         return jsonify([dict(r) for r in db.execute(
-            "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC",(wid(),)).fetchall()])
+            "SELECT * FROM tasks WHERE workspace_id=? ORDER BY created DESC LIMIT 500",(wid(),)).fetchall()])
 
 def next_task_id(db, ws):
     import time
@@ -5636,7 +5729,7 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
     timesheet:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="4" x2="9" y2="9"/><path d="M7 13h2l1 2 2-4 1 2h2"/></svg>`,
   };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, {id:'timesheet', label:'Timesheet', badge:'New'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, {id:'timesheet', label:'Timesheet', badge:'New', hint:'Shift+L'}, ];
   const devNav=[
     {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'timesheet', label:'Timesheet'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
@@ -6241,6 +6334,14 @@ function TaskModal({task,onClose,onSave,onDel,projects,users,cu,defaultPid,onSet
             <div style=${{display:'flex',gap:9,justifyContent:'flex-end',paddingTop:6,borderTop:isEdit?'1px solid var(--bd)':'none'}}>
               <button class="btn bg" onClick=${onClose}>${isEdit&&!canEditTask&&!canUpdateStage?'Close':'Cancel'}</button>
               ${onSetReminder&&isEdit?html`<button class="btn bam" style=${{fontSize:12}} onClick=${async()=>{const r=await save({keepOpen:true});if(r!==null){onClose();onSetReminder({id:(task&&task.id)||r.id,title:title,due});}}}>⏰ Set Reminder</button>`:null}
+              ${isEdit?html`<button class="btn bg" style=${{fontSize:12,color:'var(--ac)'}}
+                onClick=${()=>{
+                  // Navigate to Timesheet and pass pre-fill info via sessionStorage
+                  try{sessionStorage.setItem('ts_prefill',JSON.stringify({project_id:project||'',task_id:(task&&task.id)||'',task_title:title}));}catch{}
+                  onClose();
+                  // Dispatch custom event so App can navigate + open form
+                  window.dispatchEvent(new CustomEvent('vw:logtime'));
+                }}>⏱ Log Time</button>`:null}
               ${(!isEdit||canEditTask||canUpdateStage)?html`<button class="btn bp" onClick=${save} disabled=${saving}>${saving?html`<span class="spin"></span>`:(isEdit?'Save Changes':'Create Task')}</button>`:null}
             </div>
           </div>`:null}
@@ -7242,6 +7343,18 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     const url=activeTeam?'/api/tickets?team_id='+activeTeam.id:'/api/tickets';
     api.get(url).then(d=>setTickets(Array.isArray(d)?d:[]));
   },[activeTeam]);
+  // Today's logged hours for current user
+  const [todayHrs,setTodayHrs]=useState('—');
+  useEffect(()=>{
+    api.get('/api/timelogs').then(logs=>{
+      if(!Array.isArray(logs))return;
+      const today=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+      const mine=logs.filter(l=>l.user_id===cu.id&&l.date===today);
+      const total=mine.reduce((s,l)=>s+(Number(l.hours||0))+(Number(l.minutes||0)/60),0);
+      const wh=Math.floor(total);const wm=Math.round((total-wh)*60);
+      setTodayHrs(total>0?(wh>0?wh+'h'+(wm>0?' '+wm+'m':'')):wm+'m'):'0m');
+    });
+  },[cu.id]);
   const openTickets=tickets.filter(x=>x.status==='open').length;
   const inProgressTickets=tickets.filter(x=>x.status==='in-progress').length;
   const myTickets=tickets.filter(x=>x.assignee===cu.id&&x.status!=='closed'&&x.status!=='resolved').length;
@@ -7251,7 +7364,7 @@ function Dashboard({cu,tasks,projects,users,onNav,activeTeam,teams,setTeamCtx}){
     {name:'Critical',value:activeTasks.filter(x=>x.priority==='critical').length,color:'var(--rd)',priKey:'critical'}, {name:'High',value:activeTasks.filter(x=>x.priority==='high').length,color:'var(--rd2)',priKey:'high'}, {name:'Medium',value:activeTasks.filter(x=>x.priority==='medium').length,color:'var(--pu)',priKey:'medium'}, {name:'Low',value:activeTasks.filter(x=>x.priority==='low').length,color:'var(--cy)',priKey:'low'}
   ];
   const stats=[
-    {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'}, ];
+    {label:'Total Projects',val:p.length,color:'#1d4ed8',bg:'rgba(29,78,216,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,nav:'projects'}, {label:'Active Tasks',val:active,color:'#0e7490',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,nav:'tasks'}, {label:'Completed',val:done,color:'var(--gn)',bg:'rgba(21,128,61,0.12)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,nav:'tasks:stage:completed'}, {label:'Blocked',val:blocked,color:'var(--rd)',bg:'rgba(185,28,28,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`,nav:'tasks:stage:blocked'}, {label:'My Tasks',val:myT.filter(x=>x.stage!=='completed').length,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tasks:assignee:me'}, {label:'Team Members',val:u.length,color:'var(--pu)',bg:'rgba(109,40,217,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,nav:isAdminManager?'team':'tasks:assignee:me'}, {label:'Open Tickets',val:openTickets,color:'var(--cy)',bg:'rgba(14,116,144,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1.5a1.5 1.5 0 0 0 0-3V9z"/><line x1="9" y1="7" x2="9" y2="17" strokeDasharray="2 2"/></svg>`,nav:'tickets:status:open'}, {label:'In Progress',val:inProgressTickets,color:'var(--am)',bg:'rgba(180,83,9,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:isAdminManager?'tickets':'tasks:assignee:me'}, {label:'My Tickets',val:myTickets,color:'var(--or)',bg:'rgba(194,65,12,0.10)',icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,nav:'tickets:assignee:me'}, {label:"Today's Hours",val:todayHrs,color:'#0891b2',bg:'rgba(8,145,178,0.10)',strVal:true,icon:html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,nav:'timesheet'}, ];
   return html`
     <div class="fi" style=${{height:'100%',overflowY:'auto',padding:'12px 20px',display:'flex',flexDirection:'column',gap:12}}>
       <div style=${{padding:'10px 14px',background:'var(--sf)',borderRadius:12,border:'1px solid var(--bd2)',display:'flex',alignItems:'center',gap:10}}>
@@ -7869,7 +7982,7 @@ function MessagesView({projects,users,cu,tasks}){
       }
     };
     fetchTs();
-    const id=setInterval(fetchTs,8000);
+    const id=setInterval(fetchTs,15000); // reduced 8s→15s
     return()=>clearInterval(id);
   },[]);
 
@@ -10485,9 +10598,23 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     setRequiredHrs(hrs);setAdminHrsInput(String(hrs));
   },[]);
 
-  // Mount: setup schema → then load immediately
+  // Mount: setup schema → then load immediately, also check for prefill from TaskModal
   useEffect(()=>{
-    api.post('/api/timelogs/setup',{}).finally(()=>load());
+    api.post('/api/timelogs/setup',{}).finally(()=>{
+      load();
+      // Check if TaskModal sent a prefill via sessionStorage
+      try{
+        const raw=sessionStorage.getItem('ts_prefill');
+        if(raw){
+          const pf=JSON.parse(raw);
+          sessionStorage.removeItem('ts_prefill');
+          if(pf.project_id||pf.task_id){
+            setForm(f=>({...f,tab:'project',project_id:pf.project_id||'',task_id:pf.task_id||''}));
+            setShowForm(true);
+          }
+        }
+      }catch{}
+    });
   },[]);
 
   // Refresh when user returns to tab (focus event)
@@ -11058,7 +11185,7 @@ function App(){
     beat();          // then beat + fetch again
     const beatId=setInterval(beat,15000);
     window.addEventListener('focus',()=>{beat();});
-    const presId=setInterval(fetchPresence,8000);
+    const presId=setInterval(fetchPresence,20000); // reduced 8s→20s
     return()=>{clearInterval(beatId);clearInterval(presId);};
   },[cu]);
   const [showReminders,setShowReminders]=useState(false);const [reminderTask,setReminderTask]=useState(null);const [upcomingReminders,setUpcomingReminders]=useState([]);
@@ -11139,10 +11266,22 @@ function App(){
     },300); // debounce
     return()=>clearTimeout(t);
   },[globalSearch]);
+  // Log Time shortcut from TaskModal (vw:logtime event)
+  useEffect(()=>{
+    const handler=()=>{
+      _setView('timesheet');
+      // TimesheetView will pick up sessionStorage.ts_prefill on next render
+    };
+    window.addEventListener('vw:logtime',handler);
+    return()=>window.removeEventListener('vw:logtime',handler);
+  },[_setView]);
+
   // Global search shortcut: Cmd+K / Ctrl+K
   useEffect(()=>{
     const h=(e)=>{
       if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();setShowGlobalSearch(v=>!v);setGlobalSearch('');}
+      // Shift+L → jump straight to Timesheet
+      if(e.shiftKey&&e.key==='L'&&!e.metaKey&&!e.ctrlKey){const tag=document.activeElement&&document.activeElement.tagName;if(tag!=='INPUT'&&tag!=='TEXTAREA'){e.preventDefault();_setView('timesheet');}}
       if(e.key==='Escape')setShowGlobalSearch(false);
     };
     document.addEventListener('keydown',h);
@@ -11263,7 +11402,7 @@ function App(){
 
     triggerPollRef.current=pollOnce;
 
-    const id=setInterval(pollOnce, 6000);
+    const id=setInterval(pollOnce, 30000); // reduced from 6s → 30s (5× less DB load)
     return()=>{ clearInterval(id); if(triggerPollRef.current===pollOnce) triggerPollRef.current=null; };
   },[cu,addToast]);
 
