@@ -163,25 +163,26 @@ def get_db(autocommit=False):
     conn.autocommit = autocommit  # pg8000 supports autocommit property
     return _DB(conn)
 def _run_ddl(sql):
-    """Run a single DDL statement in its own connection+commit. Never raises."""
+    """Run a single DDL statement in its own fresh connection. Never raises."""
     try:
         conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
         try:
+            # pg8000 native does NOT auto-wrap in transactions — DDL runs directly
             conn.run(sql)
-            conn.run("COMMIT")
+            print(f"  [DDL OK] {sql[:80]!r}")
         except Exception as e:
             msg = str(e).lower()
-            # Ignore "already exists" / "duplicate column" errors
-            if any(x in msg for x in ["already exists","duplicate","column already",
-                                       "relation already","index already"]):
-                pass
+            ok_msgs = ["already exists", "duplicate", "column already",
+                       "relation already", "index already"]
+            if any(x in msg for x in ok_msgs):
+                print(f"  [DDL skip — already exists] {sql[:60]!r}")
             else:
-                print(f"  _run_ddl warning: {sql[:60]!r}: {e}")
+                print(f"  [DDL WARN] {sql[:60]!r}: {type(e).__name__}: {e}")
         finally:
             try: conn.close()
             except: pass
     except Exception as e:
-        print(f"  _run_ddl connect error: {e}")
+        print(f"  [DDL connect error] {e}")
 
 def ensure_timelog_schema():
     """Ensure time_logs has ALL required columns. Safe to call repeatedly."""
@@ -2233,6 +2234,44 @@ def add_ticket_comment(tid):
         return jsonify(dict(db.execute("SELECT * FROM ticket_comments WHERE id=?",(cid,)).fetchone()))
 
 # ── Calls (Huddle) ────────────────────────────────────────────────────────────
+
+@app.route("/api/migrate-timelog", methods=["GET","POST"])
+def migrate_timelog_public():
+    """Public migration endpoint — run once to fix live DB schema.
+    Safe to call repeatedly. Returns JSON report of what was done."""
+    results = []
+    steps = [
+        ("CREATE time_logs base", """CREATE TABLE IF NOT EXISTS time_logs (
+            id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
+            hours REAL DEFAULT 0, minutes INTEGER DEFAULT 0,
+            comments TEXT DEFAULT '', created TEXT)"""),
+        ("ADD team_id",    "ALTER TABLE time_logs ADD COLUMN team_id    TEXT DEFAULT ''"),
+        ("ADD date",       "ALTER TABLE time_logs ADD COLUMN date       TEXT DEFAULT ''"),
+        ("ADD task_name",  "ALTER TABLE time_logs ADD COLUMN task_name  TEXT DEFAULT ''"),
+        ("ADD project_id", "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''"),
+        ("ADD task_id",    "ALTER TABLE time_logs ADD COLUMN task_id    TEXT DEFAULT ''"),
+        ("ADD req_hours",  "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8"),
+    ]
+    for label, sql in steps:
+        try:
+            conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+            try:
+                conn.run(sql)
+                results.append({"step": label, "status": "ok"})
+            except Exception as e:
+                msg = str(e).lower()
+                if any(x in msg for x in ["already exists","duplicate","column already","relation already"]):
+                    results.append({"step": label, "status": "already_exists"})
+                else:
+                    results.append({"step": label, "status": "error", "msg": str(e)})
+            finally:
+                try: conn.close()
+                except: pass
+        except Exception as e:
+            results.append({"step": label, "status": "connect_error", "msg": str(e)})
+    print(f"[migrate-timelog] {results}")
+    return jsonify({"ok": True, "results": results})
+
 # ── Time Logging API ──────────────────────────────────────────────────────────
 @app.route("/api/timelogs/setup", methods=["POST"])
 @login_required
@@ -11495,6 +11534,8 @@ if __name__=="__main__":
     print("="*54)
     print("  Initializing database...")
     init_db()
+    print("  Ensuring timelog schema...")
+    ensure_timelog_schema()
     print("  Checking JS libraries...")
     if not download_js():
         print("  ⚠ Some libraries failed. Check your internet connection.")
