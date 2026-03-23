@@ -9265,6 +9265,99 @@ INSTRUCTIONS:
     </div>`;
 }
 
+/* ─── Notification Utilities ──────────────────────────────────────────────── */
+const NOTIF_ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Ccircle cx='32' cy='32' r='9' fill='white'/%3E%3Ccircle cx='32' cy='11' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='51' cy='43' r='6' fill='white' opacity='.95'/%3E%3Ccircle cx='13' cy='43' r='6' fill='white' opacity='.95'/%3E%3Cline x1='32' y1='17' x2='32' y2='23' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='46' y1='40' x2='40' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='18' y1='40' x2='24' y2='36' stroke='white' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E";
+
+function updateBadge(count){
+  try{
+    if(navigator.setAppBadge){
+      if(count>0)navigator.setAppBadge(count);
+      else navigator.clearAppBadge();
+    }
+  }catch(e){}
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=32;canvas.height=32;
+    const ctx=canvas.getContext('2d');
+    const img=new Image();
+    img.onload=()=>{
+      ctx.drawImage(img,0,0,32,32);
+      if(count>0){
+        ctx.fillStyle='#ef4444';
+        ctx.beginPath();ctx.arc(24,8,9,0,2*Math.PI);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font='bold 10px Inter,sans-serif';
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(count>9?'9+':String(count),24,8);
+      }
+      const links=document.querySelectorAll("link[rel*='icon']");
+      links.forEach(l=>{l.href=canvas.toDataURL();});
+      document.title=count>0?'('+count+') VEWIT':'VEWIT';
+    };
+    img.src=NOTIF_ICON;
+  }catch(e){}
+}
+
+async function requestNotifPermission(){
+  if(window.__TAURI__){
+    try{
+      const {isPermissionGranted,requestPermission,sendNotification}=window.__TAURI__.notification;
+      let ok=await isPermissionGranted();
+      if(!ok){const p=await requestPermission();ok=(p==='granted');}
+      if(ok)await sendNotification({title:'VEWIT',body:'Notifications enabled.'});
+      return;
+    }catch(e){}
+  }
+  if('Notification' in window&&Notification.permission==='default'){
+    const p=await Notification.requestPermission();
+    if(p==='granted'){
+      if(window._pfSWReg){
+        try{
+          const r=await fetch('/api/push/vapid-key',{credentials:'include'});
+          const d=await r.json();
+          if(d.publicKey){
+            const padding='='.repeat((4-d.publicKey.length%4)%4);
+            const base64=(d.publicKey+padding).replace(/-/g,'+').replace(/_/g,'/');
+            const raw=window.atob(base64);
+            const key=new Uint8Array(raw.length);
+            for(let i=0;i<raw.length;i++) key[i]=raw.charCodeAt(i);
+            const sub=await window._pfSWReg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+            window._pfPushSub=sub;
+            const sj=sub.toJSON();
+            fetch('/api/push/subscribe',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sj.endpoint,keys:sj.keys})}).catch(()=>{});
+          }
+        }catch(e){}
+      }
+      new Notification('VEWIT',{body:'Desktop notifications enabled! You\'ll be notified for tasks, projects & reminders.',icon:NOTIF_ICON,silent:true});
+    }
+  }
+}
+
+async function showBrowserNotif(title,body,onClick,opts={}){
+  const tag=opts.tag||'pf-'+Date.now();
+  if(onClick){window._pfNotifHandlers=window._pfNotifHandlers||{};window._pfNotifHandlers[tag]=onClick;}
+  if(window.__TAURI__){
+    try{
+      const {isPermissionGranted,requestPermission,sendNotification}=window.__TAURI__.notification;
+      let ok=await isPermissionGranted();
+      if(!ok){const p=await requestPermission();ok=(p==='granted');}
+      if(ok){await sendNotification({title,body});return;}
+    }catch(e){}
+  }
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  if(window._pfSWReg){
+    try{
+      await window._pfSWReg.showNotification(title,{body,icon:NOTIF_ICON,badge:NOTIF_ICON,tag,vibrate:[200,100,200],requireInteraction:opts.requireInteraction||false,data:{tag}});
+      return;
+    }catch(e){}
+  }
+  try{
+    const n=new Notification(title,{body,icon:NOTIF_ICON,badge:NOTIF_ICON,tag,requireInteraction:opts.requireInteraction||false,silent:false});
+    if(onClick)n.onclick=()=>{window.focus();onClick();n.close();};
+    if(!opts.requireInteraction)setTimeout(()=>n.close(),6000);
+  }catch(e){}
+}
+
+/* ─── RemindersView ──────────────────────────────────────────────────────── */
 function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
   const [reminders,setReminders]=useState([]);
   const [busy,setBusy]=useState(true);
