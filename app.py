@@ -3179,30 +3179,47 @@ def emergency_reset_2fa():
 @app.route("/static/<path:fn>")
 def serve_static(fn):
     """Serve static files (frontend.js, landing.html, etc.) from app directory."""
-    # Try multiple locations for the file
+    # Try every plausible location for the file
     locations = [
-        os.path.join(BASE_DIR, fn),           # Same directory as app.py
-        os.path.join(BASE_DIR, "static", fn), # static/ subdirectory
-        os.path.join(BASE_DIR, "..", fn),     # Parent directory
+        os.path.join(BASE_DIR, fn),                # Same directory as app.py  ← most common
+        os.path.join(BASE_DIR, "static", fn),      # static/ subdirectory
+        os.path.join(JS_DIR, fn),                  # pf_static/ (downloaded libs)
+        os.path.join(BASE_DIR, "pf_static", fn),   # explicit pf_static path
+        os.path.join(BASE_DIR, "..", fn),           # Parent directory
+        os.path.join("/app", fn),                  # Railway /app root
+        os.path.join("/app", "static", fn),        # Railway /app/static
     ]
-    
+
     path = None
     for loc in locations:
         if os.path.exists(loc) and os.path.isfile(loc):
             path = loc
             break
-    
+
     if not path:
+        # Special case: if frontend.js is missing, return a helpful JS error
+        # instead of an HTML 404 (which causes the MIME-type rejection)
+        if fn == "frontend.js":
+            err_js = (
+                "console.error('[VEWIT] frontend.js not found on server. "
+                "Make sure frontend.js is deployed in the same directory as app.py.');"
+                "document.body.innerHTML='<div style=\"color:#f87171;font-family:monospace;"
+                "padding:40px;background:#0a0618;min-height:100vh\">"
+                "<h2>⚠ frontend.js missing</h2>"
+                "<p>Deploy frontend.js to the same folder as app.py on your server.</p>"
+                "</div>';"
+            )
+            return Response(err_js, mimetype="application/javascript",
+                            headers={"Cache-Control": "no-cache"})
         print(f"  ⚠ Static file not found: {fn}")
-        print(f"     Searched in: {', '.join(locations)}")
+        print(f"     Searched: {locations}")
         return "", 404
-    
+
     import mimetypes as _mt
     mime = _mt.guess_type(fn)[0] or "application/octet-stream"
     with open(path, "rb") as fh:
         data = fh.read()
     resp = Response(data, mimetype=mime)
-    # Cache JS for 1 hour; HTML never cache
     resp.headers["Cache-Control"] = "public, max-age=3600" if fn.endswith(".js") else "no-cache"
     return resp
 
@@ -3381,10 +3398,7 @@ def icon_512():
 def index():
     """Serve the landing page for non-authenticated users."""
     if "user_id" in session:
-        # If user is logged in, redirect to dashboard/app
         return serve_app()
-    # If the user clicked Sign In or Get Started, serve the React app
-    # which contains the AuthScreen login/register form
     action = request.args.get("action", "")
     if action in ("login", "register"):
         return HTML
