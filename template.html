@@ -596,11 +596,17 @@ function waitForLibs(cb){
   var needed=['React','ReactDOM','PropTypes','Recharts','htm'];
   var interval=setInterval(function(){
     var ready=needed.every(function(k){return window[k]!=null;});
-    if(ready){clearInterval(interval);try{cb();}catch(e){console.error('[VEWIT] App init error:',e);}}
+    if(ready){
+      clearInterval(interval);
+      try{ cb(); }
+      catch(e){ console.error('[VEWIT] App init error:',e); }
+    }
   },30);
 }
 
 window._pfStartApp=function(){
+/* ── bind htm to React.createElement so html`...` works throughout ── */
+const html=htm.bind(React.createElement);
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
 const RC=Recharts;
 
