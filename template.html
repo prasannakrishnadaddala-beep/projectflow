@@ -589,6 +589,18 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 window.onerror=function(m,s,l,c,e){var el=document.getElementById('LE');if(el){el.style.display='block';el.innerHTML='<b>Load Error</b><br>'+(e?e.message:m);}};
 </script>
 <script>
+(function(){
+'use strict';
+
+function waitForLibs(cb){
+  var needed=['React','ReactDOM','PropTypes','Recharts','htm'];
+  var interval=setInterval(function(){
+    var ready=needed.every(function(k){return window[k]!=null;});
+    if(ready){clearInterval(interval);try{cb();}catch(e){console.error('[VEWIT] App init error:',e);}}
+  },30);
+}
+
+window._pfStartApp=function(){
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
 const RC=Recharts;
 
