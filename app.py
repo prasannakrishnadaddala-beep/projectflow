@@ -1687,7 +1687,7 @@ def create_project():
                    (pid,wid(),d["name"],d.get("description",""),session["user_id"],
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
                     d.get("color","#5a8cff"),ts(),d.get("team_id","")))
-        p=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
+        p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
         creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cname=creator["name"] if creator else "Someone"
         for uid in members:
@@ -1715,7 +1715,7 @@ def update_project(pid):
                     d.get("color",p["color"]),
                     json.dumps(d.get("members",json.loads(p["members"]))),
                     d.get("team_id",p_team),pid,wid()))
-        updated=db.execute("SELECT * FROM projects WHERE id=?",(pid,)).fetchone()
+        updated=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
         actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         aname=actor["name"] if actor else "Someone"
         try: mems=json.loads(updated["members"] or "[]")
@@ -1836,7 +1836,7 @@ def create_task():
                         args=(db, uid, f"📋 New task in {proj['name']}",
                               f"{cname} created '{d['title']}'", "/"),
                         daemon=True).start()
-        t=db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()
+        t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if d.get("project"):
             assignee_name=""
             if d.get("assignee"):
@@ -1988,7 +1988,7 @@ def update_task(tid):
                     args=(db, t["assignee"], f"💬 Comment on: {t['title']}",
                           f"{cname}: {latest.get('text','')[:80]}", "/"),
                     daemon=True).start()
-        return jsonify(dict(db.execute("SELECT * FROM tasks WHERE id=?",(tid,)).fetchone()))
+        return jsonify(dict(db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
 
 
 @app.route("/api/subtasks/search")
@@ -2084,7 +2084,7 @@ def upload_file():
     with get_db() as db:
         db.execute("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?)",
                    (fid,wid(),f.filename,len(data),f.content_type,task_id,project_id,session["user_id"],ts()))
-        row=db.execute("SELECT * FROM files WHERE id=?",(fid,)).fetchone()
+        row=db.execute("SELECT * FROM files WHERE id=? AND workspace_id=?",(fid,wid())).fetchone()
         return jsonify(dict(row))
 
 @app.route("/api/files/<fid>")
@@ -2254,7 +2254,7 @@ def create_team():
     with get_db() as db:
         db.execute("INSERT INTO teams VALUES (?,?,?,?,?,?)",
                    (tid,wid(),d["name"],d.get("lead_id",""),json.dumps(d.get("member_ids",[])),ts()))
-        return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=?",(tid,)).fetchone()))
+        return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
 
 @app.route("/api/teams/<tid>", methods=["PUT"])
 @login_required
@@ -2266,7 +2266,7 @@ def update_team(tid):
         db.execute("UPDATE teams SET name=?,lead_id=?,member_ids=? WHERE id=?",
                    (d.get("name",t["name"]),d.get("lead_id",t["lead_id"]),
                     json.dumps(d.get("member_ids",json.loads(t["member_ids"] or "[]"))),tid))
-        return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=?",(tid,)).fetchone()))
+        return jsonify(dict(db.execute("SELECT * FROM teams WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
 
 @app.route("/api/teams/<tid>", methods=["DELETE"])
 @login_required
@@ -2363,9 +2363,7 @@ def create_ticket():
             rname=reporter["name"] if reporter else "Someone"
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                        (nid,wid(),"task_assigned",f"🎫 {rname} assigned ticket: {d['title']}",d["assignee"],0,now))
-        return jsonify(dict(db.execute("SELECT * FROM tickets WHERE id=?",(tid,)).fetchone()))
-
-@app.route("/api/tickets/<tid>", methods=["PUT"])
+        return jsonify(dict(db.execute("SELECT * FROM tickets WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
 @login_required
 def update_ticket(tid):
     d=request.json or {}
@@ -2386,7 +2384,7 @@ def update_ticket(tid):
                     d.get("status",t["status"]),d.get("assignee",t["assignee"]),
                     d.get("project",t["project"]),json.dumps(d.get("tags",json.loads(t["tags"] or "[]"))),now,
                     d.get("team_id",cur_team_id),tid))
-        return jsonify(dict(db.execute("SELECT * FROM tickets WHERE id=?",(tid,)).fetchone()))
+        return jsonify(dict(db.execute("SELECT * FROM tickets WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
 
 @app.route("/api/tickets/<tid>", methods=["DELETE"])
 @login_required

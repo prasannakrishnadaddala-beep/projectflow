@@ -1779,7 +1779,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
   const [tab,setTab]=useState('tasks');const [edit,setEdit]=useState(false);
   const [name,setName]=useState(project.name||'');const [desc,setDesc]=useState(project.description||'');
   const [tDate,setTDate]=useState(project.target_date||'');const [color,setColor]=useState(project.color||'#5a8cff');
-  const [members,setMembers]=useState(safe(project.members));const [saving,setSaving]=useState(false);
+  const [members,setMembers]=useState(()=>{try{return safe(JSON.parse(project.members||'[]'));}catch{return [];}});const [saving,setSaving]=useState(false);
   const [showNew,setShowNew]=useState(false);const [editTask,setEditTask]=useState(null);
   const [projTeamId,setProjTeamId]=useState((project.team_id)||'');
 
@@ -1856,7 +1856,7 @@ function ProjectDetail({project,allTasks,allUsers,cu,onClose,onReload,onSetRemin
               <div><label class="lbl">Members</label><${MemberPicker} allUsers=${allUsers} selected=${members} onChange=${setMembers}/></div>
             </div>
             <div style=${{height:1,background:'var(--bd)',marginBottom:12}}></div>`:html`
-            <p style=${{color:'var(--tx2)',fontSize:13,marginBottom:11,lineHeight:1.55}}>${project.description||'No description.'}</p>
+            <p style=${{color:project.description?'var(--tx2)':'var(--tx3)',fontSize:13,marginBottom:11,lineHeight:1.55,fontStyle:project.description?'normal':'italic'}}>${project.description||'No description added yet.'}</p>
             <div style=${{display:'flex',alignItems:'center',gap:18,marginBottom:10}}>
               <div style=${{flex:1}}><${Prog} pct=${pc} color=${project.color}/></div>
               <span style=${{fontSize:11,color:'var(--tx2)',fontFamily:'monospace',fontWeight:700}}>${pc}%</span>
@@ -2113,7 +2113,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
               const pt=safe(tasks).filter(t=>t.project===p.id);
               const done=pt.filter(t=>t.stage==='completed').length;
               const pc=pt.length?Math.round(pt.reduce((a,t)=>a+(t.pct||0),0)/pt.length):(p.progress||0);
-              const mems=safe(p.members).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
+              const mems=safe((()=>{try{return JSON.parse(p.members||'[]');}catch{return[];}})()).map(id=>safe(users).find(u=>u.id===id)).filter(Boolean);
               const fmtShort=d=>{if(!d)return '';const dt=new Date(d);return dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});};
               const daysWorked=p=>{
                 const s=p.start_date?new Date(p.start_date):null;
@@ -2134,7 +2134,7 @@ function ProjectsView({projects,tasks,users,cu,reload,onSetReminder,teams,active
                     <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',flex:1,marginRight:6,lineHeight:1.3}}>${p.name}</h3>
                     <span class="badge" style=${{background:p.color+'22',color:p.color,flexShrink:0,fontSize:9}}>${pt.length} tasks</span>
                   </div>
-                  <p style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.5,marginBottom:9,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>${p.description||'No description.'}</p>
+                  <p style=${{fontSize:11,color:p.description?'var(--tx2)':'var(--tx3)',lineHeight:1.5,marginBottom:9,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',fontStyle:p.description?'normal':'italic'}}>${p.description||'Add a description…'}</p>
                   <div style=${{marginBottom:9}}>
                     <div style=${{display:'flex',justifyContent:'space-between',marginBottom:3}}>
                       <span style=${{fontSize:9,color:'var(--tx3)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px'}}>Progress</span>
