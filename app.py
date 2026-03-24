@@ -1427,7 +1427,7 @@ def register():
             session.permanent=True
             session["user_id"]=uid
             session["workspace_id"]=ws_id
-            session["role"]=u.get("role","") if u else ""  # cache role
+            session["role"]=d.get("role","Developer")  # cache role
             return jsonify({"id":uid,"workspace_id":ws_id,"name":d["name"],"email":d["email"],
                             "role":d.get("role","Developer"),"avatar":av,"color":c})
     except Exception as e:
@@ -3380,9 +3380,14 @@ def icon_512():
 @app.route("/")
 def index():
     """Serve the landing page for non-authenticated users."""
-    if "uid" in session:
+    if "user_id" in session:
         # If user is logged in, redirect to dashboard/app
         return serve_app()
+    # If the user clicked Sign In or Get Started, serve the React app
+    # which contains the AuthScreen login/register form
+    action = request.args.get("action", "")
+    if action in ("login", "register"):
+        return HTML
     return LANDING_HTML
 
 @app.route("/app")
