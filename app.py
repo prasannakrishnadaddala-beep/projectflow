@@ -3179,9 +3179,24 @@ def emergency_reset_2fa():
 @app.route("/static/<path:fn>")
 def serve_static(fn):
     """Serve static files (frontend.js, landing.html, etc.) from app directory."""
-    path = os.path.join(BASE_DIR, fn)
-    if not os.path.exists(path) or not os.path.isfile(path):
+    # Try multiple locations for the file
+    locations = [
+        os.path.join(BASE_DIR, fn),           # Same directory as app.py
+        os.path.join(BASE_DIR, "static", fn), # static/ subdirectory
+        os.path.join(BASE_DIR, "..", fn),     # Parent directory
+    ]
+    
+    path = None
+    for loc in locations:
+        if os.path.exists(loc) and os.path.isfile(loc):
+            path = loc
+            break
+    
+    if not path:
+        print(f"  ⚠ Static file not found: {fn}")
+        print(f"     Searched in: {', '.join(locations)}")
         return "", 404
+    
     import mimetypes as _mt
     mime = _mt.guess_type(fn)[0] or "application/octet-stream"
     with open(path, "rb") as fh:
