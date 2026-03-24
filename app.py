@@ -3361,6 +3361,38 @@ def icon_512():
     return Response(png_data, mimetype='image/png',
         headers={'Cache-Control':'public,max-age=86400'})
 
+# ── Main Application Routes ────────────────────────────────────────────────────
+@app.route("/")
+def index():
+    """Serve the landing page for non-authenticated users."""
+    if "uid" in session:
+        # If user is logged in, redirect to dashboard/app
+        return serve_app()
+    return LANDING_HTML
+
+@app.route("/app")
+@app.route("/dashboard")
+@app.route("/projects")
+@app.route("/tasks")
+@app.route("/messages")
+@app.route("/settings")
+@app.route("/profile")
+@app.route("/analytics")
+@app.route("/tickets")
+@app.route("/timeline")
+def serve_app():
+    """Serve the main application template for all app routes."""
+    return HTML
+
+# Catch-all route for SPA routing - must be last
+@app.route("/<path:path>")
+def catch_all(path):
+    """Catch-all route for SPA client-side routing."""
+    # If it looks like a file request, return 404
+    if "." in path.split("/")[-1]:
+        return "", 404
+    # Otherwise serve the app (for client-side routing)
+    return HTML
 
 import os as _os
 
