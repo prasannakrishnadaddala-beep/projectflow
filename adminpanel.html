@@ -235,6 +235,7 @@ let modalCb = null;
 // ── Boot ───────────────────────────────────────────────────────────────────────
 (function(){
   if (ADMIN_TOKEN) {
+    // Show a loading state first; dashboard() will auto-logout if token is stale
     showApp();
     showPage('dashboard');
   }
@@ -249,6 +250,11 @@ async function api(method, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch('/api/admin' + path, opts);
   const data = await r.json().catch(() => ({}));
+  if (r.status === 401 || r.status === 403) {
+    // Token expired or invalid — send back to login
+    doLogout();
+    throw new Error('Session expired. Please log in again.');
+  }
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
   return data;
 }
@@ -323,8 +329,8 @@ function closeModal() {
   modalCb = null;
 }
 async function modalConfirm() {
-  if (modalCb) await modalCb();
-  closeModal();
+  try { if (modalCb) await modalCb(); }
+  finally { closeModal(); }
 }
 
 // ── Render helpers ─────────────────────────────────────────────────────────────
