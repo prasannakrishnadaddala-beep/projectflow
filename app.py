@@ -3421,6 +3421,378 @@ def password_generator_page():
     """Serve the standalone password generator tool."""
     return PASSWORD_GENERATOR_HTML
 
+@app.route("/api/admin/security-stats")
+def admin_api_security_stats():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            try:
+                enabled  = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled=TRUE").fetchone()[0]
+                disabled = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled IS NOT TRUE").fetchone()[0]
+                no_totp  = db.execute("""
+                    SELECT u.id, u.name, u.email, u.role, w.name AS workspace_name
+                    FROM users u
+                    LEFT JOIN workspaces w ON w.id = u.workspace_id
+                    WHERE u.totp_enabled IS NOT TRUE
+                    ORDER BY u.created DESC LIMIT 100
+                """).fetchall()
+            except Exception:
+                enabled, disabled, no_totp = 0, 0, []
+        return jsonify({
+            "totp_enabled":  enabled,
+            "totp_disabled": disabled,
+            "no_totp": [dict(r) for r in no_totp],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/plans-stats")
+def admin_api_plans_stats():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            rows = db.execute("""
+                SELECT w.id, w.name, w.plan, COUNT(u.id) AS member_count
+                FROM workspaces w
+                LEFT JOIN users u ON u.workspace_id = w.id
+                GROUP BY w.id, w.name, w.plan
+                ORDER BY w.created DESC
+            """).fetchall()
+            starter    = sum(1 for r in rows if (r["plan"] or "starter") == "starter")
+            team       = sum(1 for r in rows if r["plan"] == "team")
+            enterprise = sum(1 for r in rows if r["plan"] == "enterprise")
+        return jsonify({
+            "starter_count":    starter,
+            "team_count":       team,
+            "enterprise_count": enterprise,
+            "workspaces":       [dict(r) for r in rows],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/users/<uid>/reset-password", methods=["POST"])
+def admin_api_user_reset_password(uid):
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    pw = data.get("password", "")
+    if len(pw) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+    try:
+        with get_db() as db:
+            db.execute("UPDATE users SET password_hash=:p0 WHERE id=:p1", (hash_pw(pw), uid))
+            db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/users/<uid>/reset-totp", methods=["POST"])
+def admin_api_user_reset_totp(uid):
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            db.execute(
+                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE id=:p0",
+                {"p0": uid}
+            )
+            db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/users/<uid>/change-role", methods=["POST"])
+def admin_api_user_change_role(uid):
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    role = data.get("role", "")
+    valid_roles = ("Admin","Manager","TeamLead","Developer","Tester","Viewer")
+    if role not in valid_roles:
+        return jsonify({"error": "Invalid role"}), 400
+    try:
+        with get_db() as db:
+            db.execute("UPDATE users SET role=:p0 WHERE id=:p1", (role, uid))
+            db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── Admin Panel ────────────────────────────────────────────────────────────────
+_ADMIN_TOKENS = {}   # token -> expiry (datetime)
+
+@app.route("/adminpanel")
+@app.route("/adminpanel/<path:workspace>")
+def admin_panel_page(workspace=None):
+    """Serve the admin panel HTML."""
+    return ADMIN_HTML
+
+@app.route("/api/admin/login", methods=["POST"])
+def admin_api_login():
+    """Super-admin login — returns a short-lived bearer token."""
+    data = request.get_json(silent=True) or {}
+    email    = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "")
+
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@vewit.in").strip().lower()
+    admin_pass  = os.environ.get("ADMIN_PASSWORD", "")
+
+    if not admin_pass:
+        return jsonify({"error": "Admin password not configured. Set ADMIN_PASSWORD env var."}), 503
+
+    if email != admin_email or password != admin_pass:
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    token = secrets.token_hex(32)
+    _ADMIN_TOKENS[token] = datetime.utcnow() + timedelta(hours=8)
+    return jsonify({"token": token})
+
+def _require_admin():
+    """Return True if request carries a valid admin token."""
+    token = request.headers.get("X-Admin-Token", "")
+    exp   = _ADMIN_TOKENS.get(token)
+    return bool(exp and datetime.utcnow() < exp)
+
+@app.route("/api/admin/dashboard")
+def admin_api_dashboard():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            total_ws    = db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
+            # active = logged in within last 7 days (if last_active column exists)
+            try:
+                cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
+                active = db.execute(
+                    "SELECT COUNT(*) FROM users WHERE last_active > :p0", {"p0": cutoff}
+                ).fetchone()[0]
+            except Exception:
+                active = total_users
+            # revenue placeholder — extend when billing is wired
+            revenue = 0
+        return jsonify({
+            "total_users": total_users,
+            "total_workspaces": total_ws,
+            "active_users": active,
+            "revenue": revenue,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspaces")
+def admin_api_workspaces():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            rows = db.execute("""
+                SELECT w.id, w.name, w.invite_code, w.plan, w.created,
+                       COUNT(u.id) AS member_count
+                FROM workspaces w
+                LEFT JOIN users u ON u.workspace_id = w.id
+                GROUP BY w.id, w.name, w.invite_code, w.plan, w.created
+                ORDER BY w.created DESC
+            """).fetchall()
+        return jsonify({"workspaces": [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspaces/<ws_id>")
+def admin_api_workspace_detail(ws_id):
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            ws = db.execute("SELECT * FROM workspaces WHERE id=:p0", {"p0": ws_id}).fetchone()
+            if not ws:
+                return jsonify({"error": "Workspace not found"}), 404
+            members = db.execute(
+                "SELECT id, name, email, role, created FROM users WHERE workspace_id=:p0 ORDER BY created",
+                {"p0": ws_id}
+            ).fetchall()
+        return jsonify({"workspace": dict(ws), "members": [dict(m) for m in members]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/users")
+def admin_api_users():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            rows = db.execute("""
+                SELECT u.id, u.name, u.email, u.role, u.created,
+                       w.name AS workspace_name
+                FROM users u
+                LEFT JOIN workspaces w ON w.id = u.workspace_id
+                ORDER BY u.created DESC
+            """).fetchall()
+        return jsonify({"users": [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/users/<uid>/delete", methods=["POST"])
+def admin_api_delete_user(uid):
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            db.execute("DELETE FROM users WHERE id=:p0", {"p0": uid})
+            db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/audit")
+def admin_api_audit():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        with get_db() as db:
+            # Try audit_log table; fall back to empty list if it doesn't exist yet
+            try:
+                rows = db.execute(
+                    "SELECT * FROM audit_log ORDER BY created DESC LIMIT 200"
+                ).fetchall()
+                return jsonify({"logs": [dict(r) for r in rows]})
+            except Exception:
+                return jsonify({"logs": []})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/set-plan", methods=["POST"])
+def admin_api_set_plan():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    ws_id = data.get("workspace_id")
+    plan  = data.get("plan", "starter")
+    if plan not in ("starter", "team", "enterprise"):
+        return jsonify({"error": "Invalid plan"}), 400
+    try:
+        with get_db() as db:
+            db.execute("UPDATE workspaces SET plan=:p0 WHERE id=:p1", (plan, ws_id))
+            db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/suspend", methods=["POST"])
+def admin_api_suspend_workspace():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    ws_id = data.get("workspace_id")
+    try:
+        with get_db() as db:
+            db.execute("UPDATE workspaces SET suspended=TRUE WHERE id=:p0", {"p0": ws_id})
+            db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/reset-invite", methods=["POST"])
+def admin_api_reset_invite():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    ws_id = data.get("workspace_id")
+    new_code = secrets.token_urlsafe(8).upper()[:8]
+    try:
+        with get_db() as db:
+            db.execute("UPDATE workspaces SET invite_code=:p0 WHERE id=:p1", (new_code, ws_id))
+            db.commit()
+        return jsonify({"ok": True, "invite_code": new_code})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/reset-all-passwords", methods=["POST"])
+def admin_api_reset_all_passwords():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    ws_id = data.get("workspace_id")
+    pw    = data.get("password", "")
+    if len(pw) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+    try:
+        with get_db() as db:
+            db.execute(
+                "UPDATE users SET password_hash=:p0 WHERE workspace_id=:p1",
+                (hash_pw(pw), ws_id)
+            )
+            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
+            count = cur.fetchone()[0]
+            db.commit()
+        return jsonify({"ok": True, "count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/reset-all-totp", methods=["POST"])
+def admin_api_reset_all_totp():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    ws_id = data.get("workspace_id")
+    try:
+        with get_db() as db:
+            db.execute(
+                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE workspace_id=:p0",
+                {"p0": ws_id}
+            )
+            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
+            count = cur.fetchone()[0]
+            db.commit()
+        return jsonify({"ok": True, "count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/toggle-2fa", methods=["POST"])
+def admin_api_toggle_2fa():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    ws_id   = data.get("workspace_id")
+    enabled = bool(data.get("enabled", False))
+    try:
+        with get_db() as db:
+            db.execute(
+                "UPDATE workspaces SET require_2fa=:p0 WHERE id=:p1",
+                (enabled, ws_id)
+            )
+            db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/add-user", methods=["POST"])
+def admin_api_add_user():
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    data  = request.get_json(silent=True) or {}
+    ws_id = data.get("workspace_id")
+    name  = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    pw    = data.get("password", "")
+    role  = data.get("role", "Developer")
+    if not name or not email or len(pw) < 8:
+        return jsonify({"error": "Name, email and password (min 8 chars) are required"}), 400
+    uid = secrets.token_hex(8)
+    try:
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO users (id, name, email, password_hash, role, workspace_id, created) "
+                "VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)",
+                (uid, name, email, hash_pw(pw), role, ws_id, datetime.utcnow().isoformat())
+            )
+            db.commit()
+        return jsonify({"ok": True, "id": uid})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Catch-all route for SPA routing - must be last
 @app.route("/<path:path>")
 def catch_all(path):
@@ -3449,6 +3821,7 @@ def _load_template(filename, fallback=''):
 HTML                    = _load_template('template.html')
 LANDING_HTML            = _load_template('landing.html')
 PASSWORD_GENERATOR_HTML = _load_template('password-generator.html')
+ADMIN_HTML              = _load_template('adminpanel.html')
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────

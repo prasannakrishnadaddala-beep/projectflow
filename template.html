@@ -1656,9 +1656,9 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
     'password-generator': html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>`,
   };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, {id:'timesheet', label:'Timesheet', badge:'New', hint:'Shift+L'}, {id:'password-generator', label:'Password Gen', badge:'FREE', href:'/password-generator'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, {id:'timesheet', label:'Timesheet', badge:'New', hint:'Shift+L'}, {id:'password-generator', label:'Password Gen', badge:'FREE'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'timesheet', label:'Timesheet'}, {id:'password-generator', label:'Password Gen', badge:'FREE', href:'/password-generator'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'timesheet', label:'Timesheet'}, {id:'password-generator', label:'Password Gen', badge:'FREE'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -7102,10 +7102,132 @@ function TimesheetView({cu,teams,users,projects,tasks}){
     </div>
   </div>`;
 }
+// ── Inline Password Generator ─────────────────────────────────────────────────
+function PasswordGeneratorView(){
+  const [len,setLen]=useState(20);
+  const [upper,setUpper]=useState(true);
+  const [lower,setLower]=useState(true);
+  const [nums,setNums]=useState(true);
+  const [syms,setSyms]=useState(true);
+  const [exclude,setExclude]=useState('');
+  const [pw,setPw]=useState('');
+  const [copied,setCopied]=useState(false);
+  const [history,setHistory]=useState([]);
+
+  function generate(){
+    let chars='';
+    if(upper) chars+='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if(lower) chars+='abcdefghijklmnopqrstuvwxyz';
+    if(nums)  chars+='0123456789';
+    if(syms)  chars+='!@#$%^&*()-_=+[]{}|;:,.<>?';
+    if(exclude){const ex=new Set(exclude.split(''));chars=[...chars].filter(c=>!ex.has(c)).join('');}
+    if(!chars){setPw('⚠ Select at least one character type');return;}
+    const arr=new Uint32Array(len);
+    crypto.getRandomValues(arr);
+    const result=Array.from(arr).map(v=>chars[v%chars.length]).join('');
+    setPw(result);
+    setCopied(false);
+    setHistory(h=>[result,...h].slice(0,10));
+  }
+
+  async function copy(val){
+    try{await navigator.clipboard.writeText(val||pw);}catch(e){const ta=document.createElement('textarea');ta.value=val||pw;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);}
+    setCopied(true);setTimeout(()=>setCopied(false),2000);
+  }
+
+  useEffect(()=>{generate();},[]);
+
+  const strength=(()=>{
+    if(!pw||pw.startsWith('⚠'))return{label:'',color:'#636366',w:0};
+    let s=0;
+    if(pw.length>=12)s++;if(pw.length>=18)s++;if(pw.length>=24)s++;
+    if(/[A-Z]/.test(pw))s++;if(/[a-z]/.test(pw))s++;
+    if(/[0-9]/.test(pw))s++;if(/[^A-Za-z0-9]/.test(pw))s++;
+    if(s<=2)return{label:'Weak',color:'#ff453a',w:25};
+    if(s<=4)return{label:'Fair',color:'#ff9f0a',w:55};
+    if(s<=5)return{label:'Good',color:'#30d158',w:78};
+    return{label:'Strong',color:'#30d158',w:100};
+  })();
+
+  const S={
+    wrap:{padding:'28px 32px',maxWidth:680,margin:'0 auto'},
+    card:{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'28px',marginBottom:20},
+    label:{fontSize:12,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:8,display:'block'},
+    row:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16},
+    toggle:{display:'flex',alignItems:'center',gap:10,fontSize:14,color:'var(--tx)',cursor:'pointer'},
+    pwBox:{background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:10,padding:'16px 18px',fontFamily:'monospace',fontSize:18,letterSpacing:'0.08em',color:'var(--tx)',wordBreak:'break-all',minHeight:60,lineHeight:1.5},
+    btn:{padding:'11px 22px',borderRadius:9,border:'none',cursor:'pointer',fontWeight:700,fontSize:13,fontFamily:'inherit'},
+  };
+
+  function Toggle({label,val,set}){
+    return html`<label style=${S.toggle}>
+      <div style=${{width:36,height:20,borderRadius:20,background:val?'var(--ac)':'var(--bd)',position:'relative',flexShrink:0,transition:'background .2s',cursor:'pointer'}}
+        onClick=${()=>set(!val)}>
+        <div style=${{position:'absolute',top:3,left:val?17:3,width:14,height:14,borderRadius:'50%',background:'#fff',transition:'left .2s'}}></div>
+      </div>
+      ${label}
+    </label>`;
+  }
+
+  return html`<div style=${S.wrap}>
+    <div style=${{marginBottom:24}}>
+      <div style=${{fontSize:22,fontWeight:800,letterSpacing:'-0.5px',marginBottom:4}}>🔐 Password Generator</div>
+      <div style=${{fontSize:14,color:'var(--tx2)'}}>Generate cryptographically secure passwords — all generation happens locally in your browser.</div>
+    </div>
+
+    <div style=${S.card}>
+      <div style=${{...S.pwBox,marginBottom:12}}>${pw||'Click Generate'}</div>
+      ${strength.w>0?html`<div style=${{marginBottom:14}}>
+        <div style=${{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+          <span style=${{fontSize:12,color:'var(--tx2)'}}>Strength</span>
+          <span style=${{fontSize:12,fontWeight:700,color:strength.color}}>${strength.label}</span>
+        </div>
+        <div style=${{height:5,borderRadius:4,background:'var(--bd)'}}>
+          <div style=${{height:'100%',borderRadius:4,width:strength.w+'%',background:strength.color,transition:'width .4s'}}></div>
+        </div>
+      </div>`:null}
+      <div style=${{display:'flex',gap:10}}>
+        <button style=${{...S.btn,background:'var(--ac)',color:'#fff',flex:1}} onClick=${generate}>⟳ Generate</button>
+        <button style=${{...S.btn,background:copied?'rgba(48,209,88,.15)':'var(--sf2)',color:copied?'#30d158':'var(--tx)',border:'1px solid var(--bd)'}} onClick=${()=>copy()}>
+          ${copied?'✓ Copied!':'⎘ Copy'}
+        </button>
+      </div>
+    </div>
+
+    <div style=${S.card}>
+      <div style=${S.row}>
+        <span style=${{fontSize:14,fontWeight:600}}>Length: ${len}</span>
+        <input type="range" min="8" max="64" value=${len} onInput=${e=>setLen(+e.target.value)}
+          style=${{flex:1,marginLeft:16,accentColor:'var(--ac)'}}/>
+      </div>
+      <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px 24px',marginBottom:16}}>
+        <${Toggle} label="Uppercase A–Z" val=${upper} set=${setUpper}/>
+        <${Toggle} label="Lowercase a–z" val=${lower} set=${setLower}/>
+        <${Toggle} label="Numbers 0–9"   val=${nums}  set=${setNums}/>
+        <${Toggle} label="Symbols !@#…"  val=${syms}  set=${setSyms}/>
+      </div>
+      <label style=${S.label}>Exclude characters</label>
+      <input class="inp" style=${{width:'100%',background:'var(--bg)',border:'1px solid var(--bd)',borderRadius:8,padding:'9px 12px',fontSize:13,color:'var(--tx)',fontFamily:'monospace'}}
+        placeholder="e.g.  0 O l 1 I"
+        value=${exclude}
+        onInput=${e=>setExclude(e.target.value)}/>
+    </div>
+
+    ${history.length>1?html`<div style=${S.card}>
+      <label style=${S.label}>Recent passwords</label>
+      ${history.slice(1).map((h,i)=>html`<div key=${i} style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.04)',gap:12}}>
+        <span style=${{fontFamily:'monospace',fontSize:13,color:'var(--tx2)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>${h}</span>
+        <button style=${{...S.btn,padding:'4px 12px',background:'var(--sf2)',color:'var(--tx2)',border:'1px solid var(--bd)',fontSize:11,flexShrink:0}}
+          onClick=${()=>copy(h)}>Copy</button>
+      </div>`)}
+    </div>`:null}
+  </div>`;
+}
+
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','ai-docs','timesheet'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','ai-docs','timesheet','password-generator'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -7631,6 +7753,7 @@ function App(){
             ${baseView==='productivity'&&(cu.role==='Admin'||cu.role==='Manager')?html`<${ProductivityView} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers}/>`:null}
             ${baseView==='ai-docs'?html`<${AiDocsView} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users}/>`:null}
             ${baseView==='timesheet'?html`<${TimesheetView} cu=${cu} teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}/>`:null}
+            ${baseView==='password-generator'?html`<${PasswordGeneratorView}/>`:null}
             </div>
           <//>
         </div>

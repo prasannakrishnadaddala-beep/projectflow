@@ -357,7 +357,11 @@ function planBadge(plan) {
 async function dashboard() {
   set('<div class="loading">Loading dashboard…</div>');
   try {
-    const data = await api('GET', '/stats');
+    const [data, wsData] = await Promise.all([
+      api('GET', '/dashboard'),
+      api('GET', '/workspaces')
+    ]);
+    const recent = (wsData.workspaces||[]).slice(0,8);
     set(`
       <div class="page-header">
         <div>
@@ -368,23 +372,23 @@ async function dashboard() {
       <div class="stats-g">
         <div class="stat-card">
           <div class="sc-label">Total Workspaces</div>
-          <div class="sc-val">${data.workspaces}</div>
+          <div class="sc-val">${data.total_workspaces}</div>
           <div class="sc-sub">Across all companies</div>
         </div>
         <div class="stat-card">
           <div class="sc-label">Total Users</div>
-          <div class="sc-val">${data.users}</div>
+          <div class="sc-val">${data.total_users}</div>
           <div class="sc-sub">All roles combined</div>
         </div>
         <div class="stat-card">
           <div class="sc-label">Total Tasks</div>
-          <div class="sc-val">${data.tasks}</div>
+          <div class="sc-val">${data.total_tasks||'—'}</div>
           <div class="sc-sub">Across all projects</div>
         </div>
         <div class="stat-card">
-          <div class="sc-label">Active Today</div>
-          <div class="sc-val">${data.active_today}</div>
-          <div class="sc-sub">Users active last 24h</div>
+          <div class="sc-label">Active (7d)</div>
+          <div class="sc-val">${data.active_users}</div>
+          <div class="sc-sub">Users active last 7 days</div>
         </div>
       </div>
       <div class="table-wrap">
@@ -396,7 +400,7 @@ async function dashboard() {
             <th>Workspace</th><th>Owner</th><th>Members</th><th>Plan</th><th>Created</th><th>Actions</th>
           </tr></thead>
           <tbody>
-            ${(data.recent_workspaces||[]).map(w=>`
+            ${recent.map(w=>`
               <tr>
                 <td><b style="color:var(--tx)">${esc(w.name)}</b><br/><span style="font-size:11px;color:var(--tx3)">${esc(w.id)}</span></td>
                 <td>${esc(w.owner_name||'—')}</td>
@@ -595,7 +599,7 @@ async function users() {
 async function security() {
   set('<div class="loading">Loading security data…</div>');
   try {
-    const data = await api('GET', '/security');
+    const data = await api('GET', '/security-stats');
     set(`
       <div class="page-header">
         <div>
@@ -649,7 +653,7 @@ async function security() {
 async function pricing() {
   set('<div class="loading">Loading plans…</div>');
   try {
-    const data = await api('GET', '/plans');
+    const data = await api('GET', '/plans-stats');
     set(`
       <div class="page-header">
         <div>
@@ -703,6 +707,7 @@ async function audit() {
   set('<div class="loading">Loading audit log…</div>');
   try {
     const data = await api('GET', '/audit');
+    const logs = data.logs||[];
     set(`
       <div class="page-header">
         <div>
@@ -714,7 +719,7 @@ async function audit() {
         <table>
           <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
           <tbody>
-            ${(data||[]).map(e=>`
+            ${logs.map(e=>`
               <tr>
                 <td style="font-size:12px;white-space:nowrap">${(e.ts||'').replace('T',' ').slice(0,19)}</td>
                 <td style="font-size:12.5px">${esc(e.admin_email||'—')}</td>
@@ -723,7 +728,7 @@ async function audit() {
                 <td style="font-size:12px;color:var(--tx3)">${esc(e.detail||'—')}</td>
               </tr>
             `).join('')}
-            ${(data||[]).length===0?'<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:30px">No audit entries yet</td></tr>':''}
+            ${logs.length===0?'<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:30px">No audit entries yet</td></tr>':''}
           </tbody>
         </table>
       </div>
@@ -745,7 +750,7 @@ async function resetPassword(userId, userName) {
       const pw = document.getElementById('new-pw-input').value;
       if (!pw || pw.length < 8) { toast('Password must be at least 8 characters', 'err'); return; }
       try {
-        await api('POST', '/user/reset-password', { user_id: userId, password: pw });
+        await api('POST', `/users/${userId}/reset-password`, { password: pw });
         toast(`✓ Password reset for ${userName}`);
       } catch(e) { toast(e.message, 'err'); }
     }
@@ -759,7 +764,7 @@ async function resetTOTP(userId, userName) {
     '', 'Reset 2FA', '',
     async () => {
       try {
-        await api('POST', '/user/reset-totp', { user_id: userId });
+        await api('POST', `/users/${userId}/reset-totp`, {});
         toast(`✓ 2FA reset for ${userName}`);
       } catch(e) { toast(e.message, 'err'); }
     }
@@ -778,7 +783,7 @@ async function changeRole(userId, userName, currentRole) {
     async () => {
       const role = document.getElementById('role-select').value;
       try {
-        await api('POST', '/user/change-role', { user_id: userId, role });
+        await api('POST', `/users/${userId}/change-role`, { role });
         toast(`✓ Role updated to ${role} for ${userName}`);
       } catch(e) { toast(e.message, 'err'); }
     }
@@ -792,7 +797,7 @@ async function removeUser(userId, userName, wsId) {
     '', 'Remove', 'btn-danger',
     async () => {
       try {
-        await api('POST', '/user/remove', { user_id: userId, workspace_id: wsId });
+        await api('POST', `/users/${userId}/delete`, { workspace_id: wsId });
         toast(`✓ ${userName} removed`);
         viewWorkspace(wsId, '');
       } catch(e) { toast(e.message, 'err'); }
