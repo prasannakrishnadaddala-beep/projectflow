@@ -364,24 +364,13 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.18)}
 
-/* ── Animation safety: hero content must always be visible ──
-   animation-fill-mode:both starts elements at opacity:0 —
-   switching to forwards means they start visible and animate in.
-   The @media block handles browsers/OSes with reduced motion. ── */
-.hero-chip{animation-fill-mode:forwards}
-h1.h-title{animation-fill-mode:forwards}
-.h-sub{animation-fill-mode:forwards}
-.h-ctas{animation-fill-mode:forwards}
-.h-trust{animation-fill-mode:forwards}
-
+/* ── Animation safety: fill-mode:both starts at opacity:0 which blanks the page
+   if animations are slow/blocked. forwards = starts visible, animates in. ── */
+.hero-chip,h1.h-title,.h-sub,.h-ctas,.h-trust{animation-fill-mode:forwards}
 @media(prefers-reduced-motion:reduce){
-  .hero-chip,h1.h-title,.h-sub,.h-ctas,.h-trust{
-    animation:none!important;opacity:1!important;transform:none!important;
-  }
+  .hero-chip,h1.h-title,.h-sub,.h-ctas,.h-trust,
   .reveal{animation:none!important;opacity:1!important;transform:none!important;}
-  .orb{animation:none!important;}
-  .hero-scan{animation:none!important;}
-  .gt{animation:none!important;}
+  .orb,.hero-scan,.gt{animation:none!important;}
 }
 
 /* ── Responsive ── */
@@ -429,6 +418,7 @@ h1.h-title{animation-fill-mode:forwards}
     <a href="#pricing">Pricing</a>
     <a href="#contact">Contact</a>
     <a href="/about">About</a>
+    <a href="/password-generator" style="color:var(--green);font-weight:600">🔐 Password Gen</a>
   </div>
   <div class="nav-right">
     <a href="/?action=login" class="nav-in">Sign In</a>
@@ -1311,11 +1301,11 @@ h1.h-title{animation-fill-mode:forwards}
       <a href="/?action=login">Sign in</a>
     </div>
     <div class="footer-col">
-      <h4>Use Cases</h4>
+      <h4>Free Tools</h4>
+      <a href="/password-generator">🔐 Password Generator</a>
       <a href="/?action=register">Engineering teams</a>
       <a href="/?action=register">Product managers</a>
       <a href="/?action=register">Startups</a>
-      <a href="/?action=register">Agencies</a>
       <a href="/?action=register">Remote teams</a>
     </div>
     <div class="footer-col">
@@ -1331,7 +1321,7 @@ h1.h-title{animation-fill-mode:forwards}
   </div>
 </footer>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 // ── Scroll Reveal ──
 const ro = new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');ro.unobserve(e.target);}});
@@ -1444,119 +1434,45 @@ function sendAiMsg(){
   const input=document.getElementById('aiInput');
   const val=input.value.trim();
   if(!val)return;
-  const reply=aiConvos[val] || "I don't have a demo response for that — but the real AI assistant can handle anything! Try one of the suggested prompts above, or sign up to experience it live.";
+  const reply=aiConvos[val] || "I don't have a demo response for that — try one of the suggested prompts above, or sign up to experience it live.";
   addAiMessage(val, reply);
-  input.value = '';
+  input.value='';
 }
 
-document.getElementById('aiInput').addEventListener('keydown', function(e){
-  if(e.key === 'Enter') sendAiMsg();
+document.getElementById('aiInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter')sendAiMsg();
 });
 
 // ── Notification Demo ──
-const notifMessages = [
+let _notifIdx=0;
+const _notifMsgs=[
   {title:'🔔 New task assigned',body:'T-020: API rate limiting — assigned by Arjun C.',color:'#5a8cff'},
   {title:'✅ Task completed',body:'T-014: Auth API review marked Done by Bharat M.',color:'#30d158'},
   {title:'💬 New message',body:'Chandu S. in #e-commerce: "Payment gateway is live!"',color:'#a855f7'},
   {title:'🎫 Ticket updated',body:'TK-007: Login issue — status changed to In Progress',color:'#ff9f0a'},
   {title:'⏰ Reminder',body:'Sprint 3 review meeting starts in 15 minutes',color:'#ec4899'},
 ];
-let notifIndex = 0;
-function showNotif(){
-  const container = document.getElementById('notifDemo');
-  if(!container) return;
-  const n = notifMessages[notifIndex % notifMessages.length];
-  notifIndex++;
-  const el = document.createElement('div');
-  el.className = 'notif-item';
-  el.style.cssText = `border-left:3px solid ${n.color}`;
-  el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:3px">${n.title}</div><div style="font-size:11px;color:var(--tx2);line-height:1.4">${n.body}</div>`;
+function _showNotif(){
+  const container=document.getElementById('notifDemo');
+  if(!container)return;
+  const n=_notifMsgs[_notifIdx%_notifMsgs.length]; _notifIdx++;
+  const el=document.createElement('div');
+  el.className='notif-item';
+  el.style.cssText='border-left:3px solid '+n.color;
+  el.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:3px">'+n.title+'</div><div style="font-size:11px;color:var(--tx2);line-height:1.4">'+n.body+'</div>';
   container.appendChild(el);
-  setTimeout(()=>{ el.style.animation='notifOut .4s ease forwards'; setTimeout(()=>el.remove(), 400); }, 3800);
+  setTimeout(()=>{el.style.animation='notifOut .4s ease forwards';setTimeout(()=>el.remove(),400);},3800);
 }
-setInterval(showNotif, 4500);
-setTimeout(showNotif, 1200);
-
-// ── Reveal on scroll ──
-const ro = new IntersectionObserver(entries=>{
-  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); ro.unobserve(e.target); }});
-},{threshold:0.12});
-document.querySelectorAll('.reveal').forEach(el=>ro.observe(el));
-
-// ── Animated Counters ──
-const counterObs = new IntersectionObserver(entries=>{
-  entries.forEach(e=>{
-    if(e.isIntersecting){
-      const el=e.target;
-      const target=parseInt(el.dataset.count)||0;
-      const suffix=el.dataset.suffix||'';
-      if(!target){return;}
-      let start=0;const dur=1200;const startTime=performance.now();
-      function tick(now){
-        const elapsed=now-startTime;
-        const progress=Math.min(elapsed/dur,1);
-        const val=Math.round(progress*target);
-        el.textContent=val+suffix;
-        if(progress<1)requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
-      counterObs.unobserve(el);
-    }
-  });
-},{threshold:.5});
-document.querySelectorAll('[data-count]').forEach(el=>counterObs.observe(el));
-
-// ── Interactive Preview Tabs ──
-function switchPreview(tab){
-  document.querySelectorAll('.preview-panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.preview-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.pni').forEach(n=>n.classList.remove('on'));
-  const panel=document.getElementById('panel-'+tab);
-  if(panel)panel.classList.add('active');
-  document.querySelectorAll('.preview-tab').forEach(t=>{if(t.dataset.tab===tab)t.classList.add('active');});
-  const ni=document.getElementById('pni-'+tab);
-  if(ni)ni.classList.add('on');
-}
-document.querySelectorAll('.preview-tab').forEach(tab=>{
-  tab.addEventListener('click',()=>switchPreview(tab.dataset.tab));
-});
-
-// ── Module Explorer ──
-document.querySelectorAll('.mod-tab').forEach(tab=>{
-  tab.addEventListener('click',()=>{
-    document.querySelectorAll('.mod-tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.module-panel').forEach(p=>p.classList.remove('active'));
-    tab.classList.add('active');
-    const panel=document.getElementById('module-'+tab.dataset.mod);
-    if(panel)panel.classList.add('active');
-  });
-});
-
-// ── Compare Tabs ──
-document.querySelectorAll('.ctab').forEach(tab=>{
-  tab.addEventListener('click',()=>{
-    document.querySelectorAll('.ctab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.compare-panel').forEach(p=>p.classList.remove('active'));
-    tab.classList.add('active');
-    const panel=document.getElementById('compare-'+tab.dataset.cmp);
-    if(panel)panel.classList.add('active');
-  });
-});
+setInterval(_showNotif,4500);
+setTimeout(_showNotif,1200);
 
 // ── Nav scroll effect ──
 window.addEventListener('scroll',()=>{
   const nav=document.getElementById('nav');
-  if(nav){
-    if(window.scrollY>40){
-      nav.style.background='rgba(6,4,15,0.95)';
-      nav.style.boxShadow='0 1px 0 rgba(255,255,255,0.06)';
-    } else {
-      nav.style.background='rgba(6,4,15,0.78)';
-      nav.style.boxShadow='none';
-    }
-  }
+  if(!nav)return;
+  if(window.scrollY>40){nav.style.background='rgba(6,4,15,0.95)';nav.style.boxShadow='0 1px 0 rgba(255,255,255,0.06)';}
+  else{nav.style.background='rgba(6,4,15,0.78)';nav.style.boxShadow='none';}
 },{passive:true});
-
 </script>
 </body>
 </html>
