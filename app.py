@@ -1821,21 +1821,6 @@ def create_task():
                 args=(db, d["assignee"], f"✅ New task assigned: {d['title']}",
                       f"{cname} assigned you this task [{d.get('priority','medium')}]", "/"),
                 daemon=True).start()
-        if d.get("project"):
-            proj=db.execute("SELECT name,members FROM projects WHERE id=? AND workspace_id=?",(d["project"],wid())).fetchone()
-            if proj:
-                try:
-                    members=json.loads(proj["members"] or "[]")
-                except: members=[]
-                for i,uid in enumerate(members):
-                    if uid==session["user_id"] or uid==d.get("assignee"): continue
-                    nid2=f"n{base_ts+10+i}"
-                    db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                               (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts()))
-                    threading.Thread(target=push_notification_to_user,
-                        args=(db, uid, f"📋 New task in {proj['name']}",
-                              f"{cname} created '{d['title']}'", "/"),
-                        daemon=True).start()
         t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
         if d.get("project"):
             assignee_name=""
@@ -1945,22 +1930,9 @@ def update_task(tid):
                           f"{changer_name} moved it to {d['stage']}", "/"),
                     daemon=True).start()
             if t["project"]:
-                proj=db.execute("SELECT members FROM projects WHERE id=? AND workspace_id=?",(t["project"],wid())).fetchone()
-                if proj:
-                    try: members=json.loads(proj["members"] or "[]")
-                    except: members=[]
-                    actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-                    aname=actor["name"] if actor else "Someone"
-                    for i2,uid in enumerate(members):
-                        if uid==session["user_id"] or uid==t["assignee"]: continue
-                        nid2=f"n{base_ts2+20+i2}"
-                        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                                   (nid2,wid(),"status_change",f"{aname} moved '{t['title']}' → {d['stage']}",uid,0,ts()))
-                        threading.Thread(target=push_notification_to_user,
-                            args=(db, uid, f"🔄 {t['title']} → {d['stage']}",
-                                  f"{aname} updated the task stage", "/"),
-                            daemon=True).start()
                 sysmid=f"m{base_ts2+2}"
+                actor=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+                aname=actor["name"] if actor else "Someone"
                 db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
                            (sysmid,wid(),"system",t["project"],
                             f"⚡ **{aname}** moved **{t['title']}** → {d['stage'].title()}",ts(),1))
@@ -3390,6 +3362,397 @@ def icon_512():
     png_data = base64.b64decode(png_b64)
     return Response(png_data, mimetype='image/png',
         headers={'Cache-Control':'public,max-age=86400'})
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VEWIT SUPER-ADMIN PANEL — /adminpanel and /adminpanel/<company_slug>
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Load admin credentials from env (or fallback defaults for dev) ─────────────
+ADMIN_EMAILS   = set(e.strip().lower() for e in os.environ.get("VEWIT_ADMIN_EMAILS", "admin@vewit.in").split(",") if e.strip())
+ADMIN_PASSWORD = os.environ.get("VEWIT_ADMIN_PASSWORD", "VewitAdmin@2026!")
+ADMIN_TOKEN_TTL = 3600 * 8   # 8-hour token lifetime
+
+# ── In-memory admin token store {token: {email, expires}} ─────────────────────
+_admin_tokens = {}
+_admin_tokens_lock = threading.Lock()
+
+def _make_admin_token(email):
+    tok = secrets.token_hex(32)
+    with _admin_tokens_lock:
+        _admin_tokens[tok] = {"email": email, "expires": time.time() + ADMIN_TOKEN_TTL}
+    return tok
+
+def _verify_admin_token(tok):
+    with _admin_tokens_lock:
+        entry = _admin_tokens.get(tok)
+        if not entry: return None
+        if time.time() > entry["expires"]:
+            del _admin_tokens[tok]; return None
+        return entry["email"]
+
+def admin_required(f):
+    @wraps(f)
+    def _wrap(*a, **kw):
+        tok = request.headers.get("X-Admin-Token","")
+        email = _verify_admin_token(tok)
+        if not email:
+            return jsonify({"error": "Unauthorized — invalid or expired admin token"}), 401
+        request.admin_email = email
+        return f(*a, **kw)
+    return _wrap
+
+# ── Admin audit logger ─────────────────────────────────────────────────────────
+_admin_audit = []   # [{ts, admin_email, action, target, detail}]
+_ADMIN_AUDIT_MAX = 200
+
+def _audit(admin_email, action, target="", detail=""):
+    entry = {"ts": ts(), "admin_email": admin_email, "action": action, "target": target, "detail": detail}
+    _admin_audit.insert(0, entry)
+    if len(_admin_audit) > _ADMIN_AUDIT_MAX:
+        _admin_audit.pop()
+
+# ── Ensure workspaces table has plan column ────────────────────────────────────
+def _ensure_admin_schema():
+    for ddl in [
+        "ALTER TABLE workspaces ADD COLUMN plan TEXT DEFAULT 'starter'",
+        "ALTER TABLE workspaces ADD COLUMN suspended INTEGER DEFAULT 0",
+    ]:
+        _run_ddl(ddl)
+
+try: _ensure_admin_schema()
+except: pass
+
+# ── Admin Login ────────────────────────────────────────────────────────────────
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    d = request.json or {}
+    email = d.get("email","").strip().lower()
+    pwd   = d.get("password","")
+    if email not in ADMIN_EMAILS or pwd != ADMIN_PASSWORD:
+        return jsonify({"error": "Invalid admin credentials"}), 401
+    tok = _make_admin_token(email)
+    _audit(email, "login", email, "Admin signed in")
+    return jsonify({"token": tok, "email": email})
+
+# ── Admin Stats ────────────────────────────────────────────────────────────────
+@app.route("/api/admin/stats")
+@admin_required
+def admin_stats():
+    with get_db() as db:
+        ws_count   = db.execute("SELECT COUNT(*) as c FROM workspaces").fetchone()["c"]
+        user_count = db.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+        task_count = db.execute("SELECT COUNT(*) as c FROM tasks").fetchone()["c"]
+        cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+        active = db.execute(
+            "SELECT COUNT(*) as c FROM users WHERE (REPLACE(last_active,'Z','')>? OR last_active>?)",
+            (cutoff, cutoff)).fetchone()["c"]
+        recent_ws = db.execute("""
+            SELECT w.*, u.name as owner_name,
+                   (SELECT COUNT(*) FROM users uu WHERE uu.workspace_id=w.id) as member_count
+            FROM workspaces w LEFT JOIN users u ON w.owner_id=u.id
+            ORDER BY w.created DESC LIMIT 10""").fetchall()
+        return jsonify({
+            "workspaces": ws_count, "users": user_count,
+            "tasks": task_count, "active_today": active,
+            "recent_workspaces": [dict(r) for r in recent_ws]
+        })
+
+# ── All Workspaces ─────────────────────────────────────────────────────────────
+@app.route("/api/admin/workspaces")
+@admin_required
+def admin_workspaces():
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT w.*,
+                   (SELECT COUNT(*) FROM users u WHERE u.workspace_id=w.id) as member_count
+            FROM workspaces w ORDER BY w.created DESC""").fetchall()
+        return jsonify([dict(r) for r in rows])
+
+# ── Single Workspace Detail ────────────────────────────────────────────────────
+@app.route("/api/admin/workspace/<ws_id>")
+@admin_required
+def admin_workspace_detail(ws_id):
+    with get_db() as db:
+        ws = db.execute("SELECT * FROM workspaces WHERE id=?", (ws_id,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        members = db.execute(
+            "SELECT id,name,email,role,avatar,color,two_fa_enabled,totp_verified,last_active FROM users WHERE workspace_id=? ORDER BY name",
+            (ws_id,)).fetchall()
+        ws_dict = dict(ws)
+        ws_dict.pop("smtp_password", None)
+        ws_dict.pop("ai_api_key", None)
+        return jsonify({"workspace": ws_dict, "members": [dict(m) for m in members]})
+
+# ── All Users ──────────────────────────────────────────────────────────────────
+@app.route("/api/admin/users")
+@admin_required
+def admin_users():
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT u.id,u.name,u.email,u.role,u.avatar,u.color,u.workspace_id,u.two_fa_enabled,
+                   u.totp_verified,u.last_active,w.name as workspace_name
+            FROM users u LEFT JOIN workspaces w ON u.workspace_id=w.id
+            ORDER BY u.name""").fetchall()
+        return jsonify([dict(r) for r in rows])
+
+# ── Security Overview ──────────────────────────────────────────────────────────
+@app.route("/api/admin/security")
+@admin_required
+def admin_security():
+    with get_db() as db:
+        totp_on  = db.execute("SELECT COUNT(*) as c FROM users WHERE totp_verified=1").fetchone()["c"]
+        totp_off = db.execute("SELECT COUNT(*) as c FROM users WHERE (totp_verified IS NULL OR totp_verified=0)").fetchone()["c"]
+        no_totp  = db.execute("""
+            SELECT u.id,u.name,u.email,u.role,w.name as workspace_name
+            FROM users u LEFT JOIN workspaces w ON u.workspace_id=w.id
+            WHERE u.totp_verified IS NULL OR u.totp_verified=0
+            ORDER BY u.name""").fetchall()
+        return jsonify({
+            "totp_enabled": totp_on, "totp_disabled": totp_off,
+            "no_totp": [dict(r) for r in no_totp]
+        })
+
+# ── Plans Overview ─────────────────────────────────────────────────────────────
+@app.route("/api/admin/plans")
+@admin_required
+def admin_plans():
+    with get_db() as db:
+        starter = db.execute("SELECT COUNT(*) as c FROM workspaces WHERE (plan IS NULL OR plan='starter')").fetchone()["c"]
+        team    = db.execute("SELECT COUNT(*) as c FROM workspaces WHERE plan='team'").fetchone()["c"]
+        ent     = db.execute("SELECT COUNT(*) as c FROM workspaces WHERE plan='enterprise'").fetchone()["c"]
+        ws = db.execute("""
+            SELECT w.*, (SELECT COUNT(*) FROM users u WHERE u.workspace_id=w.id) as member_count
+            FROM workspaces w ORDER BY w.name""").fetchall()
+        return jsonify({
+            "starter_count": starter, "team_count": team, "enterprise_count": ent,
+            "workspaces": [dict(r) for r in ws]
+        })
+
+# ── Audit Log ──────────────────────────────────────────────────────────────────
+@app.route("/api/admin/audit")
+@admin_required
+def admin_audit_log():
+    return jsonify(_admin_audit)
+
+# ── Reset Password ─────────────────────────────────────────────────────────────
+@app.route("/api/admin/user/reset-password", methods=["POST"])
+@admin_required
+def admin_reset_password():
+    d = request.json or {}
+    uid = d.get("user_id"); pw = d.get("password","")
+    if not uid or len(pw) < 8:
+        return jsonify({"error": "user_id and password (≥8 chars) required"}), 400
+    with get_db() as db:
+        u = db.execute("SELECT name,email FROM users WHERE id=?", (uid,)).fetchone()
+        if not u: return jsonify({"error": "User not found"}), 404
+        db.execute("UPDATE users SET password=? WHERE id=?", (hash_pw(pw), uid))
+    _audit(request.admin_email, "reset_password", u["email"], f"Password reset for {u['name']}")
+    return jsonify({"ok": True})
+
+# ── Reset TOTP ─────────────────────────────────────────────────────────────────
+@app.route("/api/admin/user/reset-totp", methods=["POST"])
+@admin_required
+def admin_reset_totp():
+    d = request.json or {}
+    uid = d.get("user_id")
+    if not uid: return jsonify({"error": "user_id required"}), 400
+    with get_db() as db:
+        u = db.execute("SELECT name,email FROM users WHERE id=?", (uid,)).fetchone()
+        if not u: return jsonify({"error": "User not found"}), 404
+        db.execute("UPDATE users SET totp_secret='',totp_verified=0,two_fa_enabled=0 WHERE id=?", (uid,))
+    _audit(request.admin_email, "reset_totp", u["email"], f"2FA reset for {u['name']}")
+    return jsonify({"ok": True})
+
+# ── Change Role ────────────────────────────────────────────────────────────────
+@app.route("/api/admin/user/change-role", methods=["POST"])
+@admin_required
+def admin_change_role():
+    d = request.json or {}
+    uid = d.get("user_id"); role = d.get("role","")
+    valid_roles = ("Admin","Manager","TeamLead","Developer","Tester","Viewer")
+    if not uid or role not in valid_roles:
+        return jsonify({"error": f"user_id and valid role required ({', '.join(valid_roles)})"}), 400
+    with get_db() as db:
+        u = db.execute("SELECT name,email FROM users WHERE id=?", (uid,)).fetchone()
+        if not u: return jsonify({"error": "User not found"}), 404
+        db.execute("UPDATE users SET role=? WHERE id=?", (role, uid))
+    _audit(request.admin_email, "change_role", u["email"], f"Role → {role} for {u['name']}")
+    return jsonify({"ok": True})
+
+# ── Remove User ────────────────────────────────────────────────────────────────
+@app.route("/api/admin/user/remove", methods=["POST"])
+@admin_required
+def admin_remove_user():
+    d = request.json or {}
+    uid = d.get("user_id"); wsid = d.get("workspace_id","")
+    if not uid: return jsonify({"error": "user_id required"}), 400
+    with get_db() as db:
+        u = db.execute("SELECT name,email FROM users WHERE id=?", (uid,)).fetchone()
+        if not u: return jsonify({"error": "User not found"}), 404
+        db.execute("DELETE FROM users WHERE id=? AND workspace_id=?", (uid, wsid))
+    _audit(request.admin_email, "remove_user", u["email"], f"Removed {u['name']} from workspace {wsid}")
+    return jsonify({"ok": True})
+
+# ── Set Plan ───────────────────────────────────────────────────────────────────
+@app.route("/api/admin/workspace/set-plan", methods=["POST"])
+@admin_required
+def admin_set_plan():
+    d = request.json or {}
+    wsid = d.get("workspace_id"); plan = d.get("plan","starter")
+    if not wsid or plan not in ("starter","team","enterprise"):
+        return jsonify({"error": "workspace_id and valid plan required"}), 400
+    with get_db() as db:
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?", (wsid,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        db.execute("UPDATE workspaces SET plan=? WHERE id=?", (plan, wsid))
+    _audit(request.admin_email, "set_plan", wsid, f"Plan → {plan} for '{ws['name']}'")
+    return jsonify({"ok": True})
+
+# ── Toggle 2FA Workspace Requirement ──────────────────────────────────────────
+@app.route("/api/admin/workspace/toggle-2fa", methods=["POST"])
+@admin_required
+def admin_toggle_2fa():
+    d = request.json or {}
+    wsid = d.get("workspace_id"); enabled = bool(d.get("enabled", False))
+    if not wsid: return jsonify({"error": "workspace_id required"}), 400
+    with get_db() as db:
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?", (wsid,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        db.execute("UPDATE workspaces SET otp_enabled=? WHERE id=?", (1 if enabled else 0, wsid))
+    _audit(request.admin_email, "toggle_2fa", wsid, f"2FA req {'enabled' if enabled else 'disabled'} for '{ws['name']}'")
+    return jsonify({"ok": True})
+
+# ── Reset Invite Code ──────────────────────────────────────────────────────────
+@app.route("/api/admin/workspace/reset-invite", methods=["POST"])
+@admin_required
+def admin_reset_invite():
+    d = request.json or {}
+    wsid = d.get("workspace_id")
+    if not wsid: return jsonify({"error": "workspace_id required"}), 400
+    new_code = secrets.token_hex(4).upper()
+    with get_db() as db:
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?", (wsid,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        db.execute("UPDATE workspaces SET invite_code=? WHERE id=?", (new_code, wsid))
+    _audit(request.admin_email, "reset_invite", wsid, f"Invite code reset for '{ws['name']}'")
+    return jsonify({"ok": True, "invite_code": new_code})
+
+# ── Bulk Reset Passwords ───────────────────────────────────────────────────────
+@app.route("/api/admin/workspace/reset-all-passwords", methods=["POST"])
+@admin_required
+def admin_reset_all_passwords():
+    d = request.json or {}
+    wsid = d.get("workspace_id"); pw = d.get("password","")
+    if not wsid or len(pw) < 8:
+        return jsonify({"error": "workspace_id and password (≥8 chars) required"}), 400
+    hashed = hash_pw(pw)
+    with get_db() as db:
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?", (wsid,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        db.execute("UPDATE users SET password=? WHERE workspace_id=?", (hashed, wsid))
+        count = db.execute("SELECT COUNT(*) as c FROM users WHERE workspace_id=?", (wsid,)).fetchone()["c"]
+    _audit(request.admin_email, "bulk_reset_passwords", wsid, f"Bulk PW reset for {count} users in '{ws['name']}'")
+    return jsonify({"ok": True, "count": count})
+
+# ── Bulk Reset TOTP ────────────────────────────────────────────────────────────
+@app.route("/api/admin/workspace/reset-all-totp", methods=["POST"])
+@admin_required
+def admin_reset_all_totp():
+    d = request.json or {}
+    wsid = d.get("workspace_id")
+    if not wsid: return jsonify({"error": "workspace_id required"}), 400
+    with get_db() as db:
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?", (wsid,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        db.execute("UPDATE users SET totp_secret='',totp_verified=0,two_fa_enabled=0 WHERE workspace_id=?", (wsid,))
+        count = db.execute("SELECT COUNT(*) as c FROM users WHERE workspace_id=?", (wsid,)).fetchone()["c"]
+    _audit(request.admin_email, "bulk_reset_totp", wsid, f"Bulk 2FA reset for {count} users in '{ws['name']}'")
+    return jsonify({"ok": True, "count": count})
+
+# ── Suspend Workspace ──────────────────────────────────────────────────────────
+@app.route("/api/admin/workspace/suspend", methods=["POST"])
+@admin_required
+def admin_suspend_workspace():
+    d = request.json or {}
+    wsid = d.get("workspace_id")
+    if not wsid: return jsonify({"error": "workspace_id required"}), 400
+    with get_db() as db:
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?", (wsid,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        db.execute("UPDATE workspaces SET suspended=1 WHERE id=?", (wsid,))
+    _audit(request.admin_email, "suspend_workspace", wsid, f"Suspended workspace '{ws['name']}'")
+    return jsonify({"ok": True})
+
+# ── Add User to Workspace ──────────────────────────────────────────────────────
+@app.route("/api/admin/workspace/add-user", methods=["POST"])
+@admin_required
+def admin_add_user():
+    d = request.json or {}
+    wsid = d.get("workspace_id"); name = d.get("name","").strip()
+    email = d.get("email","").strip().lower()
+    pw = d.get("password",""); role = d.get("role","Developer")
+    if not all([wsid, name, email, len(pw)>=8]):
+        return jsonify({"error": "workspace_id, name, email, and password (≥8 chars) required"}), 400
+    uid = f"u{int(datetime.now().timestamp()*1000)}"
+    av = "".join(w[0] for w in name.split())[:2].upper()
+    c = random.choice(CLRS)
+    with get_db() as db:
+        ws = db.execute("SELECT name FROM workspaces WHERE id=?", (wsid,)).fetchone()
+        if not ws: return jsonify({"error": "Workspace not found"}), 404
+        try:
+            db.execute("INSERT INTO users(id,workspace_id,name,email,password,role,avatar,color,created,two_fa_enabled) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                       (uid,wsid,name,email,hash_pw(pw),role,av,c,ts(),0))
+        except Exception as e:
+            if "UNIQUE" in str(e) or "unique" in str(e).lower():
+                return jsonify({"error": "Email already registered"}), 400
+            return jsonify({"error": str(e)}), 500
+    _audit(request.admin_email, "add_user", email, f"Added {name} ({role}) to '{ws['name']}'")
+    return jsonify({"ok": True, "user_id": uid})
+
+# ── Admin Panel HTML Routes ────────────────────────────────────────────────────
+try:
+    _ADMIN_HTML = open(os.path.join(BASE_DIR, 'adminpanel.html'), 'r', encoding='utf-8').read()
+except FileNotFoundError:
+    _ADMIN_HTML = '<h1>Admin panel HTML not found. Place adminpanel.html in the same directory as app.py</h1>'
+
+@app.route("/adminpanel")
+@app.route("/adminpanel/")
+def admin_panel_root():
+    """VEWIT super-admin panel."""
+    return _ADMIN_HTML
+
+@app.route("/adminpanel/<company_slug>")
+def admin_panel_company(company_slug):
+    """Admin panel pre-filtered to a specific company slug."""
+    # The JS reads ?company= from URL — inject a redirect script
+    html = _ADMIN_HTML.replace(
+        '</body>',
+        f'''<script>
+        // Auto-navigate to workspace matching slug "{company_slug}"
+        window._ADMIN_COMPANY_SLUG = "{company_slug}";
+        document.addEventListener("DOMContentLoaded", function() {{
+          var orig = showPage;
+          // After login, auto-search for the company workspace
+          var _origShowApp = showApp;
+          showApp = function() {{
+            _origShowApp();
+            setTimeout(async function() {{
+              try {{
+                var data = await api("GET", "/workspaces");
+                var slug = "{company_slug}".toLowerCase();
+                var match = data.find(function(w) {{
+                  return w.name.toLowerCase().replace(/[^a-z0-9]+/g,"-") === slug ||
+                         w.id.toLowerCase() === slug;
+                }});
+                if (match) viewWorkspace(match.id, match.name);
+                else showPage("workspaces");
+              }} catch(e) {{ showPage("workspaces"); }}
+            }}, 300);
+          }};
+        }});
+        </script></body>'''
+    )
+    return html
 
 # ── Main Application Routes ────────────────────────────────────────────────────
 @app.route("/")
