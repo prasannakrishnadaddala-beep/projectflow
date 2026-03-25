@@ -3446,8 +3446,8 @@ def _load_template(filename, fallback=''):
         print(f"  ⚠ Template not found: {filename}")
         return fallback
 
-HTML                   = _load_template('template.html')
-LANDING_HTML           = _load_template('landing.html')
+HTML                    = _load_template('template.html')
+LANDING_HTML            = _load_template('landing.html')
 PASSWORD_GENERATOR_HTML = _load_template('password-generator.html')
 
 
