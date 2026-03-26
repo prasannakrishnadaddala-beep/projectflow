@@ -229,26 +229,41 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
 let ADMIN_TOKEN = sessionStorage.getItem('vewit_admin_token') || '';
+let ADMIN_EMAIL = sessionStorage.getItem('vewit_admin_email') || '';
 let currentPage = 'dashboard';
 let modalCb = null;
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
-(function(){
+(async function(){
+  if (ADMIN_EMAIL) document.getElementById('admin-email-display').textContent = ADMIN_EMAIL;
   if (ADMIN_TOKEN) {
-    showApp();
-    showPage('dashboard');
+    try {
+      const res = await fetch('/api/admin/session', { credentials:'include', headers: { 'X-Admin-Token': ADMIN_TOKEN } });
+      if (res.ok) {
+        const data = await res.json().catch(()=>({}));
+        ADMIN_EMAIL = data.email || ADMIN_EMAIL;
+        if (ADMIN_EMAIL) sessionStorage.setItem('vewit_admin_email', ADMIN_EMAIL);
+        document.getElementById('admin-email-display').textContent = ADMIN_EMAIL;
+        showApp();
+        showPage('dashboard');
+        return;
+      }
+    } catch(e) {}
   }
+  doLogout(false);
 })();
 
 // ── API ────────────────────────────────────────────────────────────────────────
 async function api(method, path, body) {
   const opts = {
     method,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', 'X-Admin-Token': ADMIN_TOKEN },
   };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch('/api/admin' + path, opts);
   const data = await r.json().catch(() => ({}));
+  if (r.status === 401) { doLogout(true); throw new Error('Session expired. Please sign in again.'); }
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
   return data;
 }
@@ -262,14 +277,17 @@ async function doLogin() {
   try {
     const res = await fetch('/api/admin/login', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass })
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Login failed'; errEl.style.display='block'; return; }
     ADMIN_TOKEN = data.token;
+    ADMIN_EMAIL = data.email || email;
     sessionStorage.setItem('vewit_admin_token', ADMIN_TOKEN);
-    document.getElementById('admin-email-display').textContent = email;
+    sessionStorage.setItem('vewit_admin_email', ADMIN_EMAIL);
+    document.getElementById('admin-email-display').textContent = ADMIN_EMAIL;
     showApp();
     showPage('dashboard');
   } catch(e) {
@@ -277,11 +295,23 @@ async function doLogin() {
   }
 }
 
-function doLogout() {
+async function doLogout(withNotice=false) {
+  try {
+    if (ADMIN_TOKEN) await fetch('/api/admin/logout', { method:'POST', credentials:'include', headers:{ 'X-Admin-Token': ADMIN_TOKEN } });
+  } catch(e) {}
   ADMIN_TOKEN = '';
+  ADMIN_EMAIL = '';
   sessionStorage.removeItem('vewit_admin_token');
+  sessionStorage.removeItem('vewit_admin_email');
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('admin-email-display').textContent = '';
+  if (withNotice) {
+    const errEl = document.getElementById('login-err');
+    errEl.textContent = 'Session expired. Please sign in again.';
+    errEl.style.display = 'block';
+  }
 }
 
 function showApp() {
