@@ -3,185 +3,239 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>VEWIT Admin Panel</title>
+<title>VEWIT Super Admin</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#060a0f;--bg2:#0d1117;--bg3:#111820;--bg4:#161d27;
-  --b1:rgba(255,255,255,.07);--b2:rgba(255,255,255,.13);
-  --tx:#f0f4f8;--tx2:#8b9ab0;--tx3:#556070;
-  --blue:#5a8cff;--green:#30d158;--red:#ff453a;--orange:#ff9f0a;
-  --purple:#a855f7;--cyan:#00d2ff;
-  --r:12px;--rs:8px;
-  --font:'Inter',system-ui,sans-serif;
+  --bg:#05080d;--bg2:#090e15;--bg3:#0d1420;--bg4:#111b28;
+  --b1:rgba(255,255,255,.06);--b2:rgba(255,255,255,.11);--b3:rgba(255,255,255,.18);
+  --tx:#eef2f7;--tx2:#8899b0;--tx3:#4a5a70;
+  --blue:#5a8cff;--blue2:#3d6de0;--green:#30d158;--red:#ff453a;
+  --orange:#ff9f0a;--purple:#a855f7;--cyan:#00d2ff;--pink:#ec4899;
+  --r:12px;--rs:8px;--font:'Inter',system-ui,sans-serif;
 }
-body{font-family:var(--font);background:var(--bg);color:var(--tx);min-height:100vh;display:flex;flex-direction:column}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);min-height:100vh;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--blue) 25%,var(--purple) 50%,var(--pink) 75%,transparent);z-index:9999}
 
-/* ── TOP BAR ── */
-.topbar{background:var(--bg2);border-bottom:1px solid var(--b1);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.topbar-logo{font-size:18px;font-weight:800;letter-spacing:-.6px;background:linear-gradient(135deg,#5a8cff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:flex;align-items:center;gap:10px}
-.topbar-logo span{font-size:11px;font-weight:600;color:var(--tx3);-webkit-text-fill-color:var(--tx3);letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--b2);padding:2px 8px;border-radius:20px}
-.topbar-right{display:flex;align-items:center;gap:16px}
-.admin-badge{font-size:11px;font-weight:700;color:var(--orange);background:rgba(255,159,10,.1);border:1px solid rgba(255,159,10,.25);padding:3px 10px;border-radius:20px;letter-spacing:.04em;text-transform:uppercase}
-.btn-logout{background:none;border:1px solid var(--b2);color:var(--tx2);font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .2s}
-.btn-logout:hover{border-color:var(--red);color:var(--red)}
+/* LOGIN */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 60% 20%,rgba(90,140,255,.08) 0%,transparent 60%)}
+.login-box{background:var(--bg2);border:1px solid var(--b2);border-radius:20px;padding:44px;width:420px;max-width:calc(100vw - 32px);box-shadow:0 32px 64px rgba(0,0,0,.5)}
+.login-logo{font-size:26px;font-weight:800;letter-spacing:-1px;background:linear-gradient(135deg,#5a8cff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:6px}
+.login-box h1{font-size:20px;font-weight:700;margin-bottom:4px}
+.login-sub{color:var(--tx3);font-size:13px;margin-bottom:30px;padding-bottom:24px;border-bottom:1px solid var(--b1)}
+.fg{margin-bottom:18px}
+.fg label{display:block;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
+.fg input{width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:11px 14px;font-size:14px;color:var(--tx);font-family:var(--font);outline:none;transition:all .2s}
+.fg input:focus{border-color:var(--blue);background:var(--bg4)}
+.btn-login{width:100%;background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;border:none;padding:12px;border-radius:var(--rs);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:opacity .2s;margin-top:4px}
+.btn-login:hover{opacity:.88}.btn-login:disabled{opacity:.5;cursor:not-allowed}
+.login-err{color:var(--red);font-size:13px;margin-top:14px;text-align:center;display:none;background:rgba(255,69,58,.08);border:1px solid rgba(255,69,58,.2);border-radius:8px;padding:10px}
 
-/* ── LAYOUT ── */
-.layout{display:flex;flex:1;min-height:0}
-.sidebar{width:220px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--b1);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
-.nav-section{font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;padding:12px 8px 6px}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--rs);cursor:pointer;font-size:13.5px;color:var(--tx2);transition:all .15s;border:none;background:none;width:100%;text-align:left;font-family:var(--font)}
+/* SHELL */
+#app-shell{display:none;flex-direction:column;min-height:100vh}
+
+/* TOPBAR */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--b1);padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.tl{display:flex;align-items:center;gap:12px}
+.tl-logo{font-size:17px;font-weight:800;letter-spacing:-.6px;background:linear-gradient(135deg,#5a8cff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tl-div{width:1px;height:20px;background:var(--b2)}
+.tl-sub{font-size:12px;color:var(--tx3);font-weight:500}
+.tr{display:flex;align-items:center;gap:10px}
+.badge-super{font-size:10px;font-weight:800;color:var(--orange);background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.25);padding:3px 10px;border-radius:20px;letter-spacing:.06em;text-transform:uppercase}
+.tr-email{font-size:12px;color:var(--tx3)}
+.btn-out{background:none;border:1px solid var(--b2);color:var(--tx3);font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .2s}
+.btn-out:hover{border-color:var(--red);color:var(--red)}
+
+/* LAYOUT */
+.shell-body{display:flex;flex:1;overflow:hidden}
+.sidebar{width:210px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--b1);padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.nav-sec{font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.09em;padding:14px 10px 6px}
+.nav-sec:first-child{padding-top:6px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:var(--rs);cursor:pointer;font-size:13px;color:var(--tx2);transition:all .15s;border:none;background:none;width:100%;text-align:left;font-family:var(--font)}
 .nav-item:hover{background:var(--bg3);color:var(--tx)}
-.nav-item.active{background:rgba(90,140,255,.12);color:var(--blue);font-weight:600}
-.nav-item .ni{font-size:15px;width:18px;text-align:center}
-.main{flex:1;overflow-y:auto;padding:28px 32px}
+.nav-item.active{background:rgba(90,140,255,.13);color:var(--blue);font-weight:600}
+.ni{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.main{flex:1;overflow-y:auto;padding:28px 30px;background:var(--bg)}
 
-/* ── LOGIN SCREEN ── */
-#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
-.login-box{background:var(--bg2);border:1px solid var(--b1);border-radius:16px;padding:40px;width:400px;max-width:calc(100vw - 32px)}
-.login-box h1{font-size:22px;font-weight:800;margin-bottom:4px;letter-spacing:-.5px}
-.login-box p{color:var(--tx3);font-size:13px;margin-bottom:28px}
-.form-row{margin-bottom:16px}
-.form-row label{display:block;font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
-.form-row input{width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:10px 14px;font-size:14px;color:var(--tx);font-family:var(--font);outline:none;transition:border-color .2s}
-.form-row input:focus{border-color:var(--blue)}
-.btn-primary{width:100%;background:var(--blue);color:#fff;border:none;padding:11px;border-radius:var(--rs);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:opacity .2s;margin-top:8px}
-.btn-primary:hover{opacity:.85}
-.login-error{color:var(--red);font-size:13px;margin-top:12px;text-align:center;display:none}
+/* PAGE HEADER */
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:26px;gap:16px}
+.ph-title{font-size:21px;font-weight:800;letter-spacing:-.5px}
+.ph-sub{font-size:13px;color:var(--tx3);margin-top:3px}
+.ph-actions{display:flex;gap:8px;flex-shrink:0}
 
-/* ── CARDS / STATS ── */
-.stats-g{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
-.stat-card{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);padding:20px 22px}
-.stat-card .sc-label{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
-.stat-card .sc-val{font-size:30px;font-weight:800;letter-spacing:-1.5px;color:var(--tx)}
-.stat-card .sc-sub{font-size:12px;color:var(--tx3);margin-top:4px}
+/* STATS */
+.sg{display:grid;gap:14px;margin-bottom:24px}
+.sg4{grid-template-columns:repeat(4,1fr)}.sg3{grid-template-columns:repeat(3,1fr)}.sg2{grid-template-columns:repeat(2,1fr)}
+.sc{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);padding:20px 22px;position:relative;overflow:hidden;transition:border-color .2s;cursor:default}
+.sc:hover{border-color:var(--b2)}
+.sc .acc{position:absolute;top:0;left:0;right:0;height:2px}
+.sc .si{font-size:22px;margin-bottom:10px}
+.sc .sl{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.sc .sv{font-size:28px;font-weight:800;letter-spacing:-1.2px;color:var(--tx);line-height:1}
+.sc .ss{font-size:11.5px;color:var(--tx3);margin-top:5px}
+.pb{height:4px;background:var(--b1);border-radius:4px;overflow:hidden;margin-top:8px}
+.pf{height:100%;border-radius:4px;transition:width .5s ease}
 
-/* ── PAGE HEADER ── */
-.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
-.page-title{font-size:20px;font-weight:800;letter-spacing:-.5px}
-.page-subtitle{font-size:13px;color:var(--tx3);margin-top:2px}
-
-/* ── TABLE ── */
-.table-wrap{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);overflow:hidden}
-.table-toolbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--b1)}
-.search-input{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:8px 14px;font-size:13px;color:var(--tx);font-family:var(--font);outline:none;width:260px;transition:border-color .2s}
-.search-input:focus{border-color:var(--blue)}
+/* TABLE */
+.tw{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);overflow:hidden;margin-bottom:20px}
+.tt{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--b1);gap:10px;flex-wrap:wrap}
+.tt-title{font-size:13.5px;font-weight:700;color:var(--tx)}
+.tc{font-size:11px;color:var(--tx3);margin-left:6px}
+.sw{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.si-input{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:7px 12px;font-size:13px;color:var(--tx);font-family:var(--font);outline:none;width:210px;transition:all .2s}
+.si-input:focus{border-color:var(--blue);width:250px}
+.tbl-select{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:7px 12px;font-size:12px;color:var(--tx2);font-family:var(--font);cursor:pointer;outline:none}
 table{width:100%;border-collapse:collapse}
 thead tr{border-bottom:1px solid var(--b1)}
-th{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;padding:11px 16px;text-align:left}
-td{padding:13px 16px;font-size:13.5px;color:var(--tx2);border-bottom:1px solid rgba(255,255,255,.03)}
+th{font-size:10.5px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.07em;padding:10px 14px;text-align:left;white-space:nowrap}
+td{padding:12px 14px;font-size:13px;color:var(--tx2);border-bottom:1px solid rgba(255,255,255,.025)}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:rgba(255,255,255,.02)}
-.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.03em}
-.badge-green{background:rgba(48,209,88,.12);color:var(--green);border:1px solid rgba(48,209,88,.2)}
-.badge-blue{background:rgba(90,140,255,.12);color:var(--blue);border:1px solid rgba(90,140,255,.2)}
-.badge-orange{background:rgba(255,159,10,.12);color:var(--orange);border:1px solid rgba(255,159,10,.2)}
-.badge-red{background:rgba(255,69,58,.12);color:var(--red);border:1px solid rgba(255,69,58,.2)}
-.badge-purple{background:rgba(168,85,247,.12);color:var(--purple);border:1px solid rgba(168,85,247,.2)}
-.badge-gray{background:rgba(255,255,255,.06);color:var(--tx3);border:1px solid var(--b1)}
-.action-btn{background:none;border:1px solid var(--b1);color:var(--tx2);font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .2s;margin-right:4px}
-.action-btn:hover{border-color:var(--blue);color:var(--blue)}
-.action-btn.danger:hover{border-color:var(--red);color:var(--red)}
-.action-btn.success:hover{border-color:var(--green);color:var(--green)}
+tr:hover td{background:rgba(255,255,255,.018)}
+.tdm{color:var(--tx);font-weight:600;font-size:13px}
+.tds{font-size:11px;color:var(--tx3);margin-top:2px}
 
-/* ── MODAL ── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center}
-.modal-overlay.open{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--b2);border-radius:16px;padding:28px;width:480px;max-width:calc(100vw - 32px);max-height:80vh;overflow-y:auto}
-.modal h2{font-size:17px;font-weight:800;margin-bottom:4px;letter-spacing:-.4px}
-.modal p{font-size:13px;color:var(--tx3);margin-bottom:20px}
-.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end}
-.btn-cancel{background:none;border:1px solid var(--b2);color:var(--tx2);font-size:13px;padding:8px 18px;border-radius:var(--rs);cursor:pointer;font-family:var(--font);transition:all .2s}
-.btn-cancel:hover{border-color:var(--b2);color:var(--tx)}
-.btn-confirm{background:var(--blue);color:#fff;border:none;font-size:13px;font-weight:700;padding:8px 18px;border-radius:var(--rs);cursor:pointer;font-family:var(--font);transition:opacity .2s}
-.btn-confirm:hover{opacity:.85}
-.btn-danger{background:var(--red)!important}
+/* BADGES */
+.badge{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.03em;white-space:nowrap}
+.bg-green{background:rgba(48,209,88,.12);color:var(--green);border:1px solid rgba(48,209,88,.2)}
+.bg-blue{background:rgba(90,140,255,.12);color:var(--blue);border:1px solid rgba(90,140,255,.2)}
+.bg-orange{background:rgba(255,159,10,.12);color:var(--orange);border:1px solid rgba(255,159,10,.2)}
+.bg-red{background:rgba(255,69,58,.12);color:var(--red);border:1px solid rgba(255,69,58,.2)}
+.bg-purple{background:rgba(168,85,247,.12);color:var(--purple);border:1px solid rgba(168,85,247,.2)}
+.bg-cyan{background:rgba(0,210,255,.12);color:var(--cyan);border:1px solid rgba(0,210,255,.2)}
+.bg-gray{background:rgba(255,255,255,.06);color:var(--tx3);border:1px solid var(--b1)}
+.bg-pink{background:rgba(236,72,153,.12);color:var(--pink);border:1px solid rgba(236,72,153,.2)}
 
-/* ── WORKSPACE DETAIL ── */
-.ws-header{display:flex;align-items:center;gap:14px;margin-bottom:24px}
-.ws-avatar{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;flex-shrink:0}
-.ws-info h2{font-size:19px;font-weight:800;letter-spacing:-.4px}
-.ws-info p{font-size:13px;color:var(--tx3);margin-top:2px}
-.back-btn{background:none;border:1px solid var(--b1);color:var(--tx2);font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .2s;display:inline-flex;align-items:center;gap:6px;margin-bottom:20px}
+/* BTNS */
+.ab{background:none;border:1px solid var(--b1);color:var(--tx3);font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;font-family:var(--font);transition:all .18s;margin-right:3px;white-space:nowrap}
+.ab:hover{border-color:var(--blue);color:var(--blue);background:rgba(90,140,255,.07)}
+.ab.dng:hover{border-color:var(--red);color:var(--red);background:rgba(255,69,58,.07)}
+.ab.suc:hover{border-color:var(--green);color:var(--green);background:rgba(48,209,88,.07)}
+.ab.wrn:hover{border-color:var(--orange);color:var(--orange);background:rgba(255,159,10,.07)}
+.bsm{font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid var(--b2);background:none;color:var(--tx2);cursor:pointer;font-family:var(--font);transition:all .2s}
+.bsm:hover{background:var(--bg3);color:var(--tx)}
+.bpri{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;border:none;padding:8px 18px;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);transition:opacity .2s}
+.bpri:hover{opacity:.85}
+
+/* MODAL */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.mo.open{display:flex}
+.mc{background:var(--bg2);border:1px solid var(--b2);border-radius:18px;padding:28px;width:500px;max-width:calc(100vw - 28px);max-height:85vh;overflow-y:auto;box-shadow:0 32px 64px rgba(0,0,0,.6)}
+.mh{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
+.mc h2{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.mclose{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
+.mclose:hover{color:var(--tx)}
+.mdesc{font-size:13px;color:var(--tx3);margin-bottom:20px;line-height:1.6}
+.mact{display:flex;gap:10px;margin-top:22px;justify-content:flex-end}
+.bcan{background:none;border:1px solid var(--b2);color:var(--tx2);font-size:13px;padding:8px 18px;border-radius:var(--rs);cursor:pointer;font-family:var(--font);transition:all .2s}
+.bcan:hover{color:var(--tx);border-color:var(--b3)}
+.bcon{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#fff;border:none;font-size:13px;font-weight:700;padding:8px 20px;border-radius:var(--rs);cursor:pointer;font-family:var(--font);transition:opacity .2s}
+.bcon:hover{opacity:.85}
+.bcon.bdng{background:linear-gradient(135deg,#ff453a,#cc2222)}
+.bcon.bwrn{background:linear-gradient(135deg,#ff9f0a,#cc7a00)}
+.mfg{margin-bottom:16px}
+.mfg label{display:block;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px}
+.mfg input,.mfg select{width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:10px 13px;font-size:13.5px;color:var(--tx);font-family:var(--font);outline:none;transition:all .2s}
+.mfg input:focus,.mfg select:focus{border-color:var(--blue);background:var(--bg4)}
+.mfg select{cursor:pointer}
+.mhint{font-size:11.5px;color:var(--tx3);margin-top:5px}
+
+/* SECTION CARD */
+.scard{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);margin-bottom:18px}
+.scard-h{padding:14px 18px;border-bottom:1px solid var(--b1);font-size:13.5px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.scard-b{padding:18px}
+.ir{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.025);font-size:13px;gap:10px}
+.ir:last-child{border-bottom:none}
+.il{color:var(--tx3);font-size:12px;flex-shrink:0}
+.iv{color:var(--tx);font-weight:500;text-align:right;font-size:13px}
+
+/* WS HERO */
+.ws-hero{background:linear-gradient(135deg,rgba(90,140,255,.1),rgba(168,85,247,.08));border:1px solid rgba(90,140,255,.18);border-radius:var(--r);padding:20px 22px;margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.ws-av{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;flex-shrink:0}
+.ws-info h2{font-size:18px;font-weight:800;letter-spacing:-.4px;margin-bottom:5px}
+.ws-info p{font-size:12.5px;color:var(--tx3)}
+.ws-acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.back-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid var(--b1);color:var(--tx3);font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .2s;margin-bottom:18px}
 .back-btn:hover{border-color:var(--b2);color:var(--tx)}
-.section-card{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);margin-bottom:20px}
-.section-card-header{padding:16px 20px;border-bottom:1px solid var(--b1);font-size:14px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;justify-content:space-between}
-.section-card-body{padding:20px}
-.info-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:13.5px}
-.info-row:last-child{border-bottom:none}
-.info-label{color:var(--tx3);font-size:12.5px}
-.info-val{color:var(--tx);font-weight:500}
 
-/* ── TOAST ── */
-.toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--b2);border-radius:10px;padding:12px 20px;font-size:13.5px;color:var(--tx);z-index:999;transform:translateY(80px);opacity:0;transition:all .3s;max-width:340px}
+/* TOAST */
+.toast{position:fixed;bottom:22px;right:22px;background:var(--bg3);border:1px solid var(--b2);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--tx);z-index:9000;transform:translateY(80px);opacity:0;transition:all .3s;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
 .toast.show{transform:translateY(0);opacity:1}
-.toast.toast-ok{border-color:rgba(48,209,88,.3);color:var(--green)}
-.toast.toast-err{border-color:rgba(255,69,58,.3);color:var(--red)}
+.toast.tok{border-color:rgba(48,209,88,.3);color:var(--green)}
+.toast.terr{border-color:rgba(255,69,58,.3);color:var(--red)}
+.toast.twrn{border-color:rgba(255,159,10,.3);color:var(--orange)}
 
-/* ── EMPTY STATE ── */
+/* EMPTY/LOADING */
 .empty{text-align:center;padding:60px 20px;color:var(--tx3)}
-.empty .ei{font-size:40px;margin-bottom:12px}
-.empty p{font-size:14px}
+.empty .ei{font-size:36px;margin-bottom:12px}
+.empty p{font-size:14px;line-height:1.6}
+.loading{text-align:center;padding:48px;color:var(--tx3);font-size:13px}
+.loading::after{content:'';display:inline-block;width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin-left:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── LOADING ── */
-.loading{text-align:center;padding:40px;color:var(--tx3);font-size:13px}
+/* HEALTH */
+.hdot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
+.hdot.g{background:var(--green);box-shadow:0 0 6px var(--green)}
+.hdot.r{background:var(--red);box-shadow:0 0 6px var(--red)}
+.hdot.o{background:var(--orange);box-shadow:0 0 6px var(--orange)}
 
-/* ── TOGGLE ── */
-.toggle-wrap{display:flex;align-items:center;gap:10px}
-.toggle{position:relative;width:36px;height:20px;cursor:pointer}
-.toggle input{opacity:0;width:0;height:0}
-.toggle-slider{position:absolute;inset:0;background:var(--b2);border-radius:20px;transition:.3s}
-.toggle input:checked + .toggle-slider{background:var(--blue)}
-.toggle-slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.3s}
-.toggle input:checked + .toggle-slider::before{transform:translateX(16px)}
+/* AUDIT BADGE COLORS */
+.ab-login{background:rgba(48,209,88,.1);color:var(--green);border:1px solid rgba(48,209,88,.2)}
+.ab-logout{background:rgba(255,255,255,.06);color:var(--tx3);border:1px solid var(--b1)}
+.ab-delete,.ab-suspend{background:rgba(255,69,58,.1);color:var(--red);border:1px solid rgba(255,69,58,.2)}
+.ab-reset{background:rgba(255,159,10,.1);color:var(--orange);border:1px solid rgba(255,159,10,.2)}
+.ab-plan{background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.2)}
+.ab-add{background:rgba(90,140,255,.1);color:var(--blue);border:1px solid rgba(90,140,255,.2)}
+.ab-2fa{background:rgba(0,210,255,.1);color:var(--cyan);border:1px solid rgba(0,210,255,.2)}
 
-/* ── RESPONSIVE ── */
-@media(max-width:768px){
-  .sidebar{display:none}
-  .stats-g{grid-template-columns:repeat(2,1fr)}
-  .main{padding:16px}
+/* CHIP AVATAR */
+.chip{display:inline-flex;align-items:center;justify-content:center;border-radius:7px;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+
+@media(max-width:900px){
+  .sidebar{display:none}.sg4{grid-template-columns:repeat(2,1fr)}
+  .sg3{grid-template-columns:repeat(2,1fr)}.main{padding:16px}
 }
 </style>
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
+<!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
-    <div style="font-size:22px;font-weight:800;background:linear-gradient(135deg,#5a8cff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px">VEWIT</div>
-    <h1>Admin Panel</h1>
-    <p>Super-admin access only. All actions are logged.</p>
-    <div class="form-row">
+    <div class="login-logo">VEWIT</div>
+    <h1>Super Admin Panel</h1>
+    <p class="login-sub">Restricted access — all actions are logged and monitored.</p>
+    <div class="fg">
       <label>Admin Email</label>
-      <input type="email" id="login-email" placeholder="admin@vewit.in" autocomplete="username"/>
+      <input type="email" id="l-email" placeholder="admin@vewit.in" autocomplete="username"/>
     </div>
-    <div class="form-row">
-      <label>Admin Password</label>
-      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+    <div class="fg">
+      <label>Password</label>
+      <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()"/>
     </div>
-    <button class="btn-primary" onclick="doLogin()">Sign In to Admin Panel</button>
-    <div class="login-error" id="login-err">Invalid credentials</div>
+    <button class="btn-login" id="l-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-err" id="l-err"></div>
   </div>
 </div>
 
-<!-- MAIN APP (hidden until logged in) -->
-<div id="app-shell" style="display:none;flex-direction:column;min-height:100vh">
-  <!-- TOP BAR -->
+<!-- APP -->
+<div id="app-shell">
   <div class="topbar">
-    <div class="topbar-logo">
-      VEWIT
-      <span>Admin</span>
+    <div class="tl">
+      <div class="tl-logo">VEWIT</div>
+      <div class="tl-div"></div>
+      <div class="tl-sub">Super Admin Console</div>
     </div>
-    <div class="topbar-right">
-      <div class="admin-badge">Super Admin</div>
-      <div style="font-size:13px;color:var(--tx3)" id="admin-email-display"></div>
-      <button class="btn-logout" onclick="doLogout()">Sign Out</button>
+    <div class="tr">
+      <div class="badge-super">Super Admin</div>
+      <div class="tr-email" id="admin-email-display"></div>
+      <button class="btn-out" onclick="doLogout()">Sign Out</button>
     </div>
   </div>
-  <div class="layout">
-    <!-- SIDEBAR -->
+
+  <div class="shell-body">
     <div class="sidebar">
-      <div class="nav-section">Overview</div>
+      <div class="nav-sec">Overview</div>
       <button class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
         <span class="ni">📊</span> Dashboard
       </button>
@@ -191,792 +245,775 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <button class="nav-item" onclick="showPage('users')" id="nav-users">
         <span class="ni">👥</span> All Users
       </button>
-      <div class="nav-section">Management</div>
+      <div class="nav-sec">Management</div>
       <button class="nav-item" onclick="showPage('security')" id="nav-security">
         <span class="ni">🔐</span> Security & 2FA
       </button>
-      <button class="nav-item" onclick="showPage('pricing')" id="nav-pricing">
+      <button class="nav-item" onclick="showPage('billing')" id="nav-billing">
         <span class="ni">💳</span> Plans & Billing
       </button>
       <button class="nav-item" onclick="showPage('audit')" id="nav-audit">
         <span class="ni">📋</span> Audit Log
       </button>
+      <div class="nav-sec">System</div>
+      <button class="nav-item" onclick="showPage('health')" id="nav-health">
+        <span class="ni">⚙️</span> Platform Health
+      </button>
     </div>
 
-    <!-- MAIN CONTENT -->
     <div class="main" id="main-content">
-      <div class="loading">Loading…</div>
+      <div class="loading">Initialising</div>
     </div>
   </div>
 </div>
 
 <!-- MODAL -->
-<div class="modal-overlay" id="modal">
-  <div class="modal">
-    <h2 id="modal-title">Confirm</h2>
-    <p id="modal-body">Are you sure?</p>
-    <div id="modal-form"></div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-confirm" id="modal-confirm-btn" onclick="modalConfirm()">Confirm</button>
+<div class="mo" id="mo" onclick="if(event.target===this)closeModal()">
+  <div class="mc">
+    <div class="mh">
+      <h2 id="m-title">Confirm</h2>
+      <button class="mclose" onclick="closeModal()">✕</button>
+    </div>
+    <p class="mdesc" id="m-desc"></p>
+    <div id="m-form"></div>
+    <div class="mact">
+      <button class="bcan" onclick="closeModal()">Cancel</button>
+      <button class="bcon" id="m-btn" onclick="modalConfirm()">Confirm</button>
     </div>
   </div>
 </div>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script>
-// ── State ──────────────────────────────────────────────────────────────────────
-let ADMIN_TOKEN = sessionStorage.getItem('vewit_admin_token') || '';
-let ADMIN_EMAIL = sessionStorage.getItem('vewit_admin_email') || '';
-let currentPage = 'dashboard';
-let modalCb = null;
+'use strict';
+let TOK = sessionStorage.getItem('v_atk') || '';
+let EMAIL = sessionStorage.getItem('v_ae') || '';
+let curPage = 'dashboard';
+let mCb = null;
+let _ttimer = null;
 
-// ── Boot ───────────────────────────────────────────────────────────────────────
-(async function(){
-  if (ADMIN_EMAIL) document.getElementById('admin-email-display').textContent = ADMIN_EMAIL;
-  if (ADMIN_TOKEN) {
-    try {
-      const res = await fetch('/api/admin/session', { credentials:'include', headers: { 'X-Admin-Token': ADMIN_TOKEN } });
-      if (res.ok) {
-        const data = await res.json().catch(()=>({}));
-        ADMIN_EMAIL = data.email || ADMIN_EMAIL;
-        if (ADMIN_EMAIL) sessionStorage.setItem('vewit_admin_email', ADMIN_EMAIL);
-        document.getElementById('admin-email-display').textContent = ADMIN_EMAIL;
-        showApp();
-        showPage('dashboard');
-        return;
-      }
-    } catch(e) {}
-  }
-  doLogout(false);
+// ── Boot ─────────────────────────────────────────────────────────────────────
+(async function boot(){
+  if (EMAIL) _setEmail(EMAIL);
+  if (!TOK) { _showLogin(); return; }
+  try {
+    const r = await fetch('/api/admin/session', { headers:{'X-Admin-Token':TOK}, credentials:'include' });
+    if (!r.ok) throw new Error('invalid');
+    const d = await r.json().catch(()=>({}));
+    EMAIL = d.email || EMAIL;
+    sessionStorage.setItem('v_ae', EMAIL);
+    _setEmail(EMAIL);
+    _showApp();
+    showPage('dashboard');
+  } catch(_){ _clearSess(); _showLogin(); }
 })();
 
-// ── API ────────────────────────────────────────────────────────────────────────
-async function api(method, path, body) {
-  const opts = {
-    method,
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': ADMIN_TOKEN },
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch('/api/admin' + path, opts);
-  const data = await r.json().catch(() => ({}));
-  if (r.status === 401) { doLogout(true); throw new Error('Session expired. Please sign in again.'); }
-  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-  return data;
+function _setEmail(e){ document.getElementById('admin-email-display').textContent = e; }
+function _showLogin(){
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app-shell').style.display='none';
+}
+function _showApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-shell').style.display='flex';
+}
+function _clearSess(){
+  TOK=''; EMAIL='';
+  sessionStorage.removeItem('v_atk');
+  sessionStorage.removeItem('v_ae');
 }
 
-// ── Login / Logout ─────────────────────────────────────────────────────────────
-async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass  = document.getElementById('login-pass').value;
-  const errEl = document.getElementById('login-err');
-  errEl.style.display = 'none';
+async function doLogin(){
+  const email = document.getElementById('l-email').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  const err = document.getElementById('l-err');
+  const btn = document.getElementById('l-btn');
+  err.style.display='none';
+  btn.textContent='Signing in…'; btn.disabled=true;
   try {
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pass })
+    const r = await fetch('/api/admin/login',{
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email, password:pass})
     });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error || 'Login failed'; errEl.style.display='block'; return; }
-    ADMIN_TOKEN = data.token;
-    ADMIN_EMAIL = data.email || email;
-    sessionStorage.setItem('vewit_admin_token', ADMIN_TOKEN);
-    sessionStorage.setItem('vewit_admin_email', ADMIN_EMAIL);
-    document.getElementById('admin-email-display').textContent = ADMIN_EMAIL;
-    showApp();
+    const d = await r.json();
+    if (!r.ok){ err.textContent = d.error||'Invalid credentials'; err.style.display='block'; return; }
+    TOK = d.token; EMAIL = d.email || email;
+    sessionStorage.setItem('v_atk', TOK);
+    sessionStorage.setItem('v_ae', EMAIL);
+    _setEmail(EMAIL);
+    _showApp();
     showPage('dashboard');
-  } catch(e) {
-    errEl.textContent = 'Connection error'; errEl.style.display='block';
+  } catch(_){ err.textContent='Connection error'; err.style.display='block'; }
+  finally { btn.textContent='Sign In'; btn.disabled=false; }
+}
+
+async function doLogout(){
+  try { await fetch('/api/admin/logout',{method:'POST',credentials:'include',headers:{'X-Admin-Token':TOK}}); } catch(_){}
+  _clearSess();
+  document.getElementById('l-pass').value='';
+  document.getElementById('l-err').style.display='none';
+  _setEmail('');
+  _showLogin();
+}
+
+async function api(method, path, body){
+  const opts = { method, credentials:'include', headers:{'Content-Type':'application/json','X-Admin-Token':TOK} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch('/api/admin'+path, opts);
+  const d = await r.json().catch(()=>({}));
+  if (r.status === 401){
+    _clearSess(); _showLogin();
+    const e = document.getElementById('l-err');
+    e.textContent='Session expired — please sign in again.'; e.style.display='block';
+    throw new Error('Session expired');
   }
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  return d;
 }
 
-async function doLogout(withNotice=false) {
-  try {
-    if (ADMIN_TOKEN) await fetch('/api/admin/logout', { method:'POST', credentials:'include', headers:{ 'X-Admin-Token': ADMIN_TOKEN } });
-  } catch(e) {}
-  ADMIN_TOKEN = '';
-  ADMIN_EMAIL = '';
-  sessionStorage.removeItem('vewit_admin_token');
-  sessionStorage.removeItem('vewit_admin_email');
-  document.getElementById('app-shell').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-pass').value = '';
-  document.getElementById('admin-email-display').textContent = '';
-  if (withNotice) {
-    const errEl = document.getElementById('login-err');
-    errEl.textContent = 'Session expired. Please sign in again.';
-    errEl.style.display = 'block';
-  }
-}
-
-function showApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-shell').style.display = 'flex';
-}
-
-// ── Navigation ─────────────────────────────────────────────────────────────────
-function showPage(page) {
-  currentPage = page;
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  const nav = document.getElementById('nav-' + page);
+function showPage(p){
+  curPage = p;
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  const nav = document.getElementById('nav-'+p);
   if (nav) nav.classList.add('active');
-  const pages = { dashboard, workspaces, users, security, pricing, audit };
-  if (pages[page]) pages[page]();
+  ({dashboard,workspaces,users,security,billing,audit,health})[p]?.();
 }
 
-// ── Toast ──────────────────────────────────────────────────────────────────────
-function toast(msg, type='ok') {
+function toast(msg, type='ok'){
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = `toast toast-${type} show`;
-  setTimeout(() => t.classList.remove('show'), 3500);
+  const icons = {ok:'✓',err:'✕',warn:'⚠'};
+  t.textContent = (icons[type]||'•')+' '+msg;
+  t.className = `toast t${type} show`;
+  clearTimeout(_ttimer);
+  _ttimer = setTimeout(()=>t.classList.remove('show'), 3800);
 }
 
-// ── Modal ──────────────────────────────────────────────────────────────────────
-function openModal(title, body, formHtml, btnLabel, btnClass, cb) {
-  document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-body').textContent = body;
-  document.getElementById('modal-form').innerHTML = formHtml || '';
-  const btn = document.getElementById('modal-confirm-btn');
-  btn.textContent = btnLabel || 'Confirm';
-  btn.className = 'btn-confirm' + (btnClass ? ' ' + btnClass : '');
-  modalCb = cb;
-  document.getElementById('modal').classList.add('open');
+function openModal(title, desc, formHtml, btnLabel, btnStyle, cb){
+  document.getElementById('m-title').textContent = title;
+  document.getElementById('m-desc').textContent = desc;
+  document.getElementById('m-form').innerHTML = formHtml||'';
+  const btn = document.getElementById('m-btn');
+  btn.textContent = btnLabel||'Confirm';
+  btn.className = 'bcon'+(btnStyle?' '+btnStyle:'');
+  mCb = cb;
+  document.getElementById('mo').classList.add('open');
 }
-function closeModal() {
-  document.getElementById('modal').classList.remove('open');
-  modalCb = null;
-}
-async function modalConfirm() {
-  if (modalCb) await modalCb();
-  closeModal();
+function closeModal(){ document.getElementById('mo').classList.remove('open'); mCb=null; }
+async function modalConfirm(){ if(mCb) await mCb(); closeModal(); }
+
+function set(h){ document.getElementById('main-content').innerHTML = h; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function slugify(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+function ts(d){ if(!d) return '—'; const s=Math.floor((Date.now()-new Date(d))/1000); if(s<60)return 'just now'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
+function fmt(d){ return d?String(d).slice(0,10):'—'; }
+function roleBadge(r){ const m={Admin:'bg-red',Manager:'bg-orange',TeamLead:'bg-purple',Developer:'bg-blue',Tester:'bg-green',Viewer:'bg-gray'}; return `<span class="badge ${m[r]||'bg-gray'}">${esc(r)||'—'}</span>`; }
+function planBadge(p){ const m={starter:'bg-gray',team:'bg-blue',enterprise:'bg-purple'}; return `<span class="badge ${m[p]||'bg-gray'}">${esc(p)||'starter'}</span>`; }
+function chip(u,size=28){ const av=(u.avatar||(u.name||'?')[0]).slice(0,2).toUpperCase(); return `<div class="chip" style="width:${size}px;height:${size}px;background:${esc(u.color||'#334')}">${esc(av)}</div>`; }
+function auditCls(a){ if(!a)return'bg-gray'; const l=a.toLowerCase(); if(l.includes('login'))return'ab-login'; if(l.includes('logout'))return'ab-logout'; if(l.includes('delete'))return'ab-delete'; if(l.includes('suspend'))return'ab-suspend'; if(l.includes('reset'))return'ab-reset'; if(l.includes('plan'))return'ab-plan'; if(l.includes('add')||l.includes('create'))return'ab-add'; if(l.includes('2fa')||l.includes('totp'))return'ab-2fa'; return 'bg-gray'; }
+function filterTable(inp, id){ const q=inp.value.toLowerCase(); document.querySelectorAll(`#${id} tbody tr`).forEach(r=>{ r.style.display=(r.dataset.search||r.textContent).toLowerCase().includes(q)?'':'none'; }); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+async function dashboard(){
+  set('<div class="loading">Loading dashboard</div>');
+  // Fetch independently so one failure doesn't block the other
+  let dash={}, wsList=[];
+  try { dash = await api('GET','/dashboard'); } catch(_){}
+  try { const r = await api('GET','/workspaces'); wsList = r.workspaces||[]; } catch(_){}
+
+  const total = dash.total_workspaces||wsList.length||0;
+  const users = dash.total_users||0;
+  const active = dash.active_users||0;
+  const rev = dash.revenue||0;
+  const rate = users>0?Math.round(active/users*100):0;
+  const starter = wsList.filter(w=>(w.plan||'starter')==='starter').length;
+  const team = wsList.filter(w=>w.plan==='team').length;
+  const ent = wsList.filter(w=>w.plan==='enterprise').length;
+  const recent = wsList.slice(0,8);
+
+  set(`
+    <div class="ph">
+      <div><div class="ph-title">Dashboard</div>
+        <div class="ph-sub">${new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+      </div>
+      <div class="ph-actions"><button class="bsm" onclick="dashboard()">↺ Refresh</button></div>
+    </div>
+
+    <div class="sg sg4">
+      <div class="sc">
+        <div class="acc" style="background:linear-gradient(90deg,var(--blue),var(--purple))"></div>
+        <div class="si">🏢</div><div class="sl">Workspaces</div>
+        <div class="sv">${total}</div><div class="ss">Companies on VEWIT</div>
+      </div>
+      <div class="sc">
+        <div class="acc" style="background:linear-gradient(90deg,var(--green),var(--cyan))"></div>
+        <div class="si">👥</div><div class="sl">Total Users</div>
+        <div class="sv">${users}</div><div class="ss">All roles combined</div>
+      </div>
+      <div class="sc">
+        <div class="acc" style="background:linear-gradient(90deg,var(--orange),var(--pink))"></div>
+        <div class="si">⚡</div><div class="sl">Active (7 days)</div>
+        <div class="sv">${active}</div><div class="ss">${rate}% activity rate</div>
+        <div class="pb"><div class="pf" style="width:${rate}%;background:var(--orange)"></div></div>
+      </div>
+      <div class="sc">
+        <div class="acc" style="background:linear-gradient(90deg,var(--purple),var(--pink))"></div>
+        <div class="si">₹</div><div class="sl">Est. MRR</div>
+        <div class="sv" style="font-size:22px">₹${rev.toLocaleString('en-IN')}</div>
+        <div class="ss">Monthly recurring revenue</div>
+      </div>
+    </div>
+
+    <div class="sg sg3">
+      <div class="sc" style="cursor:pointer" onclick="showPage('workspaces')">
+        <div class="sl">Starter (Free)</div><div class="sv">${starter}</div>
+        <div class="ss" style="color:var(--tx3)">↗ Click to manage</div>
+      </div>
+      <div class="sc" style="cursor:pointer" onclick="showPage('workspaces')">
+        <div class="sl">Team</div><div class="sv" style="color:var(--blue)">${team}</div>
+        <div class="ss" style="color:var(--blue)">₹999/mo ↗</div>
+      </div>
+      <div class="sc" style="cursor:pointer" onclick="showPage('workspaces')">
+        <div class="sl">Enterprise</div><div class="sv" style="color:var(--purple)">${ent}</div>
+        <div class="ss" style="color:var(--purple)">Custom pricing ↗</div>
+      </div>
+    </div>
+
+    <div class="tw">
+      <div class="tt">
+        <span class="tt-title">Recent Workspaces <span class="tc">${recent.length} shown</span></span>
+        <button class="bsm" onclick="showPage('workspaces')">View All →</button>
+      </div>
+      <table>
+        <thead><tr><th>Workspace</th><th>Members</th><th>Plan</th><th>2FA</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${recent.length ? recent.map(w=>`
+            <tr data-search="${esc(w.name)} ${esc(w.id)}">
+              <td><div class="tdm">${esc(w.name)}</div><div class="tds">${esc(w.id)}</div></td>
+              <td>${w.member_count||0}</td>
+              <td>${planBadge(w.plan)}</td>
+              <td>${(w.otp_enabled||w.require_2fa)?'<span class="badge bg-green">ON</span>':'<span class="badge bg-gray">OFF</span>'}</td>
+              <td>${fmt(w.created)}</td>
+              <td>
+                <button class="ab" onclick="viewWorkspace('${esc(w.id)}','${esc(w.name)}')">Manage →</button>
+                <button class="ab wrn" onclick="setPlan('${esc(w.id)}','${esc(w.name)}')">Plan</button>
+              </td>
+            </tr>`).join('') :
+            '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--tx3)">No workspaces yet</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `);
 }
 
-// ── Render helpers ─────────────────────────────────────────────────────────────
-function set(html) { document.getElementById('main-content').innerHTML = html; }
-
-function roleBadge(role) {
-  const map = {
-    Admin:'badge-red', Manager:'badge-orange', TeamLead:'badge-purple',
-    Developer:'badge-blue', Tester:'badge-green', Viewer:'badge-gray'
-  };
-  return `<span class="badge ${map[role]||'badge-gray'}">${role}</span>`;
-}
-
-function planBadge(plan) {
-  const map = { starter:'badge-gray', team:'badge-blue', enterprise:'badge-purple' };
-  return `<span class="badge ${map[plan]||'badge-gray'}">${plan||'starter'}</span>`;
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// PAGES
-// ══════════════════════════════════════════════════════════════════════════════
-
-// ── Dashboard ─────────────────────────────────────────────────────────────────
-async function dashboard() {
-  set('<div class="loading">Loading dashboard…</div>');
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKSPACES
+// ─────────────────────────────────────────────────────────────────────────────
+async function workspaces(){
+  set('<div class="loading">Loading workspaces</div>');
   try {
-    // Dashboard uses /api/admin/dashboard + /api/admin/workspaces for recent list
-    const [data, wsData] = await Promise.all([
-      api('GET', '/dashboard'),
-      api('GET', '/workspaces')
-    ]);
-    const recentWs = ((wsData && wsData.workspaces) || []).slice(0, 8);
+    const resp = await api('GET','/workspaces');
+    const data = resp.workspaces||resp||[];
+    const s=data.filter(w=>(w.plan||'starter')==='starter').length;
+    const t=data.filter(w=>w.plan==='team').length;
+    const e=data.filter(w=>w.plan==='enterprise').length;
     set(`
-      <div class="page-header">
-        <div>
-          <div class="page-title">Dashboard</div>
-          <div class="page-subtitle">Platform-wide overview — ${new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
-        </div>
+      <div class="ph">
+        <div><div class="ph-title">Workspaces</div>
+          <div class="ph-sub">${data.length} workspace(s) registered</div></div>
+        <div class="ph-actions"><button class="bsm" onclick="workspaces()">↺ Refresh</button></div>
       </div>
-      <div class="stats-g">
-        <div class="stat-card">
-          <div class="sc-label">Total Workspaces</div>
-          <div class="sc-val">${data.total_workspaces||0}</div>
-          <div class="sc-sub">Across all companies</div>
-        </div>
-        <div class="stat-card">
-          <div class="sc-label">Total Users</div>
-          <div class="sc-val">${data.total_users||0}</div>
-          <div class="sc-sub">All roles combined</div>
-        </div>
-        <div class="stat-card">
-          <div class="sc-label">Active (7d)</div>
-          <div class="sc-val">${data.active_users||0}</div>
-          <div class="sc-sub">Users active last 7 days</div>
-        </div>
-        <div class="stat-card">
-          <div class="sc-label">Revenue</div>
-          <div class="sc-val" style="font-size:22px">₹${(data.revenue||0).toLocaleString('en-IN')}</div>
-          <div class="sc-sub">MRR (Team plans)</div>
-        </div>
+      <div class="sg sg3">
+        <div class="sc"><div class="sl">Starter</div><div class="sv">${s}</div><div class="ss">Free tier</div></div>
+        <div class="sc"><div class="sl">Team</div><div class="sv" style="color:var(--blue)">${t}</div><div class="ss">₹999/mo</div></div>
+        <div class="sc"><div class="sl">Enterprise</div><div class="sv" style="color:var(--purple)">${e}</div><div class="ss">Custom</div></div>
       </div>
-      <div class="table-wrap">
-        <div class="table-toolbar">
-          <div style="font-size:14px;font-weight:700">Recent Workspaces</div>
+      <div class="tw">
+        <div class="tt">
+          <span class="tt-title">All Workspaces <span class="tc">${data.length}</span></span>
+          <div class="sw"><input class="si-input" placeholder="Search name, code, ID…" oninput="filterTable(this,'ws-tbl')"/></div>
         </div>
-        <table>
-          <thead><tr>
-            <th>Workspace</th><th>Members</th><th>Plan</th><th>Created</th><th>Actions</th>
-          </tr></thead>
+        <table id="ws-tbl">
+          <thead><tr><th>Workspace</th><th>Invite Code</th><th>Members</th><th>Plan</th><th>2FA</th><th>Email</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody>
-            ${recentWs.map(w=>`
-              <tr>
-                <td><b style="color:var(--tx)">${esc(w.name)}</b><br/><span style="font-size:11px;color:var(--tx3)">${esc(w.id)}</span></td>
-                <td>${w.member_count||0}</td>
-                <td>${planBadge(w.plan)}</td>
-                <td style="font-size:12px">${(w.created||'').slice(0,10)}</td>
-                <td><button class="action-btn" onclick="viewWorkspace('${esc(w.id)}','${esc(w.name)}')">Manage →</button></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    `);
-  } catch(e) { set(`<div class="empty"><div class="ei">⚠️</div><p>${e.message}</p></div>`); }
-}
-
-// ── Workspaces ────────────────────────────────────────────────────────────────
-async function workspaces() {
-  set('<div class="loading">Loading workspaces…</div>');
-  try {
-    const resp = await api('GET', '/workspaces');
-    const data = resp.workspaces || resp || [];
-    set(`
-      <div class="page-header">
-        <div>
-          <div class="page-title">Workspaces</div>
-          <div class="page-subtitle">${data.length} workspace(s) registered</div>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <div class="table-toolbar">
-          <input class="search-input" placeholder="Search workspaces…" oninput="filterTable(this,'ws-table')" />
-        </div>
-        <table id="ws-table">
-          <thead><tr>
-            <th>Name</th><th>Invite Code</th><th>Members</th><th>Plan</th><th>2FA</th><th>Created</th><th>Actions</th>
-          </tr></thead>
-          <tbody>
-            ${data.map(w=>`
+            ${data.length ? data.map(w=>`
               <tr data-search="${esc(w.name)} ${esc(w.id)} ${esc(w.invite_code||'')}">
-                <td>
-                  <b style="color:var(--tx)">${esc(w.name)}</b><br/>
-                  <span style="font-size:11px;color:var(--tx3)">/${slugify(w.name)}</span>
-                </td>
+                <td><div class="tdm">${esc(w.name)}</div><div class="tds">/${slugify(w.name)}</div></td>
                 <td><code style="font-size:12px;color:var(--cyan)">${esc(w.invite_code||'—')}</code></td>
                 <td>${w.member_count||0}</td>
                 <td>${planBadge(w.plan)}</td>
-                <td>${w.otp_enabled ? '<span class="badge badge-green">ON</span>' : '<span class="badge badge-gray">OFF</span>'}</td>
-                <td style="font-size:12px">${(w.created||'').slice(0,10)}</td>
+                <td>${(w.otp_enabled||w.require_2fa)?'<span class="badge bg-green">ON</span>':'<span class="badge bg-gray">OFF</span>'}</td>
+                <td>${w.email_enabled?'<span class="badge bg-cyan">ON</span>':'<span class="badge bg-gray">OFF</span>'}</td>
+                <td>${fmt(w.created)}</td>
                 <td>
-                  <button class="action-btn" onclick="viewWorkspace('${esc(w.id)}','${esc(w.name)}')">Manage</button>
-                  <button class="action-btn" onclick="setPlan('${esc(w.id)}','${esc(w.name)}')">Plan</button>
+                  <button class="ab" onclick="viewWorkspace('${esc(w.id)}','${esc(w.name)}')">Manage</button>
+                  <button class="ab wrn" onclick="setPlan('${esc(w.id)}','${esc(w.name)}')">Plan</button>
+                  <button class="ab dng" onclick="suspendWorkspace('${esc(w.id)}','${esc(w.name)}')">Suspend</button>
                 </td>
-              </tr>
-            `).join('')}
+              </tr>`).join('') :
+              '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--tx3)">No workspaces</td></tr>'}
           </tbody>
         </table>
-      </div>
-    `);
-  } catch(e) { set(`<div class="empty"><div class="ei">⚠️</div><p>${e.message}</p></div>`); }
+      </div>`);
+  } catch(e){ set(`<div class="empty"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`); }
 }
 
-// ── View Workspace Detail ──────────────────────────────────────────────────────
-async function viewWorkspace(wsId, wsName) {
-  set('<div class="loading">Loading workspace…</div>');
-  // Update nav
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKSPACE DETAIL
+// ─────────────────────────────────────────────────────────────────────────────
+async function viewWorkspace(wsId, wsName){
+  set('<div class="loading">Loading workspace</div>');
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
   try {
-    const data = await api('GET', `/workspace/${wsId}`);
-    const ws = data.workspace;
-    const members = data.members || [];
-
+    const data = await api('GET',`/workspaces/${wsId}`);
+    const ws = data.workspace||{};
+    const members = data.members||[];
+    const twoFA = !!(ws.otp_enabled||ws.require_2fa);
+    const twoFACount = members.filter(u=>u.totp_enabled||u.totp_verified).length;
+    const twoFARate = members.length?Math.round(twoFACount/members.length*100):0;
     set(`
-      <button class="back-btn" onclick="showPage('workspaces')">← Back to Workspaces</button>
-      <div class="ws-header">
-        <div class="ws-avatar">${esc(ws.name||'W').charAt(0).toUpperCase()}</div>
+      <button class="back-btn" onclick="showPage('workspaces')">← Back</button>
+      <div class="ws-hero">
+        <div class="ws-av">${esc((ws.name||'W')[0]).toUpperCase()}</div>
         <div class="ws-info">
           <h2>${esc(ws.name)}</h2>
-          <p>Workspace ID: ${esc(ws.id)} &nbsp;·&nbsp; Invite: <code style="color:var(--cyan)">${esc(ws.invite_code||'—')}</code></p>
+          <p>ID: <code style="color:var(--cyan)">${esc(ws.id)}</code>
+            &nbsp;·&nbsp; Invite: <code style="color:var(--cyan)">${esc(ws.invite_code||'—')}</code>
+            &nbsp;·&nbsp; ${planBadge(ws.plan)}
+            &nbsp;·&nbsp; ${twoFA?'<span class="badge bg-green">2FA Required</span>':'<span class="badge bg-gray">2FA Optional</span>'}
+          </p>
         </div>
-        <div style="margin-left:auto;display:flex;gap:10px">
-          <button class="action-btn" onclick="setPlan('${esc(ws.id)}','${esc(ws.name)}')">Change Plan</button>
-          <button class="action-btn" onclick="resetInviteCode('${esc(ws.id)}')">Reset Invite Code</button>
-          <button class="action-btn" onclick="toggle2FAWorkspace('${esc(ws.id)}', ${ws.otp_enabled?1:0})">
-            ${ws.otp_enabled ? 'Disable 2FA Req' : 'Enable 2FA Req'}
-          </button>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-        <div class="section-card">
-          <div class="section-card-header">Workspace Info</div>
-          <div class="section-card-body">
-            <div class="info-row"><span class="info-label">Plan</span><span class="info-val">${planBadge(ws.plan)}</span></div>
-            <div class="info-row"><span class="info-label">Members</span><span class="info-val">${members.length}</span></div>
-            <div class="info-row"><span class="info-label">2FA Required</span><span class="info-val">${ws.otp_enabled ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-gray">No</span>'}</span></div>
-            <div class="info-row"><span class="info-label">Email Enabled</span><span class="info-val">${ws.email_enabled ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-gray">No</span>'}</span></div>
-            <div class="info-row"><span class="info-label">Created</span><span class="info-val">${(ws.created||'').slice(0,10)}</span></div>
-          </div>
-        </div>
-        <div class="section-card">
-          <div class="section-card-header">Quick Actions</div>
-          <div class="section-card-body" style="display:flex;flex-direction:column;gap:10px">
-            <button class="action-btn" style="width:100%;padding:9px;font-size:13px" onclick="addUserToWs('${esc(ws.id)}')">➕ Add User</button>
-            <button class="action-btn" style="width:100%;padding:9px;font-size:13px" onclick="resetAllPasswords('${esc(ws.id)}','${esc(ws.name)}')">🔑 Force Password Reset (All)</button>
-            <button class="action-btn" style="width:100%;padding:9px;font-size:13px" onclick="resetAllTOTP('${esc(ws.id)}','${esc(ws.name)}')">📱 Reset All Google Auth</button>
-            <button class="action-btn danger" style="width:100%;padding:9px;font-size:13px" onclick="suspendWorkspace('${esc(ws.id)}','${esc(ws.name)}')">⛔ Suspend Workspace</button>
-          </div>
+        <div class="ws-acts">
+          <button class="ab" onclick="setPlan('${esc(ws.id)}','${esc(ws.name)}')">Change Plan</button>
+          <button class="ab" onclick="resetInviteCode('${esc(ws.id)}')">Reset Invite</button>
+          <button class="ab ${twoFA?'':'suc'}" onclick="toggle2FA('${esc(ws.id)}',${twoFA?1:0})">${twoFA?'Disable 2FA Req':'Enable 2FA Req'}</button>
+          <button class="ab dng" onclick="suspendWorkspace('${esc(ws.id)}','${esc(ws.name)}')">⛔ Suspend</button>
         </div>
       </div>
 
-      <div class="section-card">
-        <div class="section-card-header">
-          Members (${members.length})
-          <input class="search-input" style="width:200px;font-size:12px;padding:5px 10px" placeholder="Search…" oninput="filterTable(this,'members-table')" />
+      <div class="sg sg4">
+        <div class="sc"><div class="sl">Members</div><div class="sv">${members.length}</div>
+          <div class="ss">${ws.plan==='starter'?'Limit: 5':ws.plan==='team'?'Limit: 30':'Unlimited'}</div></div>
+        <div class="sc"><div class="sl">2FA Active</div><div class="sv" style="color:var(--green)">${twoFACount}</div>
+          <div class="ss">of ${members.length} users</div>
+          <div class="pb"><div class="pf" style="width:${twoFARate}%;background:var(--green)"></div></div></div>
+        <div class="sc"><div class="sl">Plan</div>
+          <div class="sv" style="font-size:18px;margin-top:4px">${planBadge(ws.plan)}</div>
+          <div class="ss">${ws.plan==='team'?'₹999/mo':ws.plan==='enterprise'?'Custom':'Free'}</div></div>
+        <div class="sc"><div class="sl">Created</div><div class="sv" style="font-size:17px">${fmt(ws.created)}</div>
+          <div class="ss">Email: ${ws.email_enabled?'<span class="badge bg-cyan" style="font-size:10px">ON</span>':'<span class="badge bg-gray" style="font-size:10px">OFF</span>'}</div></div>
+      </div>
+
+      <div class="scard">
+        <div class="scard-h">Quick Actions</div>
+        <div class="scard-b" style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="ab suc" style="padding:8px 16px;font-size:12.5px" onclick="addUserToWs('${esc(ws.id)}')">➕ Add User</button>
+          <button class="ab wrn" style="padding:8px 16px;font-size:12.5px" onclick="resetAllPasswords('${esc(ws.id)}','${esc(ws.name)}')">🔑 Force Password Reset (All)</button>
+          <button class="ab" style="padding:8px 16px;font-size:12.5px" onclick="resetAllTOTP('${esc(ws.id)}','${esc(ws.name)}')">📱 Reset All 2FA</button>
+          <button class="ab" style="padding:8px 16px;font-size:12.5px" onclick="resetInviteCode('${esc(ws.id)}')">🔄 New Invite Code</button>
         </div>
-        <table id="members-table">
-          <thead><tr>
-            <th>Name</th><th>Email</th><th>Role</th><th>Google Auth</th><th>Last Active</th><th>Actions</th>
-          </tr></thead>
+      </div>
+
+      <div class="scard">
+        <div class="scard-h">
+          <span>Members <span class="badge bg-gray" style="margin-left:6px">${members.length}</span></span>
+          <input class="si-input" style="width:190px;font-size:12px;padding:6px 10px" placeholder="Search members…" oninput="filterTable(this,'mbr-tbl')"/>
+        </div>
+        <table id="mbr-tbl">
+          <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Google Auth</th><th>Last Active</th><th>Actions</th></tr></thead>
           <tbody>
-            ${members.map(u=>`
+            ${members.length ? members.map(u=>`
               <tr data-search="${esc(u.name)} ${esc(u.email)} ${esc(u.role)}">
-                <td>
-                  <div style="display:flex;align-items:center;gap:10px">
-                    <div style="width:30px;height:30px;border-radius:8px;background:${esc(u.color||'#444')};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${esc(u.avatar||'?')}</div>
-                    <b style="color:var(--tx)">${esc(u.name)}</b>
-                  </div>
-                </td>
+                <td><div style="display:flex;align-items:center;gap:9px">${chip(u)}<span class="tdm">${esc(u.name)}</span></div></td>
                 <td style="font-size:12.5px">${esc(u.email)}</td>
                 <td>${roleBadge(u.role)}</td>
-                <td>${u.totp_verified||u.totp_enabled ? '<span class="badge badge-green">✓ Active</span>' : '<span class="badge badge-gray">Not set</span>'}</td>
-                <td style="font-size:12px">${u.last_active ? timeSince(u.last_active) : 'Never'}</td>
+                <td>${(u.totp_enabled||u.totp_verified)?'<span class="badge bg-green">✓ Active</span>':'<span class="badge bg-gray">Not set</span>'}</td>
+                <td style="font-size:12px">${ts(u.last_active)}</td>
                 <td>
-                  <button class="action-btn" onclick="resetPassword('${esc(u.id)}','${esc(u.name)}')">Reset PW</button>
-                  <button class="action-btn" onclick="resetTOTP('${esc(u.id)}','${esc(u.name)}')">Reset 2FA</button>
-                  <button class="action-btn" onclick="changeRole('${esc(u.id)}','${esc(u.name)}','${esc(u.role)}')">Role</button>
-                  <button class="action-btn danger" onclick="removeUser('${esc(u.id)}','${esc(u.name)}','${esc(ws.id)}')">Remove</button>
+                  <button class="ab" onclick="resetPassword('${esc(u.id)}','${esc(u.name)}')">Reset PW</button>
+                  <button class="ab" onclick="resetTOTP('${esc(u.id)}','${esc(u.name)}')">Reset 2FA</button>
+                  <button class="ab" onclick="changeRole('${esc(u.id)}','${esc(u.name)}','${esc(u.role)}')">Role</button>
+                  <button class="ab dng" onclick="removeUser('${esc(u.id)}','${esc(u.name)}','${esc(ws.id)}')">Remove</button>
                 </td>
-              </tr>
-            `).join('')}
+              </tr>`).join('') :
+              '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--tx3)">No members yet</td></tr>'}
           </tbody>
         </table>
-      </div>
-    `);
-  } catch(e) { set(`<div class="empty"><div class="ei">⚠️</div><p>${e.message}</p></div>`); }
+      </div>`);
+  } catch(e){ set(`<div class="empty"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`); }
 }
 
-// ── All Users ─────────────────────────────────────────────────────────────────
-async function users() {
-  set('<div class="loading">Loading users…</div>');
+// ─────────────────────────────────────────────────────────────────────────────
+// ALL USERS
+// ─────────────────────────────────────────────────────────────────────────────
+async function users(){
+  set('<div class="loading">Loading users</div>');
   try {
-    const resp = await api('GET', '/users');
-    const data = resp.users || resp || [];
+    const resp = await api('GET','/users');
+    const data = resp.users||resp||[];
+    const t2fa = data.filter(u=>u.totp_enabled||u.totp_verified).length;
+    const adm = data.filter(u=>u.role==='Admin').length;
     set(`
-      <div class="page-header">
-        <div>
-          <div class="page-title">All Users</div>
-          <div class="page-subtitle">${data.length} users across all workspaces</div>
-        </div>
+      <div class="ph">
+        <div><div class="ph-title">All Users</div><div class="ph-sub">${data.length} users across all workspaces</div></div>
+        <div class="ph-actions"><button class="bsm" onclick="users()">↺ Refresh</button></div>
       </div>
-      <div class="table-wrap">
-        <div class="table-toolbar">
-          <input class="search-input" placeholder="Search by name, email, role…" oninput="filterTable(this,'users-table')" />
+      <div class="sg sg4">
+        <div class="sc"><div class="sl">Total</div><div class="sv">${data.length}</div><div class="ss">All workspaces</div></div>
+        <div class="sc"><div class="sl">Admins</div><div class="sv" style="color:var(--red)">${adm}</div><div class="ss">Workspace admins</div></div>
+        <div class="sc"><div class="sl">2FA Active</div><div class="sv" style="color:var(--green)">${t2fa}</div>
+          <div class="ss">${data.length>0?Math.round(t2fa/data.length*100):0}% coverage</div>
+          <div class="pb"><div class="pf" style="width:${data.length>0?Math.round(t2fa/data.length*100):0}%;background:var(--green)"></div></div></div>
+        <div class="sc"><div class="sl">No 2FA</div><div class="sv" style="color:var(--orange)">${data.length-t2fa}</div><div class="ss">Needs attention</div></div>
+      </div>
+      <div class="tw">
+        <div class="tt">
+          <span class="tt-title">User Directory <span class="tc">${data.length}</span></span>
+          <div class="sw"><input class="si-input" placeholder="Name, email, role, workspace…" oninput="filterTable(this,'usr-tbl')"/></div>
         </div>
-        <table id="users-table">
-          <thead><tr>
-            <th>User</th><th>Email</th><th>Workspace</th><th>Role</th><th>2FA</th><th>Last Active</th><th>Actions</th>
-          </tr></thead>
+        <table id="usr-tbl">
+          <thead><tr><th>User</th><th>Email</th><th>Workspace</th><th>Role</th><th>2FA</th><th>Last Active</th><th>Actions</th></tr></thead>
           <tbody>
-            ${data.map(u=>`
+            ${data.length ? data.map(u=>`
               <tr data-search="${esc(u.name)} ${esc(u.email)} ${esc(u.role)} ${esc(u.workspace_name||'')}">
-                <td>
-                  <div style="display:flex;align-items:center;gap:10px">
-                    <div style="width:30px;height:30px;border-radius:8px;background:${esc(u.color||'#444')};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${esc(u.avatar||'?')}</div>
-                    <b style="color:var(--tx)">${esc(u.name)}</b>
-                  </div>
-                </td>
+                <td><div style="display:flex;align-items:center;gap:9px">${chip(u)}<span class="tdm">${esc(u.name)}</span></div></td>
                 <td style="font-size:12.5px">${esc(u.email)}</td>
-                <td style="font-size:12.5px"><span class="badge badge-gray">${esc(u.workspace_name||u.workspace_id||'—')}</span></td>
+                <td><span class="badge bg-gray">${esc(u.workspace_name||'—')}</span></td>
                 <td>${roleBadge(u.role)}</td>
-                <td>${u.totp_verified ? '<span class="badge badge-green">✓</span>' : '—'}</td>
-                <td style="font-size:12px">${u.last_active ? timeSince(u.last_active) : 'Never'}</td>
+                <td>${(u.totp_enabled||u.totp_verified)?'<span class="badge bg-green">✓</span>':'<span class="badge bg-orange">✕</span>'}</td>
+                <td style="font-size:12px">${ts(u.last_active)}</td>
                 <td>
-                  <button class="action-btn" onclick="resetPassword('${esc(u.id)}','${esc(u.name)}')">Reset PW</button>
-                  <button class="action-btn" onclick="resetTOTP('${esc(u.id)}','${esc(u.name)}')">Reset 2FA</button>
+                  <button class="ab" onclick="resetPassword('${esc(u.id)}','${esc(u.name)}')">Reset PW</button>
+                  <button class="ab" onclick="resetTOTP('${esc(u.id)}','${esc(u.name)}')">Reset 2FA</button>
+                  <button class="ab" onclick="changeRole('${esc(u.id)}','${esc(u.name)}','${esc(u.role)}')">Role</button>
+                  <button class="ab dng" onclick="removeUser('${esc(u.id)}','${esc(u.name)}','')">Delete</button>
                 </td>
-              </tr>
-            `).join('')}
+              </tr>`).join('') :
+              '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--tx3)">No users found</td></tr>'}
           </tbody>
         </table>
-      </div>
-    `);
-  } catch(e) { set(`<div class="empty"><div class="ei">⚠️</div><p>${e.message}</p></div>`); }
+      </div>`);
+  } catch(e){ set(`<div class="empty"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`); }
 }
 
-// ── Security & 2FA ────────────────────────────────────────────────────────────
-async function security() {
-  set('<div class="loading">Loading security data…</div>');
+// ─────────────────────────────────────────────────────────────────────────────
+// SECURITY & 2FA
+// ─────────────────────────────────────────────────────────────────────────────
+async function security(){
+  set('<div class="loading">Loading security data</div>');
   try {
-    const data = await api('GET', '/security-stats');
+    const data = await api('GET','/security-stats');
+    const total = (data.totp_enabled||0)+(data.totp_disabled||0);
+    const rate = total>0?Math.round((data.totp_enabled||0)/total*100):0;
+    const noT = data.no_totp||[];
     set(`
-      <div class="page-header">
-        <div>
-          <div class="page-title">Security & 2FA</div>
-          <div class="page-subtitle">Google Authenticator status across all workspaces</div>
-        </div>
+      <div class="ph"><div><div class="ph-title">Security & 2FA</div>
+        <div class="ph-sub">Google Authenticator coverage across all workspaces</div></div></div>
+      <div class="sg sg3">
+        <div class="sc"><div class="acc" style="background:var(--green)"></div>
+          <div class="si">🛡️</div><div class="sl">2FA Enabled</div>
+          <div class="sv" style="color:var(--green)">${data.totp_enabled||0}</div>
+          <div class="ss">Authenticator active</div>
+          <div class="pb"><div class="pf" style="width:${rate}%;background:var(--green)"></div></div></div>
+        <div class="sc"><div class="acc" style="background:var(--orange)"></div>
+          <div class="si">⚠️</div><div class="sl">No 2FA</div>
+          <div class="sv" style="color:var(--orange)">${data.totp_disabled||0}</div>
+          <div class="ss">Not configured</div></div>
+        <div class="sc"><div class="acc" style="background:${rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--red)'}"></div>
+          <div class="si">${rate>=80?'✅':rate>=50?'⚡':'🚨'}</div>
+          <div class="sl">Adoption Rate</div>
+          <div class="sv" style="color:${rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--red)'}">${rate}%</div>
+          <div class="ss">${rate>=80?'Excellent':'rate>=50?Needs improvement':'Critical — act now'}</div></div>
       </div>
-      <div class="stats-g" style="grid-template-columns:repeat(3,1fr)">
-        <div class="stat-card">
-          <div class="sc-label">2FA Enabled Users</div>
-          <div class="sc-val" style="color:var(--green)">${data.totp_enabled}</div>
-          <div class="sc-sub">Google Authenticator active</div>
+      <div class="tw">
+        <div class="tt">
+          <span class="tt-title">Users without 2FA <span class="tc">${noT.length}</span></span>
+          <input class="si-input" placeholder="Search…" oninput="filterTable(this,'sec-tbl')"/>
         </div>
-        <div class="stat-card">
-          <div class="sc-label">2FA Not Set</div>
-          <div class="sc-val" style="color:var(--orange)">${data.totp_disabled}</div>
-          <div class="sc-sub">No authenticator configured</div>
-        </div>
-        <div class="stat-card">
-          <div class="sc-label">Adoption Rate</div>
-          <div class="sc-val">${data.totp_enabled+data.totp_disabled > 0 ? Math.round(data.totp_enabled/(data.totp_enabled+data.totp_disabled)*100) : 0}%</div>
-          <div class="sc-sub">Platform-wide 2FA coverage</div>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <div class="table-toolbar">
-          <div style="font-size:14px;font-weight:700">Users without 2FA</div>
-          <input class="search-input" placeholder="Search…" oninput="filterTable(this,'sec-table')" />
-        </div>
-        <table id="sec-table">
+        <table id="sec-tbl">
           <thead><tr><th>User</th><th>Email</th><th>Workspace</th><th>Role</th><th>Actions</th></tr></thead>
           <tbody>
-            ${(data.no_totp||[]).map(u=>`
-              <tr data-search="${esc(u.name)} ${esc(u.email)}">
-                <td><b style="color:var(--tx)">${esc(u.name)}</b></td>
+            ${noT.length ? noT.map(u=>`
+              <tr data-search="${esc(u.name)} ${esc(u.email)} ${esc(u.workspace_name||'')}">
+                <td class="tdm">${esc(u.name)}</td>
                 <td style="font-size:12.5px">${esc(u.email)}</td>
-                <td><span class="badge badge-gray">${esc(u.workspace_name||'—')}</span></td>
+                <td><span class="badge bg-gray">${esc(u.workspace_name||'—')}</span></td>
                 <td>${roleBadge(u.role)}</td>
-                <td><button class="action-btn" onclick="resetTOTP('${esc(u.id)}','${esc(u.name)}')">Reset 2FA</button></td>
-              </tr>
-            `).join('')}
-            ${(data.no_totp||[]).length===0 ? '<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:30px">🎉 All users have 2FA configured</td></tr>' : ''}
+                <td><button class="ab" onclick="resetTOTP('${esc(u.id)}','${esc(u.name)}')">Reset 2FA</button></td>
+              </tr>`).join('') :
+              '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--green)">🎉 All users have 2FA!</td></tr>'}
           </tbody>
         </table>
-      </div>
-    `);
-  } catch(e) { set(`<div class="empty"><div class="ei">⚠️</div><p>${e.message}</p></div>`); }
+      </div>`);
+  } catch(e){ set(`<div class="empty"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`); }
 }
 
-// ── Plans & Billing ───────────────────────────────────────────────────────────
-async function pricing() {
-  set('<div class="loading">Loading plans…</div>');
+// ─────────────────────────────────────────────────────────────────────────────
+// BILLING — distinct from workspaces with revenue focus
+// ─────────────────────────────────────────────────────────────────────────────
+async function billing(){
+  set('<div class="loading">Loading billing data</div>');
   try {
-    const data = await api('GET', '/plans-stats');
+    const data = await api('GET','/plans-stats');
+    const ws = data.workspaces||[];
+    const mrr = (data.team_count||0)*999;
     set(`
-      <div class="page-header">
-        <div>
-          <div class="page-title">Plans & Billing</div>
-          <div class="page-subtitle">Current plan assignments across all workspaces</div>
-        </div>
+      <div class="ph"><div>
+        <div class="ph-title">Plans & Billing</div>
+        <div class="ph-sub">Revenue overview and subscription management</div>
+      </div></div>
+      <div class="sg sg4">
+        <div class="sc"><div class="acc" style="background:var(--tx3)"></div>
+          <div class="sl">Starter</div><div class="sv">${data.starter_count||0}</div><div class="ss">Free — ₹0/mo</div></div>
+        <div class="sc"><div class="acc" style="background:var(--blue)"></div>
+          <div class="sl">Team</div><div class="sv" style="color:var(--blue)">${data.team_count||0}</div><div class="ss">₹999/workspace/mo</div></div>
+        <div class="sc"><div class="acc" style="background:var(--purple)"></div>
+          <div class="sl">Enterprise</div><div class="sv" style="color:var(--purple)">${data.enterprise_count||0}</div><div class="ss">Custom pricing</div></div>
+        <div class="sc"><div class="acc" style="background:linear-gradient(90deg,var(--green),var(--cyan))"></div>
+          <div class="sl">Est. MRR</div><div class="sv" style="font-size:20px;color:var(--green)">₹${mrr.toLocaleString('en-IN')}</div><div class="ss">From Team plans only</div></div>
       </div>
-      <div class="stats-g" style="grid-template-columns:repeat(3,1fr)">
-        <div class="stat-card">
-          <div class="sc-label">Starter (Free)</div>
-          <div class="sc-val">${data.starter_count}</div>
-          <div class="sc-sub">₹0 / month</div>
+      <div class="tw">
+        <div class="tt">
+          <span class="tt-title">Subscriptions <span class="tc">${ws.length}</span></span>
+          <div class="sw">
+            <select class="tbl-select" id="pf-sel" onchange="filterPlan()">
+              <option value="">All Plans</option>
+              <option value="starter">Starter</option>
+              <option value="team">Team</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+            <input class="si-input" id="bill-si" placeholder="Search workspace…" oninput="filterTable(this,'bill-tbl')"/>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="sc-label">Team</div>
-          <div class="sc-val" style="color:var(--blue)">${data.team_count}</div>
-          <div class="sc-sub">₹999 / workspace / month</div>
-        </div>
-        <div class="stat-card">
-          <div class="sc-label">Enterprise</div>
-          <div class="sc-val" style="color:var(--purple)">${data.enterprise_count}</div>
-          <div class="sc-sub">Custom pricing</div>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <div class="table-toolbar">
-          <div style="font-size:14px;font-weight:700">Workspace Plans</div>
-          <input class="search-input" placeholder="Search…" oninput="filterTable(this,'plan-table')" />
-        </div>
-        <table id="plan-table">
-          <thead><tr><th>Workspace</th><th>Members</th><th>Current Plan</th><th>Member Limit</th><th>Actions</th></tr></thead>
+        <table id="bill-tbl">
+          <thead><tr><th>Workspace</th><th>Members</th><th>Plan</th><th>Limit</th><th>Monthly Value</th><th>Utilisation</th><th>Actions</th></tr></thead>
           <tbody>
-            ${(data.workspaces||[]).map(w=>`
-              <tr data-search="${esc(w.name)} ${esc(w.plan||'starter')}">
-                <td><b style="color:var(--tx)">${esc(w.name)}</b><br/><span style="font-size:11px;color:var(--tx3)">${esc(w.id)}</span></td>
-                <td>${w.member_count||0}</td>
+            ${ws.length ? ws.map(w=>{
+              const limit = w.plan==='starter'?5:w.plan==='team'?30:9999;
+              const util = limit<9999?Math.min(100,Math.round((w.member_count||0)/limit*100)):0;
+              return `
+              <tr data-search="${esc(w.name)} ${esc(w.plan||'starter')}" data-plan="${esc(w.plan||'starter')}">
+                <td><div class="tdm">${esc(w.name)}</div><div class="tds">${esc(w.id)}</div></td>
+                <td style="color:${(w.member_count||0)>=limit&&limit<9999?'var(--orange)':'var(--tx)';font-weight:600}">
+                  ${w.member_count||0}<span style="color:var(--tx3);font-size:11px"> / ${limit<9999?limit:'∞'}</span></td>
                 <td>${planBadge(w.plan)}</td>
-                <td>${w.plan==='starter'?'5':w.plan==='team'?'30':'Unlimited'}</td>
-                <td><button class="action-btn" onclick="setPlan('${esc(w.id)}','${esc(w.name)}')">Change Plan</button></td>
-              </tr>
-            `).join('')}
+                <td>${w.plan==='starter'?'5 members':w.plan==='team'?'30 members':'Unlimited'}</td>
+                <td style="font-weight:600;color:${w.plan==='team'?'var(--green)':w.plan==='enterprise'?'var(--purple)':'var(--tx3)'}">
+                  ${w.plan==='team'?'₹999':w.plan==='enterprise'?'Custom':'₹0'}</td>
+                <td style="min-width:100px">
+                  ${limit<9999?`<div style="font-size:11px;color:var(--tx3);margin-bottom:3px">${util}%</div>
+                  <div class="pb" style="margin-top:0"><div class="pf" style="width:${util}%;background:${util>=90?'var(--red)':util>=70?'var(--orange)':'var(--blue)'}"></div></div>`:'—'}
+                </td>
+                <td>
+                  <button class="ab suc" onclick="setPlan('${esc(w.id)}','${esc(w.name)}')">Change Plan</button>
+                  <button class="ab" onclick="viewWorkspace('${esc(w.id)}','${esc(w.name)}')">Manage →</button>
+                </td>
+              </tr>`;}).join('') :
+              '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--tx3)">No workspaces</td></tr>'}
           </tbody>
         </table>
-      </div>
-    `);
-  } catch(e) { set(`<div class="empty"><div class="ei">⚠️</div><p>${e.message}</p></div>`); }
+      </div>`);
+  } catch(e){ set(`<div class="empty"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`); }
 }
+function filterPlan(){ const p=document.getElementById('pf-sel').value; document.querySelectorAll('#bill-tbl tbody tr').forEach(r=>{ r.style.display=(!p||r.dataset.plan===p)?'':'none'; }); }
 
-// ── Audit Log ─────────────────────────────────────────────────────────────────
-async function audit() {
-  set('<div class="loading">Loading audit log…</div>');
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────────────────────────────────────
+async function audit(){
+  set('<div class="loading">Loading audit log</div>');
   try {
-    const resp = await api('GET', '/audit');
-    const data = resp.logs || resp || [];
+    const resp = await api('GET','/audit');
+    const logs = resp.logs||[];
+    const logins = logs.filter(l=>(l.action||'').includes('login')).length;
+    const actions = logs.filter(l=>!(l.action||'').includes('login')&&!(l.action||'').includes('logout')).length;
     set(`
-      <div class="page-header">
-        <div>
-          <div class="page-title">Audit Log</div>
-          <div class="page-subtitle">All admin actions — last 200 entries</div>
-        </div>
+      <div class="ph">
+        <div><div class="ph-title">Audit Log</div><div class="ph-sub">All super-admin actions — last 200 entries</div></div>
+        <div class="ph-actions"><button class="bsm" onclick="audit()">↺ Refresh</button></div>
       </div>
-      <div class="table-wrap">
-        <table>
+      <div class="sg sg3">
+        <div class="sc"><div class="sl">Total Entries</div><div class="sv">${logs.length}</div><div class="ss">In log (max 200)</div></div>
+        <div class="sc"><div class="sl">Login Events</div><div class="sv" style="color:var(--green)">${logins}</div><div class="ss">Admin sign-ins</div></div>
+        <div class="sc"><div class="sl">Admin Actions</div><div class="sv" style="color:var(--blue)">${actions}</div><div class="ss">Mutations performed</div></div>
+      </div>
+      <div class="tw">
+        <div class="tt">
+          <span class="tt-title">Action History <span class="tc">${logs.length}</span></span>
+          <div class="sw">
+            <select class="tbl-select" id="af-sel" onchange="filterAudit()">
+              <option value="">All Actions</option>
+              <option value="login">Login/Logout</option>
+              <option value="reset">Resets</option>
+              <option value="delete">Deletions</option>
+              <option value="plan">Plan Changes</option>
+              <option value="2fa">2FA Events</option>
+              <option value="add">Add/Create</option>
+              <option value="suspend">Suspensions</option>
+            </select>
+            <input class="si-input" id="af-si" placeholder="Search action, target…" oninput="filterTable(this,'audit-tbl')"/>
+          </div>
+        </div>
+        <table id="audit-tbl">
           <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
           <tbody>
-            ${(data||[]).map(e=>`
-              <tr>
-                <td style="font-size:12px;white-space:nowrap">${(e.created||e.ts||'').replace('T',' ').slice(0,19)}</td>
-                <td style="font-size:12.5px">${esc(e.admin_email||e.actor||'—')}</td>
-                <td><span class="badge badge-orange">${esc(e.action||e.event||'—')}</span></td>
-                <td style="font-size:12.5px">${esc(e.target||e.workspace_id||'—')}</td>
-                <td style="font-size:12px;color:var(--tx3)">${esc(e.detail||e.description||'—')}</td>
-              </tr>
-            `).join('')}
-            ${(data||[]).length===0?'<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:30px">No audit entries yet</td></tr>':''}
+            ${logs.length ? logs.map(e=>{
+              const ac=e.action||e.event||'—';
+              const t=(e.created||e.ts||'').replace('T',' ').replace('Z','').slice(0,19);
+              return `<tr data-search="${esc(ac)} ${esc(e.target||'')} ${esc(e.detail||'')}" data-action="${esc(ac.toLowerCase())}">
+                <td style="font-size:11.5px;white-space:nowrap;color:var(--tx3)">${t}</td>
+                <td style="font-size:12px">${esc(e.admin_email||e.actor||'—')}</td>
+                <td><span class="badge ${auditCls(ac)}">${esc(ac)}</span></td>
+                <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.target||'')}">${esc(e.target||'—')}</td>
+                <td style="font-size:12px;color:var(--tx3);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.detail||'')}">${esc(e.detail||'—')}</td>
+              </tr>`;}).join('') :
+              `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--tx3)">
+                <div style="font-size:28px;margin-bottom:10px">📋</div>
+                No audit entries yet — actions you take will appear here automatically.
+              </td></tr>`}
           </tbody>
         </table>
+      </div>`);
+  } catch(e){ set(`<div class="empty"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`); }
+}
+function filterAudit(){ const f=document.getElementById('af-sel').value.toLowerCase(); document.querySelectorAll('#audit-tbl tbody tr').forEach(r=>{ r.style.display=(!f||(r.dataset.action||'').includes(f))?'':'none'; }); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLATFORM HEALTH
+// ─────────────────────────────────────────────────────────────────────────────
+async function health(){
+  set('<div class="loading">Running diagnostics</div>');
+  const endpoints = [
+    ['/dashboard','Dashboard API'],
+    ['/workspaces','Workspaces API'],
+    ['/users','Users API'],
+    ['/security-stats','Security Stats API'],
+    ['/plans-stats','Plans & Billing API'],
+    ['/audit','Audit Log API'],
+  ];
+  const results = await Promise.allSettled(endpoints.map(([p])=>api('GET',p)));
+  const now = new Date();
+  const ok = results.filter(r=>r.status==='fulfilled').length;
+  set(`
+    <div class="ph">
+      <div><div class="ph-title">Platform Health</div>
+        <div class="ph-sub">System diagnostics · ${now.toLocaleTimeString('en-IN')} IST</div></div>
+      <div class="ph-actions">
+        <span class="badge ${ok===endpoints.length?'bg-green':ok>=4?'bg-orange':'bg-red'}" style="font-size:12px;padding:5px 12px">
+          ${ok}/${endpoints.length} APIs healthy
+        </span>
+        <button class="bsm" onclick="health()">↺ Recheck</button>
       </div>
-    `);
-  } catch(e) { set(`<div class="empty"><div class="ei">⚠️</div><p>${e.message}</p></div>`); }
+    </div>
+    <div class="scard">
+      <div class="scard-h">API Endpoint Status</div>
+      <div class="scard-b">
+        ${results.map((r,i)=>`
+          <div class="ir">
+            <span class="il"><span class="hdot ${r.status==='fulfilled'?'g':'r'}"></span>${endpoints[i][1]}</span>
+            <span class="iv">${r.status==='fulfilled'?'<span class="badge bg-green">✓ OK</span>':`<span class="badge bg-red">✕ ${esc(r.reason?.message||'Error')}</span>`}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="scard">
+      <div class="scard-h">Session Info</div>
+      <div class="scard-b">
+        <div class="ir"><span class="il">Admin Account</span><span class="iv">${esc(EMAIL)}</span></div>
+        <div class="ir"><span class="il">Token Status</span><span class="iv"><span class="badge bg-green">Active</span></span></div>
+        <div class="ir"><span class="il">Console Version</span><span class="iv"><span class="badge bg-blue">v2.0</span></span></div>
+        <div class="ir"><span class="il">Stack</span><span class="iv">VEWIT v4.0 · PostgreSQL · Gunicorn · Python 3.12</span></div>
+        <div class="ir"><span class="il">Checked At</span><span class="iv">${now.toISOString().replace('T',' ').slice(0,19)} UTC</span></div>
+      </div>
+    </div>
+    <div class="scard">
+      <div class="scard-h">Quick Navigation</div>
+      <div class="scard-b" style="display:flex;gap:10px;flex-wrap:wrap">
+        ${['dashboard','workspaces','users','security','billing','audit'].map(p=>`
+          <button class="bsm" onclick="showPage('${p}')">${{dashboard:'📊 Dashboard',workspaces:'🏢 Workspaces',users:'👥 Users',security:'🔐 Security',billing:'💳 Billing',audit:'📋 Audit'}[p]}</button>`).join('')}
+      </div>
+    </div>`);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
 // ACTIONS
-// ══════════════════════════════════════════════════════════════════════════════
-
-async function resetPassword(userId, userName) {
-  openModal(
-    'Reset Password',
-    `Set a new password for ${userName}. They will need to log in with this new password.`,
-    `<div class="form-row"><label>New Password</label><input type="password" id="new-pw-input" placeholder="Min 8 characters" /></div>`,
-    'Reset Password', '',
-    async () => {
-      const pw = document.getElementById('new-pw-input').value;
-      if (!pw || pw.length < 8) { toast('Password must be at least 8 characters', 'err'); return; }
-      try {
-        await api('POST', `/users/${userId}/reset-password`, { password: pw });
-        toast(`✓ Password reset for ${userName}`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+// ─────────────────────────────────────────────────────────────────────────────
+function resetPassword(uid,name){
+  openModal('Reset Password',`Set a new password for ${name}.`,
+    `<div class="mfg"><label>New Password</label><input type="password" id="m-pw" placeholder="Min 8 characters"/><div class="mhint">User must change this on next login.</div></div>`,
+    'Reset Password','',
+    async()=>{ const pw=document.getElementById('m-pw').value; if(!pw||pw.length<8){toast('Min 8 characters','err');return;} await api('POST',`/users/${uid}/reset-password`,{password:pw}); toast(`Password reset for ${name}`); });
 }
-
-async function resetTOTP(userId, userName) {
-  openModal(
-    'Reset Google Authenticator',
-    `This will clear 2FA for ${userName}. They will need to reconfigure Google Authenticator on next login.`,
-    '', 'Reset 2FA', '',
-    async () => {
-      try {
-        await api('POST', `/users/${userId}/reset-totp`, {});
-        toast(`✓ 2FA reset for ${userName}`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function resetTOTP(uid,name){
+  openModal('Reset Google Authenticator',`Clear 2FA for ${name}? They must reconfigure Google Authenticator.`,
+    '','Reset 2FA','',
+    async()=>{ await api('POST',`/users/${uid}/reset-totp`,{}); toast(`2FA reset for ${name}`); });
 }
-
-async function changeRole(userId, userName, currentRole) {
-  const roles = ['Admin','Manager','TeamLead','Developer','Tester','Viewer'];
-  openModal(
-    'Change Role',
-    `Change role for ${userName} (currently: ${currentRole})`,
-    `<div class="form-row"><label>New Role</label><select id="role-select" style="width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:10px 14px;font-size:14px;color:var(--tx);font-family:var(--font);outline:none">
-      ${roles.map(r=>`<option value="${r}" ${r===currentRole?'selected':''}>${r}</option>`).join('')}
-    </select></div>`,
-    'Update Role', '',
-    async () => {
-      const role = document.getElementById('role-select').value;
-      try {
-        await api('POST', `/users/${userId}/change-role`, { role });
-        toast(`✓ Role updated to ${role} for ${userName}`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function changeRole(uid,name,current){
+  openModal('Change Role',`Change role for ${name} (currently: ${current})`,
+    `<div class="mfg"><label>New Role</label><select id="m-role">${['Admin','Manager','TeamLead','Developer','Tester','Viewer'].map(r=>`<option value="${r}"${r===current?' selected':''}>${r}</option>`).join('')}</select></div>`,
+    'Update Role','',
+    async()=>{ const role=document.getElementById('m-role').value; await api('POST',`/users/${uid}/change-role`,{role}); toast(`Role → ${role} for ${name}`); });
 }
-
-async function removeUser(userId, userName, wsId) {
-  openModal(
-    'Remove User',
-    `Remove ${userName} from this workspace? This cannot be undone.`,
-    '', 'Remove', 'btn-danger',
-    async () => {
-      try {
-        await api('POST', `/users/${userId}/delete`, { workspace_id: wsId });
-        toast(`✓ ${userName} removed`);
-        viewWorkspace(wsId, '');
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function removeUser(uid,name,wsId){
+  openModal('Delete User',`Permanently delete ${name}? This cannot be undone.`,
+    '','Delete User','bdng',
+    async()=>{ await api('POST',`/users/${uid}/delete`,{workspace_id:wsId}); toast(`${name} deleted`,'warn'); if(wsId)viewWorkspace(wsId,''); else users(); });
 }
-
-async function setPlan(wsId, wsName) {
-  openModal(
-    'Change Plan',
-    `Set the subscription plan for "${wsName}"`,
-    `<div class="form-row"><label>Plan</label><select id="plan-select" style="width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:10px 14px;font-size:14px;color:var(--tx);font-family:var(--font);outline:none">
-      <option value="starter">Starter — Free (up to 5 members)</option>
-      <option value="team">Team — ₹999/mo (up to 30 members)</option>
-      <option value="enterprise">Enterprise — Custom (unlimited)</option>
-    </select></div>`,
-    'Update Plan', '',
-    async () => {
-      const plan = document.getElementById('plan-select').value;
-      try {
-        await api('POST', '/workspace/set-plan', { workspace_id: wsId, plan });
-        toast(`✓ Plan updated to ${plan} for "${wsName}"`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function setPlan(wsId,wsName){
+  openModal('Change Plan',`Set subscription plan for "${wsName}"`,
+    `<div class="mfg"><label>Plan</label><select id="m-plan"><option value="starter">Starter — Free (up to 5 members)</option><option value="team">Team — ₹999/mo (up to 30 members)</option><option value="enterprise">Enterprise — Custom (unlimited)</option></select><div class="mhint">Change takes effect immediately.</div></div>`,
+    'Update Plan','',
+    async()=>{ const plan=document.getElementById('m-plan').value; await api('POST','/workspace/set-plan',{workspace_id:wsId,plan}); toast(`Plan → ${plan} for "${wsName}"`); });
 }
-
-async function toggle2FAWorkspace(wsId, current) {
-  const enable = !current;
-  openModal(
-    enable ? 'Enable 2FA Requirement' : 'Disable 2FA Requirement',
-    enable
-      ? 'All users in this workspace will be required to set up Google Authenticator.'
-      : 'Remove the 2FA requirement for this workspace.',
-    '', enable ? 'Enable' : 'Disable', '',
-    async () => {
-      try {
-        await api('POST', '/workspace/toggle-2fa', { workspace_id: wsId, enabled: enable });
-        toast(`✓ 2FA requirement ${enable ? 'enabled' : 'disabled'}`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function toggle2FA(wsId,current){
+  const en=!current;
+  openModal(en?'Enable 2FA Requirement':'Disable 2FA Requirement',
+    en?'All users will be required to set up Google Authenticator before they can log in.':'Users will no longer be required to have 2FA. Existing setups remain active.',
+    '',en?'Enable 2FA':'Disable 2FA',en?'':'bwrn',
+    async()=>{ await api('POST','/workspace/toggle-2fa',{workspace_id:wsId,enabled:en}); toast(`2FA requirement ${en?'enabled':'disabled'}`); viewWorkspace(wsId,''); });
 }
-
-async function resetInviteCode(wsId) {
-  openModal(
-    'Reset Invite Code',
-    'Generate a new invite code? The old code will stop working immediately.',
-    '', 'Reset Code', '',
-    async () => {
-      try {
-        const res = await api('POST', '/workspace/reset-invite', { workspace_id: wsId });
-        toast(`✓ New invite code: ${res.invite_code}`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function resetInviteCode(wsId){
+  openModal('Reset Invite Code','Generate a new invite code? The existing one stops working immediately.',
+    '','Generate New Code','',
+    async()=>{ const r=await api('POST','/workspace/reset-invite',{workspace_id:wsId}); toast(`New code: ${r.invite_code}`); viewWorkspace(wsId,''); });
 }
-
-async function resetAllPasswords(wsId, wsName) {
-  openModal(
-    'Force Password Reset',
-    `Set a temporary password for ALL users in "${wsName}". They must change it on next login.`,
-    `<div class="form-row"><label>Temporary Password</label><input type="password" id="bulk-pw-input" placeholder="Min 8 characters" /></div>`,
-    'Reset All', 'btn-danger',
-    async () => {
-      const pw = document.getElementById('bulk-pw-input').value;
-      if (!pw || pw.length < 8) { toast('Password must be at least 8 characters', 'err'); return; }
-      try {
-        const res = await api('POST', '/workspace/reset-all-passwords', { workspace_id: wsId, password: pw });
-        toast(`✓ Passwords reset for ${res.count} users`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function resetAllPasswords(wsId,wsName){
+  openModal('Force Password Reset (All)',`Set a temporary password for ALL users in "${wsName}".`,
+    `<div class="mfg"><label>Temporary Password</label><input type="password" id="m-bpw" placeholder="Min 8 characters"/><div class="mhint">⚠️ Affects every member. Use with care.</div></div>`,
+    'Reset All Passwords','bdng',
+    async()=>{ const pw=document.getElementById('m-bpw').value; if(!pw||pw.length<8){toast('Min 8 characters','err');return;} const r=await api('POST','/workspace/reset-all-passwords',{workspace_id:wsId,password:pw}); toast(`Passwords reset for ${r.count} users`); });
 }
-
-async function resetAllTOTP(wsId, wsName) {
-  openModal(
-    'Reset All Google Auth',
-    `This will clear 2FA for ALL users in "${wsName}". Each user must reconfigure their authenticator.`,
-    '', 'Reset All 2FA', 'btn-danger',
-    async () => {
-      try {
-        const res = await api('POST', '/workspace/reset-all-totp', { workspace_id: wsId });
-        toast(`✓ Google Auth reset for ${res.count} users`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function resetAllTOTP(wsId,wsName){
+  openModal('Reset All 2FA',`Clear Google Authenticator for ALL users in "${wsName}". Everyone must reconfigure.`,
+    '','Reset All 2FA','bdng',
+    async()=>{ const r=await api('POST','/workspace/reset-all-totp',{workspace_id:wsId}); toast(`2FA reset for ${r.count} users`); viewWorkspace(wsId,''); });
 }
-
-async function suspendWorkspace(wsId, wsName) {
-  openModal(
-    'Suspend Workspace',
-    `Suspend "${wsName}"? All users will be logged out and unable to access the workspace.`,
-    '', 'Suspend', 'btn-danger',
-    async () => {
-      try {
-        await api('POST', '/workspace/suspend', { workspace_id: wsId });
-        toast(`✓ Workspace "${wsName}" suspended`);
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
+function suspendWorkspace(wsId,wsName){
+  openModal('Suspend Workspace',`Suspend "${wsName}"? All active sessions will be invalidated immediately.`,
+    '','Suspend','bdng',
+    async()=>{ await api('POST','/workspace/suspend',{workspace_id:wsId}); toast(`"${wsName}" suspended`,'warn'); showPage('workspaces'); });
 }
-
-async function addUserToWs(wsId) {
-  openModal(
-    'Add User to Workspace',
-    'Create a new user account directly in this workspace.',
-    `<div class="form-row"><label>Name</label><input id="add-name" placeholder="Full name" /></div>
-     <div class="form-row"><label>Email</label><input id="add-email" type="email" placeholder="user@company.com" /></div>
-     <div class="form-row"><label>Temporary Password</label><input id="add-pw" type="password" placeholder="Min 8 chars" /></div>
-     <div class="form-row"><label>Role</label><select id="add-role" style="width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:10px 14px;font-size:14px;color:var(--tx);font-family:var(--font)">
-       <option>Developer</option><option>Tester</option><option>Viewer</option><option>TeamLead</option><option>Manager</option><option>Admin</option>
-     </select></div>`,
-    'Create User', '',
-    async () => {
-      const name = document.getElementById('add-name').value;
-      const email = document.getElementById('add-email').value;
-      const pw = document.getElementById('add-pw').value;
-      const role = document.getElementById('add-role').value;
-      if (!name || !email || !pw) { toast('All fields required', 'err'); return; }
-      try {
-        await api('POST', '/workspace/add-user', { workspace_id: wsId, name, email, password: pw, role });
-        toast(`✓ User ${name} created`);
-        viewWorkspace(wsId, '');
-      } catch(e) { toast(e.message, 'err'); }
-    }
-  );
-}
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-function slugify(s) {
-  return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-}
-
-function timeSince(dateStr) {
-  const d = new Date(dateStr);
-  const sec = Math.floor((Date.now() - d) / 1000);
-  if (sec < 60) return 'Just now';
-  if (sec < 3600) return `${Math.floor(sec/60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec/3600)}h ago`;
-  return `${Math.floor(sec/86400)}d ago`;
-}
-
-function filterTable(input, tableId) {
-  const q = input.value.toLowerCase();
-  document.querySelectorAll(`#${tableId} tbody tr`).forEach(row => {
-    const text = (row.dataset.search || row.textContent).toLowerCase();
-    row.style.display = text.includes(q) ? '' : 'none';
-  });
+function addUserToWs(wsId){
+  openModal('Add User to Workspace','Create a new user account directly in this workspace.',
+    `<div class="mfg"><label>Full Name</label><input id="m-name" placeholder="e.g. Priya Sharma"/></div>
+     <div class="mfg"><label>Email</label><input id="m-email" type="email" placeholder="user@company.com"/></div>
+     <div class="mfg"><label>Temporary Password</label><input id="m-pw3" type="password" placeholder="Min 8 chars"/><div class="mhint">User changes this on first login.</div></div>
+     <div class="mfg"><label>Role</label><select id="m-role3"><option>Developer</option><option>Tester</option><option>Viewer</option><option>TeamLead</option><option>Manager</option><option>Admin</option></select></div>`,
+    'Create User','',
+    async()=>{
+      const name=document.getElementById('m-name').value.trim();
+      const email=document.getElementById('m-email').value.trim();
+      const pw=document.getElementById('m-pw3').value;
+      const role=document.getElementById('m-role3').value;
+      if(!name||!email||!pw){toast('All fields required','err');return;}
+      if(pw.length<8){toast('Min 8 characters','err');return;}
+      await api('POST','/workspace/add-user',{workspace_id:wsId,name,email,password:pw,role});
+      toast(`${name} created`);
+      viewWorkspace(wsId,'');
+    });
 }
 </script>
 </body>
