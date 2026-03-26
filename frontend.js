@@ -4763,6 +4763,36 @@ function WorkspaceSettings({cu,onReload}){
       </div>
 
       <div class="card" style=${{marginBottom:16}}>
+        <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>💳 Plan & Billing</h3>
+        <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Your current subscription plan and member usage.</p>
+        ${(()=>{
+          const plan=(ws.plan||'starter');
+          const limits={starter:5,team:30,enterprise:null};
+          const limit=limits[plan];
+          const planColors={starter:'var(--tx3)',team:'var(--ac)',enterprise:'var(--pu)'};
+          const planLabels={starter:'Starter — Free',team:'Team — ₹999/mo',enterprise:'Enterprise — Custom'};
+          return html\`
+            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',background:'var(--sf2)',borderRadius:10,border:'1px solid var(--bd)',marginBottom:10}}>
+              <div>
+                <div style=${{fontSize:13,fontWeight:700,color:planColors[plan]||'var(--tx)'}}>${planLabels[plan]||plan}</div>
+                <div style=${{fontSize:11,color:'var(--tx3)',marginTop:2}}>
+                  ${limit?html\`Member limit: \${limit} · Contact ceo@vewit.in to upgrade\`:html\`Unlimited members\`}
+                </div>
+              </div>
+              <div style=${{fontSize:22,padding:'6px 14px',background:plan==='team'?'rgba(90,140,255,.12)':plan==='enterprise'?'rgba(168,85,247,.12)':'var(--sf2)',borderRadius:8,fontWeight:700,color:planColors[plan]||'var(--tx3)',border:'1px solid var(--bd)'}}>
+                ${plan==='starter'?'FREE':plan==='team'?'TEAM':plan==='enterprise'?'ENT':'—'}
+              </div>
+            </div>
+            ${plan==='starter'?html\`
+              <div style=${{fontSize:12,padding:'9px 12px',background:'rgba(90,140,255,.06)',borderRadius:8,border:'1px solid rgba(90,140,255,.15)',color:'var(--tx2)'}}>
+                🚀 <b>Upgrade to Team</b> — Get up to 30 members, analytics, custom SMTP & more for ₹999/mo. Email <a href="mailto:ceo@vewit.in" style=${{color:'var(--ac)'}}>ceo@vewit.in</a>
+              </div>
+            \`:null}
+          \`;
+        })()}
+      </div>
+
+      <div class="card" style=${{marginBottom:16}}>
         <h3 style=${{fontSize:13,fontWeight:700,color:'var(--tx)',letterSpacing:'-0.01em',marginBottom:4}}>🔗 Invite Code</h3>
         <p style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>Share this code with teammates to join your workspace.</p>
         <div style=${{display:'flex',alignItems:'center',gap:10}}>

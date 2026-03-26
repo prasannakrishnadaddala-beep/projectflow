@@ -863,6 +863,23 @@ def login_required(f):
 
 def wid(): return session.get("workspace_id","")
 
+# ── Plan member limits ────────────────────────────────────────────────────────
+PLAN_MEMBER_LIMITS = {"starter": 5, "team": 30, "enterprise": None}
+
+def _get_ws_plan(db, ws_id):
+    ws = db.execute("SELECT plan FROM workspaces WHERE id=?", (ws_id,)).fetchone()
+    return (ws["plan"] if ws and ws["plan"] else "starter") or "starter"
+
+def _check_member_limit(db, ws_id):
+    """Return (allowed, current_count, limit, plan). limit=None means unlimited."""
+    plan = _get_ws_plan(db, ws_id)
+    limit = PLAN_MEMBER_LIMITS.get(plan, 5)
+    count = db.execute("SELECT COUNT(*) as c FROM users WHERE workspace_id=?", (ws_id,)).fetchone()["c"]
+    if limit is None:
+        return True, count, None, plan
+    return count < limit, count, limit, plan
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 # ── Login rate limiter (brute-force protection) ───────────────────────────────
@@ -1414,13 +1431,22 @@ def register():
     elif mode=="join":
         code=d.get("invite_code","").strip().upper()
         with get_db() as db:
-            ws=db.execute("SELECT id FROM workspaces WHERE invite_code=?",(code,)).fetchone()
+            ws=db.execute("SELECT id,name FROM workspaces WHERE invite_code=?",(code,)).fetchone()
             if not ws: return jsonify({"error":"Invalid invite code"}),400
             ws_id=ws["id"]
+            # Enforce plan member limit
+            allowed,count,limit,plan=_check_member_limit(db,ws_id)
+            if not allowed:
+                return jsonify({"error":f"This workspace has reached its {plan.title()} plan limit of {limit} members. Ask the workspace admin to upgrade to add more members."}),403
     else:
         return jsonify({"error":"Invalid mode"}),400
     try:
         with get_db() as db:
+            # Double-check limit in the insert transaction (race-condition safety)
+            if mode=="join":
+                allowed2,_,limit2,plan2=_check_member_limit(db,ws_id)
+                if not allowed2:
+                    return jsonify({"error":f"Workspace member limit reached ({limit2} for {plan2.title()} plan)."}),403
             db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (uid,ws_id,d["name"],d["email"],hash_pw(d["password"]),
                         d.get("role","Developer"),av,c,ts(),None))
@@ -1602,6 +1628,10 @@ def add_user():
     c=random.choice(CLRS)
     try:
         with get_db() as db:
+            # Enforce plan member limit
+            allowed,count,limit,plan=_check_member_limit(db,wid())
+            if not allowed:
+                return jsonify({"error":f"Your workspace is on the {plan.title()} plan which allows up to {limit} members. Upgrade your plan to add more members."}),403
             db.execute("INSERT INTO users (id,workspace_id,name,email,password,role,avatar,color,created,avatar_data) VALUES (?,?,?,?,?,?,?,?,?,?)",
                        (uid,wid(),d["name"],d["email"],hash_pw(d["password"]),
                         d.get("role","Developer"),av,c,ts(),None))
@@ -3428,13 +3458,13 @@ def admin_api_security_stats():
     try:
         with get_db() as db:
             try:
-                enabled  = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled=TRUE").fetchone()[0]
-                disabled = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled IS NOT TRUE").fetchone()[0]
+                enabled  = db.execute("SELECT COUNT(*) FROM users WHERE totp_verified=1").fetchone()[0]
+                disabled = db.execute("SELECT COUNT(*) FROM users WHERE (totp_verified IS NULL OR totp_verified=0)").fetchone()[0]
                 no_totp  = db.execute("""
                     SELECT u.id, u.name, u.email, u.role, w.name AS workspace_name
                     FROM users u
                     LEFT JOIN workspaces w ON w.id = u.workspace_id
-                    WHERE u.totp_enabled IS NOT TRUE
+                    WHERE u.(totp_verified IS NULL OR totp_verified=0)
                     ORDER BY u.created DESC LIMIT 100
                 """).fetchall()
             except Exception:
@@ -3482,7 +3512,7 @@ def admin_api_user_reset_password(uid):
         return jsonify({"error": "Password must be at least 8 characters"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE users SET password_hash=:p0 WHERE id=:p1", (hash_pw(pw), uid))
+            db.execute("UPDATE users SET password=:p0 WHERE id=:p1", (hash_pw(pw), uid))
             db.commit()
         return jsonify({"ok": True})
     except Exception as e:
@@ -3495,7 +3525,7 @@ def admin_api_user_reset_totp(uid):
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE id=:p0",
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE id=:p0",
                 {"p0": uid}
             )
             db.commit()
@@ -3721,7 +3751,7 @@ def admin_api_reset_all_passwords():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET password_hash=:p0 WHERE workspace_id=:p1",
+                "UPDATE users SET password=:p0 WHERE workspace_id=:p1",
                 (hash_pw(pw), ws_id)
             )
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
@@ -3740,7 +3770,7 @@ def admin_api_reset_all_totp():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE workspace_id=:p0",
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE workspace_id=:p0",
                 {"p0": ws_id}
             )
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
@@ -3783,13 +3813,18 @@ def admin_api_add_user():
     uid = secrets.token_hex(8)
     try:
         with get_db() as db:
+            # Check plan member limit before adding
+            allowed, count, limit, plan = _check_member_limit(db, ws_id)
+            if not allowed:
+                return jsonify({"error": f"Workspace is on the {plan.title()} plan (max {limit} members). Upgrade first."}), 403
+            av = "".join(w[0] for w in name.split())[:2].upper() or "?"
+            col = random.choice(CLRS)
             db.execute(
-                "INSERT INTO users (id, name, email, password_hash, role, workspace_id, created) "
-                "VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)",
-                (uid, name, email, hash_pw(pw), role, ws_id, datetime.utcnow().isoformat())
+                "INSERT INTO users (id, workspace_id, name, email, password, role, avatar, color, created, two_fa_enabled, totp_secret, totp_verified) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (uid, ws_id, name, email, hash_pw(pw), role, av, col, datetime.utcnow().isoformat(), 0, '', 0)
             )
-            db.commit()
-        return jsonify({"ok": True, "id": uid})
+        return jsonify({"ok": True, "id": uid, "name": name, "email": email, "role": role})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

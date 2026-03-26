@@ -235,7 +235,6 @@ let modalCb = null;
 // ── Boot ───────────────────────────────────────────────────────────────────────
 (function(){
   if (ADMIN_TOKEN) {
-    // Show a loading state first; dashboard() will auto-logout if token is stale
     showApp();
     showPage('dashboard');
   }
@@ -250,11 +249,6 @@ async function api(method, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch('/api/admin' + path, opts);
   const data = await r.json().catch(() => ({}));
-  if (r.status === 401 || r.status === 403) {
-    // Token expired or invalid — send back to login
-    doLogout();
-    throw new Error('Session expired. Please log in again.');
-  }
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
   return data;
 }
@@ -329,8 +323,8 @@ function closeModal() {
   modalCb = null;
 }
 async function modalConfirm() {
-  try { if (modalCb) await modalCb(); }
-  finally { closeModal(); }
+  if (modalCb) await modalCb();
+  closeModal();
 }
 
 // ── Render helpers ─────────────────────────────────────────────────────────────
@@ -357,11 +351,12 @@ function planBadge(plan) {
 async function dashboard() {
   set('<div class="loading">Loading dashboard…</div>');
   try {
+    // Dashboard uses /api/admin/dashboard + /api/admin/workspaces for recent list
     const [data, wsData] = await Promise.all([
       api('GET', '/dashboard'),
       api('GET', '/workspaces')
     ]);
-    const recent = (wsData.workspaces||[]).slice(0,8);
+    const recentWs = (wsData.workspaces || []).slice(0, 8);
     set(`
       <div class="page-header">
         <div>
@@ -372,23 +367,23 @@ async function dashboard() {
       <div class="stats-g">
         <div class="stat-card">
           <div class="sc-label">Total Workspaces</div>
-          <div class="sc-val">${data.total_workspaces}</div>
+          <div class="sc-val">${data.total_workspaces||0}</div>
           <div class="sc-sub">Across all companies</div>
         </div>
         <div class="stat-card">
           <div class="sc-label">Total Users</div>
-          <div class="sc-val">${data.total_users}</div>
+          <div class="sc-val">${data.total_users||0}</div>
           <div class="sc-sub">All roles combined</div>
         </div>
         <div class="stat-card">
-          <div class="sc-label">Total Tasks</div>
-          <div class="sc-val">${data.total_tasks||'—'}</div>
-          <div class="sc-sub">Across all projects</div>
+          <div class="sc-label">Active (7d)</div>
+          <div class="sc-val">${data.active_users||0}</div>
+          <div class="sc-sub">Users active last 7 days</div>
         </div>
         <div class="stat-card">
-          <div class="sc-label">Active (7d)</div>
-          <div class="sc-val">${data.active_users}</div>
-          <div class="sc-sub">Users active last 7 days</div>
+          <div class="sc-label">Revenue</div>
+          <div class="sc-val" style="font-size:22px">₹${(data.revenue||0).toLocaleString('en-IN')}</div>
+          <div class="sc-sub">MRR (Team plans)</div>
         </div>
       </div>
       <div class="table-wrap">
@@ -397,13 +392,12 @@ async function dashboard() {
         </div>
         <table>
           <thead><tr>
-            <th>Workspace</th><th>Owner</th><th>Members</th><th>Plan</th><th>Created</th><th>Actions</th>
+            <th>Workspace</th><th>Members</th><th>Plan</th><th>Created</th><th>Actions</th>
           </tr></thead>
           <tbody>
-            ${recent.map(w=>`
+            ${recentWs.map(w=>`
               <tr>
                 <td><b style="color:var(--tx)">${esc(w.name)}</b><br/><span style="font-size:11px;color:var(--tx3)">${esc(w.id)}</span></td>
-                <td>${esc(w.owner_name||'—')}</td>
                 <td>${w.member_count||0}</td>
                 <td>${planBadge(w.plan)}</td>
                 <td style="font-size:12px">${(w.created||'').slice(0,10)}</td>
@@ -421,7 +415,8 @@ async function dashboard() {
 async function workspaces() {
   set('<div class="loading">Loading workspaces…</div>');
   try {
-    const data = await api('GET', '/workspaces');
+    const resp = await api('GET', '/workspaces');
+    const data = resp.workspaces || resp || [];
     set(`
       <div class="page-header">
         <div>
@@ -531,7 +526,7 @@ async function viewWorkspace(wsId, wsName) {
                 </td>
                 <td style="font-size:12.5px">${esc(u.email)}</td>
                 <td>${roleBadge(u.role)}</td>
-                <td>${u.totp_verified ? '<span class="badge badge-green">✓ Active</span>' : '<span class="badge badge-gray">Not set</span>'}</td>
+                <td>${u.totp_verified||u.totp_enabled ? '<span class="badge badge-green">✓ Active</span>' : '<span class="badge badge-gray">Not set</span>'}</td>
                 <td style="font-size:12px">${u.last_active ? timeSince(u.last_active) : 'Never'}</td>
                 <td>
                   <button class="action-btn" onclick="resetPassword('${esc(u.id)}','${esc(u.name)}')">Reset PW</button>
@@ -552,7 +547,8 @@ async function viewWorkspace(wsId, wsName) {
 async function users() {
   set('<div class="loading">Loading users…</div>');
   try {
-    const data = await api('GET', '/users');
+    const resp = await api('GET', '/users');
+    const data = resp.users || resp || [];
     set(`
       <div class="page-header">
         <div>
@@ -706,8 +702,8 @@ async function pricing() {
 async function audit() {
   set('<div class="loading">Loading audit log…</div>');
   try {
-    const data = await api('GET', '/audit');
-    const logs = data.logs||[];
+    const resp = await api('GET', '/audit');
+    const data = resp.logs || resp || [];
     set(`
       <div class="page-header">
         <div>
@@ -719,16 +715,16 @@ async function audit() {
         <table>
           <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
           <tbody>
-            ${logs.map(e=>`
+            ${(data||[]).map(e=>`
               <tr>
-                <td style="font-size:12px;white-space:nowrap">${(e.ts||'').replace('T',' ').slice(0,19)}</td>
-                <td style="font-size:12.5px">${esc(e.admin_email||'—')}</td>
-                <td><span class="badge badge-orange">${esc(e.action||'—')}</span></td>
-                <td style="font-size:12.5px">${esc(e.target||'—')}</td>
-                <td style="font-size:12px;color:var(--tx3)">${esc(e.detail||'—')}</td>
+                <td style="font-size:12px;white-space:nowrap">${(e.created||e.ts||'').replace('T',' ').slice(0,19)}</td>
+                <td style="font-size:12.5px">${esc(e.admin_email||e.actor||'—')}</td>
+                <td><span class="badge badge-orange">${esc(e.action||e.event||'—')}</span></td>
+                <td style="font-size:12.5px">${esc(e.target||e.workspace_id||'—')}</td>
+                <td style="font-size:12px;color:var(--tx3)">${esc(e.detail||e.description||'—')}</td>
               </tr>
             `).join('')}
-            ${logs.length===0?'<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:30px">No audit entries yet</td></tr>':''}
+            ${(data||[]).length===0?'<tr><td colspan="5" style="text-align:center;color:var(--tx3);padding:30px">No audit entries yet</td></tr>':''}
           </tbody>
         </table>
       </div>
