@@ -29,63 +29,6 @@ import urllib.parse, re as _re
 
 DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("PGURL") or ""
 
-def _parse_bool(value, default=False):
-    if value is None:
-        return default
-    return str(value).strip().lower() in ("1", "true", "yes", "on")
-
-def _split_csv_env(value):
-    return [item.strip() for item in (value or "").split(",") if item.strip()]
-
-def _mask_secret(value):
-    value = (value or "").strip()
-    if not value:
-        return ""
-    if len(value) <= 6:
-        return "*" * len(value)
-    return value[:2] + ("*" * (len(value)-4)) + value[-2:]
-
-def _workspace_cipher():
-    raw = (os.environ.get("WORKSPACE_SECRET_KEY") or "").strip()
-    if not raw:
-        return None
-    try:
-        from cryptography.fernet import Fernet
-        import base64
-        import hashlib
-        if len(raw) == 44 and raw.endswith('='):
-            key = raw.encode()
-        else:
-            key = base64.urlsafe_b64encode(hashlib.sha256(raw.encode()).digest())
-        return Fernet(key)
-    except Exception:
-        return None
-
-def _encrypt_secret(value):
-    value = value or ""
-    cipher = _workspace_cipher()
-    if not value or not cipher:
-        return value
-    try:
-        if str(value).startswith('enc:'):
-            return value
-        return 'enc:' + cipher.encrypt(str(value).encode()).decode()
-    except Exception:
-        return value
-
-def _decrypt_secret(value):
-    value = value or ""
-    cipher = _workspace_cipher()
-    if not value or not cipher:
-        return value
-    try:
-        if str(value).startswith('enc:'):
-            return cipher.decrypt(str(value)[4:].encode()).decode()
-        return value
-    except Exception:
-        return value
-
-
 def _parse_db_url(url):
     """Parse postgres://user:pass@host:port/dbname into pg8000 kwargs."""
     if not url:
@@ -93,14 +36,9 @@ def _parse_db_url(url):
     url = url.replace("postgres://", "postgresql://", 1)
     p = urllib.parse.urlparse(url)
     import ssl as _ssl
-    sslmode = (os.environ.get("PGSSLMODE") or "require").strip().lower()
-    ssl_ctx = None
-    if sslmode not in ("disable", "allow"):
-        ssl_ctx = _ssl.create_default_context()
-        if sslmode == "verify-full":
-            ssl_ctx.check_hostname = True
-        else:
-            ssl_ctx.check_hostname = False
+    ssl_ctx = _ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = _ssl.CERT_NONE
     return dict(host=p.hostname, port=p.port or 5432, user=p.username,
                 password=p.password, database=p.path.lstrip("/"),
                 ssl_context=ssl_ctx)
@@ -215,18 +153,13 @@ def get_secret_key():
     except: pass
     return k
 
-
 app = Flask(__name__)
 app.secret_key = get_secret_key()
-_ALLOWED_ORIGINS = _split_csv_env(os.environ.get("ALLOWED_ORIGINS"))
 app.config.update(
-    SESSION_COOKIE_SAMESITE=os.environ.get("SESSION_COOKIE_SAMESITE", "Lax"),
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SECURE=_parse_bool(os.environ.get("SESSION_COOKIE_SECURE"), True),
-    PERMANENT_SESSION_LIFETIME=86400*7,
-    MAX_CONTENT_LENGTH=150*1024*1024,
-)
-CORS(app, supports_credentials=True, origins=_ALLOWED_ORIGINS or None)
+    SESSION_COOKIE_SAMESITE="Lax",SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=False,PERMANENT_SESSION_LIFETIME=86400*7,
+    MAX_CONTENT_LENGTH=150*1024*1024)
+CORS(app, supports_credentials=True)
 
 @app.after_request
 def add_security_headers(response):
@@ -235,8 +168,6 @@ def add_security_headers(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; frame-ancestors 'self'; base-uri 'self'"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     # Only set HSTS on HTTPS
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -499,7 +430,7 @@ def send_email(to_email, subject, body_html, workspace_id=None):
                         'server': ws['smtp_server'],
                         'port': ws['smtp_port'] or 587,
                         'username': ws['smtp_username'],
-                        'password': _decrypt_secret(ws['smtp_password']),
+                        'password': ws['smtp_password'],
                         'from_email': ws['from_email'] or ws['smtp_username']
                     }
         except Exception as e:
@@ -837,7 +768,6 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_timelogs_date ON time_logs(workspace_id, date)",
             "CREATE TABLE IF NOT EXISTS task_events (id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT, user_id TEXT, event_type TEXT, old_val TEXT DEFAULT \'\', new_val TEXT DEFAULT \'\', ts TEXT)",
             "CREATE INDEX IF NOT EXISTS idx_task_events ON task_events(task_id, ts)",
-            "CREATE TABLE IF NOT EXISTS audit_log (id TEXT PRIMARY KEY, workspace_id TEXT, actor_user_id TEXT, actor_role TEXT, action TEXT, resource_type TEXT, resource_id TEXT, before_json TEXT DEFAULT '{}', after_json TEXT DEFAULT '{}', ip_address TEXT DEFAULT '', user_agent TEXT DEFAULT '', status TEXT DEFAULT 'ok', created TEXT)",
             "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
             "ALTER TABLE time_logs ADD COLUMN task_id TEXT DEFAULT ''",
             "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
@@ -931,55 +861,7 @@ def login_required(f):
         return f(*a,**kw)
     return d
 
-
 def wid(): return session.get("workspace_id","")
-
-def get_user_role():
-    return session.get("role", "")
-
-def require_roles(*roles):
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            if "user_id" not in session:
-                return jsonify({"error":"Unauthorized"}),401
-            if session.get("role") not in roles:
-                return jsonify({"error":"Forbidden"}),403
-            return f(*args, **kwargs)
-        return wrapper
-    return decorator
-
-def audit_log(db, action, resource_type, resource_id="", before=None, after=None, status="ok"):
-    try:
-        db.execute(
-            "INSERT INTO audit_log (id, workspace_id, actor_user_id, actor_role, action, resource_type, resource_id, before_json, after_json, ip_address, user_agent, status, created) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                f"audit_{int(time.time()*1000)}_{secrets.token_hex(4)}",
-                session.get("workspace_id", ""),
-                session.get("user_id", ""),
-                session.get("role", ""),
-                action,
-                resource_type,
-                resource_id,
-                json.dumps(before or {}, default=str),
-                json.dumps(after or {}, default=str),
-                request.headers.get("X-Forwarded-For", request.remote_addr or ""),
-                request.headers.get("User-Agent", "")[:500],
-                status,
-                datetime.utcnow().isoformat(),
-            )
-        )
-    except Exception:
-        pass
-
-@app.route("/health")
-def health_check():
-    try:
-        with get_db() as db:
-            db.execute("SELECT 1").fetchone()
-        return jsonify({"ok": True, "database": "up"})
-    except Exception as e:
-        return jsonify({"ok": False, "database": "down", "error": str(e)}), 503
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -1611,46 +1493,34 @@ def me():
         return jsonify(result)
 
 # ── Workspace ─────────────────────────────────────────────────────────────────
-
 @app.route("/api/workspace")
 @login_required
 def get_workspace():
     with get_db() as db:
         ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
         if not ws: return jsonify({"error":"Workspace not found"}),404
-        result=dict(ws)
-        result["ai_api_key"] = _mask_secret(_decrypt_secret(result.get("ai_api_key", "")))
-        result["smtp_password"] = _mask_secret(_decrypt_secret(result.get("smtp_password", "")))
-        return jsonify(result)
-
+        return jsonify(dict(ws))
 
 @app.route("/api/workspace",methods=["PUT"])
 @login_required
-@require_roles("Admin","Manager")
 def update_workspace():
     d=request.json or {}
     with get_db() as db:
-        before=db.execute("SELECT * FROM workspaces WHERE id=?", (wid(),)).fetchone()
         if "name" in d: db.execute("UPDATE workspaces SET name=? WHERE id=?",(d["name"],wid()))
-        if "ai_api_key" in d and d["ai_api_key"]: db.execute("UPDATE workspaces SET ai_api_key=? WHERE id=?",(_encrypt_secret(d["ai_api_key"]),wid()))
+        if "ai_api_key" in d: db.execute("UPDATE workspaces SET ai_api_key=? WHERE id=?",(d["ai_api_key"],wid()))
         if "smtp_server" in d: db.execute("UPDATE workspaces SET smtp_server=? WHERE id=?",(d["smtp_server"],wid()))
         if "smtp_port" in d: db.execute("UPDATE workspaces SET smtp_port=? WHERE id=?",(d["smtp_port"],wid()))
         if "smtp_username" in d: db.execute("UPDATE workspaces SET smtp_username=? WHERE id=?",(d["smtp_username"],wid()))
-        if "smtp_password" in d and d["smtp_password"]: db.execute("UPDATE workspaces SET smtp_password=? WHERE id=?",(_encrypt_secret(d["smtp_password"]),wid()))
+        if "smtp_password" in d: db.execute("UPDATE workspaces SET smtp_password=? WHERE id=?",(d["smtp_password"],wid()))
         if "from_email" in d: db.execute("UPDATE workspaces SET from_email=? WHERE id=?",(d["from_email"],wid()))
         if "email_enabled" in d: db.execute("UPDATE workspaces SET email_enabled=? WHERE id=?",(1 if d["email_enabled"] else 0,wid()))
         if "otp_enabled" in d: db.execute("UPDATE workspaces SET otp_enabled=? WHERE id=?",(1 if d["otp_enabled"] else 0,wid()))
         if "dm_enabled" in d: db.execute("UPDATE workspaces SET dm_enabled=? WHERE id=?",(1 if d["dm_enabled"] else 0,wid()))
         ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        audit_log(db, "workspace.update", "workspace", wid(), dict(before or {}), {k:v for k,v in d.items() if k not in ("ai_api_key","smtp_password")})
-        result=dict(ws)
-        result["ai_api_key"] = _mask_secret(_decrypt_secret(result.get("ai_api_key", "")))
-        result["smtp_password"] = _mask_secret(_decrypt_secret(result.get("smtp_password", "")))
-        return jsonify(result)
+        return jsonify(dict(ws))
 
 @app.route("/api/workspace/new-invite",methods=["POST"])
 @login_required
-@require_roles("Admin","Manager")
 def new_invite():
     invite=secrets.token_hex(4).upper()
     with get_db() as db:
@@ -1659,7 +1529,6 @@ def new_invite():
 
 @app.route("/api/workspace/test-email",methods=["POST"])
 @login_required
-@require_roles("Admin","Manager")
 def test_email():
     """Send a test email to verify SMTP configuration"""
     d=request.json or {}
@@ -1703,7 +1572,7 @@ def get_users():
     with get_db() as db:
         rows = db.execute(
             """SELECT id,workspace_id,name,email,role,avatar,color,created,
-               two_fa_enabled,totp_verified,last_active,totp_secret
+               two_fa_enabled,totp_verified,last_active
                FROM users WHERE workspace_id=? ORDER BY name""",
             (wid(),)).fetchall()
         caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()
@@ -1717,12 +1586,13 @@ def get_users():
             # Add computed totp_configured field, never expose raw secret
             u['totp_configured'] = bool(u.get('totp_verified') and u.get('totp_secret'))
             u.pop('totp_secret', None)
+            if not can_see_passwords:
+                u.pop('plain_password', None)
             users.append(u)
         return jsonify(users)
 
 @app.route("/api/users",methods=["POST"])
 @login_required
-@require_roles("Admin","Manager")
 def add_user():
     d=request.json or {}
     if not d.get("name") or not d.get("email") or not d.get("password"):
@@ -1743,7 +1613,6 @@ def add_user():
 
 @app.route("/api/users/<uid>",methods=["PUT"])
 @login_required
-@require_roles("Admin","Manager")
 def update_user(uid):
     d=request.json or {}
     with get_db() as db:
@@ -1752,7 +1621,7 @@ def update_user(uid):
             av="".join(w[0] for w in d["name"].split())[:2].upper()
             db.execute("UPDATE users SET name=?,avatar=? WHERE id=? AND workspace_id=?",(d["name"],av,uid,wid()))
         if "email" in d: db.execute("UPDATE users SET email=? WHERE id=? AND workspace_id=?",(d["email"],uid,wid()))
-        if "password" in d: db.execute("UPDATE users SET password=? WHERE id=? AND workspace_id=?",(hash_pw(d["password"]),uid,wid()))
+        if "password" in d: db.execute("UPDATE users SET password=?,plain_password=? WHERE id=? AND workspace_id=?",(hash_pw(d["password"]),d["password"],uid,wid()))
         if "avatar_data" in d: db.execute("UPDATE users SET avatar_data=? WHERE id=? AND workspace_id=?",(d["avatar_data"],uid,wid()))
         u=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
         if u:
@@ -1760,13 +1629,13 @@ def update_user(uid):
             caller_role=caller["role"] if caller else "Developer"
             result=dict(u)
             result.pop("password",None)
-            result.pop("plain_password",None)
+            if caller_role not in ("Admin","Manager"):
+                result.pop("plain_password",None)
             return jsonify(result)
         return jsonify({})
 
 @app.route("/api/users/<uid>",methods=["DELETE"])
 @login_required
-@require_roles("Admin",)
 def del_user(uid):
     with get_db() as db:
         db.execute("DELETE FROM users WHERE id=? AND workspace_id=?",(uid,wid()))
@@ -2830,7 +2699,7 @@ def ai_chat():
 
     with get_db() as db:
         ws=db.execute("SELECT * FROM workspaces WHERE id=?",(wid(),)).fetchone()
-        api_key=_decrypt_secret((ws["ai_api_key"] if ws and ws["ai_api_key"] else "")).strip()
+        api_key=(ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
         if not api_key:
             return jsonify({"error":"NO_KEY","message":"Please configure your Anthropic API key in Workspace Settings (⚙) to enable AI features."}),400
 
@@ -2944,7 +2813,7 @@ def ai_generate_docs():
 
     with get_db() as db:
         ws = db.execute("SELECT * FROM workspaces WHERE id=?", (wid(),)).fetchone()
-        api_key = _decrypt_secret((ws["ai_api_key"] if ws and ws["ai_api_key"] else "")).strip()
+        api_key = (ws["ai_api_key"] if ws and ws["ai_api_key"] else "").strip()
         if not api_key:
             return jsonify({"error": "NO_KEY", "message": "Configure your Anthropic API key in Settings → AI Assistant."}), 400
 
@@ -3571,8 +3440,7 @@ def security_info_page():
 _ADMIN_TOKENS = {}   # token -> expiry (datetime)
 
 def _require_admin():
-    if session.get("admin_logged_in"):
-        return True
+    """Return True if request carries a valid admin token."""
     token = request.headers.get("X-Admin-Token", "")
     exp   = _ADMIN_TOKENS.get(token)
     return bool(exp and datetime.utcnow() < exp)
@@ -3584,13 +3452,13 @@ def admin_api_security_stats():
     try:
         with get_db() as db:
             try:
-                enabled  = db.execute("SELECT COUNT(*) FROM users WHERE COALESCE(two_fa_enabled,0)=1").fetchone()[0]
-                disabled = db.execute("SELECT COUNT(*) FROM users WHERE COALESCE(two_fa_enabled,0)<>1").fetchone()[0]
+                enabled  = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled=TRUE").fetchone()[0]
+                disabled = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled IS NOT TRUE").fetchone()[0]
                 no_totp  = db.execute("""
                     SELECT u.id, u.name, u.email, u.role, w.name AS workspace_name
                     FROM users u
                     LEFT JOIN workspaces w ON w.id = u.workspace_id
-                    WHERE COALESCE(u.two_fa_enabled,0)<>1
+                    WHERE u.totp_enabled IS NOT TRUE
                     ORDER BY u.created DESC LIMIT 100
                 """).fetchall()
             except Exception:
@@ -3638,7 +3506,7 @@ def admin_api_user_reset_password(uid):
         return jsonify({"error": "Password must be at least 8 characters"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE users SET password=:p0 WHERE id=:p1", (hash_pw(pw), uid))
+            db.execute("UPDATE users SET password_hash=:p0 WHERE id=:p1", (hash_pw(pw), uid))
             db.commit()
         return jsonify({"ok": True})
     except Exception as e:
@@ -3651,7 +3519,7 @@ def admin_api_user_reset_totp(uid):
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret=NULL, two_fa_enabled=0, totp_verified=0 WHERE id=:p0",
+                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE id=:p0",
                 {"p0": uid}
             )
             db.commit()
@@ -3702,19 +3570,7 @@ def admin_api_login():
 
     token = secrets.token_hex(32)
     _ADMIN_TOKENS[token] = datetime.utcnow() + timedelta(hours=8)
-    session["admin_logged_in"] = True
-    session["admin_email"] = email
-    session.permanent = True
-    return jsonify({"token": token, "ok": True})
-
-@app.route("/api/admin/logout", methods=["GET", "POST"])
-def admin_api_logout():
-    token = request.headers.get("X-Admin-Token", "")
-    if token in _ADMIN_TOKENS:
-        _ADMIN_TOKENS.pop(token, None)
-    session.pop("admin_logged_in", None)
-    session.pop("admin_email", None)
-    return jsonify({"ok": True})
+    return jsonify({"token": token})
 
 @app.route("/api/admin/dashboard")
 def admin_api_dashboard():
@@ -3882,7 +3738,7 @@ def admin_api_reset_all_passwords():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET password=:p0 WHERE workspace_id=:p1",
+                "UPDATE users SET password_hash=:p0 WHERE workspace_id=:p1",
                 (hash_pw(pw), ws_id)
             )
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
@@ -3901,7 +3757,7 @@ def admin_api_reset_all_totp():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret=NULL, two_fa_enabled=0, totp_verified=0 WHERE workspace_id=:p0",
+                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE workspace_id=:p0",
                 {"p0": ws_id}
             )
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
@@ -3945,7 +3801,7 @@ def admin_api_add_user():
     try:
         with get_db() as db:
             db.execute(
-                "INSERT INTO users (id, name, email, password, role, workspace_id, created) "
+                "INSERT INTO users (id, name, email, password_hash, role, workspace_id, created) "
                 "VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)",
                 (uid, name, email, hash_pw(pw), role, ws_id, datetime.utcnow().isoformat())
             )
@@ -3979,11 +3835,10 @@ def _load_template(filename, fallback=''):
         print(f"  ⚠ Template not found: {filename}")
         return fallback
 
-
-HTML = _load_template('template.html', '<html><body><h1>VEWIT</h1></body></html>')
-LANDING_HTML = _load_template('landing.html', '<html><body><h1>VEWIT</h1></body></html>')
-PASSWORD_GENERATOR_HTML = _load_template('password-generator.html', '<html><body><h1>Password Generator</h1></body></html>')
-ADMIN_HTML = _load_template('adminpanel.html', '<!doctype html><html><body style="font-family:Arial;padding:40px;background:#0b1220;color:#fff"><h2>VEWIT Admin Panel</h2><p>Admin UI bundle missing. Backend is running.</p></body></html>')
+HTML                    = _load_template('template.html')
+LANDING_HTML            = _load_template('landing.html')
+PASSWORD_GENERATOR_HTML = _load_template('password-generator.html')
+ADMIN_HTML              = _load_template('adminpanel.html')
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
@@ -4037,7 +3892,7 @@ if __name__=="__main__":
     print("  Checking JS libraries...")
     if not download_js():
         print("  ⚠ Some libraries failed. Check your internet connection.")
-    port=int(os.environ.get("PORT", find_free_port(5000)))
+    port=find_free_port(5000)
     print(f"\n  ✓ Running at  http://localhost:{port}")
     print(f"  ✓ Database:   {DB}")
     print(f"  ✓ Uploads:    {UPLOAD_DIR}")
