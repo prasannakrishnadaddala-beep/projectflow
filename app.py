@@ -731,6 +731,14 @@ def init_db():
                 user_id TEXT, event_type TEXT, old_val TEXT DEFAULT '',
                 new_val TEXT DEFAULT '', ts TEXT);
             CREATE INDEX IF NOT EXISTS idx_task_events ON task_events(task_id, ts);
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                admin_email TEXT DEFAULT '',
+                action TEXT DEFAULT '',
+                target TEXT DEFAULT '',
+                detail TEXT DEFAULT '',
+                created TEXT DEFAULT '');
+            CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created);
         """)
         # ── Consolidated migrations (safe — each wrapped in try/except) ──────
         for stmt in [
@@ -3445,6 +3453,22 @@ def _require_admin():
     exp   = _ADMIN_TOKENS.get(token)
     return bool(exp and datetime.utcnow() < exp)
 
+def _audit(action, target="", detail=""):
+    """Write an entry to audit_log. Fire-and-forget — never raises."""
+    try:
+        admin_email = os.environ.get("ADMIN_EMAIL", "admin@vewit.in")
+        entry_id    = secrets.token_hex(8)
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO audit_log (id, admin_email, action, target, detail, created) "
+                "VALUES (:p0, :p1, :p2, :p3, :p4, :p5)",
+                (entry_id, admin_email, action, target, detail,
+                 datetime.utcnow().isoformat())
+            )
+            db.commit()
+    except Exception as _ae:
+        print(f"[audit] write error: {_ae}")
+
 @app.route("/api/admin/security-stats")
 def admin_api_security_stats():
     if not _require_admin():
@@ -3452,13 +3476,18 @@ def admin_api_security_stats():
     try:
         with get_db() as db:
             try:
-                enabled  = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled=TRUE").fetchone()[0]
-                disabled = db.execute("SELECT COUNT(*) FROM users WHERE totp_enabled IS NOT TRUE").fetchone()[0]
+                # Cast to int to handle both boolean TRUE and integer 1 stored in pg
+                enabled  = db.execute(
+                    "SELECT COUNT(*) FROM users WHERE totp_enabled::int = 1 OR totp_enabled IS TRUE"
+                ).fetchone()[0]
+                disabled = db.execute(
+                    "SELECT COUNT(*) FROM users WHERE (totp_enabled IS NULL OR totp_enabled::int = 0) AND totp_enabled IS NOT TRUE"
+                ).fetchone()[0]
                 no_totp  = db.execute("""
                     SELECT u.id, u.name, u.email, u.role, w.name AS workspace_name
                     FROM users u
                     LEFT JOIN workspaces w ON w.id = u.workspace_id
-                    WHERE u.totp_enabled IS NOT TRUE
+                    WHERE (u.totp_enabled IS NULL OR u.totp_enabled::int = 0) AND u.totp_enabled IS NOT TRUE
                     ORDER BY u.created DESC LIMIT 100
                 """).fetchall()
             except Exception:
@@ -3508,6 +3537,7 @@ def admin_api_user_reset_password(uid):
         with get_db() as db:
             db.execute("UPDATE users SET password_hash=:p0 WHERE id=:p1", (hash_pw(pw), uid))
             db.commit()
+        _audit("reset_user_password", uid, "Password reset by admin")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3523,6 +3553,7 @@ def admin_api_user_reset_totp(uid):
                 {"p0": uid}
             )
             db.commit()
+        _audit("reset_user_totp", uid, "2FA cleared by admin")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3540,6 +3571,7 @@ def admin_api_user_change_role(uid):
         with get_db() as db:
             db.execute("UPDATE users SET role=:p0 WHERE id=:p1", (role, uid))
             db.commit()
+        _audit("change_user_role", uid, f"Role changed to {role}")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3570,7 +3602,25 @@ def admin_api_login():
 
     token = secrets.token_hex(32)
     _ADMIN_TOKENS[token] = datetime.utcnow() + timedelta(hours=8)
+    _audit("admin_login", "system", f"Admin logged in: {email}")
     return jsonify({"token": token})
+
+@app.route("/api/admin/session")
+def admin_api_session():
+    """Validate an existing admin token — called on page load to restore session."""
+    if not _require_admin():
+        return jsonify({"error": "Unauthorized"}), 401
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@vewit.in")
+    return jsonify({"ok": True, "email": admin_email})
+
+@app.route("/api/admin/logout", methods=["POST"])
+def admin_api_logout():
+    """Invalidate the admin token."""
+    token = request.headers.get("X-Admin-Token", "")
+    if token and token in _ADMIN_TOKENS:
+        _audit("admin_logout", "system", "Admin signed out")
+        _ADMIN_TOKENS.pop(token, None)
+    return jsonify({"ok": True})
 
 @app.route("/api/admin/dashboard")
 def admin_api_dashboard():
@@ -3659,6 +3709,7 @@ def admin_api_delete_user(uid):
         with get_db() as db:
             db.execute("DELETE FROM users WHERE id=:p0", {"p0": uid})
             db.commit()
+        _audit("delete_user", uid, "User deleted by admin")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3669,16 +3720,12 @@ def admin_api_audit():
         return jsonify({"error": "Unauthorized"}), 401
     try:
         with get_db() as db:
-            # Try audit_log table; fall back to empty list if it doesn't exist yet
-            try:
-                rows = db.execute(
-                    "SELECT * FROM audit_log ORDER BY created DESC LIMIT 200"
-                ).fetchall()
-                return jsonify({"logs": [dict(r) for r in rows]})
-            except Exception:
-                return jsonify({"logs": []})
+            rows = db.execute(
+                "SELECT * FROM audit_log ORDER BY created DESC LIMIT 200"
+            ).fetchall()
+        return jsonify({"logs": [dict(r) for r in rows]})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"logs": [], "warning": str(e)}), 200
 
 @app.route("/api/admin/workspace/set-plan", methods=["POST"])
 def admin_api_set_plan():
@@ -3693,11 +3740,8 @@ def admin_api_set_plan():
         with get_db() as db:
             db.execute("UPDATE workspaces SET plan=:p0 WHERE id=:p1", (plan, ws_id))
             db.commit()
+        _audit("set_plan", ws_id, f"Plan changed to {plan}")
         return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/admin/workspace/suspend", methods=["POST"])
 def admin_api_suspend_workspace():
     if not _require_admin():
         return jsonify({"error": "Unauthorized"}), 401
@@ -3707,6 +3751,7 @@ def admin_api_suspend_workspace():
         with get_db() as db:
             db.execute("UPDATE workspaces SET suspended=TRUE WHERE id=:p0", {"p0": ws_id})
             db.commit()
+        _audit("suspend_workspace", ws_id, "Workspace suspended")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3722,6 +3767,7 @@ def admin_api_reset_invite():
         with get_db() as db:
             db.execute("UPDATE workspaces SET invite_code=:p0 WHERE id=:p1", (new_code, ws_id))
             db.commit()
+        _audit("reset_invite_code", ws_id, f"New code: {new_code}")
         return jsonify({"ok": True, "invite_code": new_code})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3744,6 +3790,7 @@ def admin_api_reset_all_passwords():
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
             count = cur.fetchone()[0]
             db.commit()
+        _audit("reset_all_passwords", ws_id, f"Bulk password reset for {count} users")
         return jsonify({"ok": True, "count": count})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3763,11 +3810,8 @@ def admin_api_reset_all_totp():
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
             count = cur.fetchone()[0]
             db.commit()
+        _audit("reset_all_totp", ws_id, f"Bulk 2FA reset for {count} users")
         return jsonify({"ok": True, "count": count})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/admin/workspace/toggle-2fa", methods=["POST"])
 def admin_api_toggle_2fa():
     if not _require_admin():
         return jsonify({"error": "Unauthorized"}), 401
@@ -3777,10 +3821,11 @@ def admin_api_toggle_2fa():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE workspaces SET require_2fa=:p0 WHERE id=:p1",
-                (enabled, ws_id)
+                "UPDATE workspaces SET otp_enabled=:p0 WHERE id=:p1",
+                (1 if enabled else 0, ws_id)
             )
             db.commit()
+        _audit("toggle_2fa", ws_id, f"2FA requirement {'enabled' if enabled else 'disabled'}")
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3806,11 +3851,8 @@ def admin_api_add_user():
                 (uid, name, email, hash_pw(pw), role, ws_id, datetime.utcnow().isoformat())
             )
             db.commit()
+        _audit("add_user", ws_id, f"User {name} ({email}) created with role {role}")
         return jsonify({"ok": True, "id": uid})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Catch-all route for SPA routing - must be last
 @app.route("/<path:path>")
 def catch_all(path):
     """Catch-all route for SPA client-side routing."""

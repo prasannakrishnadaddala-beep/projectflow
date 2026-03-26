@@ -386,7 +386,7 @@ async function dashboard() {
       api('GET', '/dashboard'),
       api('GET', '/workspaces')
     ]);
-    const recentWs = (wsData.workspaces || []).slice(0, 8);
+    const recentWs = ((wsData && wsData.workspaces) || []).slice(0, 8);
     set(`
       <div class="page-header">
         <div>
