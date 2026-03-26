@@ -3742,6 +3742,10 @@ def admin_api_set_plan():
             db.commit()
         _audit("set_plan", ws_id, f"Plan changed to {plan}")
         return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/suspend", methods=["POST"])
 def admin_api_suspend_workspace():
     if not _require_admin():
         return jsonify({"error": "Unauthorized"}), 401
@@ -3812,6 +3816,10 @@ def admin_api_reset_all_totp():
             db.commit()
         _audit("reset_all_totp", ws_id, f"Bulk 2FA reset for {count} users")
         return jsonify({"ok": True, "count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/workspace/toggle-2fa", methods=["POST"])
 def admin_api_toggle_2fa():
     if not _require_admin():
         return jsonify({"error": "Unauthorized"}), 401
@@ -3853,6 +3861,9 @@ def admin_api_add_user():
             db.commit()
         _audit("add_user", ws_id, f"User {name} ({email}) created with role {role}")
         return jsonify({"ok": True, "id": uid})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/<path:path>")
 def catch_all(path):
     """Catch-all route for SPA client-side routing."""
