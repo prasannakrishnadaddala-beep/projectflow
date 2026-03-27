@@ -363,10 +363,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
   padding:8px 14px;
   font-size:10px;
   font-weight:700;
-  color:var(--tx2);
+  color:#94a3b8;
   text-transform:uppercase;
   letter-spacing:.08em;
-  background:var(--sf2);
+  background:rgba(15,14,23,0.4);
   border-bottom:1px solid var(--bd);
   border-top:1px solid var(--bd);
   white-space:nowrap;
@@ -374,7 +374,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 }
 .vault-th input{
   background:transparent;border:none;outline:none;
-  font-size:10px;font-weight:700;color:var(--tx2);
+  font-size:10px;font-weight:700;color:#94a3b8;
   text-transform:uppercase;letter-spacing:.08em;
   font-family:inherit;width:100%;cursor:text;
 }
@@ -396,7 +396,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 }
 .vault-td input:focus{color:var(--ac);}
 .vault-td input::placeholder{color:var(--tx3);}
-.vault-row:hover .vault-td,.vault-row:hover .vault-row-num{background:var(--ac3);}
+.vault-row:hover .vault-td,.vault-row:hover .vault-row-num{background:rgba(90,94,247,.12);}
 .vault-row-num{
   padding:9px 8px 9px 14px;
   color:var(--tx3);font-size:10px;font-family:monospace;
@@ -831,89 +831,7 @@ function AppLoader(){
 }
 
 const api={
-  get: async (u) => {
-    try {
-      const r = await fetch(u, {credentials: 'include'});
-      if (!r.ok) {
-        if (r.status === 401) {
-          console.warn('[API] 401 Unauthorized:', u);
-          return null;
-        }
-        const errData = await r.json().catch(() => ({}));
-        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
-      }
-      return await r.json();
-    } catch (e) {
-      console.error('[API] Network error:', u, e);
-      return null;
-    }
-  },
-  post: async (u, b) => {
-    try {
-      const r = await fetch(u, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(b)
-      });
-      if (!r.ok) {
-        if (r.status === 401) return null;
-        const errData = await r.json().catch(() => ({}));
-        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
-      }
-      return await r.json();
-    } catch (e) {
-      console.error('[API] Network error:', u, e);
-      return null;
-    }
-  },
-  put: async (u, b) => {
-    try {
-      const r = await fetch(u, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(b)
-      });
-      if (!r.ok) {
-        if (r.status === 401) return null;
-        const errData = await r.json().catch(() => ({}));
-        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
-      }
-      return await r.json();
-    } catch (e) {
-      console.error('[API] Network error:', u, e);
-      return null;
-    }
-  },
-  del: async (u) => {
-    try {
-      const r = await fetch(u, {method: 'DELETE', credentials: 'include'});
-      if (!r.ok) {
-        if (r.status === 401) return null;
-        const errData = await r.json().catch(() => ({}));
-        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
-      }
-      return await r.json();
-    } catch (e) {
-      console.error('[API] Network error:', u, e);
-      return null;
-    }
-  },
-  upload: async (u, fd) => {
-    try {
-      const r = await fetch(u, {method: 'POST', credentials: 'include', body: fd});
-      if (!r.ok) {
-        if (r.status === 401) return null;
-        const errData = await r.json().catch(() => ({}));
-        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
-      }
-      return await r.json();
-    } catch (e) {
-      console.error('[API] Network error:', u, e);
-      return null;
-    }
-  },
+  get:u=>fetch(u,{credentials:'include'}).then(r=>r.json()).catch(()=>({})), post:(u,b)=>fetch(u,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), put:(u,b)=>fetch(u,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), del:u=>fetch(u,{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(()=>({})), upload:(u,fd)=>fetch(u,{method:'POST',credentials:'include',body:fd}).then(r=>r.json()).catch(()=>({})),
 };
 
 const STAGES={
@@ -4961,15 +4879,7 @@ function TeamView({users,cu,reload}){
   const toggleMember=id=>{setTMembers(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);};
 
   const umap=safe(users).filter(u=>u&&u.id).reduce((a,u)=>{a[u.id]=u;return a;},{});
-  const filteredMembers=useMemo(()=>{
-    const userArray=safe(users);
-    // Extra validation to catch non-array edge cases
-    if(!Array.isArray(userArray)){
-      console.error('[TeamView] users is not an array:',typeof users,users);
-      return [];
-    }
-    return userArray.filter(u=>u&&u.id&&u.name&&u.email&&(!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase())));
-  },[users,memberSearch]);
+  const filteredMembers=useMemo(()=>safe(users).filter(u=>u&&u.id&&u.name&&u.email&&(!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase()))),[users,memberSearch]);
   const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const ROLE_COLORS={Admin:'var(--ac)',Manager:'var(--gn)',TeamLead:'var(--cy)',Developer:'var(--pu)',Tester:'var(--am)',Viewer:'var(--tx3)'};
 
@@ -4998,7 +4908,7 @@ function TeamView({users,cu,reload}){
       <div class="card" style=${{padding:0,overflow:'auto'}}>
         <table style=${{width:'100%',borderCollapse:'collapse'}}>
           <thead><tr style=${{borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
-            ${['Member','Email','Password & 2FA','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
+            ${['Member','Email','Password','2FA / Authenticator','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
           </tr></thead>
           <tbody>
             ${filteredMembers.length===0?html`<tr><td colspan="5" style=${{padding:'20px',textAlign:'center',color:'var(--tx3)',fontSize:12}}>No members match your search.</td></tr>`:null}
@@ -8466,15 +8376,6 @@ function App(){
       const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw,ticketsRaw]=await Promise.all([
         api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'),api.get('/api/tickets'), ]);
-      
-      // Handle 401 errors - API returns null for auth failures
-      if (users === null || projects === null || tasks === null) {
-        console.warn('[Load] Authentication failed, clearing session');
-        setCu(null);
-        setData({users:[],projects:[],tasks:[],notifs:[],teams:[],tickets:[]});
-        return;
-      }
-      
       const teams=Array.isArray(teamsRaw)?teamsRaw:[];
       const tickets=Array.isArray(ticketsRaw)?ticketsRaw:[];
       setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams,tickets});
@@ -8483,8 +8384,8 @@ function App(){
       if(ws)setWsDmEnabled(ws.dm_enabled!==0);
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
-    }catch(e){console.error('[Load] Error:',e);}
-  },[cu,teamCtx]);
+    }catch(e){console.error(e);}
+  },[cu]);
 
   useEffect(()=>{
     // Try to get current user; if backend is unreachable, enter offline mode
