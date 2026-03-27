@@ -7725,35 +7725,41 @@ function renderVaultGrid(filtered, unlocked, filter, onUnlock, onLock, onEdit, o
 
 // ── Main VaultView ────────────────────────────────────────────────────────────
 function VaultView({cu}){
-  // ── Key is computed fresh each render from the live cu object ────────────
-  // NEVER cache it in useState — cu is null on first render (auth pending)
-  const key = vaultStorageKey(cu);
+  const [cards,    setCards]   = useState([]);
+  const [vLoading, setVLoading]= useState(true);
+  const [unlocked, setUnlocked]= useState({});
+  const [filter,   setFilter]  = useState('');
+  const [modal,    setModal]   = useState(null);
+  const [mTitle,   setMTitle]  = useState('');
+  const [mTags,    setMTags]   = useState('');
+  const [mRows,    setMRows]   = useState([]);
+  const [mPw1,     setMPw1]    = useState('');
+  const [mPw2,     setMPw2]    = useState('');
+  const [mErr,     setMErr]    = useState('');
 
-  const [cards,   setCards]   = useState([]);
-  const [unlocked,setUnlocked]= useState({});
-  const [filter,  setFilter]  = useState('');
-  const [modal,   setModal]   = useState(null);
-  const [mTitle,  setMTitle]  = useState('');
-  const [mTags,   setMTags]   = useState('');
-  const [mRows,   setMRows]   = useState([]);
-  const [mPw1,    setMPw1]    = useState('');
-  const [mPw2,    setMPw2]    = useState('');
-  const [mErr,    setMErr]    = useState('');
+  // Offline fallback key (used only when backend unreachable)
+  const offlineKey = vaultStorageKey(cu);
 
-  // Reload cards from localStorage whenever the resolved user identity changes.
-  // This is the ONLY place cards are loaded — fixes the race where cu is null
-  // on first mount and useState's lazy-init picks up the wrong (guest) key.
+  // Load cards — from API when online, from localStorage when offline
   useEffect(()=>{
-    const currentKey = vaultStorageKey(cu);
-    setCards(vaultLoad(currentKey));
-  }, [cu && cu.id]);   // re-run when the user id changes (null → real id, or switch user)
-
-  // save always writes to the key that matches the current cu — never stale
-  function save(next){
-    const currentKey = vaultStorageKey(cu);
-    setCards(next);
-    vaultPersist(currentKey, next);
-  }
+    if(!cu) return;
+    if(cu._offline){
+      setCards(vaultLoad(offlineKey));
+      setVLoading(false);
+      return;
+    }
+    setVLoading(true);
+    api.get('/api/vault').then(data=>{
+      if(Array.isArray(data)){
+        setCards(data.map(c=>({
+          ...c,
+          rows: typeof c.rows==='string' ? (()=>{try{return JSON.parse(c.rows);}catch(_){return [];}}()) : (c.rows||[]),
+          lockHash: c.lock_hash||''
+        })));
+      }
+      setVLoading(false);
+    }).catch(()=>{ setVLoading(false); });
+  }, [cu && cu.id]);
 
   function copyVal(v){ navigator.clipboard.writeText(v).catch(()=>{}); }
 
@@ -7771,34 +7777,73 @@ function VaultView({cu}){
   function handleUnlock(id){ setUnlocked(u=>({...u,[id]:true})); }
   function handleLock(id){ setUnlocked(u=>{ const n={...u}; delete n[id]; return n; }); }
 
+  // Persist helpers — API when online, localStorage when offline
+  async function apiCreate(card){
+    const res = await api.post('/api/vault', {
+      title: card.title, tags: card.tags, rows: card.rows, lock_hash: card.lockHash||''
+    });
+    // Replace temp id with server-assigned id
+    if(res && res.id){
+      setCards(prev=>prev.map(c=>c.id===card.id ? {...c, id:res.id, created:res.created} : c));
+    }
+  }
+  async function apiUpdate(card){
+    await api.put('/api/vault/'+card.id, {
+      title: card.title, tags: card.tags, rows: card.rows, lock_hash: card.lockHash||''
+    });
+  }
+  async function apiDelete(id){
+    await api.del('/api/vault/'+id);
+  }
+
   async function handleSubmit(){
     if(!modal) return;
     const t = modal.type;
     const cleanRows = Array.isArray(mRows) ? mRows.filter(r=>(r.k||'').trim()) : vaultParseRows(mRows);
+
     if(t==='new'){
       if(!mTitle.trim()){ setMErr('Title is required'); return; }
       const card={ id:vaultNewId(), title:mTitle.trim(), tags:mTags.trim(), rows:cleanRows, lockHash:'' };
-      save([card,...cards]); closeModal();
+      const next = [card, ...cards];
+      setCards(next);
+      closeModal();
+      if(cu && !cu._offline) apiCreate(card);
+      else vaultPersist(offlineKey, next);
+
     } else if(t==='edit'){
       if(!mTitle.trim()){ setMErr('Title is required'); return; }
-      let next=cards.map(c=>c.id!==modal.card.id?c:{...c,title:mTitle.trim(),tags:mTags.trim(),rows:cleanRows});
+      let updated = {...modal.card, title:mTitle.trim(), tags:mTags.trim(), rows:cleanRows};
       if(modal.card.lockHash && mPw1){
-        const h=await vaultHashPw(mPw1);
-        if(h!==modal.card.lockHash){ setMErr('Wrong password — lock kept'); return; }
-        next=next.map(c=>c.id===modal.card.id?{...c,lockHash:''}:c);
+        const h = await vaultHashPw(mPw1);
+        if(h !== modal.card.lockHash){ setMErr('Wrong password — lock kept'); return; }
+        updated = {...updated, lockHash:''};
         setUnlocked(u=>{ const n={...u}; delete n[modal.card.id]; return n; });
       }
-      save(next); closeModal();
+      const next = cards.map(c=>c.id===modal.card.id ? updated : c);
+      setCards(next);
+      closeModal();
+      if(cu && !cu._offline) apiUpdate(updated);
+      else vaultPersist(offlineKey, next);
+
     } else if(t==='lock'){
       if(!mPw1){ setMErr('Enter a password'); return; }
       if(mPw1!==mPw2){ setMErr('Passwords do not match'); return; }
-      const h=await vaultHashPw(mPw1);
-      save(cards.map(c=>c.id===modal.card.id?{...c,lockHash:h}:c));
+      const h = await vaultHashPw(mPw1);
+      const updated = {...modal.card, lockHash: h};
+      const next = cards.map(c=>c.id===modal.card.id ? updated : c);
+      setCards(next);
       closeModal();
+      if(cu && !cu._offline) apiUpdate(updated);
+      else vaultPersist(offlineKey, next);
+
     } else if(t==='del'){
-      save(cards.filter(c=>c.id!==modal.card.id));
-      setUnlocked(u=>{ const n={...u}; delete n[modal.card.id]; return n; });
+      const id = modal.card.id;
+      const next = cards.filter(c=>c.id!==id);
+      setCards(next);
+      setUnlocked(u=>{ const n={...u}; delete n[id]; return n; });
       closeModal();
+      if(cu && !cu._offline) apiDelete(id);
+      else vaultPersist(offlineKey, next);
     }
   }
 
@@ -7832,15 +7877,15 @@ function VaultView({cu}){
             value=${filter}
             onInput=${e=>setFilter(e.target.value)}
             onFocus=${e=>{
-              // Clear any browser-injected autocomplete value on first focus
               if(e.target.value && e.target.value.includes('@')){ setFilter(''); e.target.value=''; }
             }}/>
         </div>
         <span style=${{fontSize:12,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',padding:'5px 12px',borderRadius:100,fontWeight:600}}>${countLabel}</span>
       </div>
-      <div style=${VS.grid}>
-        ${renderVaultGrid(filtered, unlocked, filter, handleUnlock, handleLock, openEdit, openLock, openDel, copyVal)}
-      </div>
+      ${vLoading ? html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)',fontSize:13}}>Loading vault…</div>` :
+        html`<div style=${VS.grid}>
+          ${renderVaultGrid(filtered, unlocked, filter, handleUnlock, handleLock, openEdit, openLock, openDel, copyVal)}
+        </div>`}
       <${VaultModal}
         modal=${modal}
         mTitle=${mTitle} setMTitle=${setMTitle}

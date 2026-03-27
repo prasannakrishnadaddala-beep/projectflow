@@ -155,9 +155,11 @@ def get_secret_key():
 
 app = Flask(__name__)
 app.secret_key = get_secret_key()
+_is_https = os.environ.get("HTTPS","").lower() in ("1","true","on") or              os.environ.get("RAILWAY_ENVIRONMENT","") != "" or              os.environ.get("RENDER","") != ""
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SECURE=False,PERMANENT_SESSION_LIFETIME=86400*7,
+    SESSION_COOKIE_SECURE=_is_https,PERMANENT_SESSION_LIFETIME=86400*30,
+    SESSION_COOKIE_NAME="pf_session",
     MAX_CONTENT_LENGTH=150*1024*1024)
 CORS(app, supports_credentials=True)
 
@@ -779,6 +781,8 @@ def init_db():
             "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
             "ALTER TABLE time_logs ADD COLUMN task_id TEXT DEFAULT ''",
             "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
+            "CREATE TABLE IF NOT EXISTS vault_cards (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT DEFAULT '', tags TEXT DEFAULT '', rows TEXT DEFAULT '[]', lock_hash TEXT DEFAULT '', created TEXT, updated TEXT)",
+            "CREATE INDEX IF NOT EXISTS idx_vault_cards_user ON vault_cards(user_id)",
         ]:
             try: db.execute(stmt)
             except: pass
@@ -1499,6 +1503,44 @@ def me():
         for k in ("password","plain_password","totp_secret"):
             result.pop(k, None)
         return jsonify(result)
+
+# ── Vault ─────────────────────────────────────────────────────────────────────
+@app.route("/api/vault", methods=["GET"])
+@login_required
+def vault_list():
+    with get_db() as db:
+        rows = db.execute("SELECT * FROM vault_cards WHERE user_id=? ORDER BY created DESC", (session["user_id"],)).fetchall()
+        return jsonify([dict(r) for r in rows])
+
+@app.route("/api/vault", methods=["POST"])
+@login_required
+def vault_create():
+    d = request.json or {}
+    now = datetime.utcnow().isoformat()
+    cid = "c" + str(int(time.time()*1000)) + secrets.token_hex(3)
+    with get_db() as db:
+        db.execute("INSERT INTO vault_cards (id,user_id,title,tags,rows,lock_hash,created,updated) VALUES (?,?,?,?,?,?,?,?)",
+            (cid, session["user_id"], d.get("title",""), d.get("tags",""),
+             json.dumps(d.get("rows",[])), d.get("lock_hash",""), now, now))
+    return jsonify({"id": cid, "created": now})
+
+@app.route("/api/vault/<cid>", methods=["PUT"])
+@login_required
+def vault_update(cid):
+    d = request.json or {}
+    now = datetime.utcnow().isoformat()
+    with get_db() as db:
+        db.execute("UPDATE vault_cards SET title=?,tags=?,rows=?,lock_hash=?,updated=? WHERE id=? AND user_id=?",
+            (d.get("title",""), d.get("tags",""), json.dumps(d.get("rows",[])),
+             d.get("lock_hash",""), now, cid, session["user_id"]))
+    return jsonify({"ok": True})
+
+@app.route("/api/vault/<cid>", methods=["DELETE"])
+@login_required
+def vault_delete(cid):
+    with get_db() as db:
+        db.execute("DELETE FROM vault_cards WHERE id=? AND user_id=?", (cid, session["user_id"]))
+    return jsonify({"ok": True})
 
 # ── Workspace ─────────────────────────────────────────────────────────────────
 @app.route("/api/workspace")
