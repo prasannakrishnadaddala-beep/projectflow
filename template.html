@@ -7236,26 +7236,15 @@ function PasswordGeneratorView(){
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VAULT VIEW — Personal credential & data store for all roles
-// ─────────────────────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// VAULT VIEW — Personal credential & data store, all roles
-// No nested template literals — every html` tag is at the top level of its
-// enclosing function so the HTM parser never sees backticks inside ${}.
-// ─────────────────────────────────────────────────────────────────────────────
+// ── VAULT VIEW — Spreadsheet-style credential store ───────────────────────────
 
-// ── Storage helpers ──────────────────────────────────────────────────────────
+// ── Storage helpers ───────────────────────────────────────────────────────────
 function vaultStorageKey(cu){
-  // If we have a real user id, use it and cache it for offline recovery
   if(cu && cu.id && cu.id !== 'offline'){
     try{ localStorage.setItem('vewit_last_uid', cu.id); }catch(_){}
     return 'vewit_vault_v2_'+cu.id;
   }
-  // Offline mode — try to recover the last known real user id
-  try{
-    const lastUid = localStorage.getItem('vewit_last_uid');
-    if(lastUid) return 'vewit_vault_v2_'+lastUid;
-  }catch(_){}
+  try{ const lastUid = localStorage.getItem('vewit_last_uid'); if(lastUid) return 'vewit_vault_v2_'+lastUid; }catch(_){}
   return 'vewit_vault_v2_guest';
 }
 function vaultLoad(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch(_){ return []; } }
@@ -7265,462 +7254,509 @@ async function vaultHashPw(pw){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('vewit::'+pw));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-function vaultParseRows(raw){
-  return (raw||'').split('\n').map(line=>{
-    const secret = line.startsWith('\uD83D\uDD12') || line.startsWith('*');
-    const clean  = secret ? line.replace(/^[\uD83D\uDD12*]\s*/,'') : line;
-    const colon  = clean.indexOf(':');
-    if(colon<0) return null;
-    return { k:clean.slice(0,colon).trim(), v:clean.slice(colon+1).trim(), secret };
-  }).filter(Boolean);
-}
 
-// ── Vault Icon System ─────────────────────────────────────────────────────────
+// ── Icon map ──────────────────────────────────────────────────────────────────
 const VAULT_ICON_MAP = [
-  { keys:['aws','amazon','s3','ec2','lambda','rds','cloudfront','amplify'],  icon:'☁️',  bg:'rgba(255,153,0,.13)',  border:'rgba(255,153,0,.3)'  },
-  { keys:['gcp','google cloud','firebase','bigquery','gcs'],                 icon:'🌐',  bg:'rgba(66,133,244,.13)', border:'rgba(66,133,244,.3)' },
-  { keys:['azure','microsoft','office365','sharepoint','teams'],             icon:'🔷',  bg:'rgba(0,120,212,.13)', border:'rgba(0,120,212,.3)'  },
-  { keys:['github','gitlab','bitbucket','git','repo'],                       icon:'🐙',  bg:'rgba(255,255,255,.06)',border:'rgba(255,255,255,.18)'},
-  { keys:['database','db','mysql','postgres','mongo','redis','sqlite','supabase','neon','planetscale'], icon:'🗃️', bg:'rgba(6,182,212,.12)', border:'rgba(6,182,212,.28)' },
-  { keys:['slack','discord','teams','telegram','whatsapp','chat'],           icon:'💬',  bg:'rgba(99,91,255,.13)', border:'rgba(99,91,255,.28)'  },
-  { keys:['stripe','payment','billing','razorpay','paypal','invoice'],       icon:'💳',  bg:'rgba(99,91,255,.12)', border:'rgba(99,91,255,.28)'  },
-  { keys:['email','smtp','sendgrid','mailgun','postmark','ses','mail'],       icon:'📧',  bg:'rgba(90,94,247,.12)', border:'rgba(90,94,247,.28)'  },
-  { keys:['ssh','server','vps','host','nginx','apache','linux','ubuntu','debian'], icon:'🖥️', bg:'rgba(16,185,129,.1)', border:'rgba(16,185,129,.28)'},
-  { keys:['docker','kubernetes','k8s','container','helm'],                   icon:'🐳',  bg:'rgba(9,150,224,.13)', border:'rgba(9,150,224,.28)'  },
-  { keys:['api','token','key','secret','credential','oauth','jwt'],          icon:'🔑',  bg:'rgba(245,158,11,.12)',border:'rgba(245,158,11,.28)' },
-  { keys:['wallet','crypto','btc','eth','metamask','web3'],                  icon:'🪙',  bg:'rgba(255,184,0,.12)', border:'rgba(255,184,0,.28)'  },
-  { keys:['vpn','proxy','tunnel','network','firewall'],                      icon:'🌐',  bg:'rgba(168,85,247,.12)',border:'rgba(168,85,247,.28)' },
-  { keys:['figma','design','adobe','canva','sketch'],                        icon:'🎨',  bg:'rgba(162,89,255,.13)',border:'rgba(162,89,255,.28)' },
-  { keys:['jira','asana','notion','trello','linear','clickup','monday'],     icon:'📋',  bg:'rgba(0,82,204,.12)',  border:'rgba(0,82,204,.28)'  },
-  { keys:['shopify','woocommerce','ecommerce','store'],                      icon:'🛒',  bg:'rgba(150,191,71,.12)',border:'rgba(150,191,71,.28)' },
-  { keys:['twilio','sms','phone','otp','verify'],                            icon:'📱',  bg:'rgba(245,60,28,.12)', border:'rgba(245,60,28,.28)'  },
-  { keys:['openai','claude','gemini','anthropic','llm','ai','ml','model'],   icon:'🤖',  bg:'rgba(16,163,127,.12)',border:'rgba(16,163,127,.28)' },
-  { keys:['note','memo','personal','misc','other','general'],                icon:'📝',  bg:'rgba(255,255,255,.05)',border:'rgba(255,255,255,.12)'},
+  { keys:['aws','amazon','s3','ec2','lambda'],         icon:'☁️',  bg:'rgba(255,153,0,.15)',  border:'rgba(255,153,0,.35)'  },
+  { keys:['gcp','google','firebase','bigquery'],       icon:'🌐',  bg:'rgba(66,133,244,.15)', border:'rgba(66,133,244,.3)'  },
+  { keys:['azure','microsoft','office365'],            icon:'🔷',  bg:'rgba(0,120,212,.15)',  border:'rgba(0,120,212,.3)'   },
+  { keys:['github','gitlab','bitbucket','git'],        icon:'🐙',  bg:'rgba(200,200,200,.08)',border:'rgba(200,200,200,.2)' },
+  { keys:['database','db','mysql','postgres','mongo','redis','sqlite'], icon:'🗃️', bg:'rgba(6,182,212,.12)', border:'rgba(6,182,212,.3)' },
+  { keys:['slack','discord','telegram','chat'],        icon:'💬',  bg:'rgba(99,91,255,.15)',  border:'rgba(99,91,255,.3)'   },
+  { keys:['stripe','payment','billing','razorpay'],    icon:'💳',  bg:'rgba(99,91,255,.12)',  border:'rgba(99,91,255,.28)'  },
+  { keys:['email','smtp','sendgrid','mailgun','mail'],  icon:'📧',  bg:'rgba(90,94,247,.12)',  border:'rgba(90,94,247,.28)'  },
+  { keys:['ssh','server','vps','nginx','linux'],        icon:'🖥️',  bg:'rgba(16,185,129,.1)',  border:'rgba(16,185,129,.28)' },
+  { keys:['docker','kubernetes','k8s','container'],    icon:'🐳',  bg:'rgba(9,150,224,.13)',  border:'rgba(9,150,224,.28)'  },
+  { keys:['api','token','key','secret','oauth','jwt'],  icon:'🔑',  bg:'rgba(245,158,11,.12)', border:'rgba(245,158,11,.28)' },
+  { keys:['wallet','crypto','btc','eth','web3'],       icon:'🪙',  bg:'rgba(255,184,0,.12)',  border:'rgba(255,184,0,.28)'  },
+  { keys:['openai','claude','gemini','llm','ai','ml'], icon:'🤖',  bg:'rgba(16,163,127,.12)', border:'rgba(16,163,127,.28)' },
+  { keys:['note','memo','personal','misc'],            icon:'📝',  bg:'rgba(255,255,255,.05)',border:'rgba(255,255,255,.12)'},
 ];
 const VAULT_ICON_DEFAULT = { icon:'🗂️', bg:'rgba(90,94,247,.08)', border:'rgba(90,94,247,.2)' };
-
 function vaultGetIcon(title, tags){
   const hay = ((title||'')+(tags||'')).toLowerCase();
   for(const e of VAULT_ICON_MAP){ if(e.keys.some(k=>hay.includes(k))) return e; }
   return VAULT_ICON_DEFAULT;
 }
 
-// ── Shared styles (plain object, no template literals) ───────────────────────
+// ── Shared styles ─────────────────────────────────────────────────────────────
 const VS = {
-  wrap:    { padding:'28px 30px', maxWidth:1100 },
-  ph:      { display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:22,gap:12 },
-  phTitle: { fontSize:21,fontWeight:800,letterSpacing:'-.5px',color:'var(--tx)' },
-  phSub:   { fontSize:13,color:'var(--tx2)',marginTop:3 },
-  btnPri:  { background:'linear-gradient(135deg,#5a5ef7,#a855f7)',color:'#fff',border:'none',padding:'8px 18px',borderRadius:100,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6 },
-  btnCan:  { background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:13,padding:'7px 16px',borderRadius:100,cursor:'pointer',fontFamily:'inherit' },
-  btnDng:  { background:'linear-gradient(135deg,#ef4444,#b91c1c)',color:'#fff',border:'none',fontSize:13,fontWeight:700,padding:'7px 16px',borderRadius:100,cursor:'pointer',fontFamily:'inherit' },
-  ab:      { background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:11,padding:'3px 9px',borderRadius:6,cursor:'pointer',fontFamily:'inherit',marginRight:3,transition:'all .15s' },
-  search:  { background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'8px 14px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',outline:'none',width:280 },
-  grid:    { display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:16,marginBottom:20 },
-  card:    { background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:14,overflow:'hidden',position:'relative',transition:'transform .15s,box-shadow .15s,border-color .15s' },
-  cardAccent: { height:3,width:'100%' },
-  cardHd:  { display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',borderBottom:'1px solid var(--bd)',gap:8 },
-  cardIcon:{ width:36,height:36,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0,marginRight:2 },
-  cardTi:  { fontSize:13,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0 },
-  cardTiTx:{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' },
-  cardBd:  { padding:'12px 14px' },
-  row:     { display:'flex',justifyContent:'space-between',alignItems:'center',padding:'5px 0',fontSize:12.5,gap:8,borderBottom:'1px solid rgba(0,0,0,.04)' },
-  rowK:    { color:'var(--tx2)',fontSize:11.5,flexShrink:0,maxWidth:120,display:'flex',alignItems:'center',gap:4 },
-  rowV:    { color:'var(--tx)',fontWeight:500,textAlign:'right',wordBreak:'break-all',display:'flex',alignItems:'center',gap:4 },
-  cpyBtn:  { background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',fontSize:11,padding:'2px 5px',borderRadius:4,fontFamily:'inherit',transition:'color .15s' },
-  overlay: { position:'absolute',inset:0,background:'rgba(13,11,30,.9)',backdropFilter:'blur(8px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:12,borderRadius:14,zIndex:2 },
-  ulInput: { background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 12px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',outline:'none',width:210,textAlign:'center' },
-  moBack:  { position:'fixed',inset:0,background:'rgba(0,0,0,.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)' },
-  moBox:   { background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'26px',width:480,maxWidth:'calc(100vw - 28px)',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 32px 64px rgba(0,0,0,.5)' },
-  moTi:    { fontSize:16,fontWeight:800,marginBottom:6,color:'var(--tx)' },
-  moDe:    { fontSize:13,color:'var(--tx2)',marginBottom:18,lineHeight:1.6 },
-  fg:      { marginBottom:16 },
-  lbl:     { display:'block',fontSize:11,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:6 },
-  inp:     { width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,padding:'9px 12px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',outline:'none',boxSizing:'border-box' },
-  ta:      { width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,padding:'9px 12px',fontSize:12.5,color:'var(--tx)',fontFamily:'monospace',outline:'none',resize:'vertical',lineHeight:1.6,boxSizing:'border-box',minHeight:130 },
-  hint:    { fontSize:11,color:'var(--tx2)',marginTop:5 },
-  mact:    { display:'flex',gap:10,marginTop:20,justifyContent:'flex-end' },
-  err:     { color:'#f87171',fontSize:12,marginTop:6 },
-  tag:     { display:'inline-block',fontSize:10,padding:'2px 8px',borderRadius:100,border:'1px solid var(--bd)',color:'var(--tx2)',marginRight:4,marginBottom:2 },
-  empty:   { textAlign:'center',color:'var(--tx2)',padding:'60px 20px',fontSize:14,gridColumn:'1/-1' },
-  dots:    { letterSpacing:2,color:'var(--tx2)',fontSize:10 },
+  wrap:   { padding:'24px 28px', maxWidth:1200 },
+  ph:     { display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:12 },
+  btnPri: { background:'linear-gradient(135deg,#5a5ef7,#a855f7)',color:'#fff',border:'none',padding:'8px 18px',borderRadius:100,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,transition:'opacity .15s' },
+  btnCan: { background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:13,padding:'7px 16px',borderRadius:100,cursor:'pointer',fontFamily:'inherit' },
+  moBack: { position:'fixed',inset:0,background:'rgba(0,0,0,.75)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(6px)' },
 };
 
-// ── Sub-components (no nested backticks anywhere) ─────────────────────────────
+// ── Password modal ────────────────────────────────────────────────────────────
+function VaultPwModal({title, mode, onConfirm, onClose}){
+  // mode: 'set' | 'verify'
+  const [pw1,setPw1]=useState('');
+  const [pw2,setPw2]=useState('');
+  const [err,setErr]=useState('');
 
-function VaultUnlockOverlay({card, onUnlock}){
-  const [pw,setPw]   = useState('');
-  const [err,setErr] = useState('');
-  function attempt(){
-    vaultHashPw(pw).then(h=>{
-      if(h===card.lockHash){ onUnlock(card.id); }
-      else{ setErr('Wrong password'); setPw(''); }
-    });
+  function submit(){
+    if(!pw1){ setErr('Enter a password'); return; }
+    if(mode==='set' && pw1!==pw2){ setErr('Passwords do not match'); return; }
+    vaultHashPw(pw1).then(h=>onConfirm(h)).catch(()=>setErr('Error hashing password'));
   }
-  return html`
-    <div style=${VS.overlay}>
-      <span style=${{fontSize:32}}>🔒</span>
-      <span style=${{fontSize:13,fontWeight:600,color:'rgba(200,195,240,.85)'}}>Password Protected</span>
-      <span style=${{fontSize:11,color:'rgba(200,195,240,.45)',marginTop:-4}}>${card.title}</span>
-      <input style=${VS.ulInput} type="password" placeholder="Enter password"
-        value=${pw}
-        onInput=${e=>{ setPw(e.target.value); setErr(''); }}
-        onKeyDown=${e=>{ if(e.key==='Enter') attempt(); }}/>
-      ${err && html`<span style=${{fontSize:11,color:'#f87171',marginTop:-4}}>${err}</span>`}
-      <button style=${{...VS.btnPri,fontSize:12,padding:'6px 18px'}} onClick=${attempt}>Unlock</button>
-    </div>`;
-}
-
-function VaultRowItem({r, showRows, onCopy, isLast}){
-  const masked = r.secret && !showRows;
-  const rowStyle = {...VS.row, borderBottom: isLast ? 'none' : '1px solid var(--bd2)'};
-  if(masked){
-    return html`
-      <div style=${rowStyle}>
-        <span style=${VS.rowK}>
-          <span style=${{width:5,height:5,borderRadius:'50%',background:'var(--rd)',opacity:.6,display:'inline-block',flexShrink:0}}></span>
-          ${r.k}
-        </span>
-        <span style=${VS.rowV}><span style=${VS.dots}>${'\u2022'.repeat(8)}</span></span>
-      </div>`;
-  }
-  return html`
-    <div style=${rowStyle}>
-      <span style=${VS.rowK}>
-        <span style=${{width:5,height:5,borderRadius:'50%',background:r.secret?'var(--am)':'var(--bd)',display:'inline-block',flexShrink:0}}></span>
-        ${r.k}
-      </span>
-      <span style=${VS.rowV}>
-        <span style=${{fontSize:12.5,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${r.v}</span>
-        ${r.v && html`<button style=${VS.cpyBtn} title="Copy" onClick=${()=>onCopy(r.v)}>${'\u2398'}</button>`}
-      </span>
-    </div>`;
-}
-
-function VaultTagList({tags}){
-  const items = (tags||'').split(',').map(t=>t.trim()).filter(Boolean);
-  if(!items.length) return null;
-  return html`<div style=${{marginBottom:8}}>${items.map(t=>html`<span key=${t} style=${VS.tag}>${t}</span>`)}</div>`;
-}
-
-function VaultLockBadge({isLocked, isUnlocked}){
-  if(!isLocked) return null;
-  const bg     = isUnlocked ? 'rgba(34,197,94,.1)'   : 'rgba(239,68,68,.1)';
-  const color  = isUnlocked ? '#4ade80'               : '#f87171';
-  const border = isUnlocked ? 'rgba(34,197,94,.25)'  : 'rgba(239,68,68,.25)';
-  const label  = isUnlocked ? '🔓 Unlocked'          : '🔒 Locked';
-  const s = { fontSize:9,fontWeight:700,padding:'2px 7px',borderRadius:100,border:'1px solid',background:bg,color,borderColor:border,whiteSpace:'nowrap',flexShrink:0 };
-  return html`<span style=${s}>${label}</span>`;
-}
-
-function VaultCard({card, isUnlocked, onUnlock, onLock, onEdit, onLockCard, onDelete, onCopy}){
-  const isLocked = !!card.lockHash;
-  const showRows = !isLocked || isUnlocked;
-  const rows = card.rows || [];
-  const iconInfo = vaultGetIcon(card.title, card.tags);
-  const fieldCount = rows.length;
-
-  return html`
-    <div style=${VS.card}
-      onMouseEnter=${e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='var(--sh2)';e.currentTarget.style.borderColor='rgba(90,94,247,0.25)';}}
-      onMouseLeave=${e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';e.currentTarget.style.borderColor='var(--bd)';}}>
-      ${isLocked && !isUnlocked && html`<${VaultUnlockOverlay} card=${card} onUnlock=${onUnlock}/>`}
-      <div style=${{...VS.cardAccent, background:'linear-gradient(90deg,'+iconInfo.border+',transparent)'}}></div>
-      <div style=${VS.cardHd}>
-        <div style=${{...VS.cardIcon, background:iconInfo.bg, border:'1px solid '+iconInfo.border}}>${iconInfo.icon}</div>
-        <div style=${VS.cardTi}>
-          <span style=${VS.cardTiTx}>${card.title}</span>
-          <${VaultLockBadge} isLocked=${isLocked} isUnlocked=${isUnlocked}/>
-          <span style=${{fontSize:9.5,fontWeight:700,padding:'1px 6px',borderRadius:100,background:'var(--sf2)',border:'1px solid var(--bd)',color:'var(--tx2)',flexShrink:0,whiteSpace:'nowrap'}}>${fieldCount} field${fieldCount!==1?'s':''}</span>
-        </div>
-        <div style=${{display:'flex',gap:4,flexShrink:0}}>
-          ${isLocked && isUnlocked && html`<button style=${VS.ab} title="Lock" onClick=${()=>onLock(card.id)}>🔒</button>`}
-          ${!isLocked && html`<button style=${VS.ab} title="Add lock" onClick=${()=>onLockCard(card)}>🔓</button>`}
-          <button style=${VS.ab} title="Edit" onClick=${()=>onEdit(card)}>✏️</button>
-          <button style=${{...VS.ab,marginRight:0,color:'var(--rd)'}} title="Delete" onClick=${()=>onDelete(card)}>🗑️</button>
-        </div>
-      </div>
-      <div style=${VS.cardBd}>
-        <${VaultTagList} tags=${card.tags}/>
-        ${rows.length === 0 && html`<div style=${{color:'var(--tx2)',fontSize:12,padding:'4px 0',opacity:.7}}>No rows yet — edit to add fields.</div>`}
-        ${rows.map((r,i)=>html`<${VaultRowItem} key=${i} r=${r} showRows=${showRows} onCopy=${onCopy} isLast=${i===rows.length-1}/>`)}
-      </div>
-    </div>`;
-}
-
-function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRows, setMRows, mPw1, setMPw1, mPw2, setMPw2}){
-  const iconInfo = vaultGetIcon(mTitle, mTags);
   const inp = {
-    background:'var(--sf2)', border:'1.5px solid var(--bd)', borderRadius:8,
-    padding:'8px 10px', fontSize:13, color:'var(--tx)', fontFamily:'inherit',
-    outline:'none', boxSizing:'border-box', transition:'border-color .15s,box-shadow .15s',
+    width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,
+    padding:'9px 12px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',
+    outline:'none',boxSizing:'border-box',
   };
-  const labelStyle = { display:'block', fontSize:11, fontWeight:700, color:'var(--tx2)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:7 };
-  const fgStyle = { marginBottom:18 };
-
-  // ── Key-Value row helpers ────────────────────────────────────────────────────
-  const rows = Array.isArray(mRows) ? mRows : [];
-  function addRow(){ setMRows([...rows, {k:'',v:'',secret:false}]); }
-  function removeRow(i){ const n=[...rows]; n.splice(i,1); setMRows(n.length?n:[{k:'',v:'',secret:false}]); }
-  function updateRow(i, field, val){ const n=rows.map((r,idx)=>idx===i?{...r,[field]:val}:r); setMRows(n); }
-  function toggleSecret(i){ updateRow(i,'secret',!rows[i].secret); }
-
-  if(type==='new' || type==='edit'){
-    return html`
-      <div>
-        <div style=${fgStyle}>
-          <label style=${labelStyle}>Card Title</label>
-          <div style=${{position:'relative'}}>
-            <div style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',fontSize:17,lineHeight:1,pointerEvents:'none'}}>${iconInfo.icon}</div>
-            <input style=${{...inp, paddingLeft:38, borderRadius:10, padding:'10px 13px', paddingLeft:38}}
-              placeholder="e.g. AWS Production, GitLab Creds…"
-              autoComplete="off" name="vault-title"
-              value=${mTitle} onInput=${e=>setMTitle(e.target.value)}
-              onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 3px rgba(90,94,247,0.12)';}}
-              onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
-          </div>
-        </div>
-
-        <div style=${fgStyle}>
-          <label style=${labelStyle}>Tags <span style=${{fontWeight:400,textTransform:'none',letterSpacing:0,opacity:.6}}>(comma-separated)</span></label>
-          <input style=${{...inp, borderRadius:10, padding:'10px 13px'}}
-            placeholder="e.g. aws, prod, infra"
-            autoComplete="off" name="vault-tags"
-            value=${mTags} onInput=${e=>setMTags(e.target.value)}
-            onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 3px rgba(90,94,247,0.12)';}}
-            onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
-        </div>
-
-        <div style=${fgStyle}>
-          <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-            <label style=${{...labelStyle, marginBottom:0}}>Fields</label>
-            <span style=${{fontSize:10,color:'var(--tx2)',opacity:.7}}>🔒 toggle = secret (hidden when locked)</span>
-          </div>
-
-          <div style=${{background:'var(--sf2)',border:'1.5px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
-            <div style=${{display:'grid',gridTemplateColumns:'auto 1fr 1fr auto',alignItems:'center',padding:'6px 10px 4px',borderBottom:'1px solid var(--bd)',gap:6}}>
-              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em',width:22,textAlign:'center'}}>🔒</span>
-              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em'}}>Key</span>
-              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em'}}>Value</span>
-              <span style=${{width:20}}></span>
-            </div>
-
-            ${rows.map((row,i) => {
-              const isSecret = !!row.secret;
-              return html`<div key=${i} style=${{
-                display:'grid', gridTemplateColumns:'auto 1fr 1fr auto',
-                alignItems:'center', gap:6, padding:'5px 10px',
-                background: isSecret ? 'rgba(245,158,11,.05)' : 'transparent',
-                borderBottom: i < rows.length-1 ? '1px solid var(--bd)' : 'none',
-                transition:'background .15s',
-              }}>
-                <button
-                  title=${isSecret ? 'Secret — click to make public' : 'Click to mark secret'}
-                  style=${{
-                    background: isSecret ? 'rgba(245,158,11,.18)' : 'var(--sf)',
-                    border: isSecret ? '1px solid rgba(245,158,11,.4)' : '1px solid var(--bd)',
-                    borderRadius:6, width:26, height:26, cursor:'pointer',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    fontSize:13, flexShrink:0, transition:'all .15s',
-                  }}
-                  onClick=${()=>toggleSecret(i)}>
-                  ${isSecret ? '🔒' : '👁️'}
-                </button>
-                <input
-                  style=${{...inp, fontSize:12.5}}
-                  placeholder="Key"
-                  autoComplete="off"
-                  value=${row.k}
-                  onInput=${e=>updateRow(i,'k',e.target.value)}
-                  onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 2px rgba(90,94,247,0.1)';}}
-                  onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
-                <input
-                  style=${{...inp, fontSize:12.5, fontFamily: isSecret ? 'monospace' : 'inherit'}}
-                  placeholder="Value"
-                  type=${isSecret ? 'password' : 'text'}
-                  autoComplete="off"
-                  value=${row.v}
-                  onInput=${e=>updateRow(i,'v',e.target.value)}
-                  onFocus=${e=>{e.target.style.borderColor= isSecret ? 'rgba(245,158,11,.6)' : 'var(--ac)';e.target.style.boxShadow='0 0 0 2px rgba(90,94,247,0.1)';}}
-                  onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
-                <button
-                  title="Remove field"
-                  style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',width:22,height:22,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:5,padding:0,opacity:.5,transition:'opacity .15s'}}
-                  onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='#f87171';}}
-                  onMouseLeave=${e=>{e.currentTarget.style.opacity='.5';e.currentTarget.style.color='var(--tx2)';}}
-                  onClick=${()=>removeRow(i)}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </div>`;
-            })}
-
-            <div style=${{padding:'7px 10px',borderTop: rows.length ? '1px solid var(--bd)' : 'none'}}>
-              <button
-                style=${{background:'none',border:'1px dashed var(--bd)',borderRadius:7,padding:'5px 12px',fontSize:12,color:'var(--tx2)',cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:5,width:'100%',justifyContent:'center',transition:'all .15s'}}
-                onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='rgba(90,94,247,.04)';}}
-                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';e.currentTarget.style.background='none';}}
-                onClick=${addRow}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Field
-              </button>
-            </div>
-          </div>
-        </div>
-
-        ${type==='edit' && modal.card && modal.card.lockHash && html`
-          <div style=${{...fgStyle, padding:'14px', background:'rgba(239,68,68,.06)', border:'1px solid rgba(239,68,68,.15)', borderRadius:10}}>
-            <label style=${{...labelStyle, color:'var(--rd)'}}>Remove Lock <span style=${{fontWeight:400,textTransform:'none',letterSpacing:0,opacity:.7}}>(enter current password)</span></label>
-            <input style=${{...inp, borderRadius:10, padding:'10px 13px'}} type="password" placeholder="Leave blank to keep existing lock"
-              autoComplete="new-password" name="vault-unlock"
-              value=${mPw1} onInput=${e=>setMPw1(e.target.value)}
-              onFocus=${e=>{e.target.style.borderColor='var(--rd)';e.target.style.boxShadow='0 0 0 3px rgba(239,68,68,0.1)';}}
-              onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
-          </div>`}
-      </div>`;
-  }
-
-  if(type==='lock'){
-    return html`
-      <div>
-        <div style=${{display:'flex',justifyContent:'center',marginBottom:20}}>
-          <div style=${{width:56,height:56,borderRadius:16,background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:26}}>🔒</div>
-        </div>
-        <div style=${fgStyle}>
-          <label style=${labelStyle}>Password</label>
-          <input style=${{...inp, borderRadius:10, padding:'10px 13px'}} type="password" placeholder="Choose a strong password"
-            autoComplete="new-password" name="vault-pw1"
-            value=${mPw1} onInput=${e=>setMPw1(e.target.value)}
-            onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 3px rgba(90,94,247,0.12)';}}
-            onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
-        </div>
-        <div style=${fgStyle}>
-          <label style=${labelStyle}>Confirm Password</label>
-          <input style=${{...inp, borderRadius:10, padding:'10px 13px'}} type="password" placeholder="Repeat password"
-            autoComplete="new-password" name="vault-pw2"
-            value=${mPw2} onInput=${e=>setMPw2(e.target.value)}
-            onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 3px rgba(90,94,247,0.12)';}}
-            onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
-          <div style=${{marginTop:8,padding:'8px 11px',background:'rgba(239,68,68,.06)',border:'1px solid rgba(239,68,68,.15)',borderRadius:8,display:'flex',gap:7,alignItems:'flex-start'}}>
-            <span style=${{fontSize:13,flexShrink:0}}>⚠️</span>
-            <span style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.6}}>If you forget this password, <b>the card cannot be unlocked</b>. There is no recovery option.</span>
-          </div>
-        </div>
-      </div>`;
-  }
-  return null;
-}
-function VaultModal({modal, mTitle, setMTitle, mTags, setMTags, mRows, setMRows, mPw1, setMPw1, mPw2, setMPw2, mErr, onClose, onSubmit}){
-  if(!modal) return null;
-  const t = modal.type;
-  const isDel = t==='del';
-  const isLock = t==='lock';
-
-  const iconInfo = vaultGetIcon(mTitle, mTags);
-
-  const headers = {
-    new:  { icon:'✦', label:'New Vault Card',   sub:'Store credentials, tokens, or any structured data securely.' },
-    edit: { icon:'✏️', label:'Edit Card',        sub:'Editing: '+(modal.card&&modal.card.title||'') },
-    lock: { icon:'🔒', label:'Lock This Card',   sub:'Set a password to protect secret rows in this card.' },
-    del:  { icon:'🗑️', label:'Delete Card',      sub:'Permanently delete "'+(modal.card&&modal.card.title||'')+'"? This cannot be undone.' },
-  };
-  const h = headers[t] || { icon:'', label:'', sub:'' };
-  const btnLabels = { new:'Create Card', edit:'Save Changes', lock:'Set Password', del:'Delete Forever' };
-
   return html`
-    <div style=${VS.moBack} onClick=${e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style=${{
-        background:'var(--sf)', borderRadius:20, width:520, maxWidth:'calc(100vw - 24px)',
-        maxHeight:'92vh', overflowY:'auto', boxShadow:'0 32px 80px rgba(0,0,0,.4), 0 0 0 1px rgba(90,94,247,.12)',
-        border:'1px solid var(--bd2)', display:'flex', flexDirection:'column',
-      }}>
-
-        <!-- Header band -->
-        <div style=${{
-          padding:'20px 24px 18px',
-          borderBottom:'1px solid var(--bd)',
-          background: isDel ? 'linear-gradient(135deg,rgba(239,68,68,.06),transparent)'
-                    : isLock ? 'linear-gradient(135deg,rgba(245,158,11,.06),transparent)'
-                    : 'linear-gradient(135deg,rgba(90,94,247,.06),rgba(168,85,247,.04))',
-          borderRadius:'20px 20px 0 0',
-          display:'flex', alignItems:'flex-start', gap:14,
-        }}>
-          ${t==='new' || t==='edit' ? html`
-            <div style=${{width:44,height:44,borderRadius:13,background:iconInfo.bg,border:'1px solid '+iconInfo.border,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>
-              ${iconInfo.icon}
-            </div>` : html`
-            <div style=${{width:44,height:44,borderRadius:13,
-              background: isDel?'rgba(239,68,68,.1)':isLock?'rgba(245,158,11,.1)':'rgba(90,94,247,.1)',
-              border: isDel?'1px solid rgba(239,68,68,.25)':isLock?'1px solid rgba(245,158,11,.25)':'1px solid rgba(90,94,247,.25)',
-              display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>${h.icon}</div>`}
-          <div style=${{flex:1,minWidth:0}}>
-            <div style=${{fontSize:16,fontWeight:800,color:'var(--tx)',letterSpacing:'-.3px',marginBottom:3}}>${h.label}</div>
-            <div style=${{fontSize:12,color:'var(--tx2)',lineHeight:1.5}}>${h.sub}</div>
-          </div>
-          <button onClick=${onClose}
-            style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',padding:'4px',borderRadius:8,display:'flex',alignItems:'center',transition:'all .15s',flexShrink:0}}
-            onMouseEnter=${e=>{e.currentTarget.style.background='var(--sf2)';e.currentTarget.style.color='var(--tx)';}}
-            onMouseLeave=${e=>{e.currentTarget.style.background='none';e.currentTarget.style.color='var(--tx2)';}}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+    <div style=${VS.moBack} onClick=${e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'26px',width:380,maxWidth:'calc(100vw - 32px)',boxShadow:'0 32px 80px rgba(0,0,0,.5)'}}>
+        <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)',marginBottom:4}}>${mode==='set' ? '🔒 Lock Card' : '🔓 Unlock Card'}</div>
+        <div style=${{fontSize:12,color:'var(--tx2)',marginBottom:18}}>${mode==='set' ? 'Set a password to protect "'+title+'"' : 'Enter password for "'+title+'"'}</div>
+        <div style=${{marginBottom:12}}>
+          <input style=${inp} type="password" placeholder="Password" value=${pw1}
+            autoComplete="new-password"
+            onInput=${e=>{setPw1(e.target.value);setErr('');}}
+            onKeyDown=${e=>{if(e.key==='Enter'){ mode==='set' ? document.querySelector('#vlt-pw2')&&document.querySelector('#vlt-pw2').focus() : submit(); }}}/>
         </div>
-
-        <!-- Body -->
-        <div style=${{padding:'22px 24px', flex:1}}>
-          ${isDel ? html`
-            <div style=${{textAlign:'center',padding:'12px 0 4px'}}>
-              <div style=${{fontSize:40,marginBottom:12}}>⚠️</div>
-              <div style=${{fontSize:14,color:'var(--tx)',fontWeight:600,marginBottom:6}}>Are you absolutely sure?</div>
-              <div style=${{fontSize:13,color:'var(--tx2)',lineHeight:1.6}}>
-                All credentials and data in <b>"${modal.card&&modal.card.title||''}"</b> will be permanently deleted. This action cannot be undone.
-              </div>
-            </div>` : html`
-            <${VaultModalFields}
-              type=${t} modal=${modal}
-              mTitle=${mTitle} setMTitle=${setMTitle}
-              mTags=${mTags}   setMTags=${setMTags}
-              mRows=${mRows}   setMRows=${setMRows}
-              mPw1=${mPw1}     setMPw1=${setMPw1}
-              mPw2=${mPw2}     setMPw2=${setMPw2}/>`}
-          ${mErr && html`
-            <div style=${{display:'flex',alignItems:'center',gap:7,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',borderRadius:8,padding:'9px 12px',marginTop:4}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r=".5" fill="#f87171"/></svg>
-              <span style=${{fontSize:12,color:'#f87171',fontWeight:500}}>${mErr}</span>
-            </div>`}
-        </div>
-
-        <!-- Footer -->
-        <div style=${{padding:'16px 24px',borderTop:'1px solid var(--bd)',display:'flex',gap:10,justifyContent:'flex-end',background:'var(--sf2)',borderRadius:'0 0 20px 20px'}}>
+        ${mode==='set' && html`
+          <div style=${{marginBottom:12}}>
+            <input id="vlt-pw2" style=${inp} type="password" placeholder="Confirm password" value=${pw2}
+              autoComplete="new-password"
+              onInput=${e=>{setPw2(e.target.value);setErr('');}}
+              onKeyDown=${e=>{if(e.key==='Enter')submit();}}/>
+          </div>`}
+        ${err && html`<div style=${{fontSize:12,color:'#f87171',marginBottom:10}}>${err}</div>`}
+        ${mode==='set' && html`<div style=${{fontSize:11,color:'var(--tx2)',background:'rgba(239,68,68,.06)',border:'1px solid rgba(239,68,68,.15)',borderRadius:7,padding:'7px 10px',marginBottom:14}}>⚠️ Cannot be recovered if forgotten.</div>`}
+        <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
           <button style=${VS.btnCan} onClick=${onClose}>Cancel</button>
-          <button
-            style=${{
-              ...VS.btnPri,
-              background: isDel ? 'linear-gradient(135deg,#ef4444,#b91c1c)'
-                        : isLock ? 'linear-gradient(135deg,#f59e0b,#d97706)'
-                        : 'linear-gradient(135deg,#5a5ef7,#a855f7)',
-            }}
-            onClick=${onSubmit}>
-            ${isDel ? html`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>` : null}
-            ${btnLabels[t]||'OK'}
-          </button>
+          <button style=${{...VS.btnPri, background: mode==='set' ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'linear-gradient(135deg,#5a5ef7,#a855f7)'}} onClick=${submit}>${mode==='set'?'Lock Card':'Unlock'}</button>
         </div>
       </div>
     </div>`;
 }
 
-// ── Grid renderer (extracted to avoid nested backticks in ternary) ────────────
-function renderVaultGrid(filtered, unlocked, filter, onUnlock, onLock, onEdit, onLockCard, onDelete, onCopy){
-  if(filtered.length){
-    return filtered.map(c=>html`<${VaultCard} key=${c.id} card=${c}
-      isUnlocked=${!!unlocked[c.id]}
-      onUnlock=${onUnlock}
-      onLock=${onLock}
-      onEdit=${onEdit}
-      onLockCard=${onLockCard}
-      onDelete=${onDelete}
-      onCopy=${onCopy}/>`);
+// ── Delete confirm modal ──────────────────────────────────────────────────────
+function VaultDelModal({title, onConfirm, onClose}){
+  return html`
+    <div style=${VS.moBack} onClick=${e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'26px',width:360,maxWidth:'calc(100vw - 32px)',boxShadow:'0 32px 80px rgba(0,0,0,.5)',textAlign:'center'}}>
+        <div style=${{fontSize:36,marginBottom:10}}>🗑️</div>
+        <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)',marginBottom:6}}>Delete "${title}"?</div>
+        <div style=${{fontSize:13,color:'var(--tx2)',marginBottom:20,lineHeight:1.6}}>All credentials in this card will be permanently deleted. This cannot be undone.</div>
+        <div style=${{display:'flex',gap:8,justifyContent:'center'}}>
+          <button style=${VS.btnCan} onClick=${onClose}>Cancel</button>
+          <button style=${{...VS.btnPri,background:'linear-gradient(135deg,#ef4444,#b91c1c)'}} onClick=${onConfirm}>Delete Forever</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Spreadsheet card ──────────────────────────────────────────────────────────
+function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate}){
+  const isLocked = !!card.lockHash;
+  const canSee = !isLocked || isUnlocked;
+  const iconInfo = vaultGetIcon(card.title, card.tags);
+
+  // Local editable state — synced up via onUpdate
+  const [title,    setTitle]    = useState(card.title||'');
+  const [tags,     setTags]     = useState(card.tags||'');
+  const [cols,     setCols]     = useState(()=>{
+    // cols: array of {id, label}
+    if(card.cols && card.cols.length) return card.cols;
+    // Migrate from old rows format: derive cols from first row keys
+    const rows = card.rows||[];
+    if(!rows.length) return [{id:'c1',label:'Key'},{id:'c2',label:'Value'}];
+    return rows[0] ? Object.keys(rows[0]).filter(k=>k!=='secret').map((k,i)=>({id:'col_'+i,label:k})) : [{id:'c1',label:'Key'},{id:'c2',label:'Value'}];
+  });
+  const [rows,     setRows]     = useState(()=>{
+    // Migrate old {k,v,secret} rows to new {colId: val, _secret} format
+    const raw = card.rows||[];
+    if(!raw.length) return [];
+    if(raw[0] && ('k' in raw[0] || 'v' in raw[0])){
+      // old format
+      return raw.map(r=>({ _id: vaultNewId(), _secret: !!r.secret, col_0: r.k||'', col_1: r.v||'' }));
+    }
+    return raw.map(r=>({...r, _id: r._id||vaultNewId()}));
+  });
+  const [editing,  setEditing]  = useState(false); // title edit mode
+  const [showPwMo, setShowPwMo] = useState(null);  // 'set'|'verify'|null
+  const [showDel,  setShowDel]  = useState(false);
+  const [showSecretRows, setShowSecretRows] = useState({});
+  const [copyFlash,setCopyFlash]= useState(null);
+
+  // Push local changes up
+  function push(nextCols, nextRows, nextTitle, nextTags){
+    const c = nextCols  !== undefined ? nextCols  : cols;
+    const r = nextRows  !== undefined ? nextRows  : rows;
+    const t = nextTitle !== undefined ? nextTitle : title;
+    const tg= nextTags  !== undefined ? nextTags  : tags;
+    onUpdate({...card, title:t, tags:tg, cols:c, rows:r});
   }
-  const msg = filter ? 'No cards match your search.' : 'No cards yet \u2014 click + New Card to add your first entry.';
-  return html`<div style=${VS.empty}><div style=${{fontSize:36,marginBottom:12}}>🗄️</div><div>${msg}</div></div>`;
+
+  function addCol(){
+    const id='col_'+Date.now();
+    const next=[...cols,{id,label:'Column '+(cols.length+1)}];
+    setCols(next); push(next,undefined,undefined,undefined);
+  }
+  function addRow(){
+    const obj={_id:vaultNewId(),_secret:false};
+    cols.forEach(c=>{obj[c.id]='';});
+    const next=[...rows,obj];
+    setRows(next); push(undefined,next,undefined,undefined);
+  }
+  function updateColLabel(cid,val){
+    const next=cols.map(c=>c.id===cid?{...c,label:val}:c);
+    setCols(next); push(next,undefined,undefined,undefined);
+  }
+  function removeCol(cid){
+    if(cols.length<=1) return;
+    const next=cols.filter(c=>c.id!==cid);
+    setCols(next); push(next,undefined,undefined,undefined);
+  }
+  function updateCell(rid,cid,val){
+    const next=rows.map(r=>r._id===rid?{...r,[cid]:val}:r);
+    setRows(next); push(undefined,next,undefined,undefined);
+  }
+  function toggleRowSecret(rid){
+    const next=rows.map(r=>r._id===rid?{...r,_secret:!r._secret}:r);
+    setRows(next); push(undefined,next,undefined,undefined);
+  }
+  function removeRow(rid){
+    const next=rows.filter(r=>r._id!==rid);
+    setRows(next); push(undefined,next,undefined,undefined);
+  }
+  function copyCell(val){
+    navigator.clipboard.writeText(val||'').catch(()=>{});
+    setCopyFlash(val);
+    setTimeout(()=>setCopyFlash(null),1200);
+  }
+
+  const accentColor = iconInfo.border;
+  const cardBg = 'var(--sf)';
+
+  // ── cell style ──
+  const cellInp = {
+    width:'100%', background:'transparent', border:'none', outline:'none',
+    fontSize:12.5, color:'var(--tx)', fontFamily:'inherit', padding:'0',
+  };
+  const colHeaderInp = {
+    width:'100%', background:'transparent', border:'none', outline:'none',
+    fontSize:11, fontWeight:700, color:'var(--tx2)', fontFamily:'inherit',
+    textTransform:'uppercase', letterSpacing:'.05em', padding:'0',
+  };
+
+  return html`
+    <div style=${{
+      background:cardBg, border:'1px solid var(--bd)', borderRadius:14,
+      overflow:'hidden', marginBottom:16,
+      boxShadow:'0 2px 12px rgba(0,0,0,.12)',
+      transition:'box-shadow .2s',
+    }}>
+
+      <!-- accent top bar -->
+      <div style=${{height:3, background:'linear-gradient(90deg,'+accentColor+',transparent)'}}></div>
+
+      <!-- card header -->
+      <div style=${{
+        display:'flex', alignItems:'center', gap:10, padding:'11px 14px',
+        borderBottom:'1px solid var(--bd)',
+        background:'linear-gradient(135deg,'+iconInfo.bg+',transparent)',
+      }}>
+        <div style=${{
+          width:32,height:32,borderRadius:9,flexShrink:0,
+          background:iconInfo.bg, border:'1px solid '+iconInfo.border,
+          display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,
+        }}>${iconInfo.icon}</div>
+
+        <!-- title -->
+        ${editing && html`
+          <input style=${{flex:1,background:'var(--sf2)',border:'1px solid var(--ac)',borderRadius:7,padding:'5px 9px',fontSize:13,fontWeight:700,color:'var(--tx)',fontFamily:'inherit',outline:'none'}}
+            value=${title}
+            autoFocus
+            onInput=${e=>{setTitle(e.target.value);}}
+            onBlur=${()=>{ setEditing(false); push(undefined,undefined,title,undefined); }}
+            onKeyDown=${e=>{ if(e.key==='Enter'||e.key==='Escape'){ setEditing(false); push(undefined,undefined,title,undefined); }}}/>` }
+        ${!editing && html`
+          <span style=${{flex:1,fontSize:13,fontWeight:700,color:'var(--tx)',cursor:'text',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
+            onClick=${()=>setEditing(true)}
+            title="Click to rename">${title||'Untitled'}</span>`}
+
+        <!-- badges -->
+        ${isLocked && html`
+          <span style=${{fontSize:9,fontWeight:700,padding:'2px 7px',borderRadius:100,
+            background: isUnlocked?'rgba(34,197,94,.1)':'rgba(239,68,68,.1)',
+            color: isUnlocked?'#4ade80':'#f87171',
+            border: '1px solid '+(isUnlocked?'rgba(34,197,94,.25)':'rgba(239,68,68,.25)'),
+            whiteSpace:'nowrap',flexShrink:0,
+          }}>${isUnlocked?'🔓 Unlocked':'🔒 Locked'}</span>`}
+
+        <!-- action buttons -->
+        <div style=${{display:'flex',gap:3,flexShrink:0}}>
+          ${isLocked && isUnlocked && html`
+            <button title="Lock" style=${{background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:11,padding:'3px 8px',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}}
+              onClick=${()=>onLock(card.id)}>🔒</button>`}
+          ${!isLocked && html`
+            <button title="Set password lock" style=${{background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:11,padding:'3px 8px',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}}
+              onClick=${()=>setShowPwMo('set')}>🔓</button>`}
+          <button title="Delete card" style=${{background:'none',border:'1px solid var(--bd)',color:'#f87171',fontSize:11,padding:'3px 8px',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}}
+            onClick=${()=>setShowDel(true)}>🗑️</button>
+        </div>
+      </div>
+
+      <!-- tags bar -->
+      ${tags && html`
+        <div style=${{padding:'5px 14px',borderBottom:'1px solid var(--bd)',display:'flex',gap:5,flexWrap:'wrap'}}>
+          ${(tags||'').split(',').map(t=>t.trim()).filter(Boolean).map(t=>html`
+            <span key=${t} style=${{fontSize:10,padding:'1px 8px',borderRadius:100,border:'1px solid var(--bd)',color:'var(--tx2)',background:'var(--sf2)'}}>${t}</span>`)}
+        </div>`}
+
+      <!-- LOCKED overlay -->
+      ${isLocked && !isUnlocked && html`
+        <div style=${{padding:'24px',textAlign:'center'}}>
+          <div style=${{fontSize:28,marginBottom:8}}>🔒</div>
+          <div style=${{fontSize:13,fontWeight:600,color:'var(--tx)',marginBottom:4}}>${title}</div>
+          <div style=${{fontSize:12,color:'var(--tx2)',marginBottom:14}}>This card is password protected.</div>
+          <button style=${{...VS.btnPri,margin:'0 auto',justifyContent:'center'}}
+            onClick=${()=>setShowPwMo('verify')}>Unlock Card</button>
+        </div>`}
+
+      <!-- SPREADSHEET TABLE -->
+      ${canSee && html`
+        <div style=${{overflowX:'auto'}}>
+          <table style=${{width:'100%',borderCollapse:'collapse',tableLayout:'auto',minWidth:320}}>
+            <thead>
+              <tr style=${{background:'var(--sf2)'}}>
+                <!-- row actions col -->
+                <th style=${{width:28,padding:'6px 4px 6px 10px',borderBottom:'1px solid var(--bd)'}}></th>
+                <!-- secret toggle col -->
+                <th style=${{width:26,padding:'6px 4px',borderBottom:'1px solid var(--bd)',textAlign:'center'}}>
+                  <span title="Secret row (hidden)" style=${{fontSize:11,opacity:.5}}>🔒</span>
+                </th>
+                ${cols.map((col,ci)=>html`
+                  <th key=${col.id} style=${{
+                    padding:'6px 10px', borderBottom:'1px solid var(--bd)',
+                    borderLeft:'1px solid var(--bd)', minWidth:100,
+                    position:'relative',
+                  }}>
+                    <div style=${{display:'flex',alignItems:'center',gap:4}}>
+                      <input style=${colHeaderInp}
+                        value=${col.label}
+                        onInput=${e=>updateColLabel(col.id,e.target.value)}
+                        onBlur=${e=>push(undefined,undefined,undefined,undefined)}
+                        title="Click to rename column"/>
+                      ${cols.length>1 && html`
+                        <button title="Remove column"
+                          style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',opacity:.3,padding:'0 2px',fontSize:11,lineHeight:1,flexShrink:0,transition:'opacity .15s'}}
+                          onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='#f87171';}}
+                          onMouseLeave=${e=>{e.currentTarget.style.opacity='.3';e.currentTarget.style.color='var(--tx2)';}}
+                          onClick=${()=>removeCol(col.id)}>✕</button>`}
+                    </div>
+                  </th>`)}
+                <!-- + col button -->
+                <th style=${{width:36,padding:'4px 6px',borderBottom:'1px solid var(--bd)',borderLeft:'1px dashed var(--bd)'}}>
+                  <button title="Add column"
+                    style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',opacity:.5,fontSize:15,padding:'0',width:'100%',transition:'opacity .15s'}}
+                    onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='var(--ac)';}}
+                    onMouseLeave=${e=>{e.currentTarget.style.opacity='.5';e.currentTarget.style.color='var(--tx2)';}}
+                    onClick=${addCol}>＋</button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((row,ri)=>{
+                const isSecret = !!row._secret;
+                const isShowingSecrets = !!showSecretRows[row._id];
+                return html`
+                  <tr key=${row._id} style=${{
+                    background: isSecret ? (ri%2===0?'rgba(245,158,11,.04)':'rgba(245,158,11,.02)') : (ri%2===0?'transparent':'rgba(255,255,255,.012)'),
+                    transition:'background .15s',
+                  }}>
+                    <!-- row number -->
+                    <td style=${{
+                      padding:'4px 4px 4px 10px', color:'var(--tx2)', fontSize:10,
+                      fontFamily:'monospace', opacity:.4, textAlign:'right',
+                      borderBottom:'1px solid var(--bd)',
+                      userSelect:'none',
+                    }}>${ri+1}</td>
+
+                    <!-- secret toggle -->
+                    <td style=${{padding:'4px',textAlign:'center',borderBottom:'1px solid var(--bd)'}}>
+                      <button title=${isSecret?'Secret row — click to show values':'Click to mark as secret'}
+                        style=${{
+                          background: isSecret?'rgba(245,158,11,.15)':'none',
+                          border: isSecret?'1px solid rgba(245,158,11,.3)':'1px solid transparent',
+                          borderRadius:5, width:22, height:22, cursor:'pointer',
+                          fontSize:11, display:'flex',alignItems:'center',justifyContent:'center',
+                          transition:'all .15s', flexShrink:0, margin:'0 auto',
+                        }}
+                        onClick=${()=>toggleRowSecret(row._id)}>
+                        ${isSecret?'🔒':'👁️'}
+                      </button>
+                    </td>
+
+                    <!-- data cells -->
+                    ${cols.map(col=>{
+                      const val = row[col.id]||'';
+                      const hideVal = isSecret && !isShowingSecrets;
+                      return html`
+                        <td key=${col.id} style=${{
+                          padding:'4px 10px', borderBottom:'1px solid var(--bd)',
+                          borderLeft:'1px solid var(--bd)', position:'relative',
+                          minWidth:100,
+                        }}>
+                          ${hideVal && html`
+                            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                              <span style=${{letterSpacing:3,fontSize:10,color:'var(--tx2)',opacity:.5}}>••••••••</span>
+                              <button title="Reveal row"
+                                style=${{background:'none',border:'none',cursor:'pointer',fontSize:10,color:'var(--tx2)',opacity:.4,padding:'0 2px',transition:'opacity .15s'}}
+                                onMouseEnter=${e=>{e.currentTarget.style.opacity='1';}}
+                                onMouseLeave=${e=>{e.currentTarget.style.opacity='.4';}}
+                                onClick=${()=>setShowSecretRows(s=>({...s,[row._id]:true}))}>👁</button>
+                            </div>`}
+                          ${!hideVal && html`
+                            <div style=${{display:'flex',alignItems:'center',gap:4}}>
+                              <input style=${cellInp}
+                                value=${val}
+                                placeholder="—"
+                                onInput=${e=>updateCell(row._id,col.id,e.target.value)}
+                                onBlur=${()=>push(undefined,undefined,undefined,undefined)}/>
+                              ${val && html`
+                                <button title="Copy"
+                                  style=${{
+                                    background: copyFlash===val?'rgba(90,94,247,.15)':'none',
+                                    border:'none',cursor:'pointer',
+                                    color: copyFlash===val?'var(--ac)':'var(--tx2)',
+                                    opacity: copyFlash===val?1:.3,
+                                    fontSize:11,padding:'1px 3px',borderRadius:4,
+                                    flexShrink:0,transition:'all .15s',
+                                  }}
+                                  onMouseEnter=${e=>{if(copyFlash!==val){e.currentTarget.style.opacity='1';e.currentTarget.style.color='var(--ac)';}}}
+                                  onMouseLeave=${e=>{if(copyFlash!==val){e.currentTarget.style.opacity='.3';e.currentTarget.style.color='var(--tx2)';}}}
+                                  onClick=${()=>copyCell(val)}>⎘</button>`}
+                              ${isSecret && isShowingSecrets && html`
+                                <button title="Hide row again"
+                                  style=${{background:'none',border:'none',cursor:'pointer',fontSize:10,color:'var(--tx2)',opacity:.3,padding:'0 2px',flexShrink:0,transition:'opacity .15s'}}
+                                  onMouseEnter=${e=>{e.currentTarget.style.opacity='1';}}
+                                  onMouseLeave=${e=>{e.currentTarget.style.opacity='.3';}}
+                                  onClick=${()=>setShowSecretRows(s=>{const n={...s};delete n[row._id];return n;})}>🔒</button>`}
+                            </div>`}
+                        </td>`; })}
+
+                    <!-- row delete -->
+                    <td style=${{padding:'4px 6px',borderBottom:'1px solid var(--bd)',borderLeft:'1px dashed var(--bd)',textAlign:'center'}}>
+                      <button title="Remove row"
+                        style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',opacity:.25,fontSize:12,padding:'0',transition:'opacity .15s'}}
+                        onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='#f87171';}}
+                        onMouseLeave=${e=>{e.currentTarget.style.opacity='.25';e.currentTarget.style.color='var(--tx2)';}}
+                        onClick=${()=>removeRow(row._id)}>✕</button>
+                    </td>
+                  </tr>`; })}
+
+              <!-- + row -->
+              <tr>
+                <td colSpan=${cols.length+3} style=${{padding:'0'}}>
+                  <button
+                    style=${{
+                      width:'100%',background:'none',border:'none',
+                      borderTop: rows.length?'none':'1px dashed var(--bd)',
+                      padding:'7px 14px',fontSize:12,color:'var(--tx2)',
+                      cursor:'pointer',fontFamily:'inherit',display:'flex',
+                      alignItems:'center',gap:5,opacity:.5,transition:'all .15s',
+                    }}
+                    onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.background='rgba(90,94,247,.04)';e.currentTarget.style.color='var(--ac)';}}
+                    onMouseLeave=${e=>{e.currentTarget.style.opacity='.5';e.currentTarget.style.background='none';e.currentTarget.style.color='var(--tx2)';}}
+                    onClick=${addRow}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Row
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>`}
+
+      <!-- Modals -->
+      ${showPwMo && html`
+        <${VaultPwModal}
+          title=${title}
+          mode=${showPwMo}
+          onConfirm=${h=>{
+            if(showPwMo==='verify'){
+              if(h===card.lockHash){ onUnlock(card.id); setShowPwMo(null); }
+              else{ alert('Wrong password'); }
+            } else {
+              onUpdate({...card,title,tags,cols,rows,lockHash:h});
+              setShowPwMo(null);
+            }
+          }}
+          onClose=${()=>setShowPwMo(null)}/>`}
+
+      ${showDel && html`
+        <${VaultDelModal}
+          title=${title}
+          onConfirm=${()=>{ setShowDel(false); onDelete(card.id); }}
+          onClose=${()=>setShowDel(false)}/>`}
+    </div>`;
+}
+
+// ── New card modal ────────────────────────────────────────────────────────────
+function VaultNewCardModal({onClose, onCreate}){
+  const [title, setTitle] = useState('');
+  const [tags,  setTags]  = useState('');
+  const [err,   setErr]   = useState('');
+  const inp = {
+    width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,
+    padding:'9px 12px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',
+    outline:'none',boxSizing:'border-box',
+  };
+  function submit(){
+    if(!title.trim()){ setErr('Title is required'); return; }
+    const card = {
+      id: vaultNewId(),
+      title: title.trim(),
+      tags: tags.trim(),
+      cols: [{id:'c1',label:'Key'},{id:'c2',label:'Value'}],
+      rows: [],
+      lockHash: '',
+    };
+    onCreate(card);
+    onClose();
+  }
+  const icon = vaultGetIcon(title, tags);
+  return html`
+    <div style=${VS.moBack} onClick=${e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'26px',width:400,maxWidth:'calc(100vw - 32px)',boxShadow:'0 32px 80px rgba(0,0,0,.5)'}}>
+        <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
+          <div style=${{width:40,height:40,borderRadius:11,background:icon.bg,border:'1px solid '+icon.border,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>${icon.icon}</div>
+          <div>
+            <div style=${{fontSize:15,fontWeight:800,color:'var(--tx)'}}>New Vault Card</div>
+            <div style=${{fontSize:12,color:'var(--tx2)'}}>Spreadsheet-style credential store</div>
+          </div>
+        </div>
+        <div style=${{marginBottom:14}}>
+          <label style=${{display:'block',fontSize:11,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:6}}>Card Title *</label>
+          <input style=${inp} placeholder="e.g. AWS Production, GitHub Creds…"
+            value=${title} autoFocus
+            autoComplete="off"
+            onInput=${e=>{setTitle(e.target.value);setErr('');}}
+            onKeyDown=${e=>{if(e.key==='Enter')submit();}}/>
+          ${err && html`<div style=${{fontSize:11,color:'#f87171',marginTop:5}}>${err}</div>`}
+        </div>
+        <div style=${{marginBottom:20}}>
+          <label style=${{display:'block',fontSize:11,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:6}}>Tags <span style=${{fontWeight:400,textTransform:'none',letterSpacing:0,opacity:.6}}>(optional, comma-separated)</span></label>
+          <input style=${inp} placeholder="aws, prod, infra"
+            value=${tags}
+            autoComplete="off"
+            onInput=${e=>setTags(e.target.value)}
+            onKeyDown=${e=>{if(e.key==='Enter')submit();}}/>
+        </div>
+        <div style=${{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button style=${VS.btnCan} onClick=${onClose}>Cancel</button>
+          <button style=${VS.btnPri} onClick=${submit}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create Card
+          </button>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ── Main VaultView ────────────────────────────────────────────────────────────
@@ -7729,18 +7765,11 @@ function VaultView({cu}){
   const [vLoading, setVLoading]= useState(true);
   const [unlocked, setUnlocked]= useState({});
   const [filter,   setFilter]  = useState('');
-  const [modal,    setModal]   = useState(null);
-  const [mTitle,   setMTitle]  = useState('');
-  const [mTags,    setMTags]   = useState('');
-  const [mRows,    setMRows]   = useState([]);
-  const [mPw1,     setMPw1]    = useState('');
-  const [mPw2,     setMPw2]    = useState('');
-  const [mErr,     setMErr]    = useState('');
+  const [showNew,  setShowNew] = useState(false);
 
-  // Offline fallback key (used only when backend unreachable)
   const offlineKey = vaultStorageKey(cu);
 
-  // Load cards — from API when online, from localStorage when offline
+  // Load from API (or localStorage if offline)
   useEffect(()=>{
     if(!cu) return;
     if(cu._offline){
@@ -7754,150 +7783,124 @@ function VaultView({cu}){
         setCards(data.map(c=>({
           ...c,
           rows: typeof c.rows==='string' ? (function(s){try{return JSON.parse(s);}catch(e){return [];}}(c.rows)) : (c.rows||[]),
-          lockHash: c.lock_hash||''
+          cols: typeof c.cols==='string' ? (function(s){try{return JSON.parse(s);}catch(e){return null;}}(c.cols)) : (c.cols||null),
+          lockHash: c.lock_hash||c.lockHash||''
         })));
       }
       setVLoading(false);
     }).catch(()=>{ setVLoading(false); });
   }, [cu && cu.id]);
 
-  function copyVal(v){ navigator.clipboard.writeText(v).catch(()=>{}); }
-
-  function openNew(){ setMTitle('');setMTags('');setMRows([{k:'',v:'',secret:false}]);setMPw1('');setMPw2('');setMErr(''); setModal({type:'new'}); }
-  function openEdit(c){
-    const rowArr=(c.rows||[]).map(r=>({k:r.k||'',v:r.v||'',secret:!!r.secret}));
-    if(rowArr.length===0) rowArr.push({k:'',v:'',secret:false});
-    setMTitle(c.title);setMTags(c.tags||'');setMRows(rowArr);setMPw1('');setMPw2('');setMErr('');
-    setModal({type:'edit',card:c});
-  }
-  function openLock(c){ setMPw1('');setMPw2('');setMErr(''); setModal({type:'lock',card:c}); }
-  function openDel(c){ setMErr(''); setModal({type:'del',card:c}); }
-  function closeModal(){ setModal(null); }
-
-  function handleUnlock(id){ setUnlocked(u=>({...u,[id]:true})); }
-  function handleLock(id){ setUnlocked(u=>{ const n={...u}; delete n[id]; return n; }); }
-
-  // Persist helpers — API when online, localStorage when offline
   async function apiCreate(card){
     const res = await api.post('/api/vault', {
-      title: card.title, tags: card.tags, rows: card.rows, lock_hash: card.lockHash||''
+      title:card.title, tags:card.tags,
+      rows:card.rows, cols:card.cols||null,
+      lock_hash: card.lockHash||''
     });
-    // Replace temp id with server-assigned id
     if(res && res.id){
-      setCards(prev=>prev.map(c=>c.id===card.id ? {...c, id:res.id, created:res.created} : c));
+      setCards(prev=>prev.map(c=>c.id===card.id?{...c,id:res.id,created:res.created}:c));
     }
   }
   async function apiUpdate(card){
     await api.put('/api/vault/'+card.id, {
-      title: card.title, tags: card.tags, rows: card.rows, lock_hash: card.lockHash||''
+      title:card.title, tags:card.tags,
+      rows:card.rows, cols:card.cols||null,
+      lock_hash: card.lockHash||''
     });
   }
   async function apiDelete(id){
     await api.del('/api/vault/'+id);
   }
 
-  async function handleSubmit(){
-    if(!modal) return;
-    const t = modal.type;
-    const cleanRows = Array.isArray(mRows) ? mRows.filter(r=>(r.k||'').trim()) : vaultParseRows(mRows);
-
-    if(t==='new'){
-      if(!mTitle.trim()){ setMErr('Title is required'); return; }
-      const card={ id:vaultNewId(), title:mTitle.trim(), tags:mTags.trim(), rows:cleanRows, lockHash:'' };
-      const next = [card, ...cards];
-      setCards(next);
-      closeModal();
-      if(cu && !cu._offline) apiCreate(card);
-      else vaultPersist(offlineKey, next);
-
-    } else if(t==='edit'){
-      if(!mTitle.trim()){ setMErr('Title is required'); return; }
-      let updated = {...modal.card, title:mTitle.trim(), tags:mTags.trim(), rows:cleanRows};
-      if(modal.card.lockHash && mPw1){
-        const h = await vaultHashPw(mPw1);
-        if(h !== modal.card.lockHash){ setMErr('Wrong password — lock kept'); return; }
-        updated = {...updated, lockHash:''};
-        setUnlocked(u=>{ const n={...u}; delete n[modal.card.id]; return n; });
-      }
-      const next = cards.map(c=>c.id===modal.card.id ? updated : c);
-      setCards(next);
-      closeModal();
-      if(cu && !cu._offline) apiUpdate(updated);
-      else vaultPersist(offlineKey, next);
-
-    } else if(t==='lock'){
-      if(!mPw1){ setMErr('Enter a password'); return; }
-      if(mPw1!==mPw2){ setMErr('Passwords do not match'); return; }
-      const h = await vaultHashPw(mPw1);
-      const updated = {...modal.card, lockHash: h};
-      const next = cards.map(c=>c.id===modal.card.id ? updated : c);
-      setCards(next);
-      closeModal();
-      if(cu && !cu._offline) apiUpdate(updated);
-      else vaultPersist(offlineKey, next);
-
-    } else if(t==='del'){
-      const id = modal.card.id;
-      const next = cards.filter(c=>c.id!==id);
-      setCards(next);
-      setUnlocked(u=>{ const n={...u}; delete n[id]; return n; });
-      closeModal();
-      if(cu && !cu._offline) apiDelete(id);
-      else vaultPersist(offlineKey, next);
-    }
+  function handleCreate(card){
+    const next=[card,...cards];
+    setCards(next);
+    if(cu&&!cu._offline) apiCreate(card);
+    else vaultPersist(offlineKey,next);
   }
+  function handleUpdate(updated){
+    const next=cards.map(c=>c.id===updated.id?updated:c);
+    setCards(next);
+    if(cu&&!cu._offline) apiUpdate(updated);
+    else vaultPersist(offlineKey,next);
+  }
+  function handleDelete(id){
+    const next=cards.filter(c=>c.id!==id);
+    setCards(next);
+    setUnlocked(u=>{const n={...u};delete n[id];return n;});
+    if(cu&&!cu._offline) apiDelete(id);
+    else vaultPersist(offlineKey,next);
+  }
+  function handleUnlock(id){ setUnlocked(u=>({...u,[id]:true})); }
+  function handleLock(id){   setUnlocked(u=>{const n={...u};delete n[id];return n;}); }
 
   const filtered = cards.filter(c=>{
     if(!filter) return true;
-    return (c.title+(c.tags||'')+(c.rows||[]).map(r=>r.k+r.v).join(' ')).toLowerCase().includes(filter.toLowerCase());
+    const hay=(c.title||'')+(c.tags||'')+(c.rows||[]).map(r=>Object.values(r).join(' ')).join(' ');
+    return hay.toLowerCase().includes(filter.toLowerCase());
   });
-
-  const countLabel = filtered.length+' card'+(filtered.length!==1?'s':'');
 
   return html`
     <div style=${VS.wrap}>
+      <!-- Page header -->
       <div style=${VS.ph}>
         <div>
-          <div style=${VS.phTitle}>
+          <div style=${{fontSize:21,fontWeight:800,letterSpacing:'-.5px'}}>
             <span style=${{background:'linear-gradient(135deg,#5a5ef7,#a855f7)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>My Vault</span>
           </div>
-          <div style=${VS.phSub}>Personal credential store — secret rows stay hidden behind passwords</div>
+          <div style=${{fontSize:12,color:'var(--tx2)',marginTop:2}}>Spreadsheet-style credential store — click any cell to edit, 🔒 to hide secrets</div>
         </div>
-        <button style=${VS.btnPri} onClick=${openNew}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <button style=${VS.btnPri} onClick=${()=>setShowNew(true)}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Card
         </button>
       </div>
-      <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:18,flexWrap:'wrap'}}>
-        <div style=${{position:'relative',flex:1,maxWidth:320}}>
-          <svg style=${{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',opacity:.4}} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input style=${{...VS.search, paddingLeft:32, width:'100%'}}
-            placeholder="Search cards, tags, keys…"
-            autoComplete="new-password" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+
+      <!-- Search & count -->
+      <div style=${{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+        <div style=${{position:'relative',flex:1,maxWidth:300}}>
+          <svg style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',opacity:.4}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:10,padding:'7px 12px 7px 30px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',outline:'none',width:'100%',boxSizing:'border-box'}}
+            placeholder="Search cards…"
+            autoComplete="new-password"
             value=${filter}
-            onInput=${e=>setFilter(e.target.value)}
-            onFocus=${e=>{
-              if(e.target.value && e.target.value.includes('@')){ setFilter(''); e.target.value=''; }
-            }}/>
+            onInput=${e=>setFilter(e.target.value)}/>
         </div>
-        <span style=${{fontSize:12,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',padding:'5px 12px',borderRadius:100,fontWeight:600}}>${countLabel}</span>
+        <span style=${{fontSize:11,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',padding:'4px 11px',borderRadius:100,fontWeight:600,whiteSpace:'nowrap'}}>
+          ${filtered.length} card${filtered.length!==1?'s':''}
+        </span>
       </div>
-      ${vLoading && html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)',fontSize:13}}>Loading vault…</div>`}
-      ${!vLoading && html`<div style=${VS.grid}>
-        ${renderVaultGrid(filtered, unlocked, filter, handleUnlock, handleLock, openEdit, openLock, openDel, copyVal)}
-      </div>`}
-      <${VaultModal}
-        modal=${modal}
-        mTitle=${mTitle} setMTitle=${setMTitle}
-        mTags=${mTags}   setMTags=${setMTags}
-        mRows=${mRows}   setMRows=${setMRows}
-        mPw1=${mPw1}     setMPw1=${setMPw1}
-        mPw2=${mPw2}     setMPw2=${setMPw2}
-        mErr=${mErr}
-        onClose=${closeModal}
-        onSubmit=${handleSubmit}/>
+
+      <!-- Body -->
+      ${vLoading && html`
+        <div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx2)',fontSize:13}}>
+          <div style=${{fontSize:28,marginBottom:8}}>🔐</div>
+          Loading vault…
+        </div>`}
+      ${!vLoading && filtered.length===0 && html`
+        <div style=${{textAlign:'center',padding:'60px 20px',color:'var(--tx2)',fontSize:14}}>
+          <div style=${{fontSize:40,marginBottom:12}}>🗄️</div>
+          <div style=${{fontWeight:600,marginBottom:6,color:'var(--tx)'}}>${filter?'No cards match your search':'No cards yet'}</div>
+          <div style=${{fontSize:13}}>${filter?'Try a different search term':'Click + New Card to create your first credential store'}</div>
+        </div>`}
+      ${!vLoading && filtered.map(c=>html`
+        <${VaultSpreadCard}
+          key=${c.id}
+          card=${c}
+          isUnlocked=${!!unlocked[c.id]}
+          onUnlock=${handleUnlock}
+          onLock=${handleLock}
+          onDelete=${handleDelete}
+          onUpdate=${handleUpdate}/>`)}
+
+      ${showNew && html`
+        <${VaultNewCardModal}
+          onClose=${()=>setShowNew(false)}
+          onCreate=${handleCreate}/>`}
     </div>`;
 }
+
+
 
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);

@@ -781,8 +781,9 @@ def init_db():
             "ALTER TABLE time_logs ADD COLUMN project_id TEXT DEFAULT ''",
             "ALTER TABLE time_logs ADD COLUMN task_id TEXT DEFAULT ''",
             "ALTER TABLE workspaces ADD COLUMN required_hours_per_day REAL DEFAULT 8",
-            "CREATE TABLE IF NOT EXISTS vault_cards (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT DEFAULT '', tags TEXT DEFAULT '', rows TEXT DEFAULT '[]', lock_hash TEXT DEFAULT '', created TEXT, updated TEXT)",
+            "CREATE TABLE IF NOT EXISTS vault_cards (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT DEFAULT '', tags TEXT DEFAULT '', rows TEXT DEFAULT '[]', cols TEXT DEFAULT '[]', lock_hash TEXT DEFAULT '', created TEXT, updated TEXT)",
             "CREATE INDEX IF NOT EXISTS idx_vault_cards_user ON vault_cards(user_id)",
+            "ALTER TABLE vault_cards ADD COLUMN cols TEXT DEFAULT '[]'",
         ]:
             try: db.execute(stmt)
             except: pass
@@ -1519,9 +1520,10 @@ def vault_create():
     now = datetime.utcnow().isoformat()
     cid = "c" + str(int(time.time()*1000)) + secrets.token_hex(3)
     with get_db() as db:
-        db.execute("INSERT INTO vault_cards (id,user_id,title,tags,rows,lock_hash,created,updated) VALUES (?,?,?,?,?,?,?,?)",
+        db.execute("INSERT INTO vault_cards (id,user_id,title,tags,rows,cols,lock_hash,created,updated) VALUES (?,?,?,?,?,?,?,?,?)",
             (cid, session["user_id"], d.get("title",""), d.get("tags",""),
-             json.dumps(d.get("rows",[])), d.get("lock_hash",""), now, now))
+             json.dumps(d.get("rows",[])), json.dumps(d.get("cols") or []),
+             d.get("lock_hash",""), now, now))
     return jsonify({"id": cid, "created": now})
 
 @app.route("/api/vault/<cid>", methods=["PUT"])
@@ -1530,8 +1532,9 @@ def vault_update(cid):
     d = request.json or {}
     now = datetime.utcnow().isoformat()
     with get_db() as db:
-        db.execute("UPDATE vault_cards SET title=?,tags=?,rows=?,lock_hash=?,updated=? WHERE id=? AND user_id=?",
+        db.execute("UPDATE vault_cards SET title=?,tags=?,rows=?,cols=?,lock_hash=?,updated=? WHERE id=? AND user_id=?",
             (d.get("title",""), d.get("tags",""), json.dumps(d.get("rows",[])),
+             json.dumps(d.get("cols") or []),
              d.get("lock_hash",""), now, cid, session["user_id"]))
     return jsonify({"ok": True})
 
