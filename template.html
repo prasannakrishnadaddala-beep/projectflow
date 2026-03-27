@@ -288,12 +288,13 @@ body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;backgrou
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:8px}
 ::-webkit-scrollbar-thumb:hover{background:var(--tx3)}
-/* Vault page scrollbar */
-.vault-scroll::-webkit-scrollbar{width:7px;height:7px}
-.vault-scroll::-webkit-scrollbar-track{background:rgba(90,94,247,0.05);border-radius:10px;margin:6px 0}
-.vault-scroll::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#5a5ef7,#a855f7);border-radius:10px;border:1px solid rgba(90,94,247,0.2)}
-.vault-scroll::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#6366f1,#c026d3)}
-.vault-scroll::-webkit-scrollbar-thumb:active{cursor:grabbing}
+/* Vault scrollbar — right edge, wide, draggable, themed */
+.vault-scroll{scrollbar-width:thin;scrollbar-color:#5a5ef7 rgba(90,94,247,0.08)}
+.vault-scroll::-webkit-scrollbar{width:8px}
+.vault-scroll::-webkit-scrollbar-track{background:rgba(90,94,247,0.06);border-radius:0;margin:0}
+.vault-scroll::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#5a5ef7 0%,#a855f7 100%);border-radius:4px;border:2px solid transparent;background-clip:padding-box}
+.vault-scroll::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#6366f1 0%,#c026d3 100%);background-clip:padding-box}
+.vault-scroll::-webkit-scrollbar-corner{background:transparent}
 
 input[type=date]{color-scheme:dark}
 .lm input[type=date]{color-scheme:light}
@@ -3260,7 +3261,7 @@ function TasksView({tasks,projects,users,cu,reload,onSetReminder,initialStage,in
           <div class="card" style=${{padding:0,overflow:'hidden'}}>
             <table style=${{width:'100%',borderCollapse:'collapse'}}>
               <thead>
-                <tr style=${{borderBottom:'2px solid var(--bd)',background:'var(--sf2)'}}>
+                <tr style=${{borderBottom:'2px solid var(--bd)',background:accentBg}}>
                   ${[
                     {k:'id', lbl:'ID', s:null}, {k:'type', lbl:'Type', s:null}, {k:'title', lbl:'Title', s:null}, {k:'project', lbl:'Project', s:null}, {k:'assignee',lbl:'Assignee', s:'assignee'}, {k:'priority',lbl:'Priority', s:'priority'}, {k:'stage', lbl:'Stage', s:'stage'}, {k:'due', lbl:'Due', s:'due'}, {k:'pct', lbl:'%', s:'pct'}, {k:'pts', lbl:'Pts', s:null}, ].map(h=>{
                     const isA=sortCol===h.s;const can=!!h.s;
@@ -3814,7 +3815,7 @@ function ProductivityView({cu,tasks,projects,users}){
       </div>
 
             ${!selDev?html`
-        <div style=${{flexShrink:0,display:'flex',gap:0,borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
+        <div style=${{flexShrink:0,display:'flex',gap:0,borderBottom:'1px solid var(--bd)',background:accentBg}}>
           ${[
             {lbl:'Total Tasks',val:t.length,c:'var(--tx)'}, {lbl:'Completed',val:t.filter(x=>x.stage==='completed').length,c:'var(--gn)'}, {lbl:'In Progress',val:t.filter(x=>x.stage==='in-progress'||x.stage==='development').length,c:'var(--cy)'}, {lbl:'Blocked',val:t.filter(x=>x.stage==='blocked').length,c:'var(--rd)'}, {lbl:'Overdue',val:t.filter(x=>x.due&&new Date(x.due)<now&&x.stage!=='completed').length,c:'var(--am)'}, ].map((s,i)=>html`
             <div key=${i} style=${{flex:1,textAlign:'center',padding:'8px 4px',borderRight:i<4?'1px solid var(--bd)':'none'}}>
@@ -4731,7 +4732,7 @@ function TeamView({users,cu,reload}){
       </div>
       <div class="card" style=${{padding:0,overflow:'auto'}}>
         <table style=${{width:'100%',borderCollapse:'collapse'}}>
-          <thead><tr style=${{borderBottom:'1px solid var(--bd)',background:'var(--sf2)'}}>
+          <thead><tr style=${{borderBottom:'1px solid var(--bd)',background:accentBg}}>
             ${['Member','Email','Password','2FA / Authenticator','Role',''].map((h,i)=>html`<th key=${i} style=${{padding:'9px 15px',textAlign:'left',fontSize:10,fontFamily:'monospace',color:'var(--tx3)',textTransform:'uppercase',letterSpacing:.5}}>${h}</th>`)}
           </tr></thead>
           <tbody>
@@ -4835,7 +4836,7 @@ function TeamView({users,cu,reload}){
           </div>
           <div>
             <label class="lbl">Members</label>
-            <div style=${{display:'flex',flexDirection:'column',gap:6,maxHeight:200,overflowY:'auto',border:'1px solid var(--bd)',borderRadius:9,padding:'8px 12px',background:'var(--sf2)'}}>
+            <div style=${{display:'flex',flexDirection:'column',gap:6,maxHeight:200,overflowY:'auto',border:'1px solid var(--bd)',borderRadius:9,padding:'8px 12px',background:accentBg}}>
               ${safe(users).map(u=>html`
                 <label key=${u.id} style=${{display:'flex',alignItems:'center',gap:10,cursor:'pointer',padding:'5px 0'}}>
                   <input type="checkbox" checked=${tMembers.includes(u.id)} onChange=${()=>toggleMember(u.id)}
@@ -7041,7 +7042,7 @@ function TimesheetView({cu,teams,users,projects,tasks}){
         <div style=${{overflowX:'auto'}}>
           <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
-              <tr style=${{background:'var(--sf2)'}}>
+              <tr style=${{background:accentBg}}>
                 ${isAdmin?html`<th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>USER</th>`:null}
                 <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>DATE</th>
                 <th style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'var(--tx3)',fontSize:10,letterSpacing:'.04em'}}>PROJECT</th>
@@ -7263,22 +7264,23 @@ async function vaultHashPw(pw){
 
 // ── Icon map ──────────────────────────────────────────────────────────────────
 const VAULT_ICON_MAP = [
-  { keys:['aws','amazon','s3','ec2','lambda'],         icon:'☁️',  bg:'rgba(255,153,0,.15)',  border:'rgba(255,153,0,.35)'  },
-  { keys:['gcp','google','firebase','bigquery'],       icon:'🌐',  bg:'rgba(66,133,244,.15)', border:'rgba(66,133,244,.3)'  },
-  { keys:['azure','microsoft','office365'],            icon:'🔷',  bg:'rgba(0,120,212,.15)',  border:'rgba(0,120,212,.3)'   },
-  { keys:['github','gitlab','bitbucket','git'],        icon:'🐙',  bg:'rgba(200,200,200,.08)',border:'rgba(200,200,200,.2)' },
-  { keys:['database','db','mysql','postgres','mongo','redis','sqlite'], icon:'🗃️', bg:'rgba(6,182,212,.12)', border:'rgba(6,182,212,.3)' },
-  { keys:['slack','discord','telegram','chat'],        icon:'💬',  bg:'rgba(99,91,255,.15)',  border:'rgba(99,91,255,.3)'   },
-  { keys:['stripe','payment','billing','razorpay'],    icon:'💳',  bg:'rgba(99,91,255,.12)',  border:'rgba(99,91,255,.28)'  },
-  { keys:['email','smtp','sendgrid','mailgun','mail'],  icon:'📧',  bg:'rgba(90,94,247,.12)',  border:'rgba(90,94,247,.28)'  },
-  { keys:['ssh','server','vps','nginx','linux'],        icon:'🖥️',  bg:'rgba(16,185,129,.1)',  border:'rgba(16,185,129,.28)' },
-  { keys:['docker','kubernetes','k8s','container'],    icon:'🐳',  bg:'rgba(9,150,224,.13)',  border:'rgba(9,150,224,.28)'  },
-  { keys:['api','token','key','secret','oauth','jwt'],  icon:'🔑',  bg:'rgba(245,158,11,.12)', border:'rgba(245,158,11,.28)' },
-  { keys:['wallet','crypto','btc','eth','web3'],       icon:'🪙',  bg:'rgba(255,184,0,.12)',  border:'rgba(255,184,0,.28)'  },
-  { keys:['openai','claude','gemini','llm','ai','ml'], icon:'🤖',  bg:'rgba(16,163,127,.12)', border:'rgba(16,163,127,.28)' },
-  { keys:['note','memo','personal','misc'],            icon:'📝',  bg:'rgba(255,255,255,.05)',border:'rgba(255,255,255,.12)'},
+  { keys:['aws','amazon','s3','ec2','lambda'],         icon:'☁️',  bg:'rgba(255,153,0,.22)',  border:'rgba(255,153,0,.9)'   },
+  { keys:['gcp','google','firebase','bigquery'],       icon:'🌐',  bg:'rgba(66,133,244,.2)',  border:'rgba(66,133,244,.9)'  },
+  { keys:['azure','microsoft','office365'],            icon:'🔷',  bg:'rgba(0,120,212,.2)',   border:'rgba(0,120,212,.9)'   },
+  { keys:['github','gitlab','bitbucket','git'],        icon:'🐙',  bg:'rgba(140,140,140,.18)',border:'rgba(160,160,160,.9)' },
+  { keys:['database','db','mysql','postgres','mongo','redis','sqlite'], icon:'🗃️', bg:'rgba(6,182,212,.2)', border:'rgba(6,182,212,.9)' },
+  { keys:['slack','discord','telegram','chat'],        icon:'💬',  bg:'rgba(99,91,255,.2)',   border:'rgba(99,91,255,.9)'   },
+  { keys:['stripe','payment','billing','razorpay'],    icon:'💳',  bg:'rgba(99,91,255,.18)',  border:'rgba(99,91,255,.85)'  },
+  { keys:['email','smtp','sendgrid','mailgun','mail'],  icon:'📧',  bg:'rgba(90,94,247,.2)',   border:'rgba(90,94,247,.9)'   },
+  { keys:['ssh','server','vps','nginx','linux'],        icon:'🖥️',  bg:'rgba(16,185,129,.18)', border:'rgba(16,185,129,.9)'  },
+  { keys:['docker','kubernetes','k8s','container'],    icon:'🐳',  bg:'rgba(9,150,224,.2)',   border:'rgba(9,150,224,.9)'   },
+  { keys:['api','token','key','secret','oauth','jwt'],  icon:'🔑',  bg:'rgba(245,158,11,.2)',  border:'rgba(245,158,11,.9)'  },
+  { keys:['wallet','crypto','btc','eth','web3'],       icon:'🪙',  bg:'rgba(255,184,0,.2)',   border:'rgba(255,184,0,.9)'   },
+  { keys:['openai','claude','gemini','llm','ai','ml'], icon:'🤖',  bg:'rgba(16,163,127,.2)',  border:'rgba(16,163,127,.9)'  },
+  { keys:['vpn','sophos','wireguard','openvpn'],       icon:'🛡️',  bg:'rgba(168,85,247,.2)',  border:'rgba(168,85,247,.9)'  },
+  { keys:['note','memo','personal','misc'],            icon:'📝',  bg:'rgba(148,163,184,.15)',border:'rgba(148,163,184,.7)' },
 ];
-const VAULT_ICON_DEFAULT = { icon:'🗂️', bg:'rgba(90,94,247,.08)', border:'rgba(90,94,247,.2)' };
+const VAULT_ICON_DEFAULT = { icon:'🗂️', bg:'rgba(90,94,247,.18)', border:'rgba(90,94,247,.85)' };
 function vaultGetIcon(title, tags){
   const hay = ((title||'')+(tags||'')).toLowerCase();
   for(const e of VAULT_ICON_MAP){ if(e.keys.some(k=>hay.includes(k))) return e; }
@@ -7287,8 +7289,8 @@ function vaultGetIcon(title, tags){
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const VS = {
-  wrap:   { padding:'24px 28px', maxWidth:1200, height:'100%', overflowY:'auto', boxSizing:'border-box',
-    scrollbarWidth:'thin', scrollbarColor:'rgba(90,94,247,0.4) transparent' },
+  wrap:   { padding:'24px 28px 24px 28px', width:'100%', boxSizing:'border-box' },
+  inner:  { maxWidth:1100, width:'100%' },
   ph:     { display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:12 },
   btnPri: { background:'linear-gradient(135deg,#5a5ef7,#a855f7)',color:'#fff',border:'none',padding:'8px 18px',borderRadius:100,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,transition:'opacity .15s' },
   btnCan: { background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:13,padding:'7px 16px',borderRadius:100,cursor:'pointer',fontFamily:'inherit' },
@@ -7437,7 +7439,9 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
   }
 
   const accentColor = iconInfo.border;
-  const cardBg = 'var(--sf)';
+  const accentBg    = iconInfo.bg;
+  // Solid vivid color for the left stripe derived from the border color
+  const stripeColor = iconInfo.border.replace(/[\d.]+\)$/,'1)');
 
   // ── cell style ──
   const cellInp = {
@@ -7452,31 +7456,33 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
 
   return html`
     <div style=${{
-      background: 'linear-gradient(145deg, '+iconInfo.bg+', var(--sf))',
-      border:'1px solid '+iconInfo.border,
-      borderLeft:'3px solid '+iconInfo.border,
+      background:'var(--sf)',
+      border:'1px solid '+accentColor,
+      borderLeft:'4px solid '+stripeColor,
       borderRadius:14,
       overflow:'hidden', marginBottom:16,
-      boxShadow:'0 4px 20px rgba(0,0,0,.15), 0 1px 4px rgba(0,0,0,.08)',
+      boxShadow:'0 4px 18px rgba(0,0,0,.14), 0 0 0 0 transparent',
       transition:'box-shadow .2s, transform .15s',
     }}
-    onMouseEnter=${e=>{e.currentTarget.style.boxShadow='0 8px 32px rgba(0,0,0,.22), 0 1px 4px rgba(0,0,0,.1)';e.currentTarget.style.transform='translateY(-1px)';}}
-    onMouseLeave=${e=>{e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.15), 0 1px 4px rgba(0,0,0,.08)';e.currentTarget.style.transform='translateY(0)';}}
+    onMouseEnter=${e=>{e.currentTarget.style.boxShadow='0 8px 32px rgba(0,0,0,.2)';e.currentTarget.style.transform='translateY(-2px)';}}
+    onMouseLeave=${e=>{e.currentTarget.style.boxShadow='0 4px 18px rgba(0,0,0,.14)';e.currentTarget.style.transform='translateY(0)';}}
     >
 
-      <!-- accent top bar -->
-      <div style=${{height:3, background:'linear-gradient(90deg,'+accentColor+', '+iconInfo.bg+', transparent)'}}></div>
+      <!-- colored top bar - thicker, vivid -->
+      <div style=${{height:4, background:'linear-gradient(90deg,'+stripeColor+' 0%,'+accentColor+' 60%,transparent 100%)'}}></div>
 
       <!-- card header -->
       <div style=${{
-        display:'flex', alignItems:'center', gap:10, padding:'11px 14px',
-        borderBottom:'1px solid '+iconInfo.border+'55',
-        background:'linear-gradient(135deg,'+iconInfo.bg+'cc,transparent)',
+        display:'flex', alignItems:'center', gap:10, padding:'12px 16px',
+        borderBottom:'1px solid '+accentColor,
+        background:'linear-gradient(135deg,'+accentBg+' 0%,rgba(0,0,0,0) 70%)',
       }}>
         <div style=${{
-          width:32,height:32,borderRadius:9,flexShrink:0,
-          background:iconInfo.bg, border:'1px solid '+iconInfo.border,
-          display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,
+          width:36,height:36,borderRadius:10,flexShrink:0,
+          background:accentBg,
+          border:'2px solid '+stripeColor,
+          display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,
+          boxShadow:'0 0 10px '+accentBg,
         }}>${iconInfo.icon}</div>
 
         <!-- title -->
@@ -7488,37 +7494,37 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
             onBlur=${()=>{ setEditing(false); push(undefined,undefined,title,undefined); }}
             onKeyDown=${e=>{ if(e.key==='Enter'||e.key==='Escape'){ setEditing(false); push(undefined,undefined,title,undefined); }}}/>` }
         ${!editing && html`
-          <span style=${{flex:1,fontSize:13,fontWeight:700,color:'var(--tx)',cursor:'text',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
+          <span style=${{flex:1,fontSize:14,fontWeight:800,color:'var(--tx)',cursor:'text',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-.2px'}}
             onClick=${()=>setEditing(true)}
             title="Click to rename">${title||'Untitled'}</span>`}
 
         <!-- badges -->
         ${isLocked && html`
-          <span style=${{fontSize:9,fontWeight:700,padding:'2px 7px',borderRadius:100,
-            background: isUnlocked?'rgba(34,197,94,.1)':'rgba(239,68,68,.1)',
+          <span style=${{fontSize:10,fontWeight:700,padding:'3px 9px',borderRadius:100,
+            background: isUnlocked?'rgba(34,197,94,.15)':'rgba(239,68,68,.12)',
             color: isUnlocked?'#4ade80':'#f87171',
-            border: '1px solid '+(isUnlocked?'rgba(34,197,94,.25)':'rgba(239,68,68,.25)'),
+            border: '1px solid '+(isUnlocked?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)'),
             whiteSpace:'nowrap',flexShrink:0,
           }}>${isUnlocked?'🔓 Unlocked':'🔒 Locked'}</span>`}
 
         <!-- action buttons -->
-        <div style=${{display:'flex',gap:3,flexShrink:0}}>
+        <div style=${{display:'flex',gap:4,flexShrink:0}}>
           ${isLocked && isUnlocked && html`
-            <button title="Lock" style=${{background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:11,padding:'3px 8px',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}}
-              onClick=${()=>onLock(card.id)}>🔒</button>`}
+            <button title="Lock" style=${{background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',color:'#fbbf24',fontSize:11,padding:'4px 10px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',fontWeight:600}}
+              onClick=${()=>onLock(card.id)}>🔒 Lock</button>`}
           ${!isLocked && html`
-            <button title="Set password lock" style=${{background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:11,padding:'3px 8px',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}}
-              onClick=${()=>setShowPwMo('set')}>🔓</button>`}
-          <button title="Delete card" style=${{background:'none',border:'1px solid var(--bd)',color:'#f87171',fontSize:11,padding:'3px 8px',borderRadius:6,cursor:'pointer',fontFamily:'inherit'}}
+            <button title="Set password lock" style=${{background:'rgba(90,94,247,.1)',border:'1px solid rgba(90,94,247,.3)',color:'#818cf8',fontSize:11,padding:'4px 10px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',fontWeight:600}}
+              onClick=${()=>setShowPwMo('set')}>🔓 Lock</button>`}
+          <button title="Delete card" style=${{background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',color:'#f87171',fontSize:11,padding:'4px 10px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',fontWeight:600}}
             onClick=${()=>setShowDel(true)}>🗑️</button>
         </div>
       </div>
 
       <!-- tags bar -->
       ${tags && html`
-        <div style=${{padding:'5px 14px',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',gap:5,flexWrap:'wrap'}}>
+        <div style=${{padding:'6px 16px',borderBottom:'1px solid '+accentColor,display:'flex',gap:5,flexWrap:'wrap',background:accentBg}}>
           ${(tags||'').split(',').map(t=>t.trim()).filter(Boolean).map(t=>html`
-            <span key=${t} style=${{fontSize:10,padding:'1px 8px',borderRadius:100,border:'1px solid var(--bd)',color:'var(--tx2)',background:'var(--sf2)'}}>${t}</span>`)}
+            <span key=${t} style=${{fontSize:10,padding:'2px 9px',borderRadius:100,border:'1px solid '+accentColor,color:'var(--tx)',background:'var(--sf)',fontWeight:600}}>${t}</span>`)}
         </div>`}
 
       <!-- LOCKED overlay -->
@@ -7536,17 +7542,17 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
         <div style=${{overflowX:'auto'}}>
           <table style=${{width:'100%',borderCollapse:'collapse',tableLayout:'auto',minWidth:320}}>
             <thead>
-              <tr style=${{background:'linear-gradient(90deg,'+iconInfo.bg+'99, var(--sf2))'}}>
+              <tr style=${{background:accentBg}}>
                 <!-- row actions col -->
-                <th style=${{width:28,padding:'6px 4px 6px 10px',borderBottom:'1px solid '+iconInfo.border+'44'}}></th>
+                <th style=${{width:28,padding:'6px 4px 6px 10px',borderBottom:'1px solid '+accentColor}}></th>
                 <!-- secret toggle col -->
-                <th style=${{width:26,padding:'6px 4px',borderBottom:'1px solid '+iconInfo.border+'44',textAlign:'center'}}>
+                <th style=${{width:26,padding:'6px 4px',borderBottom:'1px solid '+accentColor,textAlign:'center'}}>
                   <span title="Secret row (hidden)" style=${{fontSize:11,opacity:.5}}>🔒</span>
                 </th>
                 ${cols.map((col,ci)=>html`
                   <th key=${col.id} style=${{
-                    padding:'6px 10px', borderBottom:'1px solid '+iconInfo.border+'44',
-                    borderLeft:'1px solid '+iconInfo.border+'33', minWidth:100,
+                    padding:'6px 10px', borderBottom:'1px solid '+accentColor,
+                    borderLeft:'1px solid '+accentColor+' ', minWidth:100,
                     position:'relative',
                   }}>
                     <div style=${{display:'flex',alignItems:'center',gap:4}}>
@@ -7564,7 +7570,7 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
                     </div>
                   </th>`)}
                 <!-- + col button -->
-                <th style=${{width:36,padding:'4px 6px',borderBottom:'1px solid '+iconInfo.border+'44',borderLeft:'1px dashed var(--bd)'}}>
+                <th style=${{width:36,padding:'4px 6px',borderBottom:'1px solid rgba(128,128,128,0.1)',borderLeft:'1px dashed rgba(128,128,128,0.15)'}}>
                   <button title="Add column"
                     style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',opacity:.5,fontSize:15,padding:'0',width:'100%',transition:'opacity .15s'}}
                     onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='var(--ac)';}}
@@ -7579,19 +7585,19 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
                 const isShowingSecrets = !!showSecretRows[row._id];
                 return html`
                   <tr key=${row._id} style=${{
-                    background: isSecret ? (ri%2===0?'rgba(245,158,11,.04)':'rgba(245,158,11,.02)') : (ri%2===0?'transparent':'rgba(255,255,255,.012)'),
+                    background: isSecret ? (ri%2===0?'rgba(245,158,11,.07)':'rgba(245,158,11,.03)') : (ri%2===0?'transparent':accentBg.replace(/[\d.]+\)$/,'0.04)')),
                     transition:'background .15s',
                   }}>
                     <!-- row number -->
                     <td style=${{
                       padding:'4px 4px 4px 10px', color:'var(--tx2)', fontSize:10,
                       fontFamily:'monospace', opacity:.4, textAlign:'right',
-                      borderBottom:'1px solid rgba(255,255,255,0.05)',
+                      borderBottom:'1px solid rgba(128,128,128,0.1)',
                       userSelect:'none',
                     }}>${ri+1}</td>
 
                     <!-- secret toggle -->
-                    <td style=${{padding:'4px',textAlign:'center',borderBottom:'1px solid rgba(255,255,255,0.05)'}}>
+                    <td style=${{padding:'4px',textAlign:'center',borderBottom:'1px solid rgba(128,128,128,0.1)'}}>
                       <button title=${isSecret?'Secret row — click to show values':'Click to mark as secret'}
                         style=${{
                           background: isSecret?'rgba(245,158,11,.15)':'none',
@@ -7611,8 +7617,8 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
                       const hideVal = isSecret && !isShowingSecrets;
                       return html`
                         <td key=${col.id} style=${{
-                          padding:'4px 10px', borderBottom:'1px solid rgba(255,255,255,0.05)',
-                          borderLeft:'1px solid rgba(255,255,255,0.05)', position:'relative',
+                          padding:'4px 10px', borderBottom:'1px solid rgba(128,128,128,0.1)',
+                          borderLeft:'1px solid rgba(128,128,128,0.08)', position:'relative',
                           minWidth:100,
                         }}>
                           ${hideVal && html`
@@ -7654,7 +7660,7 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
                         </td>`; })}
 
                     <!-- row delete -->
-                    <td style=${{padding:'4px 6px',borderBottom:'1px solid rgba(255,255,255,0.05)',borderLeft:'1px dashed var(--bd)',textAlign:'center'}}>
+                    <td style=${{padding:'4px 6px',borderBottom:'1px solid rgba(128,128,128,0.1)',borderLeft:'1px dashed rgba(128,128,128,0.15)',textAlign:'center'}}>
                       <button title="Remove row"
                         style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',opacity:.25,fontSize:12,padding:'0',transition:'opacity .15s'}}
                         onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='#f87171';}}
@@ -7669,7 +7675,7 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
                   <button
                     style=${{
                       width:'100%',background:'none',border:'none',
-                      borderTop: rows.length?'none':'1px dashed var(--bd)',
+                      borderTop: rows.length?'none':'1px dashed rgba(128,128,128,0.15)',
                       padding:'7px 14px',fontSize:12,color:'var(--tx2)',
                       cursor:'pointer',fontFamily:'inherit',display:'flex',
                       alignItems:'center',gap:5,opacity:.5,transition:'all .15s',
@@ -7854,8 +7860,9 @@ function VaultView({cu}){
   });
 
   return html`
-    <div style=${{flex:1, overflow:'hidden', display:'flex', flexDirection:'column', height:'100%'}}>
-    <div class="vault-scroll" style=${VS.wrap}>
+    <div class="vault-scroll" style=${{flex:1,display:'flex',flexDirection:'column',height:'100%',overflowY:'auto',overflowX:'hidden',width:'100%',boxSizing:'border-box'}}>
+    <div style=${VS.wrap}>
+    <div style=${VS.inner}>
       <!-- Page header -->
       <div style=${VS.ph}>
         <div>
@@ -7911,6 +7918,7 @@ function VaultView({cu}){
         <${VaultNewCardModal}
           onClose=${()=>setShowNew(false)}
           onCreate=${handleCreate}/>`}
+    </div>
     </div>
     </div>`;
 }
@@ -8459,9 +8467,9 @@ function App(){
           onMarkAllRead=${async()=>{await api.put('/api/notifications/read-all',{});load();}}
           onClearAll=${async()=>{await api.del('/api/notifications/all');load();}}
         />
-        <div style=${{flex:1,overflow: baseView==='vault' ? 'hidden' : 'hidden',display:'flex',flexDirection:'column'}}>
+        <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
-            <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow: baseView==='vault' ? 'auto' : 'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
+            <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow: baseView==='vault'?'hidden':'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
             ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId} onClearInitial=${()=>setInitialProjectId(null)}/>`:null}
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}
