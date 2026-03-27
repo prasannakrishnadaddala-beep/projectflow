@@ -7753,7 +7753,7 @@ function VaultView({cu}){
       if(Array.isArray(data)){
         setCards(data.map(c=>({
           ...c,
-          rows: typeof c.rows==='string' ? (()=>{try{return JSON.parse(c.rows);}catch(_){return [];}}()) : (c.rows||[]),
+          rows: typeof c.rows==='string' ? (function(s){try{return JSON.parse(s);}catch(e){return [];}}(c.rows)) : (c.rows||[]),
           lockHash: c.lock_hash||''
         })));
       }
@@ -7882,10 +7882,10 @@ function VaultView({cu}){
         </div>
         <span style=${{fontSize:12,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',padding:'5px 12px',borderRadius:100,fontWeight:600}}>${countLabel}</span>
       </div>
-      ${vLoading ? html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)',fontSize:13}}>Loading vault…</div>` :
-        html`<div style=${VS.grid}>
-          ${renderVaultGrid(filtered, unlocked, filter, handleUnlock, handleLock, openEdit, openLock, openDel, copyVal)}
-        </div>`}
+      ${vLoading && html`<div style=${{textAlign:'center',padding:'48px 0',color:'var(--tx3)',fontSize:13}}>Loading vault…</div>`}
+      ${!vLoading && html`<div style=${VS.grid}>
+        ${renderVaultGrid(filtered, unlocked, filter, handleUnlock, handleLock, openEdit, openLock, openDel, copyVal)}
+      </div>`}
       <${VaultModal}
         modal=${modal}
         mTitle=${mTitle} setMTitle=${setMTitle}
