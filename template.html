@@ -1654,11 +1654,12 @@ function Sidebar({cu,view,setView,onLogout,unread,dmUnread,col,setCol,wsName,dar
     'ai-docs':    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="10" cy="13" r="2"/><path d="M20 21l-4.35-4.35"/></svg>`,
     timesheet:    html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="4" x2="9" y2="9"/><path d="M7 13h2l1 2 2-4 1 2h2"/></svg>`,
     'password-generator': html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>`,
+    vault: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><circle cx="12" cy="14" r="2"/><line x1="12" y1="14" x2="12" y2="17"/></svg>`,
   };
   const adminNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, {id:'timesheet', label:'Timesheet', badge:'New', hint:'Shift+L'}, {id:'password-generator', label:'Password Gen', badge:'FREE'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline Tracker'}, {id:'productivity',label:'Dev Productivity'}, {id:'reminders', label:'Reminders'}, {id:'team', label:'Team Management'}, {id:'ai-docs', label:'AI Docs', badge:'AI'}, {id:'timesheet', label:'Timesheet', badge:'New', hint:'Shift+L'}, {id:'password-generator', label:'Password Gen', badge:'FREE'}, {id:'vault', label:'My Vault'}, ];
   const devNav=[
-    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'timesheet', label:'Timesheet'}, {id:'password-generator', label:'Password Gen', badge:'FREE'}, ];
+    {id:'dashboard', label:'Dashboard'}, {id:'projects', label:'Projects'}, {id:'tasks', label:'Kanban Board'}, {id:'messages', label:'Channels'}, {id:'dm', label:'Direct Messages'}, {id:'tickets', label:'Tickets'}, {id:'timeline', label:'Timeline'}, {id:'reminders', label:'Reminders'}, {id:'timesheet', label:'Timesheet'}, {id:'password-generator', label:'Password Gen', badge:'FREE'}, {id:'vault', label:'My Vault'}, ];
   const navItems=(isAdminManager?adminNav:devNav).filter(it=>
     it.id!=='dm'||(wsDmEnabled||isAdminManager)
   );
@@ -7224,10 +7225,360 @@ function PasswordGeneratorView(){
   </div>`;
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VAULT VIEW — Personal credential & data store for all roles
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// VAULT VIEW — Personal credential & data store, all roles
+// No nested template literals — every html` tag is at the top level of its
+// enclosing function so the HTM parser never sees backticks inside ${}.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Storage helpers ──────────────────────────────────────────────────────────
+function vaultStorageKey(cu){ return 'vewit_vault_v2_'+((cu&&cu.id)||'guest'); }
+function vaultLoad(key){ try{ return JSON.parse(localStorage.getItem(key)||'[]'); }catch(_){ return []; } }
+function vaultPersist(key,cards){ try{ localStorage.setItem(key,JSON.stringify(cards)); }catch(_){} }
+function vaultNewId(){ return 'c'+Date.now()+Math.random().toString(36).slice(2,6); }
+async function vaultHashPw(pw){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('vewit::'+pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function vaultParseRows(raw){
+  return (raw||'').split('\n').map(line=>{
+    const secret = line.startsWith('\uD83D\uDD12') || line.startsWith('*');
+    const clean  = secret ? line.replace(/^[\uD83D\uDD12*]\s*/,'') : line;
+    const colon  = clean.indexOf(':');
+    if(colon<0) return null;
+    return { k:clean.slice(0,colon).trim(), v:clean.slice(colon+1).trim(), secret };
+  }).filter(Boolean);
+}
+
+// ── Shared styles (plain object, no template literals) ───────────────────────
+const VS = {
+  wrap:    { padding:'28px 30px', maxWidth:1100 },
+  ph:      { display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:22,gap:12 },
+  phTitle: { fontSize:21,fontWeight:800,letterSpacing:'-.5px',color:'var(--tx)' },
+  phSub:   { fontSize:13,color:'var(--tx2)',marginTop:3 },
+  btnPri:  { background:'linear-gradient(135deg,#5a5ef7,#a855f7)',color:'#fff',border:'none',padding:'8px 18px',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit' },
+  btnCan:  { background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:13,padding:'7px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit' },
+  btnDng:  { background:'linear-gradient(135deg,#ef4444,#b91c1c)',color:'#fff',border:'none',fontSize:13,fontWeight:700,padding:'7px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit' },
+  ab:      { background:'none',border:'1px solid var(--bd)',color:'var(--tx2)',fontSize:11,padding:'3px 9px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',marginRight:3 },
+  search:  { background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 13px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',outline:'none',width:260 },
+  grid:    { display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14,marginBottom:20 },
+  card:    { background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden',position:'relative' },
+  cardHd:  { display:'flex',alignItems:'center',justifyContent:'space-between',padding:'11px 14px',borderBottom:'1px solid var(--bd)',gap:8 },
+  cardTi:  { fontSize:13.5,fontWeight:700,color:'var(--tx)',display:'flex',alignItems:'center',gap:6 },
+  cardBd:  { padding:'11px 14px' },
+  row:     { display:'flex',justifyContent:'space-between',alignItems:'center',padding:'5px 0',fontSize:12.5,gap:8 },
+  rowK:    { color:'var(--tx2)',fontSize:11.5,flexShrink:0,maxWidth:110 },
+  rowV:    { color:'var(--tx)',fontWeight:500,textAlign:'right',wordBreak:'break-all',display:'flex',alignItems:'center',gap:4 },
+  cpyBtn:  { background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',fontSize:11,padding:'2px 5px',borderRadius:4,fontFamily:'inherit' },
+  overlay: { position:'absolute',inset:0,background:'rgba(13,11,30,.88)',backdropFilter:'blur(6px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,borderRadius:12,zIndex:2 },
+  ulInput: { background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,padding:'8px 12px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',outline:'none',width:200,textAlign:'center' },
+  moBack:  { position:'fixed',inset:0,background:'rgba(0,0,0,.7)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)' },
+  moBox:   { background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:16,padding:'26px',width:480,maxWidth:'calc(100vw - 28px)',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 32px 64px rgba(0,0,0,.5)' },
+  moTi:    { fontSize:16,fontWeight:800,marginBottom:6,color:'var(--tx)' },
+  moDe:    { fontSize:13,color:'var(--tx2)',marginBottom:18,lineHeight:1.6 },
+  fg:      { marginBottom:16 },
+  lbl:     { display:'block',fontSize:11,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:6 },
+  inp:     { width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,padding:'9px 12px',fontSize:13,color:'var(--tx)',fontFamily:'inherit',outline:'none',boxSizing:'border-box' },
+  ta:      { width:'100%',background:'var(--sf2)',border:'1px solid var(--bd)',borderRadius:8,padding:'9px 12px',fontSize:12.5,color:'var(--tx)',fontFamily:'monospace',outline:'none',resize:'vertical',lineHeight:1.6,boxSizing:'border-box',minHeight:130 },
+  hint:    { fontSize:11,color:'var(--tx2)',marginTop:5 },
+  mact:    { display:'flex',gap:10,marginTop:20,justifyContent:'flex-end' },
+  err:     { color:'#f87171',fontSize:12,marginTop:6 },
+  tag:     { display:'inline-block',fontSize:10,padding:'1px 7px',borderRadius:10,border:'1px solid var(--bd)',color:'var(--tx2)',marginRight:3 },
+  empty:   { textAlign:'center',color:'var(--tx2)',padding:'60px 20px',fontSize:14,gridColumn:'1/-1' },
+  dots:    { letterSpacing:2,color:'var(--tx2)',fontSize:10 },
+};
+
+// ── Sub-components (no nested backticks anywhere) ─────────────────────────────
+
+function VaultUnlockOverlay({card, onUnlock}){
+  const [pw,setPw]   = useState('');
+  const [err,setErr] = useState('');
+  function attempt(){
+    vaultHashPw(pw).then(h=>{
+      if(h===card.lockHash){ onUnlock(card.id); }
+      else{ setErr('Wrong password'); setPw(''); }
+    });
+  }
+  return html`
+    <div style=${VS.overlay}>
+      <span style=${{fontSize:26}}>🔒</span>
+      <span style=${{fontSize:12,color:'rgba(200,195,240,.7)'}}>Password protected</span>
+      <input style=${VS.ulInput} type="password" placeholder="Enter password"
+        value=${pw}
+        onInput=${e=>{ setPw(e.target.value); setErr(''); }}
+        onKeyDown=${e=>{ if(e.key==='Enter') attempt(); }}/>
+      ${err && html`<span style=${{fontSize:11,color:'#f87171'}}>${err}</span>`}
+      <button style=${VS.btnPri} onClick=${attempt}>Unlock</button>
+    </div>`;
+}
+
+function VaultRowItem({r, showRows, onCopy}){
+  const masked = r.secret && !showRows;
+  const rowStyle = {...VS.row, borderBottom:'1px solid rgba(255,255,255,.04)'};
+  if(masked){
+    return html`
+      <div style=${rowStyle}>
+        <span style=${VS.rowK}>${r.k}</span>
+        <span style=${VS.rowV}><span style=${VS.dots}>${'\u2022'.repeat(8)}</span></span>
+      </div>`;
+  }
+  return html`
+    <div style=${rowStyle}>
+      <span style=${VS.rowK}>${r.k}</span>
+      <span style=${VS.rowV}>
+        <span>${r.v}</span>
+        ${r.v && html`<button style=${VS.cpyBtn} title="Copy" onClick=${()=>onCopy(r.v)}>${'\u2398'}</button>`}
+      </span>
+    </div>`;
+}
+
+function VaultTagList({tags}){
+  const items = (tags||'').split(',').map(t=>t.trim()).filter(Boolean);
+  if(!items.length) return null;
+  return html`<div style=${{marginBottom:8}}>${items.map(t=>html`<span key=${t} style=${VS.tag}>${t}</span>`)}</div>`;
+}
+
+function VaultLockBadge({isLocked, isUnlocked}){
+  if(!isLocked) return null;
+  const bg     = isUnlocked ? 'rgba(34,197,94,.12)'  : 'rgba(239,68,68,.12)';
+  const color  = isUnlocked ? '#4ade80'               : '#f87171';
+  const border = isUnlocked ? 'rgba(34,197,94,.3)'   : 'rgba(239,68,68,.3)';
+  const label  = isUnlocked ? 'Unlocked'              : 'Locked';
+  const s = { fontSize:9.5,fontWeight:700,padding:'2px 7px',borderRadius:20,border:'1px solid',background:bg,color,borderColor:border };
+  return html`<span style=${s}>${label}</span>`;
+}
+
+function VaultCard({card, isUnlocked, onUnlock, onLock, onEdit, onLockCard, onDelete, onCopy}){
+  const isLocked = !!card.lockHash;
+  const showRows = !isLocked || isUnlocked;
+  const rows = card.rows || [];
+
+  return html`
+    <div style=${VS.card}>
+      ${isLocked && !isUnlocked && html`<${VaultUnlockOverlay} card=${card} onUnlock=${onUnlock}/>`}
+      <div style=${VS.cardHd}>
+        <div style=${VS.cardTi}>
+          <span>${card.title}</span>
+          <${VaultLockBadge} isLocked=${isLocked} isUnlocked=${isUnlocked}/>
+        </div>
+        <div style=${{display:'flex',gap:4,flexShrink:0}}>
+          ${isLocked && isUnlocked && html`<button style=${VS.ab} onClick=${()=>onLock(card.id)}>🔒</button>`}
+          ${!isLocked && html`<button style=${VS.ab} onClick=${()=>onLockCard(card)}>🔓 Lock</button>`}
+          <button style=${VS.ab} onClick=${()=>onEdit(card)}>✏</button>
+          <button style=${{...VS.ab,marginRight:0}} onClick=${()=>onDelete(card)}>🗑</button>
+        </div>
+      </div>
+      <div style=${VS.cardBd}>
+        <${VaultTagList} tags=${card.tags}/>
+        ${rows.length === 0 && html`<div style=${{color:'var(--tx2)',fontSize:12}}>No rows yet — edit to add fields.</div>`}
+        ${rows.map((r,i)=>html`<${VaultRowItem} key=${i} r=${r} showRows=${showRows} onCopy=${onCopy}/>`)}
+      </div>
+    </div>`;
+}
+
+function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRows, setMRows, mPw1, setMPw1, mPw2, setMPw2}){
+  if(type==='new' || type==='edit'){
+    return html`
+      <div>
+        <div style=${VS.fg}>
+          <label style=${VS.lbl}>Card Title</label>
+          <input style=${VS.inp} placeholder="e.g. AWS Production, GitLab Creds"
+            value=${mTitle} onInput=${e=>setMTitle(e.target.value)}/>
+        </div>
+        <div style=${VS.fg}>
+          <label style=${VS.lbl}>Tags (comma-separated)</label>
+          <input style=${VS.inp} placeholder="e.g. aws, prod, infra"
+            value=${mTags} onInput=${e=>setMTags(e.target.value)}/>
+        </div>
+        <div style=${VS.fg}>
+          <label style=${VS.lbl}>Rows — one per line, Key: Value</label>
+          <textarea style=${VS.ta} rows="6"
+            placeholder=${'Username: admin\n\uD83D\uDD12 Password: s3cr3t\nURL: https://example.com\n\uD83D\uDD12 API Key: abc123'}
+            value=${mRows} onInput=${e=>setMRows(e.target.value)}></textarea>
+          <div style=${VS.hint}>Prefix a row with 🔒 to mark it secret — hidden when card is locked.</div>
+        </div>
+        ${type==='edit' && modal.card.lockHash && html`
+          <div style=${VS.fg}>
+            <label style=${VS.lbl}>Remove lock (enter current password)</label>
+            <input style=${VS.inp} type="password" placeholder="Leave blank to keep lock"
+              value=${mPw1} onInput=${e=>setMPw1(e.target.value)}/>
+          </div>`}
+      </div>`;
+  }
+  if(type==='lock'){
+    return html`
+      <div>
+        <div style=${VS.fg}>
+          <label style=${VS.lbl}>Password</label>
+          <input style=${VS.inp} type="password" placeholder="Choose a password"
+            value=${mPw1} onInput=${e=>setMPw1(e.target.value)}/>
+        </div>
+        <div style=${VS.fg}>
+          <label style=${VS.lbl}>Confirm Password</label>
+          <input style=${VS.inp} type="password" placeholder="Repeat password"
+            value=${mPw2} onInput=${e=>setMPw2(e.target.value)}/>
+          <div style=${VS.hint}>${'\u26a0\ufe0f'} If you forget this password the card cannot be unlocked.</div>
+        </div>
+      </div>`;
+  }
+  return null;
+}
+
+function VaultModal({modal, mTitle, setMTitle, mTags, setMTags, mRows, setMRows, mPw1, setMPw1, mPw2, setMPw2, mErr, onClose, onSubmit}){
+  if(!modal) return null;
+  const t = modal.type;
+  const titles    = { new:'New Vault Card', edit:'Edit Card', lock:'Lock Card', del:'Delete Card?' };
+  const descs     = {
+    new:  'Create a card to store credentials, tokens, or any structured data.',
+    edit: 'Editing: '+(modal.card&&modal.card.title||''),
+    lock: 'Set a password to protect sensitive rows in this card.',
+    del:  'Permanently delete "'+(modal.card&&modal.card.title||'')+'"? This cannot be undone.',
+  };
+  const btnLabels = { new:'Create Card', edit:'Save Changes', lock:'Set Password', del:'Delete' };
+  const isDel = t==='del';
+  return html`
+    <div style=${VS.moBack} onClick=${e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style=${VS.moBox}>
+        <div style=${VS.moTi}>${titles[t]||''}</div>
+        <div style=${VS.moDe}>${descs[t]||''}</div>
+        <${VaultModalFields}
+          type=${t} modal=${modal}
+          mTitle=${mTitle} setMTitle=${setMTitle}
+          mTags=${mTags}   setMTags=${setMTags}
+          mRows=${mRows}   setMRows=${setMRows}
+          mPw1=${mPw1}     setMPw1=${setMPw1}
+          mPw2=${mPw2}     setMPw2=${setMPw2}/>
+        ${mErr && html`<div style=${VS.err}>${mErr}</div>`}
+        <div style=${VS.mact}>
+          <button style=${VS.btnCan} onClick=${onClose}>Cancel</button>
+          <button style=${isDel?VS.btnDng:VS.btnPri} onClick=${onSubmit}>${btnLabels[t]||'OK'}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Grid renderer (extracted to avoid nested backticks in ternary) ────────────
+function renderVaultGrid(filtered, unlocked, filter, onUnlock, onLock, onEdit, onLockCard, onDelete, onCopy){
+  if(filtered.length){
+    return filtered.map(c=>html`<${VaultCard} key=${c.id} card=${c}
+      isUnlocked=${!!unlocked[c.id]}
+      onUnlock=${onUnlock}
+      onLock=${onLock}
+      onEdit=${onEdit}
+      onLockCard=${onLockCard}
+      onDelete=${onDelete}
+      onCopy=${onCopy}/>`);
+  }
+  const msg = filter ? 'No cards match your search.' : 'No cards yet \u2014 click + New Card to add your first entry.';
+  return html`<div style=${VS.empty}><div style=${{fontSize:36,marginBottom:12}}>🗄️</div><div>${msg}</div></div>`;
+}
+
+// ── Main VaultView ────────────────────────────────────────────────────────────
+function VaultView({cu}){
+  const key = vaultStorageKey(cu);
+  const [cards,   setCards]   = useState(()=>vaultLoad(key));
+  const [unlocked,setUnlocked]= useState({});
+  const [filter,  setFilter]  = useState('');
+  const [modal,   setModal]   = useState(null);
+  const [mTitle,  setMTitle]  = useState('');
+  const [mTags,   setMTags]   = useState('');
+  const [mRows,   setMRows]   = useState('');
+  const [mPw1,    setMPw1]    = useState('');
+  const [mPw2,    setMPw2]    = useState('');
+  const [mErr,    setMErr]    = useState('');
+
+  function save(next){ setCards(next); vaultPersist(key,next); }
+
+  function copyVal(v){ navigator.clipboard.writeText(v).catch(()=>{}); }
+
+  function openNew(){ setMTitle('');setMTags('');setMRows('');setMPw1('');setMPw2('');setMErr(''); setModal({type:'new'}); }
+  function openEdit(c){
+    const rowText=(c.rows||[]).map(r=>(r.secret?'\uD83D\uDD12 ':'')+r.k+': '+r.v).join('\n');
+    setMTitle(c.title);setMTags(c.tags||'');setMRows(rowText);setMPw1('');setMPw2('');setMErr('');
+    setModal({type:'edit',card:c});
+  }
+  function openLock(c){ setMPw1('');setMPw2('');setMErr(''); setModal({type:'lock',card:c}); }
+  function openDel(c){ setMErr(''); setModal({type:'del',card:c}); }
+  function closeModal(){ setModal(null); }
+
+  function handleUnlock(id){ setUnlocked(u=>({...u,[id]:true})); }
+  function handleLock(id){ setUnlocked(u=>{ const n={...u}; delete n[id]; return n; }); }
+
+  async function handleSubmit(){
+    if(!modal) return;
+    const t = modal.type;
+    if(t==='new'){
+      if(!mTitle.trim()){ setMErr('Title is required'); return; }
+      const card={ id:vaultNewId(), title:mTitle.trim(), tags:mTags.trim(), rows:vaultParseRows(mRows), lockHash:'' };
+      save([card,...cards]); closeModal();
+    } else if(t==='edit'){
+      if(!mTitle.trim()){ setMErr('Title is required'); return; }
+      let next=cards.map(c=>c.id!==modal.card.id?c:{...c,title:mTitle.trim(),tags:mTags.trim(),rows:vaultParseRows(mRows)});
+      if(modal.card.lockHash && mPw1){
+        const h=await vaultHashPw(mPw1);
+        if(h!==modal.card.lockHash){ setMErr('Wrong password — lock kept'); return; }
+        next=next.map(c=>c.id===modal.card.id?{...c,lockHash:''}:c);
+        setUnlocked(u=>{ const n={...u}; delete n[modal.card.id]; return n; });
+      }
+      save(next); closeModal();
+    } else if(t==='lock'){
+      if(!mPw1){ setMErr('Enter a password'); return; }
+      if(mPw1!==mPw2){ setMErr('Passwords do not match'); return; }
+      const h=await vaultHashPw(mPw1);
+      save(cards.map(c=>c.id===modal.card.id?{...c,lockHash:h}:c));
+      closeModal();
+    } else if(t==='del'){
+      save(cards.filter(c=>c.id!==modal.card.id));
+      setUnlocked(u=>{ const n={...u}; delete n[modal.card.id]; return n; });
+      closeModal();
+    }
+  }
+
+  const filtered = cards.filter(c=>{
+    if(!filter) return true;
+    return (c.title+(c.tags||'')+(c.rows||[]).map(r=>r.k+r.v).join(' ')).toLowerCase().includes(filter.toLowerCase());
+  });
+
+  const countLabel = filtered.length+' card'+(filtered.length!==1?'s':'');
+
+  return html`
+    <div style=${VS.wrap}>
+      <div style=${VS.ph}>
+        <div>
+          <div style=${VS.phTitle}>🗄️ My Vault</div>
+          <div style=${VS.phSub}>Personal credential store — secret rows stay hidden behind passwords</div>
+        </div>
+        <button style=${VS.btnPri} onClick=${openNew}>+ New Card</button>
+      </div>
+      <div style=${{display:'flex',alignItems:'center',gap:12,marginBottom:18,flexWrap:'wrap'}}>
+        <input style=${VS.search} placeholder="Search cards, tags, keys…"
+          value=${filter} onInput=${e=>setFilter(e.target.value)}/>
+        <span style=${{fontSize:12,color:'var(--tx2)'}}>${countLabel}</span>
+      </div>
+      <div style=${VS.grid}>
+        ${renderVaultGrid(filtered, unlocked, filter, handleUnlock, handleLock, openEdit, openLock, openDel, copyVal)}
+      </div>
+      <${VaultModal}
+        modal=${modal}
+        mTitle=${mTitle} setMTitle=${setMTitle}
+        mTags=${mTags}   setMTags=${setMTags}
+        mRows=${mRows}   setMRows=${setMRows}
+        mPw1=${mPw1}     setMPw1=${setMPw1}
+        mPw2=${mPw2}     setMPw2=${setMPw2}
+        mErr=${mErr}
+        onClose=${closeModal}
+        onSubmit=${handleSubmit}/>
+    </div>`;
+}
+
 function App(){
   const [dark,setDark]=useState(()=>{try{return localStorage.getItem('pf_dark')==='1';}catch{return false;}});const [cu,setCu]=useState(null);const [loading,setLoading]=useState(true);
   // Read initial view from URL path or ?page= param
-  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','ai-docs','timesheet','password-generator'];
+  const VALID_VIEWS=['dashboard','projects','tasks','messages','dm','tickets','timeline','reminders','settings','team','productivity','ai-docs','timesheet','password-generator','vault'];
   // Also treat /projects/<id> as valid
   useEffect(()=>{
     try{
@@ -7754,6 +8105,7 @@ function App(){
             ${baseView==='ai-docs'?html`<${AiDocsView} cu=${cu} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users}/>`:null}
             ${baseView==='timesheet'?html`<${TimesheetView} cu=${cu} teams=${data.teams} users=${data.users} projects=${scopedProjects} tasks=${scopedTasks}/>`:null}
             ${baseView==='password-generator'?html`<${PasswordGeneratorView}/>`:null}
+            ${baseView==='vault'?html`<${VaultView} cu=${cu}/>`:null}
             </div>
           <//>
         </div>

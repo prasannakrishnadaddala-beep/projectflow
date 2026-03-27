@@ -139,7 +139,35 @@ tr:hover td{background:rgba(255,255,255,.018)}
 .mfg select{cursor:pointer}
 .mhint{font-size:11.5px;color:var(--tx3);margin-top:5px}
 
-/* SECTION CARD */
+/* VAULT */
+.vault-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.vault-search{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--rs);padding:8px 13px;font-size:13px;color:var(--tx);font-family:var(--font);outline:none;flex:1;min-width:180px;transition:all .2s}
+.vault-search:focus{border-color:var(--blue)}
+.vault-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin-bottom:20px}
+.vcard{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);overflow:hidden;transition:border-color .2s}
+.vcard:hover{border-color:var(--b2)}
+.vcard-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--b1);gap:8px}
+.vcard-title{font-size:13.5px;font-weight:700;letter-spacing:-.2px;display:flex;align-items:center;gap:7px}
+.vcard-actions{display:flex;gap:5px}
+.vcard-body{padding:12px 14px}
+.vrow{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.025);font-size:12.5px;gap:8px}
+.vrow:last-child{border-bottom:none}
+.vkey{color:var(--tx3);flex-shrink:0;font-size:11.5px;max-width:110px}
+.vval{color:var(--tx);font-weight:500;text-align:right;word-break:break-all;display:flex;align-items:center;gap:5px}
+.vval-masked{letter-spacing:2px;color:var(--tx3);font-size:10px}
+.vcopy{background:none;border:none;cursor:pointer;color:var(--tx3);font-size:11px;padding:2px 5px;border-radius:4px;transition:all .15s;flex-shrink:0}
+.vcopy:hover{color:var(--blue);background:rgba(90,140,255,.1)}
+.vlock-badge{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:20px;border:1px solid}
+.locked-b{background:rgba(255,69,58,.1);color:var(--red);border-color:rgba(255,69,58,.25)}
+.unlocked-b{background:rgba(48,209,88,.1);color:var(--green);border-color:rgba(48,209,88,.25)}
+.vault-empty{text-align:center;color:var(--tx3);padding:60px 20px;font-size:14px}
+.vault-empty .ve-icon{font-size:40px;margin-bottom:12px}
+.tag-chip{display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid var(--b2);color:var(--tx3);margin-right:3px}
+.vault-pw-overlay{position:absolute;inset:0;background:rgba(5,8,13,.85);backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-radius:var(--r);z-index:2}
+.vcard{position:relative}
+.vault-unlock-input{background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:8px 12px;font-size:13px;color:var(--tx);font-family:var(--font);outline:none;width:200px;text-align:center}
+.vault-unlock-input:focus{border-color:var(--blue)}
+
 .scard{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r);margin-bottom:18px}
 .scard-h{padding:14px 18px;border-bottom:1px solid var(--b1);font-size:13.5px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .scard-b{padding:18px}
@@ -258,6 +286,10 @@ tr:hover td{background:rgba(255,255,255,.018)}
       <div class="nav-sec">System</div>
       <button class="nav-item" onclick="showPage('health')" id="nav-health">
         <span class="ni">⚙️</span> Platform Health
+      </button>
+      <div class="nav-sec">Personal</div>
+      <button class="nav-item" onclick="showPage('vault')" id="nav-vault">
+        <span class="ni">🗄️</span> My Vault
       </button>
     </div>
 
@@ -378,7 +410,7 @@ function showPage(p){
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
   const nav = document.getElementById('nav-'+p);
   if (nav) nav.classList.add('active');
-  ({dashboard,workspaces,users,security,billing,audit,health})[p]?.();
+  ({dashboard,workspaces,users,security,billing,audit,health,vault})[p]?.();
 }
 
 function toast(msg, type='ok'){
@@ -996,7 +1028,255 @@ function suspendWorkspace(wsId,wsName){
     '','Suspend','bdng',
     async()=>{ await api('POST','/workspace/suspend',{workspace_id:wsId}); toast(`"${wsName}" suspended`,'warn'); showPage('workspaces'); });
 }
-function addUserToWs(wsId){
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MY VAULT  –  Personal credential / data store with password-locked cards
+// ─────────────────────────────────────────────────────────────────────────────
+const VAULT_KEY = 'vewit_vault_v1';
+let vaultData = [];       // Array of card objects
+let vaultFilter = '';     // Current search string
+let vaultUnlocked = {};   // cardId -> true when temporarily unlocked
+
+function vaultLoad(){
+  try { vaultData = JSON.parse(localStorage.getItem(VAULT_KEY)||'[]'); } catch(_){ vaultData=[]; }
+}
+function vaultSave(){
+  localStorage.setItem(VAULT_KEY, JSON.stringify(vaultData));
+}
+function vaultCardId(){ return 'c'+Date.now()+Math.random().toString(36).slice(2,6); }
+
+// Simple client-side hash (not cryptographic – just UI-level gating)
+async function vaultHash(pw){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('vewit::'+pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function vault(){
+  vaultLoad();
+  renderVault();
+}
+
+function renderVault(){
+  const q = vaultFilter.toLowerCase();
+  const cards = vaultData.filter(c=>{
+    if(!q) return true;
+    return (c.title+c.tags+(c.rows||[]).map(r=>r.k+r.v).join(' ')).toLowerCase().includes(q);
+  });
+
+  const cardHtml = cards.length ? cards.map(renderVaultCard).join('') :
+    `<div class="vault-empty"><div class="ve-icon">🗄️</div>No cards yet — click <b>+ New Card</b> to add your first credential or note.</div>`;
+
+  set(`
+    <div class="ph">
+      <div>
+        <div class="ph-title">🗄️ My Vault</div>
+        <div class="ph-sub">Your personal credential &amp; data store — encrypted rows stay hidden behind passwords</div>
+      </div>
+      <div class="ph-actions">
+        <button class="bpri" onclick="vaultNewCardModal()">+ New Card</button>
+      </div>
+    </div>
+    <div class="vault-toolbar">
+      <input class="vault-search" placeholder="🔍 Search cards, tags, keys…"
+        oninput="vaultFilter=this.value;renderVault()" value="${esc(vaultFilter)}">
+      <span style="font-size:12px;color:var(--tx3)">${cards.length} card${cards.length!==1?'s':''}</span>
+    </div>
+    <div class="vault-grid" id="vault-grid">
+      ${cardHtml}
+    </div>
+  `);
+}
+
+function renderVaultCard(c){
+  const isLocked = !!c.lockHash;
+  const isUnlocked = !!vaultUnlocked[c.id];
+  const showRows = !isLocked || isUnlocked;
+
+  // Build rows avoiding nested template literals
+  var rowsHtml = '';
+  (c.rows||[]).forEach(function(r){
+    var masked = r.secret && !showRows;
+    var valInner = '';
+    if(masked){
+      valInner = '<span class="vval-masked">\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>';
+    } else {
+      var safeV = esc(r.v);
+      var copyBtn = r.v ? '<button class="vcopy" title="Copy" onclick="vaultCopy(this.dataset.v)" data-v="'+r.v.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'">&#x2398;</button>' : '';
+      valInner = '<span>'+safeV+'</span>'+copyBtn;
+    }
+    rowsHtml += '<div class="vrow"><span class="vkey">'+esc(r.k)+'</span><span class="vval">'+valInner+'</span></div>';
+  });
+  if(!rowsHtml) rowsHtml = '<div style="color:var(--tx3);font-size:12px">No rows yet \u2014 edit to add fields.</div>';
+
+  // Lock overlay
+  var lockOverlay = '';
+  if(isLocked && !isUnlocked){
+    lockOverlay = '<div class="vault-pw-overlay" id="overlay-'+c.id+'">'
+      +'<span style="font-size:22px">\uD83D\uDD12</span>'
+      +'<span style="font-size:12px;color:var(--tx3)">Password protected</span>'
+      +'<input class="vault-unlock-input" type="password" placeholder="Enter password"'
+      +' id="unlock-input-'+c.id+'" onkeydown="if(event.key==='Enter')vaultUnlockCard(''+c.id+'')">'
+      +'<button class="bpri" style="font-size:12px;padding:6px 16px" onclick="vaultUnlockCard(''+c.id+'')">Unlock</button>'
+      +'</div>';
+  }
+
+  // Tags
+  var tagsHtml = '';
+  var tagItems = (c.tags||'').split(',').map(function(t){return t.trim();}).filter(Boolean);
+  if(tagItems.length){
+    tagsHtml = '<div style="margin-bottom:8px">'+tagItems.map(function(t){return '<span class="tag-chip">'+esc(t)+'</span>';}).join('')+'</div>';
+  }
+
+  // Lock badge
+  var lockBadge = '';
+  if(isLocked){
+    var badgeCls = isUnlocked ? 'unlocked-b' : 'locked-b';
+    var badgeTxt = isUnlocked ? 'Unlocked' : 'Locked';
+    lockBadge = '<span class="vlock-badge '+badgeCls+'">'+badgeTxt+'</span>';
+  }
+
+  // Lock/unlock button
+  var lockBtn = '';
+  if(isLocked && isUnlocked){
+    lockBtn = '<button class="ab" onclick="vaultLockCard(''+c.id+'')">\uD83D\uDD12 Lock</button>';
+  } else if(!isLocked){
+    lockBtn = '<button class="ab" onclick="vaultAddLockModal(''+c.id+'')">\uD83D\uDD13 Lock</button>';
+  }
+
+  return '<div class="vcard" id="vcard-'+c.id+'">'
+    +lockOverlay
+    +'<div class="vcard-head">'
+      +'<div class="vcard-title"><span>'+esc(c.title)+'</span>'+lockBadge+'</div>'
+      +'<div class="vcard-actions">'
+        +lockBtn
+        +'<button class="ab" onclick="vaultEditCardModal(''+c.id+'')">&#x270F;</button>'
+        +'<button class="ab dng" onclick="vaultDeleteCard(''+c.id+'','+JSON.stringify(c.title)+')">&#x1F5D1;</button>'
+      +'</div>'
+    +'</div>'
+    +'<div class="vcard-body">'+tagsHtml+rowsHtml+'</div>'
+    +'</div>';
+}
+
+
+async function vaultUnlockCard(id){
+  const input = document.getElementById('unlock-input-'+id);
+  if(!input) return;
+  const pw = input.value;
+  if(!pw){ toast('Enter password','err'); return; }
+  const card = vaultData.find(c=>c.id===id);
+  if(!card) return;
+  const h = await vaultHash(pw);
+  if(h !== card.lockHash){ toast('Wrong password','err'); input.value=''; input.focus(); return; }
+  vaultUnlocked[id] = true;
+  toast('Unlocked ✓');
+  renderVault();
+}
+
+function vaultLockCard(id){
+  delete vaultUnlocked[id];
+  renderVault();
+}
+
+function vaultCopy(val){
+  navigator.clipboard.writeText(val).then(()=>toast('Copied to clipboard')).catch(()=>toast('Copy failed','err'));
+}
+
+function vaultDeleteCard(id, title){
+  openModal('Delete Card', `Delete "${title}"? This cannot be undone.`, '', 'Delete','bdng', ()=>{
+    vaultData = vaultData.filter(c=>c.id!==id);
+    delete vaultUnlocked[id];
+    vaultSave();
+    toast(`"${title}" deleted`,'warn');
+    renderVault();
+  });
+}
+
+// ── ADD LOCK ─────────────────────────────────────────────────────────────────
+function vaultAddLockModal(id){
+  openModal('Lock This Card','Set a password to hide sensitive rows in this card.',
+    `<div class="mfg"><label>Password</label><input type="password" id="m-vlock1" placeholder="Choose a password"/></div>
+     <div class="mfg"><label>Confirm Password</label><input type="password" id="m-vlock2" placeholder="Repeat password"/><div class="mhint">⚠️ If you forget this password, the card cannot be unlocked.</div></div>`,
+    'Set Password','',
+    async()=>{
+      const p1 = document.getElementById('m-vlock1').value;
+      const p2 = document.getElementById('m-vlock2').value;
+      if(!p1){ toast('Enter a password','err'); return; }
+      if(p1!==p2){ toast('Passwords do not match','err'); return; }
+      const h = await vaultHash(p1);
+      const card = vaultData.find(c=>c.id===id);
+      if(card){ card.lockHash=h; vaultSave(); toast('Card locked 🔒'); renderVault(); }
+    });
+}
+
+// ── NEW CARD MODAL ────────────────────────────────────────────────────────────
+function vaultNewCardModal(){
+  openModal('New Vault Card','Create a card to store credentials, tokens, or any structured data.',
+    `<div class="mfg"><label>Card Title</label><input id="m-vtitle" placeholder="e.g. AWS Production, GitLab Creds…"/></div>
+     <div class="mfg"><label>Tags (comma-separated)</label><input id="m-vtags" placeholder="e.g. aws, production, infra"/></div>
+     <div class="mfg"><label>Rows (Key: Value per line — prefix with 🔒 to mark as secret)</label>
+       <textarea id="m-vrows" rows="6" style="width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:10px;font-size:12.5px;color:var(--tx);font-family:monospace;outline:none;resize:vertical;line-height:1.6"
+         placeholder="Username: admin\n🔒 Password: s3cr3t\nURL: https://example.com\n🔒 API Key: abc123"></textarea>
+       <div class="mhint">Lines starting with 🔒 are secret — hidden when the card is locked.</div>
+     </div>`,
+    'Create Card','',
+    ()=>{
+      const title = document.getElementById('m-vtitle').value.trim();
+      if(!title){ toast('Title required','err'); return; }
+      const tags = document.getElementById('m-vtags').value.trim();
+      const rawRows = document.getElementById('m-vrows').value.trim();
+      const rows = vaultParseRows(rawRows);
+      const card = { id: vaultCardId(), title, tags, rows, lockHash:'' };
+      vaultData.unshift(card);
+      vaultSave();
+      toast(`"${title}" created`);
+      renderVault();
+    });
+}
+
+// ── EDIT CARD MODAL ────────────────────────────────────────────────────────────
+function vaultEditCardModal(id){
+  const card = vaultData.find(c=>c.id===id);
+  if(!card) return;
+  const rowText = (card.rows||[]).map(r=>`${r.secret?'🔒 ':''}${r.k}: ${r.v}`).join('\n');
+  openModal('Edit Card', `Editing: ${card.title}`,
+    `<div class="mfg"><label>Card Title</label><input id="m-vetitle" value="${esc(card.title)}"/></div>
+     <div class="mfg"><label>Tags</label><input id="m-vetags" value="${esc(card.tags||'')}"/></div>
+     <div class="mfg"><label>Rows</label>
+       <textarea id="m-verows" rows="7" style="width:100%;background:var(--bg3);border:1px solid var(--b1);border-radius:var(--rs);padding:10px;font-size:12.5px;color:var(--tx);font-family:monospace;outline:none;resize:vertical;line-height:1.6">${esc(rowText)}</textarea>
+       <div class="mhint">Lines starting with 🔒 stay hidden when locked. One key: value per line.</div>
+     </div>
+     ${card.lockHash ? `<div class="mfg"><label>Remove Lock (enter current password)</label><input type="password" id="m-veunlock" placeholder="Leave blank to keep lock"/></div>` : ''}`,
+    'Save Changes','',
+    async()=>{
+      const title = document.getElementById('m-vetitle').value.trim();
+      if(!title){ toast('Title required','err'); return; }
+      card.title = title;
+      card.tags  = document.getElementById('m-vetags').value.trim();
+      card.rows  = vaultParseRows(document.getElementById('m-verows').value.trim());
+      // Handle lock removal
+      const unlockEl = document.getElementById('m-veunlock');
+      if(unlockEl && unlockEl.value){
+        const h = await vaultHash(unlockEl.value);
+        if(h!==card.lockHash){ toast('Wrong password – lock kept','err'); }
+        else { card.lockHash=''; delete vaultUnlocked[id]; toast('Lock removed'); }
+      }
+      vaultSave();
+      toast(`"${title}" saved`);
+      renderVault();
+    });
+}
+
+function vaultParseRows(raw){
+  return raw.split('\n').map(line=>{
+    const secret = line.startsWith('🔒') || line.startsWith('\uD83D\uDD12');
+    const clean  = secret ? line.replace(/^🔒\s*/,'') : line;
+    const colon  = clean.indexOf(':');
+    if(colon < 0) return null;
+    return { k: clean.slice(0,colon).trim(), v: clean.slice(colon+1).trim(), secret };
+  }).filter(Boolean);
+}
+
+
   openModal('Add User to Workspace','Create a new user account directly in this workspace.',
     `<div class="mfg"><label>Full Name</label><input id="m-name" placeholder="e.g. Priya Sharma"/></div>
      <div class="mfg"><label>Email</label><input id="m-email" type="email" placeholder="user@company.com"/></div>
