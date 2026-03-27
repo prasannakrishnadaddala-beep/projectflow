@@ -1625,7 +1625,7 @@ def get_users():
     with get_db() as db:
         rows = db.execute(
             """SELECT id,workspace_id,name,email,role,avatar,color,created,
-               two_fa_enabled,totp_verified,last_active
+               two_fa_enabled,totp_verified,totp_secret,last_active
                FROM users WHERE workspace_id=? ORDER BY name""",
             (wid(),)).fetchall()
         caller = db.execute("SELECT role FROM users WHERE id=?", (session["user_id"],)).fetchone()

@@ -831,7 +831,89 @@ function AppLoader(){
 }
 
 const api={
-  get:u=>fetch(u,{credentials:'include'}).then(r=>r.json()).catch(()=>({})), post:(u,b)=>fetch(u,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), put:(u,b)=>fetch(u,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).catch(()=>({})), del:u=>fetch(u,{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(()=>({})), upload:(u,fd)=>fetch(u,{method:'POST',credentials:'include',body:fd}).then(r=>r.json()).catch(()=>({})),
+  get: async (u) => {
+    try {
+      const r = await fetch(u, {credentials: 'include'});
+      if (!r.ok) {
+        if (r.status === 401) {
+          console.warn('[API] 401 Unauthorized:', u);
+          return null;
+        }
+        const errData = await r.json().catch(() => ({}));
+        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
+      }
+      return await r.json();
+    } catch (e) {
+      console.error('[API] Network error:', u, e);
+      return null;
+    }
+  },
+  post: async (u, b) => {
+    try {
+      const r = await fetch(u, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(b)
+      });
+      if (!r.ok) {
+        if (r.status === 401) return null;
+        const errData = await r.json().catch(() => ({}));
+        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
+      }
+      return await r.json();
+    } catch (e) {
+      console.error('[API] Network error:', u, e);
+      return null;
+    }
+  },
+  put: async (u, b) => {
+    try {
+      const r = await fetch(u, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(b)
+      });
+      if (!r.ok) {
+        if (r.status === 401) return null;
+        const errData = await r.json().catch(() => ({}));
+        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
+      }
+      return await r.json();
+    } catch (e) {
+      console.error('[API] Network error:', u, e);
+      return null;
+    }
+  },
+  del: async (u) => {
+    try {
+      const r = await fetch(u, {method: 'DELETE', credentials: 'include'});
+      if (!r.ok) {
+        if (r.status === 401) return null;
+        const errData = await r.json().catch(() => ({}));
+        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
+      }
+      return await r.json();
+    } catch (e) {
+      console.error('[API] Network error:', u, e);
+      return null;
+    }
+  },
+  upload: async (u, fd) => {
+    try {
+      const r = await fetch(u, {method: 'POST', credentials: 'include', body: fd});
+      if (!r.ok) {
+        if (r.status === 401) return null;
+        const errData = await r.json().catch(() => ({}));
+        return { error: errData.error || `HTTP ${r.status}`, status: r.status };
+      }
+      return await r.json();
+    } catch (e) {
+      console.error('[API] Network error:', u, e);
+      return null;
+    }
+  },
 };
 
 const STAGES={
@@ -4879,7 +4961,15 @@ function TeamView({users,cu,reload}){
   const toggleMember=id=>{setTMembers(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);};
 
   const umap=safe(users).filter(u=>u&&u.id).reduce((a,u)=>{a[u.id]=u;return a;},{});
-  const filteredMembers=useMemo(()=>safe(users).filter(u=>u&&u.id&&u.name&&u.email&&(!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase()))),[users,memberSearch]);
+  const filteredMembers=useMemo(()=>{
+    const userArray=safe(users);
+    // Extra validation to catch non-array edge cases
+    if(!Array.isArray(userArray)){
+      console.error('[TeamView] users is not an array:',typeof users,users);
+      return [];
+    }
+    return userArray.filter(u=>u&&u.id&&u.name&&u.email&&(!memberSearch||u.name.toLowerCase().includes(memberSearch.toLowerCase())||u.email.toLowerCase().includes(memberSearch.toLowerCase())));
+  },[users,memberSearch]);
   const filteredTeams=useMemo(()=>teams.filter(t=>!teamSearch||t.name.toLowerCase().includes(teamSearch.toLowerCase())),[teams,teamSearch]);
   const ROLE_COLORS={Admin:'var(--ac)',Manager:'var(--gn)',TeamLead:'var(--cy)',Developer:'var(--pu)',Tester:'var(--am)',Viewer:'var(--tx3)'};
 
@@ -8376,6 +8466,15 @@ function App(){
       const taskUrl=tCtx?'/api/tasks?team_id='+tCtx:'/api/tasks';
       const [users,projects,tasks,notifs,dmu,ws,teamsRaw,ticketsRaw]=await Promise.all([
         api.get('/api/users'),api.get(projUrl),api.get(taskUrl), api.get('/api/notifications'),api.get('/api/dm/unread'),api.get('/api/workspace'), api.get('/api/teams'),api.get('/api/tickets'), ]);
+      
+      // Handle 401 errors - API returns null for auth failures
+      if (users === null || projects === null || tasks === null) {
+        console.warn('[Load] Authentication failed, clearing session');
+        setCu(null);
+        setData({users:[],projects:[],tasks:[],notifs:[],teams:[],tickets:[]});
+        return;
+      }
+      
       const teams=Array.isArray(teamsRaw)?teamsRaw:[];
       const tickets=Array.isArray(ticketsRaw)?ticketsRaw:[];
       setData({users:Array.isArray(users)?users:[],projects:Array.isArray(projects)?projects:[],tasks:Array.isArray(tasks)?tasks:[],notifs:Array.isArray(notifs)?notifs:[],teams,tickets});
@@ -8384,8 +8483,8 @@ function App(){
       if(ws)setWsDmEnabled(ws.dm_enabled!==0);
       const rems=await api.get('/api/reminders');
       if(Array.isArray(rems)){const now=new Date();setUpcomingReminders(rems.filter(r=>new Date(r.remind_at)>=now).sort((a,b)=>new Date(a.remind_at)-new Date(b.remind_at)));}
-    }catch(e){console.error(e);}
-  },[cu]);
+    }catch(e){console.error('[Load] Error:',e);}
+  },[cu,teamCtx]);
 
   useEffect(()=>{
     // Try to get current user; if backend is unreachable, enter offline mode
