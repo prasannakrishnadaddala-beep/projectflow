@@ -7725,8 +7725,11 @@ function renderVaultGrid(filtered, unlocked, filter, onUnlock, onLock, onEdit, o
 
 // ── Main VaultView ────────────────────────────────────────────────────────────
 function VaultView({cu}){
+  // ── Key is computed fresh each render from the live cu object ────────────
+  // NEVER cache it in useState — cu is null on first render (auth pending)
   const key = vaultStorageKey(cu);
-  const [cards,   setCards]   = useState(()=>vaultLoad(key));
+
+  const [cards,   setCards]   = useState([]);
   const [unlocked,setUnlocked]= useState({});
   const [filter,  setFilter]  = useState('');
   const [modal,   setModal]   = useState(null);
@@ -7737,7 +7740,20 @@ function VaultView({cu}){
   const [mPw2,    setMPw2]    = useState('');
   const [mErr,    setMErr]    = useState('');
 
-  function save(next){ setCards(next); vaultPersist(key,next); }
+  // Reload cards from localStorage whenever the resolved user identity changes.
+  // This is the ONLY place cards are loaded — fixes the race where cu is null
+  // on first mount and useState's lazy-init picks up the wrong (guest) key.
+  useEffect(()=>{
+    const currentKey = vaultStorageKey(cu);
+    setCards(vaultLoad(currentKey));
+  }, [cu && cu.id]);   // re-run when the user id changes (null → real id, or switch user)
+
+  // save always writes to the key that matches the current cu — never stale
+  function save(next){
+    const currentKey = vaultStorageKey(cu);
+    setCards(next);
+    vaultPersist(currentKey, next);
+  }
 
   function copyVal(v){ navigator.clipboard.writeText(v).catch(()=>{}); }
 
@@ -7812,9 +7828,13 @@ function VaultView({cu}){
           <svg style=${{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',opacity:.4}} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tx)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input style=${{...VS.search, paddingLeft:32, width:'100%'}}
             placeholder="Search cards, tags, keys…"
-            autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
-            name="vault-search"
-            value=${filter} onInput=${e=>setFilter(e.target.value)}/>
+            autoComplete="new-password" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+            value=${filter}
+            onInput=${e=>setFilter(e.target.value)}
+            onFocus=${e=>{
+              // Clear any browser-injected autocomplete value on first focus
+              if(e.target.value && e.target.value.includes('@')){ setFilter(''); e.target.value=''; }
+            }}/>
         </div>
         <span style=${{fontSize:12,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',padding:'5px 12px',borderRadius:100,fontWeight:600}}>${countLabel}</span>
       </div>
