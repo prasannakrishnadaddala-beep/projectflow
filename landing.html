@@ -34,7 +34,7 @@
   --body:'Inter',system-ui,sans-serif;
 }
 html{scroll-behavior:smooth}
-body{font-family:var(--body);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-y:auto;line-height:1.6}
+body{font-family:var(--body);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.6}
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent 0%,#5a8cff 25%,#a855f7 50%,#ec4899 75%,transparent 100%);z-index:9998;box-shadow:0 0 20px rgba(90,140,255,0.5),0 0 40px rgba(168,85,247,0.2)}
 body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:.6}
 
@@ -1068,85 +1068,34 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
     <!-- ── SECURITY MODULE ── -->
     <div id="module-security" class="module-panel">
       <div class="mod-info reveal">
-        <h3>Security, Vault &amp; Password Management</h3>
-        <p>Enterprise-grade security with built-in encrypted vault and password generator. Store credentials securely, generate unbreakable passwords, and manage access control — all without leaving your workspace.</p>
+        <h3>Security &amp; Access Control</h3>
+        <p>Enterprise-grade security without enterprise complexity. VEWIT is built with security-first architecture — every query is tenant-isolated and every action is authenticated.</p>
         <div class="mod-feats">
-          <div class="mod-feat"><div class="mod-feat-dot" style="background:#30d158"></div>🔐 Encrypted credential vault — client-side AES-256</div>
-          <div class="mod-feat"><div class="mod-feat-dot" style="background:#5a8cff"></div>🎲 Advanced password generator with custom rules</div>
           <div class="mod-feat"><div class="mod-feat-dot" style="background:#ffd60a"></div>6 role types: Admin, Manager, TeamLead, Developer, Tester, Viewer</div>
-          <div class="mod-feat"><div class="mod-feat-dot" style="background:#a855f7"></div>Google Authenticator TOTP 2FA</div>
-          <div class="mod-feat"><div class="mod-feat-dot" style="background:#ec4899"></div>bcrypt password hashing + workspace isolation</div>
-          <div class="mod-feat"><div class="mod-feat-dot" style="background:#ff9f0a"></div>Flexible vault cards with custom columns</div>
+          <div class="mod-feat"><div class="mod-feat-dot" style="background:#5a8cff"></div>bcrypt password hashing</div>
+          <div class="mod-feat"><div class="mod-feat-dot" style="background:#30d158"></div>Google Authenticator TOTP 2FA</div>
+          <div class="mod-feat"><div class="mod-feat-dot" style="background:#a855f7"></div>Workspace-isolated DB queries</div>
+          <div class="mod-feat"><div class="mod-feat-dot" style="background:#ec4899"></div>HTTPS-only sessions</div>
         </div>
       </div>
       <div class="mod-visual reveal stagger-2">
-        <!-- Password Generator Demo -->
-        <div style="background:rgba(90,94,247,.04);border:1px solid rgba(90,94,247,.18);border-radius:12px;padding:18px;margin-bottom:18px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#30d158,#10b981);display:flex;align-items:center;justify-content:center;font-size:18px">🔐</div>
-            <div>
-              <div style="font-size:13px;font-weight:800;color:var(--tx)">Password Generator</div>
-              <div style="font-size:10px;color:var(--tx3)">Generate cryptographically secure passwords</div>
-            </div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--b2);border-radius:9px;padding:14px;margin-bottom:12px">
-            <div style="font-family:monospace;font-size:16px;font-weight:700;color:var(--green);letter-spacing:1.5px;word-break:break-all">Xk9#mP2$vL7@nQ4!</div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
-            <div style="display:flex;align-items:center;gap:6px;color:var(--tx2)">
-              <span style="font-weight:700">✓</span> Length: 16 chars
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;color:var(--tx2)">
-              <span style="font-weight:700">✓</span> Uppercase ABC
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;color:var(--tx2)">
-              <span style="font-weight:700">✓</span> Numbers 0-9
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;color:var(--tx2)">
-              <span style="font-weight:700">✓</span> Symbols @#$%
-            </div>
-          </div>
-        </div>
-
-        <!-- Vault Demo -->
-        <div style="background:rgba(168,85,247,.04);border:1px solid rgba(168,85,247,.18);border-radius:12px;padding:18px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#a855f7,#c084fc);display:flex;align-items:center;justify-content:center;font-size:18px">🗄️</div>
-            <div>
-              <div style="font-size:13px;font-weight:800;color:var(--tx)">My Vault — Encrypted Credentials</div>
-              <div style="font-size:10px;color:var(--tx3)">Store & manage sensitive data securely</div>
-            </div>
-          </div>
-          <div style="background:var(--bg3);border:1px solid var(--b2);border-radius:9px;overflow:hidden">
-            <div style="display:grid;grid-template-columns:140px 1fr 100px 80px;gap:1px;background:var(--b1)">
-              <div style="background:var(--bg2);padding:8px 12px;font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase">Name</div>
-              <div style="background:var(--bg2);padding:8px 12px;font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase">URL</div>
-              <div style="background:var(--bg2);padding:8px 12px;font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase">Username</div>
-              <div style="background:var(--bg2);padding:8px 12px;font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase">Status</div>
-              
-              <div style="background:var(--bg3);padding:10px 12px;font-size:12px;color:var(--tx);display:flex;align-items:center;gap:8px">
-                <span style="font-size:16px">📦</span>FLEXCUBE
-              </div>
-              <div style="background:var(--bg3);padding:10px 12px;font-size:11px;color:var(--tx2);font-family:monospace">flexonprodhost.in</div>
-              <div style="background:var(--bg3);padding:10px 12px;font-size:11px;color:var(--tx2)">10.100.25.44</div>
-              <div style="background:var(--bg3);padding:10px 12px">
-                <span style="font-size:9px;background:rgba(48,209,88,.15);color:var(--green);padding:3px 8px;border-radius:4px;font-weight:700">Unlocked</span>
-              </div>
-              
-              <div style="background:var(--bg3);padding:10px 12px;font-size:12px;color:var(--tx);display:flex;align-items:center;gap:8px">
-                <span style="font-size:16px">📦</span>AWS Prod
-              </div>
-              <div style="background:var(--bg3);padding:10px 12px;font-size:11px;color:var(--tx2);font-family:monospace">console.aws.amazon.com</div>
-              <div style="background:var(--bg3);padding:10px 12px;font-size:11px;color:var(--tx2)">prod-admin</div>
-              <div style="background:var(--bg3);padding:10px 12px">
-                <span style="font-size:9px;background:rgba(239,68,68,.15);color:var(--rd);padding:3px 8px;border-radius:4px;font-weight:700">Protected</span>
-              </div>
-            </div>
-          </div>
-          <div style="margin-top:10px;font-size:10px;color:var(--tx3);display:flex;align-items:center;gap:6px">
-            <span style="color:var(--green)">●</span> AES-256 client-side encryption · Zero-knowledge architecture
-          </div>
-        </div>
+        <div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Role Permissions Matrix</div>
+        <table style="width:100%;font-size:11px;border-collapse:collapse">
+          <tr style="border-bottom:1px solid var(--b1)">
+            <th style="text-align:left;padding:6px 0;color:var(--tx3);font-weight:600;font-size:10px">Role</th>
+            <th style="text-align:center;padding:6px 4px;color:var(--tx3);font-weight:600;font-size:10px">Tasks</th>
+            <th style="text-align:center;padding:6px 4px;color:var(--tx3);font-weight:600;font-size:10px">Projects</th>
+            <th style="text-align:center;padding:6px 4px;color:var(--tx3);font-weight:600;font-size:10px">Members</th>
+            <th style="text-align:center;padding:6px 4px;color:var(--tx3);font-weight:600;font-size:10px">Settings</th>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:7px 0"><span style="font-size:10px;font-weight:700;color:#5a8cff;background:#5a8cff18;padding:2px 8px;border-radius:4px">Admin</span></td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">✅</td></tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:7px 0"><span style="font-size:10px;font-weight:700;color:#a855f7;background:#a855f718;padding:2px 8px;border-radius:4px">Manager</span></td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">⚠️</td></tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:7px 0"><span style="font-size:10px;font-weight:700;color:#ffd60a;background:#ffd60a18;padding:2px 8px;border-radius:4px">TeamLead</span></td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">👁</td><td style="text-align:center;padding:7px 4px">❌</td></tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:7px 0"><span style="font-size:10px;font-weight:700;color:#30d158;background:#30d15818;padding:2px 8px;border-radius:4px">Developer</span></td><td style="text-align:center;padding:7px 4px">✅</td><td style="text-align:center;padding:7px 4px">👁</td><td style="text-align:center;padding:7px 4px">❌</td><td style="text-align:center;padding:7px 4px">❌</td></tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.04)"><td style="padding:7px 0"><span style="font-size:10px;font-weight:700;color:#ff9f0a;background:#ff9f0a18;padding:2px 8px;border-radius:4px">Tester</span></td><td style="text-align:center;padding:7px 4px">⚠️</td><td style="text-align:center;padding:7px 4px">👁</td><td style="text-align:center;padding:7px 4px">❌</td><td style="text-align:center;padding:7px 4px">❌</td></tr>
+          <tr><td style="padding:7px 0"><span style="font-size:10px;font-weight:700;color:#ec4899;background:#ec489918;padding:2px 8px;border-radius:4px">Viewer</span></td><td style="text-align:center;padding:7px 4px">👁</td><td style="text-align:center;padding:7px 4px">👁</td><td style="text-align:center;padding:7px 4px">❌</td><td style="text-align:center;padding:7px 4px">❌</td></tr>
+        </table>
+        <div style="margin-top:12px;font-size:10px;color:var(--tx3)">✅ Full · ⚠️ Limited · 👁 View only · ❌ No access</div>
       </div>
     </div>
   </div>
@@ -1338,7 +1287,7 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
         <div class="plan-tagline">Custom solutions for large organisations, regulated industries or teams needing on-premise deployment.</div>
         <div class="plan-custom">Custom</div>
         <div class="plan-period">Volume pricing · Annual billing</div>
-        <a href="/cdn-cgi/l/email-protection#f685979a9385b68093819f82d89f98" class="plan-cta out">Contact Sales →</a>
+        <a href="mailto:sales@vewit.in" class="plan-cta out">Contact Sales →</a>
         <div class="plan-div"></div>
         <div class="plan-fhead">Everything in Team, plus</div>
         <ul class="plan-feats">
@@ -1366,14 +1315,14 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
   <div class="wrap">
     <div class="ey">FAQ</div>
     <h2 class="st">Common questions.</h2>
-    <p class="ssub" style="margin-bottom:40px">Can't find an answer? Email <a href="/cdn-cgi/l/email-protection#9bf8f4f5effaf8efdbedfeecf2efb5f2f5"><span class="__cf_email__" data-cfemail="8ae9e5e4feebe9fecafceffde3fea4e3e4">[email&#160;protected]</span></a></p>
+    <p class="ssub" style="margin-bottom:40px">Can't find an answer? Email <a href="mailto:contact@vewit.in">contact@vewit.in</a></p>
     <div class="faq">
       <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">Do I need a credit card to start?<span class="arr">▾</span></button><div class="faq-a">No. The Starter plan is completely free forever. Create a workspace, invite your team and use all 12 modules with zero payment required. You only need billing details when upgrading to Team or Enterprise.</div></div>
       <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">How does the AI assistant work?<span class="arr">▾</span></button><div class="faq-a">VEWIT's AI assistant is powered by Anthropic Claude. You provide your own API key in Workspace Settings → AI Key. Once set, the assistant can create tasks, update statuses, generate EOD reports and answer questions about your projects in natural language.</div></div>
       <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">How many team members can I invite on the free plan?<span class="arr">▾</span></button><div class="faq-a">The Starter plan supports up to 5 team members. If your team is larger, upgrade to the Team plan for unlimited members. You can invite people via the workspace invite code found in Settings → Workspace.</div></div>
       <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">Is my data secure?<span class="arr">▾</span></button><div class="faq-a">Yes. VEWIT uses bcrypt password hashing, session-based auth, Google Authenticator TOTP 2FA, HTTPS-only sessions and tenant-isolated database queries — no workspace can access another's data. Enterprise customers can opt for on-premise deployment for complete data sovereignty.</div></div>
       <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">What does "bring your own AI key" mean?<span class="arr">▾</span></button><div class="faq-a">Get an API key from Anthropic (anthropic.com) and paste it once in VEWIT's Workspace Settings. VEWIT calls the Claude API directly from your server — you pay Anthropic only for actual usage, and we never store your key outside your workspace settings.</div></div>
-      <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">Can I upgrade or downgrade anytime?<span class="arr">▾</span></button><div class="faq-a">Yes. Upgrade from Starter to Team at any time and your data is preserved exactly as-is. Downgrades take effect at the end of your billing period. Contact <a href="/cdn-cgi/l/email-protection#1261737e7761526477657b663c7b7c" style="color:var(--blue)"><span class="__cf_email__" data-cfemail="3c4f5d50594f7c4a594b5548125552">[email&#160;protected]</span></a> for Enterprise custom billing arrangements.</div></div>
+      <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">Can I upgrade or downgrade anytime?<span class="arr">▾</span></button><div class="faq-a">Yes. Upgrade from Starter to Team at any time and your data is preserved exactly as-is. Downgrades take effect at the end of your billing period. Contact <a href="mailto:sales@vewit.in" style="color:var(--blue)">sales@vewit.in</a> for Enterprise custom billing arrangements.</div></div>
       <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">Does VEWIT work for non-technical teams?<span class="arr">▾</span></button><div class="faq-a">Absolutely. While VEWIT has deep features for dev teams (story points, sprint planning, velocity tracking), the core Kanban, ticket system, AI assistant and messaging work perfectly for any team — product, marketing, operations, or support.</div></div>
       <div class="faq-i"><button class="faq-q" onclick="this.closest('.faq-i').classList.toggle('open')">What happens to my data if I cancel?<span class="arr">▾</span></button><div class="faq-a">Your data remains accessible for 30 days after cancellation. You can export your projects, tasks and attachments at any time via Settings → Export. We never delete data without notice.</div></div>
     </div>
@@ -1387,9 +1336,9 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
     <h2 class="st">We're here to help.</h2>
     <p class="ssub" style="margin-bottom:0">Have a question, need onboarding help or want to explore an Enterprise deal? Reach out — we respond fast.</p>
     <div class="contact-g">
-      <div class="cc reveal stagger-1"><div class="cc-icon" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">🤝</div><h3>Sales &amp; CEO</h3><p>Enterprise pricing, volume deals, custom contracts and strategic partnership discussions.</p><a href="/cdn-cgi/l/email-protection#1a697b767f695a6c7f6d736e347374" style="color:var(--blue)"><span class="__cf_email__" data-cfemail="9ceffdf0f9efdceaf9ebf5e8b2f5f2">[email&#160;protected]</span> →</a></div>
-      <div class="cc reveal stagger-2"><div class="cc-icon" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding, API questions and general product support.</p><a href="/cdn-cgi/l/email-protection#f784828787988583b78192809e83d99e99" style="color:var(--green)"><span class="__cf_email__" data-cfemail="a6d5d3d6d6c9d4d2e6d0c3d1cfd288cfc8">[email&#160;protected]</span> →</a></div>
-      <div class="cc reveal stagger-3"><div class="cc-icon" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we'd love to hear from you.</p><a href="/cdn-cgi/l/email-protection#7018151c1c1f3006150719045e191e" style="color:var(--purple)"><span class="__cf_email__" data-cfemail="1f777a7373705f697a68766b317671">[email&#160;protected]</span> →</a></div>
+      <div class="cc reveal stagger-1"><div class="cc-icon" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">🤝</div><h3>Sales &amp; CEO</h3><p>Enterprise pricing, volume deals, custom contracts and strategic partnership discussions.</p><a href="mailto:sales@vewit.in" style="color:var(--blue)">sales@vewit.in →</a></div>
+      <div class="cc reveal stagger-2"><div class="cc-icon" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">🛟</div><h3>Technical Support</h3><p>Bug reports, feature requests, onboarding, API questions and general product support.</p><a href="mailto:support@vewit.in" style="color:var(--green)">support@vewit.in →</a></div>
+      <div class="cc reveal stagger-3"><div class="cc-icon" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">📣</div><h3>General Inquiries</h3><p>Press, media, feedback and anything else — we'd love to hear from you.</p><a href="mailto:hello@vewit.in" style="color:var(--purple)">hello@vewit.in →</a></div>
     </div>
   </div>
 </section>
@@ -1417,8 +1366,8 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
       <div class="footer-brand-name">VEWIT</div>
       <p>AI-powered team collaboration. Projects, tasks, messages, tickets and analytics — all in one workspace.</p>
       <div class="footer-emails">
-        <a href="/cdn-cgi/l/email-protection#9deefcf1f8eeddebf8eaf4e9b3f4f3">📧 <span class="__cf_email__" data-cfemail="0b786a676e784b7d6e7c627f256265">[email&#160;protected]</span> — Sales &amp; CEO</a>
-        <a href="/cdn-cgi/l/email-protection#84f7f1f4f4ebf6f0c4f2e1f3edf0aaedea">🛟 <span class="__cf_email__" data-cfemail="65161015150a1711251300120c114b0c0b">[email&#160;protected]</span> — Support</a>
+        <a href="mailto:sales@vewit.in">📧 sales@vewit.in — Sales &amp; CEO</a>
+        <a href="mailto:support@vewit.in">🛟 support@vewit.in — Support</a>
       </div>
     </div>
     <div class="footer-col">
@@ -1451,7 +1400,7 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
   </div>
 </footer>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 // ── Scroll Reveal ──
 const ro = new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');ro.unobserve(e.target);}});
@@ -1583,4 +1532,26 @@ const _notifMsgs=[
   {title:'⏰ Reminder',body:'Sprint 3 review meeting starts in 15 minutes',color:'#ec4899'},
 ];
 function _showNotif(){
-  
+  const container=document.getElementById('notifDemo');
+  if(!container)return;
+  const n=_notifMsgs[_notifIdx%_notifMsgs.length]; _notifIdx++;
+  const el=document.createElement('div');
+  el.className='notif-item';
+  el.style.cssText='border-left:3px solid '+n.color;
+  el.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:3px">'+n.title+'</div><div style="font-size:11px;color:var(--tx2);line-height:1.4">'+n.body+'</div>';
+  container.appendChild(el);
+  setTimeout(()=>{el.style.animation='notifOut .4s ease forwards';setTimeout(()=>el.remove(),400);},3800);
+}
+setInterval(_showNotif,4500);
+setTimeout(_showNotif,1200);
+
+// ── Nav scroll effect ──
+window.addEventListener('scroll',()=>{
+  const nav=document.getElementById('nav');
+  if(!nav)return;
+  if(window.scrollY>40){nav.style.background='rgba(6,4,15,0.95)';nav.style.boxShadow='0 1px 0 rgba(255,255,255,0.06)';}
+  else{nav.style.background='rgba(6,4,15,0.78)';nav.style.boxShadow='none';}
+},{passive:true});
+</script>
+</body>
+</html>
