@@ -106,11 +106,15 @@ async function _pfSetupPush(reg){
 }
 
 function _pfSendSubToServer(sub){
-  var subJson = sub.toJSON();
-  fetch('/api/push/subscribe',{
-    method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
-      endpoint: subJson.endpoint, keys: subJson.keys
-    })
+  // Guard: only call push/subscribe if the user session is active (avoid 401 in console)
+  fetch('/api/auth/me',{credentials:'include'}).then(function(r){
+    if(!r.ok) return; // not authenticated — skip silently
+    var subJson = sub.toJSON();
+    return fetch('/api/push/subscribe',{
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+        endpoint: subJson.endpoint, keys: subJson.keys
+      })
+    });
   }).catch(function(){});
 }
 
@@ -7446,14 +7450,20 @@ function VaultCard({card, isUnlocked, onUnlock, onLock, onEdit, onLockCard, onDe
 
 function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRows, setMRows, mPw1, setMPw1, mPw2, setMPw2}){
   const iconInfo = vaultGetIcon(mTitle, mTags);
-  const fieldInputStyle = {
-    width:'100%', background:'var(--sf2)', border:'1.5px solid var(--bd)',
-    borderRadius:10, padding:'10px 13px', fontSize:13, color:'var(--tx)',
-    fontFamily:'inherit', outline:'none', boxSizing:'border-box',
-    transition:'border-color .18s, box-shadow .18s',
+  const inp = {
+    background:'var(--sf2)', border:'1.5px solid var(--bd)', borderRadius:8,
+    padding:'8px 10px', fontSize:13, color:'var(--tx)', fontFamily:'inherit',
+    outline:'none', boxSizing:'border-box', transition:'border-color .15s,box-shadow .15s',
   };
   const labelStyle = { display:'block', fontSize:11, fontWeight:700, color:'var(--tx2)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:7 };
   const fgStyle = { marginBottom:18 };
+
+  // ── Key-Value row helpers ────────────────────────────────────────────────────
+  const rows = Array.isArray(mRows) ? mRows : [];
+  function addRow(){ setMRows([...rows, {k:'',v:'',secret:false}]); }
+  function removeRow(i){ const n=[...rows]; n.splice(i,1); setMRows(n.length?n:[{k:'',v:'',secret:false}]); }
+  function updateRow(i, field, val){ const n=rows.map((r,idx)=>idx===i?{...r,[field]:val}:r); setMRows(n); }
+  function toggleSecret(i){ updateRow(i,'secret',!rows[i].secret); }
 
   if(type==='new' || type==='edit'){
     return html`
@@ -7462,7 +7472,7 @@ function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRow
           <label style=${labelStyle}>Card Title</label>
           <div style=${{position:'relative'}}>
             <div style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',fontSize:17,lineHeight:1,pointerEvents:'none'}}>${iconInfo.icon}</div>
-            <input style=${{...fieldInputStyle, paddingLeft:38}}
+            <input style=${{...inp, paddingLeft:38, borderRadius:10, padding:'10px 13px', paddingLeft:38}}
               placeholder="e.g. AWS Production, GitLab Creds…"
               autoComplete="off" name="vault-title"
               value=${mTitle} onInput=${e=>setMTitle(e.target.value)}
@@ -7473,7 +7483,7 @@ function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRow
 
         <div style=${fgStyle}>
           <label style=${labelStyle}>Tags <span style=${{fontWeight:400,textTransform:'none',letterSpacing:0,opacity:.6}}>(comma-separated)</span></label>
-          <input style=${fieldInputStyle}
+          <input style=${{...inp, borderRadius:10, padding:'10px 13px'}}
             placeholder="e.g. aws, prod, infra"
             autoComplete="off" name="vault-tags"
             value=${mTags} onInput=${e=>setMTags(e.target.value)}
@@ -7482,27 +7492,85 @@ function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRow
         </div>
 
         <div style=${fgStyle}>
-          <label style=${labelStyle}>
-            Fields <span style=${{fontWeight:400,textTransform:'none',letterSpacing:0,opacity:.6}}>— one per line, Key: Value</span>
-          </label>
-          <div style=${{position:'relative'}}>
-            <textarea style=${{...fieldInputStyle, fontFamily:'ui-monospace,Consolas,monospace', fontSize:12.5, lineHeight:1.7, resize:'vertical', minHeight:140, padding:'11px 13px'}}
-              autoComplete="off" name="vault-rows"
-              placeholder=${'Username: admin\n🔒 Password: s3cr3t\nURL: https://example.com\n🔒 API Key: abc123'}
-              value=${mRows} onInput=${e=>setMRows(e.target.value)}
-              onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 3px rgba(90,94,247,0.12)';}}
-              onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}></textarea>
+          <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+            <label style=${{...labelStyle, marginBottom:0}}>Fields</label>
+            <span style=${{fontSize:10,color:'var(--tx2)',opacity:.7}}>🔒 toggle = secret (hidden when locked)</span>
           </div>
-          <div style=${{marginTop:8,padding:'8px 11px',background:'var(--ac4)',border:'1px solid var(--ac3)',borderRadius:8,display:'flex',alignItems:'flex-start',gap:7}}>
-            <span style=${{fontSize:13,flexShrink:0,marginTop:1}}>🔒</span>
-            <span style=${{fontSize:11,color:'var(--tx2)',lineHeight:1.6}}>Prefix any row with <code style=${{background:'var(--sf2)',padding:'0 4px',borderRadius:4,fontSize:11}}>🔒</code> to mark it <b>secret</b> — those rows stay hidden when the card is locked.</span>
+
+          <div style=${{background:'var(--sf2)',border:'1.5px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
+            <div style=${{display:'grid',gridTemplateColumns:'auto 1fr 1fr auto',alignItems:'center',padding:'6px 10px 4px',borderBottom:'1px solid var(--bd)',gap:6}}>
+              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em',width:22,textAlign:'center'}}>🔒</span>
+              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em'}}>Key</span>
+              <span style=${{fontSize:10,fontWeight:700,color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.06em'}}>Value</span>
+              <span style=${{width:20}}></span>
+            </div>
+
+            ${rows.map((row,i) => {
+              const isSecret = !!row.secret;
+              return html`<div key=${i} style=${{
+                display:'grid', gridTemplateColumns:'auto 1fr 1fr auto',
+                alignItems:'center', gap:6, padding:'5px 10px',
+                background: isSecret ? 'rgba(245,158,11,.05)' : 'transparent',
+                borderBottom: i < rows.length-1 ? '1px solid var(--bd)' : 'none',
+                transition:'background .15s',
+              }}>
+                <button
+                  title=${isSecret ? 'Secret — click to make public' : 'Click to mark secret'}
+                  style=${{
+                    background: isSecret ? 'rgba(245,158,11,.18)' : 'var(--sf)',
+                    border: isSecret ? '1px solid rgba(245,158,11,.4)' : '1px solid var(--bd)',
+                    borderRadius:6, width:26, height:26, cursor:'pointer',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:13, flexShrink:0, transition:'all .15s',
+                  }}
+                  onClick=${()=>toggleSecret(i)}>
+                  ${isSecret ? '🔒' : '👁️'}
+                </button>
+                <input
+                  style=${{...inp, fontSize:12.5}}
+                  placeholder="Key"
+                  autoComplete="off"
+                  value=${row.k}
+                  onInput=${e=>updateRow(i,'k',e.target.value)}
+                  onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 2px rgba(90,94,247,0.1)';}}
+                  onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
+                <input
+                  style=${{...inp, fontSize:12.5, fontFamily: isSecret ? 'monospace' : 'inherit'}}
+                  placeholder="Value"
+                  type=${isSecret ? 'password' : 'text'}
+                  autoComplete="off"
+                  value=${row.v}
+                  onInput=${e=>updateRow(i,'v',e.target.value)}
+                  onFocus=${e=>{e.target.style.borderColor= isSecret ? 'rgba(245,158,11,.6)' : 'var(--ac)';e.target.style.boxShadow='0 0 0 2px rgba(90,94,247,0.1)';}}
+                  onBlur=${e=>{e.target.style.borderColor='var(--bd)';e.target.style.boxShadow='none';}}/>
+                <button
+                  title="Remove field"
+                  style=${{background:'none',border:'none',cursor:'pointer',color:'var(--tx2)',width:22,height:22,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:5,padding:0,opacity:.5,transition:'opacity .15s'}}
+                  onMouseEnter=${e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color='#f87171';}}
+                  onMouseLeave=${e=>{e.currentTarget.style.opacity='.5';e.currentTarget.style.color='var(--tx2)';}}
+                  onClick=${()=>removeRow(i)}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>`;
+            })}
+
+            <div style=${{padding:'7px 10px',borderTop: rows.length ? '1px solid var(--bd)' : 'none'}}>
+              <button
+                style=${{background:'none',border:'1px dashed var(--bd)',borderRadius:7,padding:'5px 12px',fontSize:12,color:'var(--tx2)',cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:5,width:'100%',justifyContent:'center',transition:'all .15s'}}
+                onMouseEnter=${e=>{e.currentTarget.style.borderColor='var(--ac)';e.currentTarget.style.color='var(--ac)';e.currentTarget.style.background='rgba(90,94,247,.04)';}}
+                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.color='var(--tx2)';e.currentTarget.style.background='none';}}
+                onClick=${addRow}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Field
+              </button>
+            </div>
           </div>
         </div>
 
         ${type==='edit' && modal.card && modal.card.lockHash && html`
           <div style=${{...fgStyle, padding:'14px', background:'rgba(239,68,68,.06)', border:'1px solid rgba(239,68,68,.15)', borderRadius:10}}>
             <label style=${{...labelStyle, color:'var(--rd)'}}>Remove Lock <span style=${{fontWeight:400,textTransform:'none',letterSpacing:0,opacity:.7}}>(enter current password)</span></label>
-            <input style=${fieldInputStyle} type="password" placeholder="Leave blank to keep existing lock"
+            <input style=${{...inp, borderRadius:10, padding:'10px 13px'}} type="password" placeholder="Leave blank to keep existing lock"
               autoComplete="new-password" name="vault-unlock"
               value=${mPw1} onInput=${e=>setMPw1(e.target.value)}
               onFocus=${e=>{e.target.style.borderColor='var(--rd)';e.target.style.boxShadow='0 0 0 3px rgba(239,68,68,0.1)';}}
@@ -7519,7 +7587,7 @@ function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRow
         </div>
         <div style=${fgStyle}>
           <label style=${labelStyle}>Password</label>
-          <input style=${fieldInputStyle} type="password" placeholder="Choose a strong password"
+          <input style=${{...inp, borderRadius:10, padding:'10px 13px'}} type="password" placeholder="Choose a strong password"
             autoComplete="new-password" name="vault-pw1"
             value=${mPw1} onInput=${e=>setMPw1(e.target.value)}
             onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 3px rgba(90,94,247,0.12)';}}
@@ -7527,7 +7595,7 @@ function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRow
         </div>
         <div style=${fgStyle}>
           <label style=${labelStyle}>Confirm Password</label>
-          <input style=${fieldInputStyle} type="password" placeholder="Repeat password"
+          <input style=${{...inp, borderRadius:10, padding:'10px 13px'}} type="password" placeholder="Repeat password"
             autoComplete="new-password" name="vault-pw2"
             value=${mPw2} onInput=${e=>setMPw2(e.target.value)}
             onFocus=${e=>{e.target.style.borderColor='var(--ac)';e.target.style.boxShadow='0 0 0 3px rgba(90,94,247,0.12)';}}
@@ -7541,7 +7609,6 @@ function VaultModalFields({type, modal, mTitle, setMTitle, mTags, setMTags, mRow
   }
   return null;
 }
-
 function VaultModal({modal, mTitle, setMTitle, mTags, setMTags, mRows, setMRows, mPw1, setMPw1, mPw2, setMPw2, mErr, onClose, onSubmit}){
   if(!modal) return null;
   const t = modal.type;
@@ -7665,7 +7732,7 @@ function VaultView({cu}){
   const [modal,   setModal]   = useState(null);
   const [mTitle,  setMTitle]  = useState('');
   const [mTags,   setMTags]   = useState('');
-  const [mRows,   setMRows]   = useState('');
+  const [mRows,   setMRows]   = useState([]);
   const [mPw1,    setMPw1]    = useState('');
   const [mPw2,    setMPw2]    = useState('');
   const [mErr,    setMErr]    = useState('');
@@ -7674,10 +7741,11 @@ function VaultView({cu}){
 
   function copyVal(v){ navigator.clipboard.writeText(v).catch(()=>{}); }
 
-  function openNew(){ setMTitle('');setMTags('');setMRows('');setMPw1('');setMPw2('');setMErr(''); setModal({type:'new'}); }
+  function openNew(){ setMTitle('');setMTags('');setMRows([{k:'',v:'',secret:false}]);setMPw1('');setMPw2('');setMErr(''); setModal({type:'new'}); }
   function openEdit(c){
-    const rowText=(c.rows||[]).map(r=>(r.secret?'\uD83D\uDD12 ':'')+r.k+': '+r.v).join('\n');
-    setMTitle(c.title);setMTags(c.tags||'');setMRows(rowText);setMPw1('');setMPw2('');setMErr('');
+    const rowArr=(c.rows||[]).map(r=>({k:r.k||'',v:r.v||'',secret:!!r.secret}));
+    if(rowArr.length===0) rowArr.push({k:'',v:'',secret:false});
+    setMTitle(c.title);setMTags(c.tags||'');setMRows(rowArr);setMPw1('');setMPw2('');setMErr('');
     setModal({type:'edit',card:c});
   }
   function openLock(c){ setMPw1('');setMPw2('');setMErr(''); setModal({type:'lock',card:c}); }
@@ -7690,13 +7758,14 @@ function VaultView({cu}){
   async function handleSubmit(){
     if(!modal) return;
     const t = modal.type;
+    const cleanRows = Array.isArray(mRows) ? mRows.filter(r=>(r.k||'').trim()) : vaultParseRows(mRows);
     if(t==='new'){
       if(!mTitle.trim()){ setMErr('Title is required'); return; }
-      const card={ id:vaultNewId(), title:mTitle.trim(), tags:mTags.trim(), rows:vaultParseRows(mRows), lockHash:'' };
+      const card={ id:vaultNewId(), title:mTitle.trim(), tags:mTags.trim(), rows:cleanRows, lockHash:'' };
       save([card,...cards]); closeModal();
     } else if(t==='edit'){
       if(!mTitle.trim()){ setMErr('Title is required'); return; }
-      let next=cards.map(c=>c.id!==modal.card.id?c:{...c,title:mTitle.trim(),tags:mTags.trim(),rows:vaultParseRows(mRows)});
+      let next=cards.map(c=>c.id!==modal.card.id?c:{...c,title:mTitle.trim(),tags:mTags.trim(),rows:cleanRows});
       if(modal.card.lockHash && mPw1){
         const h=await vaultHashPw(mPw1);
         if(h!==modal.card.lockHash){ setMErr('Wrong password — lock kept'); return; }
