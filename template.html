@@ -857,14 +857,16 @@ const api={
         body: JSON.stringify(b)
       });
       if (!r.ok) {
-        if (r.status === 401) return null;
         const errData = await r.json().catch(() => ({}));
+        // For 401 on login/auth routes, always return the error body so the UI can show it.
+        // Only silently return null for 401 on non-auth routes (session expiry etc).
+        if (r.status === 401 && !u.includes('/auth/') && !u.includes('/admin/login')) return null;
         return { error: errData.error || `HTTP ${r.status}`, status: r.status };
       }
       return await r.json();
     } catch (e) {
       console.error('[API] Network error:', u, e);
-      return null;
+      return { error: 'Network error — please check your connection and try again.' };
     }
   },
   put: async (u, b) => {
@@ -1255,7 +1257,15 @@ function AuthScreen({onLogin}){
     setErr('');setPhase('loading');
     if(tab==='login'){
       const r=await api.post('/api/auth/login',{email,password:pw});
-      if(r.error){setErr(r.error);setPhase('error');setTimeout(()=>setPhase('idle'),350);}
+      if(!r){setErr('Cannot reach the server. Please check your connection.');setPhase('error');setTimeout(()=>setPhase('idle'),350);return;}
+      if(r.error){
+        // Give a specific hint for 2FA errors vs wrong password
+        const msg = r.status===429 ? r.error
+          : r.error.toLowerCase().includes('totp')||r.error.toLowerCase().includes('2fa')||r.error.toLowerCase().includes('authenticator')
+            ? '🔐 Google Authenticator code is incorrect or expired. Try again.'
+            : '❌ ' + r.error;
+        setErr(msg);setPhase('error');setTimeout(()=>setPhase('idle'),350);
+      }
       else if(r.totp_required){setTotpUserId(r.user_id);setTotpUserName(r.name);setTotpStep(true);setPhase('idle');}
       else{setSuccessMsg('Welcome back, '+r.name);setPhase('success');setTimeout(()=>onLogin(r),1900);}
     } else {
@@ -1270,10 +1280,14 @@ function AuthScreen({onLogin}){
 
   const submitTotp=async()=>{
     const tok=totpToken.replace(/\s/g,'');
-    if(tok.length!==6){setErr('Enter the 6-digit code.');return;}
+    if(tok.length!==6){setErr('Enter the 6-digit code from Google Authenticator.');return;}
     setErr('');setPhase('loading');
     const r=await api.post('/api/auth/totp/verify',{user_id:totpUserId,token:tok});
-    if(r.error){setErr(r.error);setTotpToken('');setPhase('idle');}
+    if(!r){setErr('Cannot reach the server. Please check your connection.');setPhase('idle');return;}
+    if(r.error){
+      setErr('🔐 Incorrect code — open Google Authenticator and enter the current 6-digit code.');
+      setTotpToken('');setPhase('idle');
+    }
     else{setSuccessMsg('Verified! Welcome back, '+totpUserName);setPhase('success');setTimeout(()=>onLogin(r),1800);}
   };
 
@@ -8384,7 +8398,6 @@ function VaultView({cu}){
   const [auditLog, setAuditLog]= useState([]);
   const [auditOpen,setAuditOpen]=useState(false);
   const [showNew,  setShowNew] = useState(false);
-  const [vaultOnline, setVaultOnline] = useState(true);
 
   const offlineKey = vaultStorageKey(cu);
 
@@ -8407,13 +8420,7 @@ function VaultView({cu}){
         })));
       }
       setVLoading(false);
-    }).catch(()=>{
-      setVaultOnline(false);
-      // Show a clear warning — don't silently let users create cards that won't persist
-      try { toast('⚠️ Vault offline — changes will not be saved. Reload to retry.', 'warn'); } catch(_){}
-      try { setCards(vaultLoad(offlineKey)); } catch(_){ setCards([]); }
-      setVLoading(false);
-    });
+    }).catch(()=>{ setVLoading(false); });
     // Load audit log alongside cards
     api.get('/api/vault/audit').then(data=>{
       if(Array.isArray(data)) setAuditLog(data);
@@ -8500,7 +8507,7 @@ function VaultView({cu}){
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
             Audit Log${auditLog.length?' ('+auditLog.length+')':''}
           </button>
-          <button class="vault-new-btn" onClick=${()=>setShowNew(true)} disabled=${!vaultOnline} title=${!vaultOnline?'Vault offline — cannot create cards':'New Card'} style=${!vaultOnline?{opacity:0.5,cursor:'not-allowed'}:{}}>
+          <button class="vault-new-btn" onClick=${()=>setShowNew(true)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New Card
           </button>
