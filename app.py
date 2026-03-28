@@ -137,7 +137,15 @@ def _load_vault_key_from_db():
             rows = conn.run("SELECT value FROM app_kv WHERE key='vault_encryption_key' LIMIT 1") or []
             if rows and rows[0]:
                 v = (rows[0][0] or "").strip()
-                return v.encode("utf-8") if v else None
+                if not v:
+                    return None
+                # Fernet keys are URL-safe base64-encoded 32-byte keys.
+                try:
+                    _Fernet(v.encode("utf-8"))
+                except Exception:
+                    print("  ⚠ Ignoring invalid vault key found in app_kv")
+                    return None
+                return v.encode("utf-8")
             return None
         finally:
             try: conn.close()
@@ -161,7 +169,9 @@ def _save_vault_key_to_db(key_bytes):
             now_txt = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
             conn.run("""INSERT INTO app_kv (key, value, updated_at)
                         VALUES ('vault_encryption_key', :value, :updated_at)
-                        ON CONFLICT (key) DO NOTHING""",
+                        ON CONFLICT (key) DO UPDATE SET
+                          value=EXCLUDED.value,
+                          updated_at=EXCLUDED.updated_at""",
                      value=key_bytes.decode("utf-8"), updated_at=now_txt)
             return True
         finally:
