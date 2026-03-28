@@ -889,9 +889,10 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS vault_cards (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT DEFAULT '', tags TEXT DEFAULT '', rows TEXT DEFAULT '[]', cols TEXT DEFAULT '[]', lock_hash TEXT DEFAULT '', created TEXT, updated TEXT)",
             "CREATE INDEX IF NOT EXISTS idx_vault_cards_user ON vault_cards(user_id)",
             "ALTER TABLE vault_cards ADD COLUMN cols TEXT DEFAULT '[]'",
-            "CREATE TABLE IF NOT EXISTS vault_audit_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, card_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT DEFAULT '', ip TEXT DEFAULT '', created TEXT)",
+            "CREATE TABLE IF NOT EXISTS vault_audit_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, card_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT DEFAULT '', ip TEXT DEFAULT '', created TEXT, card_title TEXT DEFAULT '')",
             "CREATE INDEX IF NOT EXISTS idx_vault_audit_user ON vault_audit_log(user_id, created)",
             "CREATE INDEX IF NOT EXISTS idx_vault_audit_card ON vault_audit_log(card_id)",
+            "ALTER TABLE vault_audit_log ADD COLUMN card_title TEXT DEFAULT ''",
         ]:
             try: db.execute(stmt)
             except Exception as _e: print(f"[warn] {_e}")
@@ -1660,6 +1661,7 @@ def vault_list():
 @login_required
 def vault_create():
     d = request.json or {}
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
     now = datetime.utcnow().isoformat()
     cid = "c" + str(int(time.time()*1000)) + secrets.token_hex(3)
     plain_rows = json.dumps(d.get("rows", []))
@@ -1672,16 +1674,19 @@ def vault_create():
              encrypted_rows, json.dumps(d.get("cols") or []),
              d.get("lock_hash", ""), now, now)
         )
-    _vault_audit(session["user_id"], cid, "create", d.get("title", ""))
+    _vault_audit(session["user_id"], cid, "create", d.get("title", ""), ip)
     return jsonify({"id": cid, "created": now})
 
 @app.route("/api/vault/<cid>", methods=["PUT"])
 @login_required
 def vault_update(cid):
     d = request.json or {}
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
     now = datetime.utcnow().isoformat()
     plain_rows = json.dumps(d.get("rows", []))
     encrypted_rows = vault_encrypt(plain_rows)
+    action = d.get("audit_action", "edit")   # frontend can pass: edit / add_row / delete_row / lock / unlock
+    detail = d.get("audit_detail", "")
     with get_db() as db:
         db.execute(
             "UPDATE vault_cards SET title=?,tags=?,rows=?,cols=?,lock_hash=?,updated=? "
@@ -1690,27 +1695,49 @@ def vault_update(cid):
              json.dumps(d.get("cols") or []),
              d.get("lock_hash", ""), now, cid, session["user_id"])
         )
+    if action in ("edit","add_row","delete_row","lock_card","unlock_card","rename"):
+        _vault_audit(session["user_id"], cid, action, detail, ip)
     return jsonify({"ok": True})
 
 @app.route("/api/vault/<cid>", methods=["DELETE"])
 @login_required
 def vault_delete(cid):
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
     with get_db() as db:
+        card = db.execute("SELECT title FROM vault_cards WHERE id=? AND user_id=?",
+                          (cid, session["user_id"])).fetchone()
+        if not card:
+            return jsonify({"error": "Not found"}), 404
+        title = card["title"] or cid
+        # Log BEFORE deleting — audit log is NEVER deleted (permanent record)
+        _vault_audit(session["user_id"], cid, "delete", f"Card \"{title}\" permanently deleted", ip)
         db.execute("DELETE FROM vault_cards WHERE id=? AND user_id=?", (cid, session["user_id"]))
-        db.execute("DELETE FROM vault_audit_log WHERE card_id=? AND user_id=?", (cid, session["user_id"]))
+        # ✦ Intentionally NOT deleting audit_log rows — history is preserved forever
     return jsonify({"ok": True})
 
 # ── Vault Audit Log ────────────────────────────────────────────────────────────
 def _vault_audit(user_id, card_id, action, detail="", ip=""):
-    """Insert a vault audit log entry. Non-blocking — swallows errors."""
+    """Insert a vault audit log entry with card_title snapshot. Non-blocking."""
     try:
         aid = "va" + secrets.token_hex(6)
         now = datetime.utcnow().isoformat()
+        # Snapshot card title so deleted cards still show correctly
+        card_title = ""
+        try:
+            with get_db() as db2:
+                row = db2.execute("SELECT title FROM vault_cards WHERE id=?", (card_id,)).fetchone()
+                if row:
+                    card_title = row["title"] or ""
+        except Exception:
+            pass
+        # If detail already contains the title (delete path), use it as fallback
+        if not card_title and action == "delete":
+            card_title = detail.replace('Card "', '').replace('" permanently deleted', '').strip()
         with get_db() as db:
             db.execute(
-                "INSERT INTO vault_audit_log (id,user_id,card_id,action,detail,ip,created) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (aid, user_id, card_id, action, detail[:200], ip[:60], now)
+                "INSERT INTO vault_audit_log (id,user_id,card_id,action,detail,ip,created,card_title) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (aid, user_id, card_id, action, detail[:300], ip[:60], now, card_title[:120])
             )
     except Exception as e:
         print(f"[vault_audit] non-fatal: {e}")
@@ -1718,16 +1745,28 @@ def _vault_audit(user_id, card_id, action, detail="", ip=""):
 @app.route("/api/vault/audit", methods=["GET"])
 @login_required
 def vault_audit_list():
-    """Return the 50 most recent vault audit events for the current user."""
+    """Return vault audit events for the current user. Returns up to 200, supports ?limit= and ?card_id= filters."""
+    limit = min(int(request.args.get("limit", 200)), 500)
+    card_filter = request.args.get("card_id", "")
     with get_db() as db:
-        rows = db.execute(
-            "SELECT a.id, a.card_id, a.action, a.detail, a.ip, a.created, "
-            "       v.title AS card_title "
-            "FROM vault_audit_log a "
-            "LEFT JOIN vault_cards v ON a.card_id = v.id "
-            "WHERE a.user_id=? ORDER BY a.created DESC LIMIT 50",
-            (session["user_id"],)
-        ).fetchall()
+        if card_filter:
+            rows = db.execute(
+                "SELECT a.id, a.card_id, a.action, a.detail, a.ip, a.created, "
+                "       COALESCE(a.card_title, v.title, a.card_id) AS card_title "
+                "FROM vault_audit_log a "
+                "LEFT JOIN vault_cards v ON a.card_id = v.id "
+                "WHERE a.user_id=? AND a.card_id=? ORDER BY a.created DESC LIMIT ?",
+                (session["user_id"], card_filter, limit)
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT a.id, a.card_id, a.action, a.detail, a.ip, a.created, "
+                "       COALESCE(a.card_title, v.title, a.card_id) AS card_title "
+                "FROM vault_audit_log a "
+                "LEFT JOIN vault_cards v ON a.card_id = v.id "
+                "WHERE a.user_id=? ORDER BY a.created DESC LIMIT ?",
+                (session["user_id"], limit)
+            ).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route("/api/vault/<cid>/audit", methods=["POST"])
@@ -1737,7 +1776,8 @@ def vault_audit_event(cid):
     d = request.json or {}
     action = (d.get("action") or "").strip()[:50]
     detail = (d.get("detail") or "").strip()[:200]
-    if action not in ("reveal", "copy", "unlock"):
+    ALLOWED = {"reveal","copy","unlock","edit","add_row","delete_row","lock_card","unlock_card","rename","view"}
+    if action not in ALLOWED:
         return jsonify({"error": "Invalid action"}), 400
     # Verify the card belongs to this user before logging
     with get_db() as db:

@@ -7785,48 +7785,52 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
   const [copyFlash,setCopyFlash]= useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Push local changes up
-  function push(nextCols, nextRows, nextTitle, nextTags){
+  // Push local changes up with audit action
+  function push(nextCols, nextRows, nextTitle, nextTags, auditAction, auditDetail){
     const c = nextCols  !== undefined ? nextCols  : cols;
     const r = nextRows  !== undefined ? nextRows  : rows;
     const t = nextTitle !== undefined ? nextTitle : title;
     const tg= nextTags  !== undefined ? nextTags  : tags;
     setSaving(true);
-    onUpdate({...card, title:t, tags:tg, cols:c, rows:r});
+    onUpdate({...card, title:t, tags:tg, cols:c, rows:r,
+      audit_action: auditAction||'edit',
+      audit_detail: auditDetail||''});
     setTimeout(() => setSaving(false), 800);
   }
 
   function addCol(){
     const id='col_'+Date.now();
     const next=[...cols,{id,label:'Column '+(cols.length+1)}];
-    setCols(next); push(next,undefined,undefined,undefined);
+    setCols(next); push(next,undefined,undefined,undefined,'edit','Added column');
   }
   function addRow(){
     const obj={_id:vaultNewId(),_secret:false};
     cols.forEach(c=>{obj[c.id]='';});
     const next=[...rows,obj];
-    setRows(next); push(undefined,next,undefined,undefined);
+    setRows(next); push(undefined,next,undefined,undefined,'add_row','Row added to "'+title+'"');
   }
   function updateColLabel(cid,val){
     const next=cols.map(c=>c.id===cid?{...c,label:val}:c);
-    setCols(next); push(next,undefined,undefined,undefined);
+    setCols(next); push(next,undefined,undefined,undefined,'edit','Column renamed to "'+val+'"');
   }
   function removeCol(cid){
     if(cols.length<=1) return;
+    const removed=cols.find(c=>c.id===cid);
     const next=cols.filter(c=>c.id!==cid);
-    setCols(next); push(next,undefined,undefined,undefined);
+    setCols(next); push(next,undefined,undefined,undefined,'edit','Column "'+( removed&&removed.label||cid)+'" removed');
   }
   function updateCell(rid,cid,val){
     const next=rows.map(r=>r._id===rid?{...r,[cid]:val}:r);
-    setRows(next); push(undefined,next,undefined,undefined);
+    setRows(next); push(undefined,next,undefined,undefined,'edit','Cell edited in "'+title+'"');
   }
   function toggleRowSecret(rid){
     const next=rows.map(r=>r._id===rid?{...r,_secret:!r._secret}:r);
-    setRows(next); push(undefined,next,undefined,undefined);
+    const isNowSecret = next.find(r=>r._id===rid)?._secret;
+    setRows(next); push(undefined,next,undefined,undefined,'edit',(isNowSecret?'Row marked secret':'Row unmarked secret')+' in "'+title+'"');
   }
   function removeRow(rid){
     const next=rows.filter(r=>r._id!==rid);
-    setRows(next); push(undefined,next,undefined,undefined);
+    setRows(next); push(undefined,next,undefined,undefined,'delete_row','Row deleted from "'+title+'"');
   }
   function copyCell(val, colLabel){
     navigator.clipboard.writeText(val||'').catch(()=>{});
@@ -7865,8 +7869,8 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
           <input style=${{flex:1,background:'var(--sf2)',border:'1px solid '+stripeColor,borderRadius:9,padding:'6px 11px',fontSize:14,fontWeight:800,color:'var(--tx)',fontFamily:'inherit',outline:'none'}}
             value=${title} autoFocus
             onInput=${e=>setTitle(e.target.value)}
-            onBlur=${()=>{setEditing(false);push(undefined,undefined,title,undefined);}}
-            onKeyDown=${e=>{if(e.key==='Enter'||e.key==='Escape'){setEditing(false);push(undefined,undefined,title,undefined);}}}/>
+            onBlur=${()=>{setEditing(false);push(undefined,undefined,title,undefined,'rename','Renamed to "'+title+'"');}}
+            onKeyDown=${e=>{if(e.key==='Enter'||e.key==='Escape'){setEditing(false);push(undefined,undefined,title,undefined,'rename','Renamed to "'+title+'"');}}}/>
         `}
         ${!editing && html`
           <span class="vault-card-title" onClick=${()=>setEditing(true)} title="Click to rename">${title||'Untitled'}</span>
@@ -7888,7 +7892,10 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
         `}
         <div style=${{display:'flex',gap:6,flexShrink:0}}>
           ${isLocked && isUnlocked && html`
-            <button class="vault-action-btn" onClick=${()=>onLock(card.id)}>
+            <button class="vault-action-btn" onClick=${()=>{
+              onLock(card.id);
+              try { api.post('/api/vault/'+card.id+'/audit', {action:'lock_card', detail:'Card "'+title+'" locked'}); } catch(_){}
+            }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               Lock
             </button>`}
@@ -8054,12 +8061,11 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
               if(h===card.lockHash){
                 onUnlock(card.id);
                 setShowPwMo(null);
-                // Audit log — fire-and-forget
-                try { api.post('/api/vault/'+card.id+'/audit', {action:'unlock', detail: title||'card'}); } catch(_){}
+                try { api.post('/api/vault/'+card.id+'/audit', {action:'unlock_card', detail:'Card "'+title+'" unlocked'}); } catch(_){}
               }
               else{ alert('Wrong password'); }
             } else {
-              onUpdate({...card,title,tags,cols,rows,lockHash:h});
+              onUpdate({...card,title,tags,cols,rows,lockHash:h,audit_action:'lock_card',audit_detail:'Card "'+title+'" locked'});
               setShowPwMo(null);
             }
           }}
@@ -8142,6 +8148,233 @@ function VaultNewCardModal({onClose, onCreate}){
     </div>`;
 }
 
+// ── Vault Audit Modal (full-page overlay) ─────────────────────────────────────
+function VaultAuditModal({auditLog, cards, onClose, onRefresh}){
+  const {useState, useEffect, useRef, useCallback} = React;
+  const [search,   setSearch]  = useState('');
+  const [tab,      setTab]     = useState('all');   // all|access|edit|delete
+  const [loading,  setLoading] = useState(false);
+  const cardIds = new Set((cards||[]).map(c=>c.id));
+
+  const ACTION_META = {
+    reveal:      {label:'Reveal',      bg:'rgba(245,158,11,.12)', color:'#f59e0b', icon:'👁',  group:'access'},
+    copy:        {label:'Copy',        bg:'rgba(99,102,241,.12)', color:'#818cf8', icon:'📋', group:'access'},
+    view:        {label:'View',        bg:'rgba(148,163,184,.1)', color:'#94a3b8', icon:'👀', group:'access'},
+    unlock:      {label:'Unlock',      bg:'rgba(34,197,94,.12)',  color:'#22c55e', icon:'🔓', group:'access'},
+    unlock_card: {label:'Unlock',      bg:'rgba(34,197,94,.12)',  color:'#22c55e', icon:'🔓', group:'access'},
+    lock_card:   {label:'Lock',        bg:'rgba(239,68,68,.1)',   color:'#f87171', icon:'🔒', group:'access'},
+    create:      {label:'Create',      bg:'rgba(59,130,246,.12)', color:'#60a5fa', icon:'✚',  group:'edit'},
+    edit:        {label:'Edit',        bg:'rgba(168,85,247,.12)', color:'#c084fc', icon:'✏️', group:'edit'},
+    rename:      {label:'Rename',      bg:'rgba(168,85,247,.12)', color:'#c084fc', icon:'🏷️', group:'edit'},
+    add_row:     {label:'Row Added',   bg:'rgba(16,185,129,.1)',  color:'#34d399', icon:'➕', group:'edit'},
+    delete_row:  {label:'Row Deleted', bg:'rgba(239,68,68,.1)',   color:'#f87171', icon:'➖', group:'edit'},
+    delete:      {label:'Deleted',     bg:'rgba(239,68,68,.14)',  color:'#ef4444', icon:'🗑️', group:'delete'},
+  };
+
+  function getTabCount(t){
+    return auditLog.filter(e=>{
+      if(t==='all') return true;
+      const m = ACTION_META[e.action];
+      return m && m.group===t;
+    }).length;
+  }
+
+  const filtered = auditLog.filter(e=>{
+    const m = ACTION_META[e.action] || {};
+    if(tab==='access'  && m.group!=='access')  return false;
+    if(tab==='edit'    && m.group!=='edit')    return false;
+    if(tab==='delete'  && m.group!=='delete')  return false;
+    if(search){
+      const q=search.toLowerCase();
+      const hay=(e.card_title||'')+(e.action||'')+(e.detail||'')+(e.ip||'');
+      if(!hay.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  function exportCSV(){
+    const cols=['Time','Action','Card','Detail','IP','Card Status'];
+    const rows=filtered.map(e=>[
+      e.created ? new Date(e.created).toLocaleString() : '',
+      e.action||'',
+      e.card_title||e.card_id||'',
+      (e.detail||'').replace(/,/g,' '),
+      e.ip||'',
+      cardIds.has(e.card_id)?'Active':'Deleted',
+    ]);
+    const csv=[cols,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    a.download='vault_audit_'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+  }
+
+  // Close on Escape
+  useEffect(()=>{
+    const h=e=>{if(e.key==='Escape')onClose();};
+    window.addEventListener('keydown',h);
+    return()=>window.removeEventListener('keydown',h);
+  },[]);
+
+  const TABS=[
+    {id:'all',    label:'All Events'},
+    {id:'access', label:'Access'},
+    {id:'edit',   label:'Edits'},
+    {id:'delete', label:'Deletions'},
+  ];
+
+  return html`
+    <div style=${{position:'fixed',inset:0,zIndex:9200,display:'flex',flexDirection:'column',background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)'}}
+      onClick=${e=>{if(e.target===e.currentTarget)onClose();}}>
+
+      <div style=${{
+        position:'relative',margin:'32px auto',width:'min(1000px,96vw)',
+        maxHeight:'calc(100vh - 64px)',display:'flex',flexDirection:'column',
+        background:'var(--bg)',border:'1px solid rgba(99,102,241,.3)',
+        borderRadius:18,overflow:'hidden',
+        boxShadow:'0 32px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04)',
+      }}>
+
+        <!-- Header -->
+        <div style=${{
+          padding:'20px 28px 0',
+          background:'linear-gradient(135deg,rgba(99,102,241,.12) 0%,rgba(168,85,247,.06) 100%)',
+          borderBottom:'1px solid rgba(99,102,241,.2)',
+          flexShrink:0,
+        }}>
+          <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,gap:12}}>
+            <div style=${{display:'flex',alignItems:'center',gap:12}}>
+              <div style=${{width:40,height:40,borderRadius:11,background:'rgba(99,102,241,.15)',border:'1.5px solid rgba(99,102,241,.35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>🔎</div>
+              <div>
+                <div style=${{fontSize:17,fontWeight:900,background:'linear-gradient(135deg,#818cf8,#c084fc)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',letterSpacing:'-.4px'}}>Vault Audit Log</div>
+                <div style=${{fontSize:11,color:'var(--tx2)',marginTop:1}}>Permanent, tamper-evident record of every vault action</div>
+              </div>
+            </div>
+            <div style=${{display:'flex',alignItems:'center',gap:8}}>
+              <span style=${{fontSize:10,background:'rgba(34,197,94,.1)',color:'#22c55e',border:'1px solid rgba(34,197,94,.25)',padding:'3px 9px',borderRadius:100,fontWeight:700,letterSpacing:.3}}>
+                ● Fernet AES-128-CBC
+              </span>
+              <button onClick=${exportCSV}
+                style=${{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',border:'1px solid rgba(99,102,241,.3)',borderRadius:8,background:'rgba(99,102,241,.08)',color:'#818cf8',cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit',transition:'all .15s'}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+              </button>
+              <button onClick=${onClose}
+                style=${{width:32,height:32,borderRadius:8,border:'1px solid var(--bd)',background:'var(--sf)',color:'var(--tx2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,transition:'all .15s'}}>✕</button>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div style=${{display:'flex',gap:2}}>
+            ${TABS.map(t=>html`
+              <button key=${t.id} onClick=${()=>setTab(t.id)}
+                style=${{
+                  padding:'8px 18px',border:'none',background:'none',cursor:'pointer',fontFamily:'inherit',
+                  fontSize:12,fontWeight:700,letterSpacing:.2,
+                  color:tab===t.id?'#818cf8':'var(--tx2)',
+                  borderBottom:tab===t.id?'2px solid #818cf8':'2px solid transparent',
+                  transition:'all .15s',whiteSpace:'nowrap',
+                }}>
+                ${t.label}
+                <span style=${{
+                  marginLeft:6,padding:'1px 7px',borderRadius:100,fontSize:10,
+                  background:tab===t.id?'rgba(99,102,241,.2)':'var(--sf)',
+                  color:tab===t.id?'#818cf8':'var(--tx3)',
+                  border:'1px solid '+(tab===t.id?'rgba(99,102,241,.3)':'var(--bd)'),
+                }}>${getTabCount(t.id)}</span>
+              </button>`)}
+          </div>
+        </div>
+
+        <!-- Search bar -->
+        <div style=${{padding:'14px 28px',borderBottom:'1px solid var(--bd)',flexShrink:0,background:'var(--bg)'}}>
+          <div style=${{position:'relative',maxWidth:400}}>
+            <svg style=${{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              placeholder="Search by card, action, IP…"
+              value=${search}
+              onInput=${e=>setSearch(e.target.value)}
+              style=${{width:'100%',boxSizing:'border-box',paddingLeft:32,paddingRight:12,paddingTop:8,paddingBottom:8,background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:9,color:'var(--tx)',fontFamily:'inherit',fontSize:13,outline:'none'}}/>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div style=${{flex:1,overflow:'auto'}}>
+          ${filtered.length===0 && html`
+            <div style=${{padding:'64px 28px',textAlign:'center',color:'#475569'}}>
+              <div style=${{fontSize:32,marginBottom:12}}>🔍</div>
+              <div style=${{fontWeight:700,color:'#64748b',fontSize:14}}>No events found</div>
+              <div style=${{fontSize:12,marginTop:4,color:'#334155'}}>${search?'Try a different search term':'No events in this category yet'}</div>
+            </div>`}
+          ${filtered.length>0 && html`
+            <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead style=${{position:'sticky',top:0,zIndex:1}}>
+                <tr style=${{background:'rgba(15,15,30,.95)',backdropFilter:'blur(8px)',borderBottom:'1px solid rgba(99,102,241,.2)'}}>
+                  ${['#','Action','Card','Detail','Time','IP','Status'].map(h=>html`
+                    <th key=${h} style=${{padding:'10px 16px',textAlign:'left',fontWeight:700,color:'#64748b',fontSize:11,letterSpacing:.5,whiteSpace:'nowrap',userSelect:'none'}}>${h}</th>`)}
+                </tr>
+              </thead>
+              <tbody>
+                ${filtered.map((e,i)=>{
+                  const m = ACTION_META[e.action] || {label:e.action,bg:'rgba(255,255,255,.05)',color:'#94a3b8',icon:'•',group:'edit'};
+                  const isDeleted = !cardIds.has(e.card_id);
+                  const timeStr = e.created ? new Date(e.created).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+                  const relTime = (()=>{
+                    if(!e.created) return '';
+                    const diff=(Date.now()-new Date(e.created).getTime())/1000;
+                    if(diff<60) return Math.round(diff)+'s ago';
+                    if(diff<3600) return Math.round(diff/60)+'m ago';
+                    if(diff<86400) return Math.round(diff/3600)+'h ago';
+                    return Math.round(diff/86400)+'d ago';
+                  })();
+                  return html`
+                    <tr key=${e.id||i}
+                      style=${{borderBottom:'1px solid rgba(255,255,255,.03)',transition:'background .1s',background:e.action==='delete'?'rgba(239,68,68,.025)':'transparent'}}
+                      onMouseEnter=${el=>{if(el.currentTarget)el.currentTarget.style.background=e.action==='delete'?'rgba(239,68,68,.05)':'rgba(255,255,255,.025)';}}
+                      onMouseLeave=${el=>{if(el.currentTarget)el.currentTarget.style.background=e.action==='delete'?'rgba(239,68,68,.025)':'transparent';}}>
+                      <td style=${{padding:'9px 16px',color:'#334155',fontFamily:'monospace',fontSize:10}}>${filtered.length-i}</td>
+                      <td style=${{padding:'9px 16px',whiteSpace:'nowrap'}}>
+                        <span style=${{display:'inline-flex',alignItems:'center',gap:5,background:m.bg,color:m.color,border:'1px solid '+m.color+'33',borderRadius:6,padding:'3px 9px',fontWeight:700,fontSize:11}}>
+                          ${m.icon} ${m.label}
+                        </span>
+                      </td>
+                      <td style=${{padding:'9px 16px',maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                        <span style=${{color:isDeleted?'#64748b':'#cbd5e1',fontStyle:isDeleted?'italic':'normal'}}>${e.card_title||e.card_id||'—'}</span>
+                      </td>
+                      <td style=${{padding:'9px 16px',color:'#94a3b8',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${e.detail||'—'}</td>
+                      <td style=${{padding:'9px 16px',whiteSpace:'nowrap'}}>
+                        <div style=${{color:'#64748b',fontSize:11}}>${timeStr}</div>
+                        <div style=${{color:'#334155',fontSize:10,marginTop:1}}>${relTime}</div>
+                      </td>
+                      <td style=${{padding:'9px 16px',color:'#475569',fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap'}}>${e.ip||'—'}</td>
+                      <td style=${{padding:'9px 16px'}}>
+                        ${isDeleted
+                          ? html`<span style=${{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(239,68,68,.1)',color:'#f87171',border:'1px solid rgba(239,68,68,.25)',borderRadius:5,padding:'2px 7px',fontSize:10,fontWeight:700}}>🗑 Deleted</span>`
+                          : html`<span style=${{display:'inline-flex',alignItems:'center',gap:4,background:'rgba(34,197,94,.08)',color:'#4ade80',border:'1px solid rgba(34,197,94,.2)',borderRadius:5,padding:'2px 7px',fontSize:10,fontWeight:700}}>● Active</span>`}
+                      </td>
+                    </tr>`;
+                })}
+              </tbody>
+            </table>`}
+        </div>
+
+        <!-- Footer -->
+        <div style=${{padding:'12px 28px',borderTop:'1px solid var(--bd)',background:'var(--sf)',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <div style=${{fontSize:11,color:'var(--tx2)'}}>
+            Showing <strong style=${{color:'var(--tx)'}}>${filtered.length}</strong> of <strong style=${{color:'var(--tx)'}}>${auditLog.length}</strong> events
+            ${filtered.filter(e=>!cardIds.has(e.card_id)).length>0
+              ? html` · <span style=${{color:'#f87171'}}>${filtered.filter(e=>!cardIds.has(e.card_id)).length} from deleted cards</span>`
+              : null}
+          </div>
+          <div style=${{fontSize:10,color:'#334155',display:'flex',alignItems:'center',gap:5}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Audit log is permanent — entries are never deleted
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 // ── Main VaultView ────────────────────────────────────────────────────────────
 function VaultView({cu}){
   const [cards,    setCards]   = useState([]);
@@ -8194,11 +8427,17 @@ function VaultView({cu}){
     await api.put('/api/vault/'+card.id, {
       title:card.title, tags:card.tags,
       rows:card.rows, cols:card.cols||null,
-      lock_hash: card.lockHash||''
+      lock_hash: card.lockHash||'',
+      audit_action: card.audit_action||'edit',
+      audit_detail: card.audit_detail||'',
     });
+    // Refresh audit log silently
+    api.get('/api/vault/audit').then(d=>{if(Array.isArray(d))setAuditLog(d);}).catch(()=>{});
   }
   async function apiDelete(id){
     await api.del('/api/vault/'+id);
+    // Refresh audit log to show the delete entry
+    api.get('/api/vault/audit').then(d=>{if(Array.isArray(d))setAuditLog(d);}).catch(()=>{});
   }
 
   function handleCreate(card){
@@ -8247,10 +8486,18 @@ function VaultView({cu}){
             <div style=${{fontSize:12,color:'var(--tx2)',marginTop:2,fontWeight:500}}>Encrypted credential store · Click any cell to edit</div>
           </div>
         </div>
-        <button class="vault-new-btn" onClick=${()=>setShowNew(true)}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Card
-        </button>
+        <div style=${{display:'flex',gap:8,alignItems:'center'}}>
+          <button
+            onClick=${()=>setAuditOpen(o=>!o)}
+            style=${{display:'flex',alignItems:'center',gap:7,padding:'9px 16px',borderRadius:9,border:'1px solid rgba(99,102,241,.35)',background:auditOpen?'rgba(99,102,241,.18)':'rgba(99,102,241,.08)',color:'#818cf8',cursor:'pointer',fontSize:13,fontWeight:700,fontFamily:'inherit',transition:'all .15s'}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+            Audit Log${auditLog.length?' ('+auditLog.length+')':''}
+          </button>
+          <button class="vault-new-btn" onClick=${()=>setShowNew(true)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Card
+          </button>
+        </div>
       </div>
 
       <!-- Stats bar -->
@@ -8318,75 +8565,17 @@ function VaultView({cu}){
           onClose=${()=>setShowNew(false)}
           onCreate=${handleCreate}/>`}
 
-      <!-- ── Audit Log Panel ── -->
-      ${!vLoading && !cu._offline && html`
-        <div style=${{marginTop:32,borderTop:'1px solid var(--bd)',paddingTop:22}}>
-          <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8}}>
-            <div style=${{display:'flex',alignItems:'center',gap:10}}>
-              <div style=${{width:30,height:30,borderRadius:8,background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>🔎</div>
-              <div>
-                <div style=${{fontSize:13,fontWeight:800,color:'var(--tx)'}}>Access Audit Log</div>
-                <div style=${{fontSize:11,color:'var(--tx2)'}}>Every reveal, copy and unlock is recorded here</div>
-              </div>
-            </div>
-            <div style=${{display:'flex',alignItems:'center',gap:8}}>
-              <span style=${{fontSize:10,background:'rgba(34,197,94,.1)',color:'#22c55e',border:'1px solid rgba(34,197,94,.25)',padding:'3px 9px',borderRadius:100,fontWeight:700,letterSpacing:.3}}>
-                ● Fernet AES-128-CBC
-              </span>
-              <button
-                style=${{fontSize:12,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,padding:'5px 14px',cursor:'pointer',fontFamily:'inherit',fontWeight:600,transition:'all .15s'}}
-                onMouseEnter=${e=>{e.currentTarget.style.borderColor='rgba(99,102,241,.4)';}}
-                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';}}
-                onClick=${()=>setAuditOpen(o=>!o)}>
-                ${auditOpen?'Hide':'Show'} log ${auditLog.length?'('+auditLog.length+')':''}
-              </button>
-            </div>
-          </div>
-
-          ${auditOpen && html`
-            <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
-              ${auditLog.length===0 && html`
-                <div style=${{padding:'28px',textAlign:'center',color:'#475569',fontSize:13}}>
-                  No audit events yet — reveal or copy a secret to generate entries.
-                </div>`}
-              ${auditLog.length>0 && html`
-                <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                  <thead>
-                    <tr style=${{background:'rgba(255,255,255,.03)',borderBottom:'1px solid var(--bd)'}}>
-                      ${['Action','Card','Detail','Time','IP'].map(h=>html`
-                        <th key=${h} style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'#64748b',letterSpacing:.3,whiteSpace:'nowrap'}}>${h}</th>`)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${auditLog.map((e,i)=>{
-                      const actionMeta = {
-                        reveal:  {label:'Reveal',  bg:'rgba(245,158,11,.1)', color:'#f59e0b', icon:'👁'},
-                        copy:    {label:'Copy',    bg:'rgba(99,102,241,.1)', color:'#818cf8', icon:'📋'},
-                        unlock:  {label:'Unlock',  bg:'rgba(34,197,94,.1)',  color:'#22c55e', icon:'🔓'},
-                        create:  {label:'Create',  bg:'rgba(59,130,246,.1)', color:'#60a5fa', icon:'✚'},
-                      }[e.action] || {label:e.action, bg:'rgba(255,255,255,.05)', color:'#94a3b8', icon:'•'};
-                      const timeStr = e.created ? new Date(e.created).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-                      return html`
-                        <tr key=${e.id||i} style=${{borderBottom:'1px solid rgba(255,255,255,.04)',transition:'background .15s'}}
-                          onMouseEnter=${el=>{if(el.currentTarget)el.currentTarget.style.background='rgba(255,255,255,.025)';}}
-                          onMouseLeave=${el=>{if(el.currentTarget)el.currentTarget.style.background='transparent';}}>
-                          <td style=${{padding:'8px 14px',whiteSpace:'nowrap'}}>
-                            <span style=${{display:'inline-flex',alignItems:'center',gap:5,background:actionMeta.bg,color:actionMeta.color,border:'1px solid '+actionMeta.color+'44',borderRadius:6,padding:'2px 8px',fontWeight:700,fontSize:11}}>
-                              ${actionMeta.icon} ${actionMeta.label}
-                            </span>
-                          </td>
-                          <td style=${{padding:'8px 14px',color:'#cbd5e1',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${e.card_title||e.card_id||'—'}</td>
-                          <td style=${{padding:'8px 14px',color:'#94a3b8',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${e.detail||'—'}</td>
-                          <td style=${{padding:'8px 14px',color:'#64748b',whiteSpace:'nowrap'}}>${timeStr}</td>
-                          <td style=${{padding:'8px 14px',color:'#475569',fontFamily:'monospace',fontSize:11}}>${e.ip||'—'}</td>
-                        </tr>`;
-                    })}
-                  </tbody>
-                </table>`}
-            </div>`}
-        </div>`}
     </div>
-    </div>`;
+    </div>
+
+    <!-- ── Audit Log Full-Page Overlay ── -->
+    ${auditOpen && html`<${VaultAuditModal}
+      auditLog=${auditLog}
+      cards=${cards}
+      onClose=${()=>setAuditOpen(false)}
+      onRefresh=${()=>api.get('/api/vault/audit').then(d=>{if(Array.isArray(d))setAuditLog(d);})}
+    />`}
+  `;
 }
 
 
