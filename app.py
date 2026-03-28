@@ -1790,11 +1790,9 @@ def get_users():
             u = dict(r)
             u.pop('avatar_data', None)
             u.pop('password', None)
-            # Add computed totp_configured field, never expose raw secret
+            u.pop('plain_password', None)  # never expose plaintext passwords over API
             u['totp_configured'] = bool(u.get('totp_verified') and u.get('totp_secret'))
             u.pop('totp_secret', None)
-            if not can_see_passwords:
-                u.pop('plain_password', None)
             users.append(u)
         return jsonify(users)
 
@@ -1828,7 +1826,7 @@ def update_user(uid):
             av="".join(w[0] for w in d["name"].split())[:2].upper()
             db.execute("UPDATE users SET name=?,avatar=? WHERE id=? AND workspace_id=?",(d["name"],av,uid,wid()))
         if "email" in d: db.execute("UPDATE users SET email=? WHERE id=? AND workspace_id=?",(d["email"],uid,wid()))
-        if "password" in d: db.execute("UPDATE users SET password=?,plain_password=? WHERE id=? AND workspace_id=?",(hash_pw(d["password"]),d["password"],uid,wid()))
+        if "password" in d: db.execute("UPDATE users SET password=? WHERE id=? AND workspace_id=?",(hash_pw(d["password"]),uid,wid()))
         if "avatar_data" in d: db.execute("UPDATE users SET avatar_data=? WHERE id=? AND workspace_id=?",(d["avatar_data"],uid,wid()))
         u=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
         if u:
@@ -1836,8 +1834,7 @@ def update_user(uid):
             caller_role=caller["role"] if caller else "Developer"
             result=dict(u)
             result.pop("password",None)
-            if caller_role not in ("Admin","Manager"):
-                result.pop("plain_password",None)
+            result.pop("plain_password",None)  # never expose plaintext passwords
             return jsonify(result)
         return jsonify({})
 
@@ -3651,7 +3648,24 @@ def security_info_page():
     return _load_template('security.html')
 
 # ── Admin Token Store & Guard (must be defined before any route that calls it) ──
-_ADMIN_TOKENS = {}   # token -> expiry (datetime)
+_ADMIN_TOKENS = {}       # token -> expiry (datetime)
+_ADMIN_FAIL_LOG = {}     # ip -> [fail_timestamp, ...] — brute-force lockout
+
+def _admin_check_lockout(ip):
+    """Return True if this IP is locked out (5+ failures in last 15 min)."""
+    now = datetime.utcnow()
+    cutoff = now - timedelta(minutes=15)
+    hits = [t for t in _ADMIN_FAIL_LOG.get(ip, []) if t > cutoff]
+    _ADMIN_FAIL_LOG[ip] = hits
+    return len(hits) >= 5
+
+def _admin_record_failure(ip):
+    """Record a failed login attempt for this IP."""
+    _ADMIN_FAIL_LOG.setdefault(ip, []).append(datetime.utcnow())
+
+def _admin_clear_failures(ip):
+    """Clear failure log on successful login."""
+    _ADMIN_FAIL_LOG.pop(ip, None)
 
 def _require_admin():
     """Return True if request carries a valid admin token."""
@@ -3800,12 +3814,20 @@ def admin_api_login():
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@vewit.in").strip().lower()
     admin_pass  = os.environ.get("ADMIN_PASSWORD", "")
 
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
+
+    if _admin_check_lockout(client_ip):
+        return jsonify({"error": "Too many failed attempts. Try again in 15 minutes."}), 429
+
     if not admin_pass:
         return jsonify({"error": "Admin password not configured. Set ADMIN_PASSWORD env var."}), 503
 
     if email != admin_email or password != admin_pass:
-        return jsonify({"error": "Invalid credentials"}), 401
+        _admin_record_failure(client_ip)
+        remaining = 5 - len(_ADMIN_FAIL_LOG.get(client_ip, []))
+        return jsonify({"error": f"Invalid credentials. {max(remaining,0)} attempt(s) remaining before lockout."}), 401
 
+    _admin_clear_failures(client_ip)
     token = secrets.token_hex(32)
     _ADMIN_TOKENS[token] = datetime.utcnow() + timedelta(hours=8)
     _audit("admin_login", "system", f"Admin logged in: {email}")

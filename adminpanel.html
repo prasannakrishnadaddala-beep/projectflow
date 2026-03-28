@@ -321,6 +321,7 @@ tr:hover td{background:rgba(255,255,255,.018)}
 
 <script>
 'use strict';
+function safeJson(s, fb){ try{ return JSON.parse(s); } catch(_){ return fb !== undefined ? fb : []; } }
 let TOK = sessionStorage.getItem('v_atk') || '';
 let EMAIL = sessionStorage.getItem('v_ae') || '';
 let curPage = 'dashboard';
@@ -800,7 +801,7 @@ async function security(){
           <div class="si">${rate>=80?'✅':rate>=50?'⚡':'🚨'}</div>
           <div class="sl">Adoption Rate</div>
           <div class="sv" style="color:${rate>=80?'var(--green)':rate>=50?'var(--orange)':'var(--red)'}">${rate}%</div>
-          <div class="ss">${rate>=80?'Excellent':'rate>=50?Needs improvement':'Critical — act now'}</div></div>
+          <div class="ss">${rate>=80?'Excellent':rate>=50?'Needs improvement':'Critical — act now'}</div></div>
       </div>
       <div class="tw">
         <div class="tt">
@@ -871,7 +872,7 @@ async function billing(){
               return `
               <tr data-search="${esc(w.name)} ${esc(w.plan||'starter')}" data-plan="${esc(w.plan||'starter')}">
                 <td><div class="tdm">${esc(w.name)}</div><div class="tds">${esc(w.id)}</div></td>
-                <td style="color:${(w.member_count||0)>=limit&&limit<9999?'var(--orange)':'var(--tx)';font-weight:600}">
+                <td style="color:${(w.member_count||0)>=limit&&limit<9999?'var(--orange)':'var(--tx)'};font-weight:600">
                   ${w.member_count||0}<span style="color:var(--tx3);font-size:11px"> / ${limit<9999?limit:'∞'}</span></td>
                 <td>${planBadge(w.plan)}</td>
                 <td>${w.plan==='starter'?'5 members':w.plan==='team'?'30 members':'Unlimited'}</td>
@@ -1117,7 +1118,7 @@ function vaultLoad(){
       _vaultOnline = true;
       vaultData = data.map(c=>({
         ...c,
-        rows: typeof c.rows==='string' ? (()=>{try{return JSON.parse(c.rows);}catch(_){return [];}}()) : (c.rows||[]),
+        rows: typeof c.rows==='string' ? safeJson(c.rows, []) : (c.rows||[]),
         lockHash: c.lock_hash||c.lockHash||''
       }));
       renderVault();
