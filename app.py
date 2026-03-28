@@ -858,6 +858,38 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_vault_audit_card ON vault_audit_log(card_id)",
             "ALTER TABLE workspaces ADD COLUMN plan TEXT DEFAULT 'starter'",
             "ALTER TABLE workspaces ADD COLUMN suspended INTEGER DEFAULT 0",
+            # ── Enterprise / white-label columns
+            "ALTER TABLE workspaces ADD COLUMN subdomain TEXT",
+            "ALTER TABLE workspaces ADD COLUMN custom_domain TEXT",
+            "ALTER TABLE workspaces ADD COLUMN company_name TEXT",
+            "ALTER TABLE workspaces ADD COLUMN logo_url TEXT",
+            "ALTER TABLE workspaces ADD COLUMN brand_color TEXT DEFAULT '#7c3aed'",
+            "ALTER TABLE workspaces ADD COLUMN max_members INTEGER DEFAULT 5",
+            "ALTER TABLE workspaces ADD COLUMN feature_flags TEXT DEFAULT '{}'",
+            "ALTER TABLE workspaces ADD COLUMN deleted_at TEXT",
+            "ALTER TABLE workspaces ADD COLUMN session_version INTEGER DEFAULT 0",
+            "ALTER TABLE workspaces ADD COLUMN notes TEXT DEFAULT ''",
+            # ── DB-backed admin sessions
+            """CREATE TABLE IF NOT EXISTS admin_sessions (
+                token TEXT PRIMARY KEY,
+                admin_email TEXT DEFAULT '',
+                expires_at TEXT,
+                ip TEXT DEFAULT '',
+                created TEXT)""",
+            "CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at)",
+            """CREATE TABLE IF NOT EXISTS admin_fail_log (
+                id TEXT PRIMARY KEY,
+                ip TEXT,
+                ts TEXT)""",
+            "CREATE INDEX IF NOT EXISTS idx_admin_fail_ip ON admin_fail_log(ip, ts)",
+            """CREATE TABLE IF NOT EXISTS impersonate_tokens (
+                token TEXT PRIMARY KEY,
+                admin_email TEXT,
+                target_user_id TEXT,
+                workspace_id TEXT,
+                expires_at TEXT,
+                used INTEGER DEFAULT 0,
+                created TEXT)""",
         ]:
             try: db.execute(stmt)
             except: pass
@@ -3647,31 +3679,55 @@ def security_info_page():
     """Serve the Security page."""
     return _load_template('security.html')
 
-# ── Admin Token Store & Guard (must be defined before any route that calls it) ──
-_ADMIN_TOKENS = {}       # token -> expiry (datetime)
-_ADMIN_FAIL_LOG = {}     # ip -> [fail_timestamp, ...] — brute-force lockout
+# ── Admin Session Store — DB-backed (multi-worker safe) ──────────────────────
 
 def _admin_check_lockout(ip):
-    """Return True if this IP is locked out (5+ failures in last 15 min)."""
-    now = datetime.utcnow()
-    cutoff = now - timedelta(minutes=15)
-    hits = [t for t in _ADMIN_FAIL_LOG.get(ip, []) if t > cutoff]
-    _ADMIN_FAIL_LOG[ip] = hits
-    return len(hits) >= 5
+    """Return True if this IP has 5+ failures in the last 15 min (DB-backed)."""
+    cutoff = (datetime.utcnow() - timedelta(minutes=15)).isoformat()
+    try:
+        with get_db() as db:
+            row = db.execute(
+                "SELECT COUNT(*) FROM admin_fail_log WHERE ip=? AND ts>?",
+                (ip, cutoff)
+            ).fetchone()
+            return (row[0] if row else 0) >= 5
+    except Exception:
+        return False
 
 def _admin_record_failure(ip):
-    """Record a failed login attempt for this IP."""
-    _ADMIN_FAIL_LOG.setdefault(ip, []).append(datetime.utcnow())
+    """Record a failed admin login attempt in DB."""
+    try:
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO admin_fail_log (id, ip, ts) VALUES (?,?,?)",
+                (secrets.token_hex(8), ip, datetime.utcnow().isoformat())
+            )
+    except Exception:
+        pass
 
 def _admin_clear_failures(ip):
-    """Clear failure log on successful login."""
-    _ADMIN_FAIL_LOG.pop(ip, None)
+    """Clear failure log for IP on successful login."""
+    try:
+        with get_db() as db:
+            db.execute("DELETE FROM admin_fail_log WHERE ip=?", (ip,))
+    except Exception:
+        pass
 
 def _require_admin():
-    """Return True if request carries a valid admin token."""
+    """Return True if request carries a valid, non-expired DB admin token."""
     token = request.headers.get("X-Admin-Token", "")
-    exp   = _ADMIN_TOKENS.get(token)
-    return bool(exp and datetime.utcnow() < exp)
+    if not token:
+        return False
+    try:
+        with get_db() as db:
+            row = db.execute(
+                "SELECT expires_at FROM admin_sessions WHERE token=?", (token,)
+            ).fetchone()
+        if not row:
+            return False
+        return datetime.utcnow().isoformat() < row["expires_at"]
+    except Exception:
+        return False
 
 def _audit(action, target="", detail=""):
     """Write an entry to audit_log. Fire-and-forget — never raises."""
