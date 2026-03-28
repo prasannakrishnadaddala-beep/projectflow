@@ -916,8 +916,8 @@ def init_db():
             legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
             ws_id = f"ws{int(datetime.now().timestamp()*1000)}"
             invite = secrets.token_hex(4).upper()
-            db.execute("INSERT OR IGNORE INTO workspaces VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                       (ws_id,"Demo Workspace",invite,"u1",None,ts(),None,587,None,None,None,1))
+            db.execute("INSERT OR IGNORE INTO workspaces VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (ws_id,"Demo Workspace",invite,"u1",None,ts(),None,587,None,None,None,1,0))
             if legacy_users:
                 for tbl in ["users","projects","tasks","files","messages","direct_messages","notifications"]:
                     try: db.execute(f"UPDATE {tbl} SET workspace_id=? WHERE workspace_id IS NULL",(ws_id,))
@@ -1549,8 +1549,8 @@ def register():
         ws_id=f"ws{int(datetime.now().timestamp()*1000)}"
         invite=secrets.token_hex(4).upper()
         with get_db() as db:
-            db.execute("INSERT INTO workspaces VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                       (ws_id,d["workspace_name"],invite,uid,None,ts(),None,587,None,None,None,1))
+            db.execute("INSERT INTO workspaces VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (ws_id,d["workspace_name"],invite,uid,None,ts(),None,587,None,None,None,1,0))
     elif mode=="join":
         code=d.get("invite_code","").strip().upper()
         with get_db() as db:
@@ -1987,11 +1987,13 @@ def create_project():
                     json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
                     d.get("color","#5a8cff"),ts(),d.get("team_id","")))
         p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
+        if not p: return jsonify({"error":"Failed to create project"}),500
         creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
         cname=creator["name"] if creator else "Someone"
-        for uid in members:
+        base_ts=int(datetime.now().timestamp()*1000)
+        for i,uid in enumerate(members):
             if uid != session["user_id"]:
-                nid=f"n{int(datetime.now().timestamp()*1000)}"
+                nid=f"n{base_ts+i}"
                 db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
                            (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts(),pid,"project"))
                 threading.Thread(target=push_notification_to_user,
@@ -3786,18 +3788,18 @@ def admin_api_security_stats():
     try:
         with get_db() as db:
             try:
-                # Cast to int to handle both boolean TRUE and integer 1 stored in pg
+                # Use the actual column names: totp_verified (configured) and two_fa_enabled (active)
                 enabled  = db.execute(
-                    "SELECT COUNT(*) FROM users WHERE totp_enabled::int = 1 OR totp_enabled IS TRUE"
+                    "SELECT COUNT(*) FROM users WHERE totp_verified = 1 AND two_fa_enabled = 1"
                 ).fetchone()[0]
                 disabled = db.execute(
-                    "SELECT COUNT(*) FROM users WHERE (totp_enabled IS NULL OR totp_enabled::int = 0) AND totp_enabled IS NOT TRUE"
+                    "SELECT COUNT(*) FROM users WHERE totp_verified IS DISTINCT FROM 1 OR two_fa_enabled IS DISTINCT FROM 1"
                 ).fetchone()[0]
                 no_totp  = db.execute("""
                     SELECT u.id, u.name, u.email, u.role, w.name AS workspace_name
                     FROM users u
                     LEFT JOIN workspaces w ON w.id = u.workspace_id
-                    WHERE (u.totp_enabled IS NULL OR u.totp_enabled::int = 0) AND u.totp_enabled IS NOT TRUE
+                    WHERE (u.totp_verified IS NULL OR u.totp_verified = 0)
                     ORDER BY u.created DESC LIMIT 100
                 """).fetchall()
             except Exception:
@@ -3845,7 +3847,7 @@ def admin_api_user_reset_password(uid):
         return jsonify({"error": "Password must be at least 8 characters"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE users SET password_hash=:p0 WHERE id=:p1", (hash_pw(pw), uid))
+            db.execute("UPDATE users SET password=:p0 WHERE id=:p1", (hash_pw(pw), uid))
             db.commit()
         _audit("reset_user_password", uid, "Password reset by admin")
         return jsonify({"ok": True})
@@ -3859,7 +3861,7 @@ def admin_api_user_reset_totp(uid):
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE id=:p0",
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE id=:p0",
                 {"p0": uid}
             )
             db.commit()
@@ -4098,7 +4100,7 @@ def admin_api_reset_all_passwords():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET password_hash=:p0 WHERE workspace_id=:p1",
+                "UPDATE users SET password=:p0 WHERE workspace_id=:p1",
                 (hash_pw(pw), ws_id)
             )
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
@@ -4118,7 +4120,7 @@ def admin_api_reset_all_totp():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret=NULL, totp_enabled=FALSE WHERE workspace_id=:p0",
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE workspace_id=:p0",
                 {"p0": ws_id}
             )
             cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
@@ -4164,7 +4166,7 @@ def admin_api_add_user():
     try:
         with get_db() as db:
             db.execute(
-                "INSERT INTO users (id, name, email, password_hash, role, workspace_id, created) "
+                "INSERT INTO users (id, name, email, password, role, workspace_id, created) "
                 "VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)",
                 (uid, name, email, hash_pw(pw), role, ws_id, datetime.utcnow().isoformat())
             )
