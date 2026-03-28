@@ -215,11 +215,11 @@ def get_secret_key():
             with open(KEY_FILE,"r") as f:
                 k=f.read().strip()
                 if len(k)==64: return k
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
     k=secrets.token_hex(32)
     try:
         with open(KEY_FILE,"w") as f: f.write(k)
-    except: pass
+    except Exception as _e: print(f"[warn] {_e}")
     return k
 
 app = Flask(__name__)
@@ -230,7 +230,13 @@ app.config.update(
     SESSION_COOKIE_SECURE=_is_https,PERMANENT_SESSION_LIFETIME=86400*30,
     SESSION_COOKIE_NAME="pf_session",
     MAX_CONTENT_LENGTH=150*1024*1024)
-CORS(app, supports_credentials=True)
+# Restrict CORS to the known frontend origin (never wildcard with credentials)
+_cors_origins = [o.strip().rstrip("/") for o in
+    os.environ.get("ALLOWED_ORIGINS", os.environ.get("APP_URL","http://localhost:5000")).split(",")
+    if o.strip()]
+if not _cors_origins:
+    _cors_origins = ["http://localhost:5000"]
+CORS(app, supports_credentials=True, origins=_cors_origins)
 
 @app.after_request
 def add_security_headers(response):
@@ -239,12 +245,41 @@ def add_security_headers(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
     # Only set HSTS on HTTPS
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
-CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#5a8cff"]
+@app.errorhandler(404)
+def err_404(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Endpoint not found"}), 404
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(405)
+def err_405(e):
+    return jsonify({"error": "Method not allowed"}), 405
+
+@app.errorhandler(500)
+def err_500(e):
+    import traceback
+    print(f"[ERROR 500] {request.path}: {traceback.format_exc()}")
+    return jsonify({"error": "Internal server error"}), 500
+
+@app.errorhandler(413)
+def err_413(e):
+    return jsonify({"error": "File too large (max 150MB)"}), 413
+
+
 
 def get_db(autocommit=False):
     conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
@@ -267,7 +302,7 @@ def _get_pool_conn():
             return conn
         except Exception:
             try: conn.close()
-            except: pass
+            except Exception as _e: print(f"[warn] {_e}")
     except _queue.Empty:
         pass
     return _PGConn(**_parse_db_url(DATABASE_URL))
@@ -278,7 +313,7 @@ def _return_pool_conn(conn):
         _PG_POOL.put_nowait(conn)
     except _queue.Full:
         try: conn.close()
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
 
 def _raw_pg(sql, params=(), fetch=False):
     """Execute SQL via pooled pg8000 native connection, bypassing _DB wrapper.
@@ -302,7 +337,7 @@ def _raw_pg(sql, params=(), fetch=False):
     except Exception:
         # Don't return broken connections to pool
         try: conn.close()
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
         raise
 
 def _run_ddl(sql):
@@ -323,7 +358,7 @@ def _run_ddl(sql):
                 print(f"  [DDL WARN] {sql[:60]!r}: {type(e).__name__}: {e}")
         finally:
             try: conn.close()
-            except: pass
+            except Exception as _e: print(f"[warn] {_e}")
     except Exception as e:
         print(f"  [DDL connect error] {e}")
 
@@ -635,7 +670,7 @@ def get_vapid_keys():
                 d = json.load(f)
                 if d.get("private") and d.get("public"):
                     return d
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
     try:
         import struct
         priv_bytes = os.urandom(32)
@@ -859,7 +894,7 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_vault_audit_card ON vault_audit_log(card_id)",
         ]:
             try: db.execute(stmt)
-            except: pass
+            except Exception as _e: print(f"[warn] {_e}")
         try:
             corrupted = db.execute("SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%%' OR (length(avatar) > 10 AND avatar !~ '^[A-Z]{1,2}$')").fetchall()
             for row in corrupted:
@@ -874,7 +909,7 @@ def init_db():
         try: db.execute("""CREATE TABLE IF NOT EXISTS subtasks (
             id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
             title TEXT, done INTEGER DEFAULT 0, assignee TEXT DEFAULT '', created TEXT)""")
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
             legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
@@ -885,9 +920,16 @@ def init_db():
             if legacy_users:
                 for tbl in ["users","projects","tasks","files","messages","direct_messages","notifications"]:
                     try: db.execute(f"UPDATE {tbl} SET workspace_id=? WHERE workspace_id IS NULL",(ws_id,))
-                    except: pass
+                    except Exception as _e: print(f"[warn] {_e}")
             else:
-                _seed_demo(db, ws_id)
+                # Never seed demo data in production — Railway/Render/Heroku envs are production
+                _is_production = any(os.environ.get(v) for v in [
+                    "RAILWAY_ENVIRONMENT","RENDER","HEROKU_APP_NAME","FLY_APP_NAME"
+                ])
+                if not _is_production:
+                    _seed_demo(db, ws_id)
+                else:
+                    print("  ℹ Production env detected — skipping demo seed. Register via /app to create workspace.")
 
 def _seed_demo(db, ws_id):
     for u in [
@@ -899,14 +941,14 @@ def _seed_demo(db, ws_id):
     ]:
         try: db.execute("INSERT INTO users(id,workspace_id,name,email,password,role,avatar,color,created,two_fa_enabled) VALUES (?,?,?,?,?,?,?,?,?,?)",
                         (u[0],ws_id,u[1],u[2],u[3],u[4],u[5],u[6],ts(),0))
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
     for p in [
         ("p1","E-Commerce Platform",   "Modern e-commerce with payment integration & inventory.",       "u1",'["u1","u2","u3","u4"]',"2025-01-15","2025-06-30",65,"#7c3aed"),
         ("p2","Mobile Banking App",    "Secure mobile banking with biometric auth & real-time transfers.","u2",'["u1","u2","u5"]',     "2025-02-01","2025-08-15",40,"#2563eb"),
         ("p3","AI Analytics Dashboard","Real-time analytics powered by ML for business intelligence.",   "u1",'["u1","u3","u4"]',     "2025-03-01","2025-09-30",20,"#059669"),
     ]:
         try: db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",(p[0],ws_id,*p[1:],ts()))
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
     for t in [
         ("T-001","Design system setup",        "Configure design tokens and component library.",       "p1","u2","high",  "completed",  "2025-02-15",100),
         ("T-002","User authentication API",    "JWT auth with refresh tokens.",                       "p1","u2","high",  "production", "2025-03-01",100),
@@ -923,7 +965,7 @@ def _seed_demo(db, ws_id):
         ("T-013","Data pipeline setup",        "ETL pipeline for real-time data ingestion.",          "p3","u2","high",  "blocked",    "2025-06-01", 30),
     ]:
         try: db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",(t[0],ws_id,t[1],t[2],t[3],t[4],t[5],t[6],ts(),t[7],t[8],"[]"))
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
     for m in [
         ("m1","u2","p1","Just pushed the auth API to staging!"),
         ("m2","u3","p1","Running test suite, will report results."),
@@ -931,19 +973,30 @@ def _seed_demo(db, ws_id):
         ("m4","u1","p1","Sure! Checking it after standup."),
     ]:
         try: db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?)",(m[0],ws_id,m[1],m[2],m[3],ts()))
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
     for n in [
         ("n1","task_assigned","You have been assigned to Cart & checkout flow","u4",0,"t1","task"),
         ("n2","status_change","Task Payment gateway moved to Code Review","u2",0,"t2","task"),
         ("n3","comment","Bob commented on Product catalog UI","u4",1,"t3","task"),
     ]:
         try: db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts(),n[5],n[6]))
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
 
 def login_required(f):
     @wraps(f)
     def d(*a,**kw):
         if "user_id" not in session: return jsonify({"error":"Unauthorized"}),401
+        # Always re-read role from DB so demoted users can't use a stale session role
+        try:
+            with get_db() as _db:
+                _row = _db.execute("SELECT role FROM users WHERE id=? AND workspace_id=?",
+                                   (session["user_id"], session.get("workspace_id",""))).fetchone()
+                if not _row:
+                    session.clear()
+                    return jsonify({"error":"Unauthorized"}),401
+                session["role"] = _row["role"]  # keep session fresh
+        except Exception:
+            pass  # DB temporarily unavailable — allow through, role check happens in handler
         return f(*a,**kw)
     return d
 
@@ -2275,6 +2328,8 @@ def get_files():
         else: rows=[]
         return jsonify([dict(r) for r in rows])
 
+from werkzeug.utils import secure_filename as _secure_filename
+
 @app.route("/api/files",methods=["POST"])
 @login_required
 def upload_file():
@@ -2283,13 +2338,14 @@ def upload_file():
     fid=f"f{int(datetime.now().timestamp()*1000)}"
     data=f.read()
     if len(data)>150*1024*1024: return jsonify({"error":"File too large (max 150MB)"}),400
+    safe_name = _secure_filename(f.filename) or fid
     path=os.path.join(UPLOAD_DIR,fid)
     with open(path,"wb") as fp: fp.write(data)
     task_id=request.form.get("task_id","")
     project_id=request.form.get("project_id","")
     with get_db() as db:
         db.execute("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?)",
-                   (fid,wid(),f.filename,len(data),f.content_type,task_id,project_id,session["user_id"],ts()))
+                   (fid,wid(),safe_name,len(data),f.content_type,task_id,project_id,session["user_id"],ts()))
         row=db.execute("SELECT * FROM files WHERE id=? AND workspace_id=?",(fid,wid())).fetchone()
         return jsonify(dict(row))
 
@@ -2626,7 +2682,9 @@ def add_ticket_comment(tid):
 
 @app.route("/api/migrate-timelog", methods=["GET","POST"])
 def migrate_timelog_public():
-    """Public migration — hit this URL once after deploy to fix live DB schema."""
+    """Migration endpoint — requires admin token. Hit this once after deploy to fix live DB schema."""
+    if not _require_admin():
+        return jsonify({"error": "Admin authentication required"}), 401
     results = []
     steps = [
         ("CREATE time_logs base", """CREATE TABLE IF NOT EXISTS time_logs (
@@ -2655,7 +2713,7 @@ def migrate_timelog_public():
                     results.append({"step": label, "status": "error", "msg": str(e)})
             finally:
                 try: c.close()
-                except: pass
+                except Exception as _e: print(f"[warn] {_e}")
         except Exception as e:
             results.append({"step": label, "status": "connect_error", "msg": str(e)})
     print(f"[migrate-timelog] {results}")
@@ -3359,11 +3417,25 @@ def health():
 @app.route("/api/auth/emergency-reset-2fa", methods=["POST"])
 def emergency_reset_2fa():
     """Emergency endpoint to disable ALL 2FA workspace-wide.
-    Requires the workspace invite code as proof of ownership.
+    Requires the workspace invite code + ADMIN_PASSWORD as proof of ownership.
     Use this if you're locked out."""
+    # Rate-limit: max 5 attempts per IP per hour
+    ip = request.headers.get("X-Forwarded-For","").split(",")[0].strip() or request.remote_addr or "unknown"
+    rl_key = f"emergency:{ip}"
+    allowed, wait = _check_rate_limit(rl_key)
+    if not allowed:
+        return jsonify({"error": f"Too many attempts. Try again in {wait}s."}), 429
+
     d = request.json or {}
     invite_code = d.get("invite_code","").strip().upper()
     email = d.get("email","").strip().lower()
+    admin_pass = d.get("admin_password","").strip()
+
+    # Require ADMIN_PASSWORD env var as second factor
+    expected_admin = os.environ.get("ADMIN_PASSWORD","")
+    if not expected_admin or admin_pass != expected_admin:
+        return jsonify({"error": "Invalid admin password"}), 403
+
     if not invite_code or not email:
         return jsonify({"error":"invite_code and email required"}),400
     with get_db() as db:
@@ -4109,7 +4181,7 @@ def find_free_port(preferred=5000):
         try:
             s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
             s.bind(("",port)); s.close(); return port
-        except: pass
+        except Exception as _e: print(f"[warn] {_e}")
     return preferred
 
 def download_js():
