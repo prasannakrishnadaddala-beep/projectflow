@@ -224,6 +224,7 @@ def get_secret_key():
 
 app = Flask(__name__)
 app.secret_key = get_secret_key()
+APP_STARTED_AT = datetime.utcnow()
 _is_https = os.environ.get("HTTPS","").lower() in ("1","true","on") or              os.environ.get("RAILWAY_ENVIRONMENT","") != "" or              os.environ.get("RENDER","") != ""
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",SESSION_COOKIE_HTTPONLY=True,
@@ -3349,11 +3350,30 @@ def import_csv():
 # ── Serve ─────────────────────────────────────────────────────────────────────
 @app.route("/health")
 def health():
+    now = datetime.utcnow()
+    uptime_seconds = int((now - APP_STARTED_AT).total_seconds())
     try:
-        with get_db() as db: db.execute("SELECT 1")
-        return jsonify({"status":"ok"}), 200
+        db_check_started = time.perf_counter()
+        with get_db() as db:
+            db.execute("SELECT 1")
+        db_latency_ms = round((time.perf_counter() - db_check_started) * 1000, 2)
+        return jsonify({
+            "status":"ok",
+            "service":"ProjectFlow",
+            "version":"4.0",
+            "timestamp":now.isoformat(timespec="seconds") + "Z",
+            "uptime_seconds":uptime_seconds,
+            "database":{"status":"ok","latency_ms":db_latency_ms}
+        }), 200
     except Exception as e:
-        return jsonify({"status":"error","detail":str(e)}), 500
+        return jsonify({
+            "status":"error",
+            "service":"ProjectFlow",
+            "version":"4.0",
+            "timestamp":now.isoformat(timespec="seconds") + "Z",
+            "uptime_seconds":uptime_seconds,
+            "database":{"status":"error","detail":str(e)}
+        }), 500
 
 @app.route("/api/auth/emergency-reset-2fa", methods=["POST"])
 def emergency_reset_2fa():
