@@ -8746,7 +8746,33 @@ function App(){
           addToast(n.type,title,n.content||'');
           showBrowserNotif(title,n.content||'',()=>{
             window.focus();
-            if(n.type==='dm'){const sid=n.sender_id||n.sender;if(sid)setDmTargetUser(sid);_setView('dm');}
+            if(n.type==='dm'){
+              const sid=n.entity_id||n.sender_id||n.sender;
+              if(sid)setDmTargetUser(sid);
+              _setView('dm');
+            }
+            else if(n.entity_id && n.entity_type==='task'){
+              _setView('tasks');
+              setTimeout(()=>{
+                const taskEl=document.querySelector(`[data-task-id="${n.entity_id}"]`);
+                if(taskEl)taskEl.click();
+              },100);
+            }
+            else if(n.entity_id && n.entity_type==='project'){
+              setActiveProject(n.entity_id);
+              _setView('projects');
+            }
+            else if(n.entity_id && n.entity_type==='ticket'){
+              _setView('tickets');
+              setTimeout(()=>{
+                const ticketEl=document.querySelector(`[data-ticket-id="${n.entity_id}"]`);
+                if(ticketEl)ticketEl.click();
+              },100);
+            }
+            else if(n.entity_type==='message' && n.entity_id){
+              setActiveProject(n.entity_id);
+              _setView('messages');
+            }
             else{_setView(nav);}
           },{tag:'notif-'+n.id});
           playSound('notif');

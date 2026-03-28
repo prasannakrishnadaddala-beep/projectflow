@@ -751,7 +751,8 @@ def init_db():
                 recipient TEXT, content TEXT, read INTEGER DEFAULT 0, ts TEXT);
             CREATE TABLE IF NOT EXISTS notifications (
                 id TEXT PRIMARY KEY, workspace_id TEXT, type TEXT, content TEXT,
-                user_id TEXT, read INTEGER DEFAULT 0, ts TEXT);
+                user_id TEXT, read INTEGER DEFAULT 0, ts TEXT, 
+                entity_id TEXT, entity_type TEXT);
             CREATE TABLE IF NOT EXISTS reminders (
                 id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
                 task_id TEXT, task_title TEXT, remind_at TEXT,
@@ -932,11 +933,11 @@ def _seed_demo(db, ws_id):
         try: db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?)",(m[0],ws_id,m[1],m[2],m[3],ts()))
         except: pass
     for n in [
-        ("n1","task_assigned","You have been assigned to Cart & checkout flow","u4",0),
-        ("n2","status_change","Task Payment gateway moved to Code Review","u2",0),
-        ("n3","comment","Bob commented on Product catalog UI","u4",1),
+        ("n1","task_assigned","You have been assigned to Cart & checkout flow","u4",0,"t1","task"),
+        ("n2","status_change","Task Payment gateway moved to Code Review","u2",0,"t2","task"),
+        ("n3","comment","Bob commented on Product catalog UI","u4",1,"t3","task"),
     ]:
-        try: db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts()))
+        try: db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts(),n[5],n[6]))
         except: pass
 
 def login_required(f):
@@ -1557,12 +1558,12 @@ def meet_notify():
         msg = f"📹 {cname} is calling you — click to join the meeting"
         try:
             db.execute(
-                "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
-                (nid, wid(), "call", msg, target_id, 0, ts(), session["user_id"]))
+                "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (nid, wid(), "call", msg, target_id, 0, ts(), session["user_id"], session["user_id"], "call"))
         except:
             db.execute(
-                "INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                (nid, wid(), "call", msg, target_id, 0, ts()))
+                "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                (nid, wid(), "call", msg, target_id, 0, ts(), session["user_id"], "call"))
         return jsonify({"ok": True, "caller": cname, "room": room_name})
 
 @app.route("/api/auth/me")
@@ -1898,8 +1899,8 @@ def create_project():
         for uid in members:
             if uid != session["user_id"]:
                 nid=f"n{int(datetime.now().timestamp()*1000)}"
-                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                           (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts()))
+                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                           (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts(),pid,"project"))
                 threading.Thread(target=push_notification_to_user,
                     args=(db,uid,f"📁 Added to project: {d['name']}",
                           f"{cname} added you to '{d['name']}'","/"),daemon=True).start()
@@ -1929,8 +1930,8 @@ def update_project(pid):
         for i,uid in enumerate(mems):
             if uid==session["user_id"]: continue
             nid=f"n{base_ts+i}"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"project_added",f"{aname} updated project '{updated['name']}'",uid,0,ts()))
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"project_added",f"{aname} updated project '{updated['name']}'",uid,0,ts(),pid,"project"))
             threading.Thread(target=push_notification_to_user,
                 args=(db,uid,f"📁 Project updated: {updated['name']}",
                       f"{aname} made changes to '{updated['name']}'","/"),daemon=True).start()
@@ -2015,8 +2016,8 @@ def create_task():
         base_ts=int(datetime.now().timestamp()*1000)
         if d.get("assignee") and d["assignee"]!=session["user_id"]:
             nid=f"n{base_ts}"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts()))
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts(),tid,"task"))
             assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(d["assignee"],)).fetchone()
             if assignee_user and assignee_user["email"]:
                 threading.Thread(target=send_task_assigned_email,
@@ -2035,8 +2036,8 @@ def create_task():
                 for i,uid in enumerate(members):
                     if uid==session["user_id"] or uid==d.get("assignee"): continue
                     nid2=f"n{base_ts+10+i}"
-                    db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                               (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts()))
+                    db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                               (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts(),tid,"task"))
                     threading.Thread(target=push_notification_to_user,
                         args=(db, uid, f"📋 New task in {proj['name']}",
                               f"{cname} created '{d['title']}'", "/"),
@@ -2135,9 +2136,9 @@ def update_task(tid):
             base_ts2=int(datetime.now().timestamp()*1000)
             if t["assignee"] and t["assignee"]!=session["user_id"]:
                 nid=f"n{base_ts2}"
-                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
                            (nid,wid(),"status_change",f"Task '{t['title']}' moved to {d['stage']}",
-                            t["assignee"],0,ts()))
+                            t["assignee"],0,ts(),tid,"task"))
                 assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(t["assignee"],)).fetchone()
                 changer_user=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
                 changer_name=changer_user["name"] if changer_user else "Someone"
@@ -2159,8 +2160,8 @@ def update_task(tid):
                     for i2,uid in enumerate(members):
                         if uid==session["user_id"] or uid==t["assignee"]: continue
                         nid2=f"n{base_ts2+20+i2}"
-                        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                                   (nid2,wid(),"status_change",f"{aname} moved '{t['title']}' → {d['stage']}",uid,0,ts()))
+                        db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                                   (nid2,wid(),"status_change",f"{aname} moved '{t['title']}' → {d['stage']}",uid,0,ts(),tid,"task"))
                         threading.Thread(target=push_notification_to_user,
                             args=(db, uid, f"🔄 {t['title']} → {d['stage']}",
                                   f"{aname} updated the task stage", "/"),
@@ -2181,9 +2182,9 @@ def update_task(tid):
                         f"💬 **{cname}** commented on **{t['title']}**: {latest.get('text','')}",ts(),1))
             if t["assignee"] and t["assignee"]!=session["user_id"]:
                 nid2=f"n{int(datetime.now().timestamp()*1000)+4}"
-                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
                            (nid2,wid(),"comment",f"{cname} commented on '{t['title']}': {latest.get('text','')}",
-                            t["assignee"],0,ts()))
+                            t["assignee"],0,ts(),tid,"task"))
                 assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(t["assignee"],)).fetchone()
                 if assignee_user and assignee_user["email"]:
                     threading.Thread(target=send_comment_email,
@@ -2338,8 +2339,8 @@ def send_message():
         base_ts=int(datetime.now().timestamp()*1000)
         for i,m in enumerate(members):
             nid=f"n{base_ts+i}"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",m["id"],0,ts()))
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",m["id"],0,ts(),d.get("project",""),"project"))
         return jsonify(dict(db.execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()))
 
 # ── Direct Messages ───────────────────────────────────────────────────────────
@@ -2369,11 +2370,11 @@ def send_dm():
         nid=f"n{int(datetime.now().timestamp()*1000)}"
         preview=d["content"][:60]+"..." if len(d["content"])>60 else d["content"]
         try:
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts(),session["user_id"]))
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts(),session["user_id"],session["user_id"],"dm"))
         except:
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts()))
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts(),session["user_id"],"dm"))
         return jsonify(dict(db.execute("SELECT * FROM direct_messages WHERE id=?",(mid,)).fetchone()))
 
 @app.route("/api/dm/unread")
@@ -2566,8 +2567,8 @@ def create_ticket():
             nid=f"n{int(datetime.now().timestamp()*1000)}"
             reporter=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
             rname=reporter["name"] if reporter else "Someone"
-            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
-                       (nid,wid(),"task_assigned",f"🎫 {rname} assigned ticket: {d['title']}",d["assignee"],0,now))
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"task_assigned",f"🎫 {rname} assigned ticket: {d['title']}",d["assignee"],0,now,tid,"ticket"))
         return jsonify(dict(db.execute("SELECT * FROM tickets WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
 @login_required
 def update_ticket(tid):
