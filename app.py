@@ -49,7 +49,16 @@ def _get_vault_fernet():
             return _vault_fernet_instance
         except Exception:
             pass
-    # 3) Generate and persist a new key
+    # 3) Fall back to database-backed key storage (survives stateless deploys)
+    db_key = _load_vault_key_from_db()
+    if db_key:
+        try:
+            _vault_fernet_instance = _Fernet(db_key)
+            return _vault_fernet_instance
+        except Exception as e:
+            print(f"  ⚠ Stored DB vault key is invalid: {e} — generating a new key")
+
+    # 4) Generate and persist a new key
     k = _Fernet.generate_key()
     try:
         with open(key_path, "wb") as _kf:
@@ -57,6 +66,7 @@ def _get_vault_fernet():
         print(f"  ✓ New vault encryption key generated and saved to {key_path}")
     except Exception as e:
         print(f"  ⚠ Could not persist vault key ({e}) — key lives in memory only (restarts will lose it!)")
+    _save_vault_key_to_db(k)
     _vault_fernet_instance = _Fernet(k)
     return _vault_fernet_instance
 
@@ -111,6 +121,55 @@ def _parse_db_url(url):
     return dict(host=p.hostname, port=p.port or 5432, user=p.username,
                 password=p.password, database=p.path.lstrip("/"),
                 ssl_context=ssl_ctx)
+
+def _load_vault_key_from_db():
+    """Load vault key from PostgreSQL app_kv table when available."""
+    if not DATABASE_URL:
+        return None
+    try:
+        conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+        try:
+            conn.run("""CREATE TABLE IF NOT EXISTS app_kv (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
+            rows = conn.run("SELECT value FROM app_kv WHERE key='vault_encryption_key' LIMIT 1") or []
+            if rows and rows[0]:
+                v = (rows[0][0] or "").strip()
+                return v.encode("utf-8") if v else None
+            return None
+        finally:
+            try: conn.close()
+            except Exception: pass
+    except Exception as e:
+        print(f"  ⚠ Could not read vault key from database: {e}")
+        return None
+
+def _save_vault_key_to_db(key_bytes):
+    """Persist vault key in PostgreSQL to survive stateless redeployments."""
+    if not DATABASE_URL or not key_bytes:
+        return False
+    try:
+        conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
+        try:
+            conn.run("""CREATE TABLE IF NOT EXISTS app_kv (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
+            now_txt = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+            conn.run("""INSERT INTO app_kv (key, value, updated_at)
+                        VALUES ('vault_encryption_key', :value, :updated_at)
+                        ON CONFLICT (key) DO NOTHING""",
+                     value=key_bytes.decode("utf-8"), updated_at=now_txt)
+            return True
+        finally:
+            try: conn.close()
+            except Exception: pass
+    except Exception as e:
+        print(f"  ⚠ Could not persist vault key in database: {e}")
+        return False
 
 def _sql_compat(sql, params=()):
     """Convert SQLite SQL + params to PostgreSQL named-param style for pg8000.
