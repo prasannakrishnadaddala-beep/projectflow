@@ -293,6 +293,8 @@ def get_secret_key():
 
 app = Flask(__name__)
 app.secret_key = get_secret_key()
+# Keep wall-clock start time for debugging/compatibility; uptime uses monotonic clock.
+APP_STARTED_AT = datetime.now(timezone.utc)
 APP_STARTED_MONOTONIC = time.monotonic()
 APP_VERSION = os.environ.get("APP_VERSION", "4.0")
 HEALTH_INCLUDE_ERROR_DETAILS = os.environ.get("HEALTH_INCLUDE_ERROR_DETAILS", "").lower() in ("1", "true", "on")
@@ -3423,6 +3425,9 @@ def import_csv():
 def health():
     now = datetime.now(timezone.utc)
     uptime_seconds = int(time.monotonic() - APP_STARTED_MONOTONIC)
+    if uptime_seconds < 0:
+        # Defensive fallback in case monotonic clock behaves unexpectedly.
+        uptime_seconds = max(0, int((now - APP_STARTED_AT).total_seconds()))
     response_payload = {
         "status": "ok",
         "service": "ProjectFlow",
