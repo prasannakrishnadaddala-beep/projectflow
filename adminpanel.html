@@ -1103,16 +1103,69 @@ function vaultGetIcon(title, tags){
   return VAULT_ICON_DEFAULT;
 }
 
-const VAULT_KEY = 'vewit_vault_v1';
+const VAULT_KEY = 'vewit_vault_v1'; // kept for offline fallback read only
 let vaultData = [];       // Array of card objects
 let vaultFilter = '';     // Current search string
 let vaultUnlocked = {};   // cardId -> true when temporarily unlocked
+let _vaultOnline = true;  // true when backend API is reachable
 
 function vaultLoad(){
-  try { vaultData = JSON.parse(localStorage.getItem(VAULT_KEY)||'[]'); } catch(_){ vaultData=[]; }
+  // Try backend first; fall back to localStorage (read-only legacy)
+  fetch('/api/vault', {credentials:'include'})
+    .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data=>{
+      _vaultOnline = true;
+      vaultData = data.map(c=>({
+        ...c,
+        rows: typeof c.rows==='string' ? (()=>{try{return JSON.parse(c.rows);}catch(_){return [];}}()) : (c.rows||[]),
+        lockHash: c.lock_hash||c.lockHash||''
+      }));
+      renderVault();
+    })
+    .catch(()=>{
+      _vaultOnline = false;
+      // Offline: show whatever is in localStorage
+      try { vaultData = JSON.parse(localStorage.getItem(VAULT_KEY)||'[]'); } catch(_){ vaultData=[]; }
+      renderVault();
+    });
 }
-function vaultSave(){
-  localStorage.setItem(VAULT_KEY, JSON.stringify(vaultData));
+
+async function vaultSave(card){
+  if(!_vaultOnline){
+    // Offline fallback — persist to localStorage only
+    localStorage.setItem(VAULT_KEY, JSON.stringify(vaultData));
+    return;
+  }
+  const payload = {
+    title: card.title,
+    tags:  card.tags,
+    rows:  Array.isArray(card.rows) ? card.rows : [],
+    lock_hash: card.lockHash||''
+  };
+  if(card._isNew){
+    const r = await fetch('/api/vault', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(d.id){
+      card.id = d.id;
+      card.created = d.created;
+      delete card._isNew;
+    }
+  } else {
+    await fetch('/api/vault/'+card.id, {
+      method:'PUT', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+  }
+}
+
+async function vaultDeleteApi(id){
+  if(!_vaultOnline) return;
+  await fetch('/api/vault/'+id, {method:'DELETE', credentials:'include'});
 }
 function vaultCardId(){ return 'c'+Date.now()+Math.random().toString(36).slice(2,6); }
 
@@ -1123,8 +1176,13 @@ async function vaultHash(pw){
 }
 
 function vault(){
-  vaultLoad();
-  renderVault();
+  // Show spinner while loading from API
+  set(`<div class="ph"><div class="ph-title">🗄️ My Vault</div><div class="ph-sub">Loading…</div></div>
+       <div style="text-align:center;padding:60px 0;color:var(--tx3);font-size:13px">
+         <div style="width:40px;height:40px;border:2px solid rgba(90,140,255,.2);border-top-color:#5a8cff;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px"></div>
+         Decrypting vault…
+       </div>`);
+  vaultLoad(); // async — calls renderVault() when done
 }
 
 function renderVault(){
@@ -1264,10 +1322,10 @@ function vaultCopy(val){
 }
 
 function vaultDeleteCard(id, title){
-  openModal('Delete Card', `Delete "${title}"? This cannot be undone.`, '', 'Delete','bdng', ()=>{
+  openModal('Delete Card', `Delete "${title}"? This cannot be undone.`, '', 'Delete','bdng', async ()=>{
     vaultData = vaultData.filter(c=>c.id!==id);
     delete vaultUnlocked[id];
-    vaultSave();
+    await vaultDeleteApi(id);
     toast(`"${title}" deleted`,'warn');
     renderVault();
   });
@@ -1286,7 +1344,7 @@ function vaultAddLockModal(id){
       if(p1!==p2){ toast('Passwords do not match','err'); return; }
       const h = await vaultHash(p1);
       const card = vaultData.find(c=>c.id===id);
-      if(card){ card.lockHash=h; vaultSave(); toast('Card locked 🔒'); renderVault(); }
+      if(card){ card.lockHash=h; await vaultSave(card); toast('Card locked 🔒'); renderVault(); }
     });
 }
 
@@ -1301,15 +1359,15 @@ function vaultNewCardModal(){
        <div class="mhint">Lines starting with 🔒 are secret — hidden when the card is locked.</div>
      </div>`,
     'Create Card','',
-    ()=>{
+    async ()=>{
       const title = document.getElementById('m-vtitle').value.trim();
       if(!title){ toast('Title required','err'); return; }
       const tags = document.getElementById('m-vtags').value.trim();
       const rawRows = document.getElementById('m-vrows').value.trim();
       const rows = vaultParseRows(rawRows);
-      const card = { id: vaultCardId(), title, tags, rows, lockHash:'' };
+      const card = { id: vaultCardId(), title, tags, rows, lockHash:'', _isNew:true };
       vaultData.unshift(card);
-      vaultSave();
+      await vaultSave(card);
       toast(`"${title}" created`);
       renderVault();
     });
@@ -1342,7 +1400,7 @@ function vaultEditCardModal(id){
         if(h!==card.lockHash){ toast('Wrong password – lock kept','err'); }
         else { card.lockHash=''; delete vaultUnlocked[id]; toast('Lock removed'); }
       }
-      vaultSave();
+      await vaultSave(card);
       toast(`"${title}" saved`);
       renderVault();
     });

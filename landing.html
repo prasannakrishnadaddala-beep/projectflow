@@ -668,7 +668,7 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
       <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.2)">🔐</div><h3>Security &amp; Access Control</h3><p>6 role types (Admin→Viewer), bcrypt passwords, Google Authenticator TOTP 2FA, workspace-isolated data queries and HTTPS-only sessions.</p><div class="ftag" style="background:rgba(251,191,36,.1);color:#ffd60a;border:1px solid rgba(251,191,36,.2)">Security</div></div>
       <div class="fc reveal stagger-3"><div class="fi" style="background:rgba(48,209,88,.12);border:1px solid rgba(48,209,88,.2)">📁</div><h3>File Management</h3><p>Attach files to tasks and projects (up to 150MB each), manage team documents, and keep all project assets in one organised workspace.</p><div class="ftag" style="background:rgba(48,209,88,.1);color:#30d158;border:1px solid rgba(48,209,88,.2)">Files</div></div>
       <div class="fc reveal stagger-1"><div class="fi" style="background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2)">🔑</div><h3>Password Generator</h3><p>Generate cryptographically strong passwords instantly — 100% client-side, nothing sent to any server. Configurable length, character sets, exclusions and one-click copy.</p><div class="ftag" style="background:rgba(90,140,255,.1);color:#5a8cff;border:1px solid rgba(90,140,255,.2)">Free Tool</div></div>
-      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">🗄️</div><h3>Credential Vault</h3><p>Securely store, organise and retrieve team credentials, API keys and secrets — all encrypted at rest and scoped to your workspace so only authorised members can access them.</p><div class="ftag" style="background:rgba(168,85,247,.1);color:#a855f7;border:1px solid rgba(168,85,247,.2)">Security</div></div>
+      <div class="fc reveal stagger-2"><div class="fi" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2)">🗄️</div><h3>Credential Vault</h3><p>Securely store, organise and retrieve team credentials, API keys and secrets — Fernet-encrypted at rest and scoped to your workspace so only authorised members can access them.</p><div class="ftag" style="background:rgba(168,85,247,.1);color:#a855f7;border:1px solid rgba(168,85,247,.2)">Security</div></div>
     </div>
   </div>
 </section>
@@ -1170,7 +1170,7 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
         <h3>Credential Vault</h3>
         <p>A secure, workspace-scoped credential store for your team. Keep API keys, database passwords, SSH credentials and secrets organised and accessible only to the right people.</p>
         <div class="mod-feats">
-          <div class="mod-feat"><div class="mod-feat-dot" style="background:#a855f7"></div>AES-256 encryption at rest for all secrets</div>
+          <div class="mod-feat"><div class="mod-feat-dot" style="background:#a855f7"></div>Fernet encryption at rest for all secrets (AES-128-CBC + HMAC-SHA256)</div>
           <div class="mod-feat"><div class="mod-feat-dot" style="background:#5a8cff"></div>Role-based visibility — Admin, Manager, TeamLead access</div>
           <div class="mod-feat"><div class="mod-feat-dot" style="background:#30d158"></div>Categories: API Keys, DB Credentials, SSH, OAuth, Custom</div>
           <div class="mod-feat"><div class="mod-feat-dot" style="background:#ffd60a"></div>Reveal-on-click with masked display by default</div>
@@ -1185,7 +1185,7 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
           <div style="display:flex;align-items:center;gap:8px">
             <div style="width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#a855f7,#5a8cff);display:flex;align-items:center;justify-content:center;font-size:11px">🔒</div>
             <span style="font-family:var(--font);font-size:13px;font-weight:800;color:var(--tx)">Team Vault</span>
-            <span style="font-size:10px;background:rgba(168,85,247,.12);color:#a855f7;border:1px solid rgba(168,85,247,.25);padding:2px 8px;border-radius:980px;font-weight:700">AES-256</span>
+            <span style="font-size:10px;background:rgba(168,85,247,.12);color:#a855f7;border:1px solid rgba(168,85,247,.25);padding:2px 8px;border-radius:980px;font-weight:700">Fernet</span>
           </div>
           <div style="font-size:11px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:5px">
             <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;box-shadow:0 0 6px var(--green)"></span>Encrypted

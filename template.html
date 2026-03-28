@@ -7823,10 +7823,18 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
     const next=rows.filter(r=>r._id!==rid);
     setRows(next); push(undefined,next,undefined,undefined);
   }
-  function copyCell(val){
+  function copyCell(val, colLabel){
     navigator.clipboard.writeText(val||'').catch(()=>{});
     setCopyFlash(val);
     setTimeout(()=>setCopyFlash(null),1200);
+    // Audit log — fire-and-forget
+    try { api.post('/api/vault/'+card.id+'/audit', {action:'copy', detail: colLabel||'value'}); } catch(_){}
+  }
+
+  function revealCell(cellKey, colLabel){
+    setShowSecretCells(s=>({...s,[cellKey]:true}));
+    // Audit log — fire-and-forget
+    try { api.post('/api/vault/'+card.id+'/audit', {action:'reveal', detail: colLabel||'secret'}); } catch(_){}
   }
 
   const accentColor = iconInfo.border;
@@ -7985,7 +7993,7 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
                             <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',gap:6}}>
                               <span style=${{letterSpacing:4,fontSize:11,color:'#94a3b8'}}>••••••••</span>
                               <button class="vault-copy-btn" title="Reveal this cell"
-                                onClick=${()=>setShowSecretCells(s=>({...s,[cellKey]:true}))}>
+                                onClick=${()=>revealCell(cellKey, col.label)}>
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                               </button>
                             </div>`}
@@ -7999,7 +8007,7 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
                               ${val && html`
                                 <button class="vault-copy-btn" title="Copy value"
                                   style=${{color: copyFlash===val?'#818cf8':'#475569', background: copyFlash===val?'rgba(90,94,247,.15)':'none'}}
-                                  onClick=${()=>copyCell(val)}>
+                                  onClick=${()=>copyCell(val, col.label)}>
                                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                 </button>`}
                               ${isSecret && isShowingThisCell && html`
@@ -8038,7 +8046,12 @@ function VaultSpreadCard({card, isUnlocked, onUnlock, onLock, onDelete, onUpdate
           mode=${showPwMo}
           onConfirm=${h=>{
             if(showPwMo==='verify'){
-              if(h===card.lockHash){ onUnlock(card.id); setShowPwMo(null); }
+              if(h===card.lockHash){
+                onUnlock(card.id);
+                setShowPwMo(null);
+                // Audit log — fire-and-forget
+                try { api.post('/api/vault/'+card.id+'/audit', {action:'unlock', detail: title||'card'}); } catch(_){}
+              }
               else{ alert('Wrong password'); }
             } else {
               onUpdate({...card,title,tags,cols,rows,lockHash:h});
@@ -8130,6 +8143,8 @@ function VaultView({cu}){
   const [vLoading, setVLoading]= useState(true);
   const [unlocked, setUnlocked]= useState({});
   const [filter,   setFilter]  = useState('');
+  const [auditLog, setAuditLog]= useState([]);
+  const [auditOpen,setAuditOpen]=useState(false);
   const [showNew,  setShowNew] = useState(false);
 
   const offlineKey = vaultStorageKey(cu);
@@ -8154,6 +8169,10 @@ function VaultView({cu}){
       }
       setVLoading(false);
     }).catch(()=>{ setVLoading(false); });
+    // Load audit log alongside cards
+    api.get('/api/vault/audit').then(data=>{
+      if(Array.isArray(data)) setAuditLog(data);
+    }).catch(()=>{});
   }, [cu && cu.id]);
 
   async function apiCreate(card){
@@ -8293,6 +8312,74 @@ function VaultView({cu}){
         <${VaultNewCardModal}
           onClose=${()=>setShowNew(false)}
           onCreate=${handleCreate}/>`}
+
+      <!-- ── Audit Log Panel ── -->
+      ${!vLoading && !cu._offline && html`
+        <div style=${{marginTop:32,borderTop:'1px solid var(--bd)',paddingTop:22}}>
+          <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14,flexWrap:'wrap',gap:8}}>
+            <div style=${{display:'flex',alignItems:'center',gap:10}}>
+              <div style=${{width:30,height:30,borderRadius:8,background:'rgba(99,102,241,.12)',border:'1px solid rgba(99,102,241,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>🔎</div>
+              <div>
+                <div style=${{fontSize:13,fontWeight:800,color:'var(--tx)'}}>Access Audit Log</div>
+                <div style=${{fontSize:11,color:'var(--tx2)'}}>Every reveal, copy and unlock is recorded here</div>
+              </div>
+            </div>
+            <div style=${{display:'flex',alignItems:'center',gap:8}}>
+              <span style=${{fontSize:10,background:'rgba(34,197,94,.1)',color:'#22c55e',border:'1px solid rgba(34,197,94,.25)',padding:'3px 9px',borderRadius:100,fontWeight:700,letterSpacing:.3}}>
+                ● Fernet AES-128-CBC
+              </span>
+              <button
+                style=${{fontSize:12,color:'var(--tx2)',background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:8,padding:'5px 14px',cursor:'pointer',fontFamily:'inherit',fontWeight:600,transition:'all .15s'}}
+                onMouseEnter=${e=>{e.currentTarget.style.borderColor='rgba(99,102,241,.4)';}}
+                onMouseLeave=${e=>{e.currentTarget.style.borderColor='var(--bd)';}}
+                onClick=${()=>setAuditOpen(o=>!o)}>
+                ${auditOpen?'Hide':'Show'} log ${auditLog.length?'('+auditLog.length+')':''}
+              </button>
+            </div>
+          </div>
+
+          ${auditOpen && html`
+            <div style=${{background:'var(--sf)',border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
+              ${auditLog.length===0 && html`
+                <div style=${{padding:'28px',textAlign:'center',color:'#475569',fontSize:13}}>
+                  No audit events yet — reveal or copy a secret to generate entries.
+                </div>`}
+              ${auditLog.length>0 && html`
+                <table style=${{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                  <thead>
+                    <tr style=${{background:'rgba(255,255,255,.03)',borderBottom:'1px solid var(--bd)'}}>
+                      ${['Action','Card','Detail','Time','IP'].map(h=>html`
+                        <th key=${h} style=${{padding:'9px 14px',textAlign:'left',fontWeight:700,color:'#64748b',letterSpacing:.3,whiteSpace:'nowrap'}}>${h}</th>`)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${auditLog.map((e,i)=>{
+                      const actionMeta = {
+                        reveal:  {label:'Reveal',  bg:'rgba(245,158,11,.1)', color:'#f59e0b', icon:'👁'},
+                        copy:    {label:'Copy',    bg:'rgba(99,102,241,.1)', color:'#818cf8', icon:'📋'},
+                        unlock:  {label:'Unlock',  bg:'rgba(34,197,94,.1)',  color:'#22c55e', icon:'🔓'},
+                        create:  {label:'Create',  bg:'rgba(59,130,246,.1)', color:'#60a5fa', icon:'✚'},
+                      }[e.action] || {label:e.action, bg:'rgba(255,255,255,.05)', color:'#94a3b8', icon:'•'};
+                      const timeStr = e.created ? new Date(e.created).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+                      return html`
+                        <tr key=${e.id||i} style=${{borderBottom:'1px solid rgba(255,255,255,.04)',transition:'background .15s'}}
+                          onMouseEnter=${el=>{if(el.currentTarget)el.currentTarget.style.background='rgba(255,255,255,.025)';}}
+                          onMouseLeave=${el=>{if(el.currentTarget)el.currentTarget.style.background='transparent';}}>
+                          <td style=${{padding:'8px 14px',whiteSpace:'nowrap'}}>
+                            <span style=${{display:'inline-flex',alignItems:'center',gap:5,background:actionMeta.bg,color:actionMeta.color,border:'1px solid '+actionMeta.color+'44',borderRadius:6,padding:'2px 8px',fontWeight:700,fontSize:11}}>
+                              ${actionMeta.icon} ${actionMeta.label}
+                            </span>
+                          </td>
+                          <td style=${{padding:'8px 14px',color:'#cbd5e1',maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${e.card_title||e.card_id||'—'}</td>
+                          <td style=${{padding:'8px 14px',color:'#94a3b8',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>${e.detail||'—'}</td>
+                          <td style=${{padding:'8px 14px',color:'#64748b',whiteSpace:'nowrap'}}>${timeStr}</td>
+                          <td style=${{padding:'8px 14px',color:'#475569',fontFamily:'monospace',fontSize:11}}>${e.ip||'—'}</td>
+                        </tr>`;
+                    })}
+                  </tbody>
+                </table>`}
+            </div>`}
+        </div>`}
     </div>
     </div>`;
 }

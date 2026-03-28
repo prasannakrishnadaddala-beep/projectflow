@@ -12,6 +12,75 @@ try:
     import bcrypt as _bcrypt
 except ImportError:
     _bcrypt = None
+
+# ── Vault encryption (Fernet = AES-128-CBC + HMAC-SHA256) ─────────────────────
+try:
+    from cryptography.fernet import Fernet as _Fernet, InvalidToken as _InvalidToken
+    _FERNET_OK = True
+except ImportError:
+    _FERNET_OK = False
+    print("  ⚠ 'cryptography' package not installed — vault rows stored unencrypted.\n"
+          "    Fix: pip install cryptography")
+
+_vault_fernet_instance = None
+
+def _get_vault_fernet():
+    """Return a cached Fernet instance, creating/loading the key on first call."""
+    global _vault_fernet_instance
+    if not _FERNET_OK:
+        return None
+    if _vault_fernet_instance is not None:
+        return _vault_fernet_instance
+    # 1) Prefer env var (set this in Railway / Render secrets)
+    env_key = os.environ.get("VAULT_ENCRYPTION_KEY", "").strip()
+    if env_key:
+        try:
+            _vault_fernet_instance = _Fernet(env_key.encode() if isinstance(env_key, str) else env_key)
+            return _vault_fernet_instance
+        except Exception as e:
+            print(f"  ⚠ VAULT_ENCRYPTION_KEY env var is invalid: {e} — generating a new key")
+    # 2) Fall back to a persisted key file
+    key_path = os.path.join(DATA_DIR, ".vault_enc_key")
+    if os.path.exists(key_path):
+        try:
+            with open(key_path, "rb") as _kf:
+                k = _kf.read().strip()
+            _vault_fernet_instance = _Fernet(k)
+            return _vault_fernet_instance
+        except Exception:
+            pass
+    # 3) Generate and persist a new key
+    k = _Fernet.generate_key()
+    try:
+        with open(key_path, "wb") as _kf:
+            _kf.write(k)
+        print(f"  ✓ New vault encryption key generated and saved to {key_path}")
+    except Exception as e:
+        print(f"  ⚠ Could not persist vault key ({e}) — key lives in memory only (restarts will lose it!)")
+    _vault_fernet_instance = _Fernet(k)
+    return _vault_fernet_instance
+
+def vault_encrypt(plaintext: str) -> str:
+    """Encrypt a plaintext string. Returns a Fernet token string, or the original
+    if the cryptography library is unavailable (graceful degradation)."""
+    f = _get_vault_fernet()
+    if not f:
+        return plaintext
+    return f.encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
+def vault_decrypt(token: str) -> str:
+    """Decrypt a Fernet token. Falls back to returning the raw value for any
+    legacy unencrypted rows (so old data keeps working after upgrade)."""
+    if not token:
+        return token
+    f = _get_vault_fernet()
+    if not f:
+        return token
+    try:
+        return f.decrypt(token.encode("utf-8")).decode("utf-8")
+    except Exception:
+        # Could be a pre-encryption legacy value — return as-is
+        return token
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, jsonify, session, Response, send_file
@@ -784,6 +853,9 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS vault_cards (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT DEFAULT '', tags TEXT DEFAULT '', rows TEXT DEFAULT '[]', cols TEXT DEFAULT '[]', lock_hash TEXT DEFAULT '', created TEXT, updated TEXT)",
             "CREATE INDEX IF NOT EXISTS idx_vault_cards_user ON vault_cards(user_id)",
             "ALTER TABLE vault_cards ADD COLUMN cols TEXT DEFAULT '[]'",
+            "CREATE TABLE IF NOT EXISTS vault_audit_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, card_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT DEFAULT '', ip TEXT DEFAULT '', created TEXT)",
+            "CREATE INDEX IF NOT EXISTS idx_vault_audit_user ON vault_audit_log(user_id, created)",
+            "CREATE INDEX IF NOT EXISTS idx_vault_audit_card ON vault_audit_log(card_id)",
         ]:
             try: db.execute(stmt)
             except: pass
@@ -1506,12 +1578,29 @@ def me():
         return jsonify(result)
 
 # ── Vault ─────────────────────────────────────────────────────────────────────
+# All `rows` data is Fernet-encrypted (AES-128-CBC + HMAC-SHA256) before being
+# stored in the database. vault_encrypt / vault_decrypt are defined near the top
+# of this file. If the `cryptography` package is unavailable the functions are
+# no-ops so the feature degrades gracefully (no silent data loss).
+
 @app.route("/api/vault", methods=["GET"])
 @login_required
 def vault_list():
     with get_db() as db:
-        rows = db.execute("SELECT * FROM vault_cards WHERE user_id=? ORDER BY created DESC", (session["user_id"],)).fetchall()
-        return jsonify([dict(r) for r in rows])
+        records = db.execute(
+            "SELECT * FROM vault_cards WHERE user_id=? ORDER BY created DESC",
+            (session["user_id"],)
+        ).fetchall()
+    result = []
+    for r in records:
+        card = dict(r)
+        # Decrypt rows — vault_decrypt falls back gracefully for legacy plain rows
+        try:
+            card["rows"] = vault_decrypt(card.get("rows") or "[]")
+        except Exception:
+            card["rows"] = "[]"
+        result.append(card)
+    return jsonify(result)
 
 @app.route("/api/vault", methods=["POST"])
 @login_required
@@ -1519,11 +1608,17 @@ def vault_create():
     d = request.json or {}
     now = datetime.utcnow().isoformat()
     cid = "c" + str(int(time.time()*1000)) + secrets.token_hex(3)
+    plain_rows = json.dumps(d.get("rows", []))
+    encrypted_rows = vault_encrypt(plain_rows)
     with get_db() as db:
-        db.execute("INSERT INTO vault_cards (id,user_id,title,tags,rows,cols,lock_hash,created,updated) VALUES (?,?,?,?,?,?,?,?,?)",
-            (cid, session["user_id"], d.get("title",""), d.get("tags",""),
-             json.dumps(d.get("rows",[])), json.dumps(d.get("cols") or []),
-             d.get("lock_hash",""), now, now))
+        db.execute(
+            "INSERT INTO vault_cards (id,user_id,title,tags,rows,cols,lock_hash,created,updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (cid, session["user_id"], d.get("title", ""), d.get("tags", ""),
+             encrypted_rows, json.dumps(d.get("cols") or []),
+             d.get("lock_hash", ""), now, now)
+        )
+    _vault_audit(session["user_id"], cid, "create", d.get("title", ""))
     return jsonify({"id": cid, "created": now})
 
 @app.route("/api/vault/<cid>", methods=["PUT"])
@@ -1531,11 +1626,16 @@ def vault_create():
 def vault_update(cid):
     d = request.json or {}
     now = datetime.utcnow().isoformat()
+    plain_rows = json.dumps(d.get("rows", []))
+    encrypted_rows = vault_encrypt(plain_rows)
     with get_db() as db:
-        db.execute("UPDATE vault_cards SET title=?,tags=?,rows=?,cols=?,lock_hash=?,updated=? WHERE id=? AND user_id=?",
-            (d.get("title",""), d.get("tags",""), json.dumps(d.get("rows",[])),
+        db.execute(
+            "UPDATE vault_cards SET title=?,tags=?,rows=?,cols=?,lock_hash=?,updated=? "
+            "WHERE id=? AND user_id=?",
+            (d.get("title", ""), d.get("tags", ""), encrypted_rows,
              json.dumps(d.get("cols") or []),
-             d.get("lock_hash",""), now, cid, session["user_id"]))
+             d.get("lock_hash", ""), now, cid, session["user_id"])
+        )
     return jsonify({"ok": True})
 
 @app.route("/api/vault/<cid>", methods=["DELETE"])
@@ -1543,6 +1643,58 @@ def vault_update(cid):
 def vault_delete(cid):
     with get_db() as db:
         db.execute("DELETE FROM vault_cards WHERE id=? AND user_id=?", (cid, session["user_id"]))
+        db.execute("DELETE FROM vault_audit_log WHERE card_id=? AND user_id=?", (cid, session["user_id"]))
+    return jsonify({"ok": True})
+
+# ── Vault Audit Log ────────────────────────────────────────────────────────────
+def _vault_audit(user_id, card_id, action, detail="", ip=""):
+    """Insert a vault audit log entry. Non-blocking — swallows errors."""
+    try:
+        aid = "va" + secrets.token_hex(6)
+        now = datetime.utcnow().isoformat()
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO vault_audit_log (id,user_id,card_id,action,detail,ip,created) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (aid, user_id, card_id, action, detail[:200], ip[:60], now)
+            )
+    except Exception as e:
+        print(f"[vault_audit] non-fatal: {e}")
+
+@app.route("/api/vault/audit", methods=["GET"])
+@login_required
+def vault_audit_list():
+    """Return the 50 most recent vault audit events for the current user."""
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT a.id, a.card_id, a.action, a.detail, a.ip, a.created, "
+            "       v.title AS card_title "
+            "FROM vault_audit_log a "
+            "LEFT JOIN vault_cards v ON a.card_id = v.id "
+            "WHERE a.user_id=? ORDER BY a.created DESC LIMIT 50",
+            (session["user_id"],)
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/vault/<cid>/audit", methods=["POST"])
+@login_required
+def vault_audit_event(cid):
+    """Log a reveal or copy event triggered by the frontend."""
+    d = request.json or {}
+    action = (d.get("action") or "").strip()[:50]
+    detail = (d.get("detail") or "").strip()[:200]
+    if action not in ("reveal", "copy", "unlock"):
+        return jsonify({"error": "Invalid action"}), 400
+    # Verify the card belongs to this user before logging
+    with get_db() as db:
+        card = db.execute(
+            "SELECT id FROM vault_cards WHERE id=? AND user_id=?",
+            (cid, session["user_id"])
+        ).fetchone()
+    if not card:
+        return jsonify({"error": "Not found"}), 404
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
+    _vault_audit(session["user_id"], cid, action, detail, ip)
     return jsonify({"ok": True})
 
 # ── Workspace ─────────────────────────────────────────────────────────────────
