@@ -215,11 +215,11 @@ def get_secret_key():
             with open(KEY_FILE,"r") as f:
                 k=f.read().strip()
                 if len(k)==64: return k
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
     k=secrets.token_hex(32)
     try:
         with open(KEY_FILE,"w") as f: f.write(k)
-    except Exception as _e: print(f"[warn] {_e}")
+    except: pass
     return k
 
 app = Flask(__name__)
@@ -230,13 +230,7 @@ app.config.update(
     SESSION_COOKIE_SECURE=_is_https,PERMANENT_SESSION_LIFETIME=86400*30,
     SESSION_COOKIE_NAME="pf_session",
     MAX_CONTENT_LENGTH=150*1024*1024)
-# Restrict CORS to the known frontend origin (never wildcard with credentials)
-_cors_origins = [o.strip().rstrip("/") for o in
-    os.environ.get("ALLOWED_ORIGINS", os.environ.get("APP_URL","http://localhost:5000")).split(",")
-    if o.strip()]
-if not _cors_origins:
-    _cors_origins = ["http://localhost:5000"]
-CORS(app, supports_credentials=True, origins=_cors_origins)
+CORS(app, supports_credentials=True)
 
 @app.after_request
 def add_security_headers(response):
@@ -245,41 +239,12 @@ def add_security_headers(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data: blob:; "
-        "connect-src 'self'; "
-        "frame-ancestors 'none';"
-    )
     # Only set HSTS on HTTPS
     if request.is_secure:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
-@app.errorhandler(404)
-def err_404(e):
-    if request.path.startswith("/api/"):
-        return jsonify({"error": "Endpoint not found"}), 404
-    return jsonify({"error": "Not found"}), 404
-
-@app.errorhandler(405)
-def err_405(e):
-    return jsonify({"error": "Method not allowed"}), 405
-
-@app.errorhandler(500)
-def err_500(e):
-    import traceback
-    print(f"[ERROR 500] {request.path}: {traceback.format_exc()}")
-    return jsonify({"error": "Internal server error"}), 500
-
-@app.errorhandler(413)
-def err_413(e):
-    return jsonify({"error": "File too large (max 150MB)"}), 413
-
-
+CLRS=["#7c3aed","#2563eb","#059669","#d97706","#dc2626","#ec4899","#0891b2","#5a8cff"]
 
 def get_db(autocommit=False):
     conn = pg8000.native.Connection(**_parse_db_url(DATABASE_URL))
@@ -302,7 +267,7 @@ def _get_pool_conn():
             return conn
         except Exception:
             try: conn.close()
-            except Exception as _e: print(f"[warn] {_e}")
+            except: pass
     except _queue.Empty:
         pass
     return _PGConn(**_parse_db_url(DATABASE_URL))
@@ -313,7 +278,7 @@ def _return_pool_conn(conn):
         _PG_POOL.put_nowait(conn)
     except _queue.Full:
         try: conn.close()
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
 
 def _raw_pg(sql, params=(), fetch=False):
     """Execute SQL via pooled pg8000 native connection, bypassing _DB wrapper.
@@ -337,7 +302,7 @@ def _raw_pg(sql, params=(), fetch=False):
     except Exception:
         # Don't return broken connections to pool
         try: conn.close()
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
         raise
 
 def _run_ddl(sql):
@@ -358,7 +323,7 @@ def _run_ddl(sql):
                 print(f"  [DDL WARN] {sql[:60]!r}: {type(e).__name__}: {e}")
         finally:
             try: conn.close()
-            except Exception as _e: print(f"[warn] {_e}")
+            except: pass
     except Exception as e:
         print(f"  [DDL connect error] {e}")
 
@@ -670,7 +635,7 @@ def get_vapid_keys():
                 d = json.load(f)
                 if d.get("private") and d.get("public"):
                     return d
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
     try:
         import struct
         priv_bytes = os.urandom(32)
@@ -786,8 +751,7 @@ def init_db():
                 recipient TEXT, content TEXT, read INTEGER DEFAULT 0, ts TEXT);
             CREATE TABLE IF NOT EXISTS notifications (
                 id TEXT PRIMARY KEY, workspace_id TEXT, type TEXT, content TEXT,
-                user_id TEXT, read INTEGER DEFAULT 0, ts TEXT, 
-                entity_id TEXT, entity_type TEXT);
+                user_id TEXT, read INTEGER DEFAULT 0, ts TEXT);
             CREATE TABLE IF NOT EXISTS reminders (
                 id TEXT PRIMARY KEY, workspace_id TEXT, user_id TEXT,
                 task_id TEXT, task_title TEXT, remind_at TEXT,
@@ -889,13 +853,12 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS vault_cards (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT DEFAULT '', tags TEXT DEFAULT '', rows TEXT DEFAULT '[]', cols TEXT DEFAULT '[]', lock_hash TEXT DEFAULT '', created TEXT, updated TEXT)",
             "CREATE INDEX IF NOT EXISTS idx_vault_cards_user ON vault_cards(user_id)",
             "ALTER TABLE vault_cards ADD COLUMN cols TEXT DEFAULT '[]'",
-            "CREATE TABLE IF NOT EXISTS vault_audit_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, card_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT DEFAULT '', ip TEXT DEFAULT '', created TEXT, card_title TEXT DEFAULT '')",
+            "CREATE TABLE IF NOT EXISTS vault_audit_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, card_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT DEFAULT '', ip TEXT DEFAULT '', created TEXT)",
             "CREATE INDEX IF NOT EXISTS idx_vault_audit_user ON vault_audit_log(user_id, created)",
             "CREATE INDEX IF NOT EXISTS idx_vault_audit_card ON vault_audit_log(card_id)",
-            "ALTER TABLE vault_audit_log ADD COLUMN card_title TEXT DEFAULT ''",
         ]:
             try: db.execute(stmt)
-            except Exception as _e: print(f"[warn] {_e}")
+            except: pass
         try:
             corrupted = db.execute("SELECT id, name, avatar FROM users WHERE avatar LIKE 'data:image%%' OR (length(avatar) > 10 AND avatar !~ '^[A-Z]{1,2}$')").fetchall()
             for row in corrupted:
@@ -910,7 +873,7 @@ def init_db():
         try: db.execute("""CREATE TABLE IF NOT EXISTS subtasks (
             id TEXT PRIMARY KEY, workspace_id TEXT, task_id TEXT,
             title TEXT, done INTEGER DEFAULT 0, assignee TEXT DEFAULT '', created TEXT)""")
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
         existing_ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
         if not existing_ws:
             legacy_users = db.execute("SELECT id FROM users WHERE workspace_id IS NULL LIMIT 1").fetchone()
@@ -921,16 +884,9 @@ def init_db():
             if legacy_users:
                 for tbl in ["users","projects","tasks","files","messages","direct_messages","notifications"]:
                     try: db.execute(f"UPDATE {tbl} SET workspace_id=? WHERE workspace_id IS NULL",(ws_id,))
-                    except Exception as _e: print(f"[warn] {_e}")
+                    except: pass
             else:
-                # Never seed demo data in production — Railway/Render/Heroku envs are production
-                _is_production = any(os.environ.get(v) for v in [
-                    "RAILWAY_ENVIRONMENT","RENDER","HEROKU_APP_NAME","FLY_APP_NAME"
-                ])
-                if not _is_production:
-                    _seed_demo(db, ws_id)
-                else:
-                    print("  ℹ Production env detected — skipping demo seed. Register via /app to create workspace.")
+                _seed_demo(db, ws_id)
 
 def _seed_demo(db, ws_id):
     for u in [
@@ -942,14 +898,14 @@ def _seed_demo(db, ws_id):
     ]:
         try: db.execute("INSERT INTO users(id,workspace_id,name,email,password,role,avatar,color,created,two_fa_enabled) VALUES (?,?,?,?,?,?,?,?,?,?)",
                         (u[0],ws_id,u[1],u[2],u[3],u[4],u[5],u[6],ts(),0))
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
     for p in [
         ("p1","E-Commerce Platform",   "Modern e-commerce with payment integration & inventory.",       "u1",'["u1","u2","u3","u4"]',"2025-01-15","2025-06-30",65,"#7c3aed"),
         ("p2","Mobile Banking App",    "Secure mobile banking with biometric auth & real-time transfers.","u2",'["u1","u2","u5"]',     "2025-02-01","2025-08-15",40,"#2563eb"),
         ("p3","AI Analytics Dashboard","Real-time analytics powered by ML for business intelligence.",   "u1",'["u1","u3","u4"]',     "2025-03-01","2025-09-30",20,"#059669"),
     ]:
         try: db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?)",(p[0],ws_id,*p[1:],ts()))
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
     for t in [
         ("T-001","Design system setup",        "Configure design tokens and component library.",       "p1","u2","high",  "completed",  "2025-02-15",100),
         ("T-002","User authentication API",    "JWT auth with refresh tokens.",                       "p1","u2","high",  "production", "2025-03-01",100),
@@ -966,7 +922,7 @@ def _seed_demo(db, ws_id):
         ("T-013","Data pipeline setup",        "ETL pipeline for real-time data ingestion.",          "p3","u2","high",  "blocked",    "2025-06-01", 30),
     ]:
         try: db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",(t[0],ws_id,t[1],t[2],t[3],t[4],t[5],t[6],ts(),t[7],t[8],"[]"))
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
     for m in [
         ("m1","u2","p1","Just pushed the auth API to staging!"),
         ("m2","u3","p1","Running test suite, will report results."),
@@ -974,30 +930,19 @@ def _seed_demo(db, ws_id):
         ("m4","u1","p1","Sure! Checking it after standup."),
     ]:
         try: db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?)",(m[0],ws_id,m[1],m[2],m[3],ts()))
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
     for n in [
-        ("n1","task_assigned","You have been assigned to Cart & checkout flow","u4",0,"t1","task"),
-        ("n2","status_change","Task Payment gateway moved to Code Review","u2",0,"t2","task"),
-        ("n3","comment","Bob commented on Product catalog UI","u4",1,"t3","task"),
+        ("n1","task_assigned","You have been assigned to Cart & checkout flow","u4",0),
+        ("n2","status_change","Task Payment gateway moved to Code Review","u2",0),
+        ("n3","comment","Bob commented on Product catalog UI","u4",1),
     ]:
-        try: db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts(),n[5],n[6]))
-        except Exception as _e: print(f"[warn] {_e}")
+        try: db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",(n[0],ws_id,n[1],n[2],n[3],n[4],ts()))
+        except: pass
 
 def login_required(f):
     @wraps(f)
     def d(*a,**kw):
         if "user_id" not in session: return jsonify({"error":"Unauthorized"}),401
-        # Always re-read role from DB so demoted users can't use a stale session role
-        try:
-            with get_db() as _db:
-                _row = _db.execute("SELECT role FROM users WHERE id=? AND workspace_id=?",
-                                   (session["user_id"], session.get("workspace_id",""))).fetchone()
-                if not _row:
-                    session.clear()
-                    return jsonify({"error":"Unauthorized"}),401
-                session["role"] = _row["role"]  # keep session fresh
-        except Exception:
-            pass  # DB temporarily unavailable — allow through, role check happens in handler
         return f(*a,**kw)
     return d
 
@@ -1612,12 +1557,12 @@ def meet_notify():
         msg = f"📹 {cname} is calling you — click to join the meeting"
         try:
             db.execute(
-                "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (nid, wid(), "call", msg, target_id, 0, ts(), session["user_id"], session["user_id"], "call"))
+                "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
+                (nid, wid(), "call", msg, target_id, 0, ts(), session["user_id"]))
         except:
             db.execute(
-                "INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                (nid, wid(), "call", msg, target_id, 0, ts(), session["user_id"], "call"))
+                "INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                (nid, wid(), "call", msg, target_id, 0, ts()))
         return jsonify({"ok": True, "caller": cname, "room": room_name})
 
 @app.route("/api/auth/me")
@@ -1661,7 +1606,6 @@ def vault_list():
 @login_required
 def vault_create():
     d = request.json or {}
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
     now = datetime.utcnow().isoformat()
     cid = "c" + str(int(time.time()*1000)) + secrets.token_hex(3)
     plain_rows = json.dumps(d.get("rows", []))
@@ -1674,19 +1618,16 @@ def vault_create():
              encrypted_rows, json.dumps(d.get("cols") or []),
              d.get("lock_hash", ""), now, now)
         )
-    _vault_audit(session["user_id"], cid, "create", d.get("title", ""), ip)
+    _vault_audit(session["user_id"], cid, "create", d.get("title", ""))
     return jsonify({"id": cid, "created": now})
 
 @app.route("/api/vault/<cid>", methods=["PUT"])
 @login_required
 def vault_update(cid):
     d = request.json or {}
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
     now = datetime.utcnow().isoformat()
     plain_rows = json.dumps(d.get("rows", []))
     encrypted_rows = vault_encrypt(plain_rows)
-    action = d.get("audit_action", "edit")   # frontend can pass: edit / add_row / delete_row / lock / unlock
-    detail = d.get("audit_detail", "")
     with get_db() as db:
         db.execute(
             "UPDATE vault_cards SET title=?,tags=?,rows=?,cols=?,lock_hash=?,updated=? "
@@ -1695,49 +1636,27 @@ def vault_update(cid):
              json.dumps(d.get("cols") or []),
              d.get("lock_hash", ""), now, cid, session["user_id"])
         )
-    if action in ("edit","add_row","delete_row","lock_card","unlock_card","rename"):
-        _vault_audit(session["user_id"], cid, action, detail, ip)
     return jsonify({"ok": True})
 
 @app.route("/api/vault/<cid>", methods=["DELETE"])
 @login_required
 def vault_delete(cid):
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
     with get_db() as db:
-        card = db.execute("SELECT title FROM vault_cards WHERE id=? AND user_id=?",
-                          (cid, session["user_id"])).fetchone()
-        if not card:
-            return jsonify({"error": "Not found"}), 404
-        title = card["title"] or cid
-        # Log BEFORE deleting — audit log is NEVER deleted (permanent record)
-        _vault_audit(session["user_id"], cid, "delete", f"Card \"{title}\" permanently deleted", ip)
         db.execute("DELETE FROM vault_cards WHERE id=? AND user_id=?", (cid, session["user_id"]))
-        # ✦ Intentionally NOT deleting audit_log rows — history is preserved forever
+        db.execute("DELETE FROM vault_audit_log WHERE card_id=? AND user_id=?", (cid, session["user_id"]))
     return jsonify({"ok": True})
 
 # ── Vault Audit Log ────────────────────────────────────────────────────────────
 def _vault_audit(user_id, card_id, action, detail="", ip=""):
-    """Insert a vault audit log entry with card_title snapshot. Non-blocking."""
+    """Insert a vault audit log entry. Non-blocking — swallows errors."""
     try:
         aid = "va" + secrets.token_hex(6)
         now = datetime.utcnow().isoformat()
-        # Snapshot card title so deleted cards still show correctly
-        card_title = ""
-        try:
-            with get_db() as db2:
-                row = db2.execute("SELECT title FROM vault_cards WHERE id=?", (card_id,)).fetchone()
-                if row:
-                    card_title = row["title"] or ""
-        except Exception:
-            pass
-        # If detail already contains the title (delete path), use it as fallback
-        if not card_title and action == "delete":
-            card_title = detail.replace('Card "', '').replace('" permanently deleted', '').strip()
         with get_db() as db:
             db.execute(
-                "INSERT INTO vault_audit_log (id,user_id,card_id,action,detail,ip,created,card_title) "
-                "VALUES (?,?,?,?,?,?,?,?)",
-                (aid, user_id, card_id, action, detail[:300], ip[:60], now, card_title[:120])
+                "INSERT INTO vault_audit_log (id,user_id,card_id,action,detail,ip,created) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (aid, user_id, card_id, action, detail[:200], ip[:60], now)
             )
     except Exception as e:
         print(f"[vault_audit] non-fatal: {e}")
@@ -1745,28 +1664,16 @@ def _vault_audit(user_id, card_id, action, detail="", ip=""):
 @app.route("/api/vault/audit", methods=["GET"])
 @login_required
 def vault_audit_list():
-    """Return vault audit events for the current user. Returns up to 200, supports ?limit= and ?card_id= filters."""
-    limit = min(int(request.args.get("limit", 200)), 500)
-    card_filter = request.args.get("card_id", "")
+    """Return the 50 most recent vault audit events for the current user."""
     with get_db() as db:
-        if card_filter:
-            rows = db.execute(
-                "SELECT a.id, a.card_id, a.action, a.detail, a.ip, a.created, "
-                "       COALESCE(a.card_title, v.title, a.card_id) AS card_title "
-                "FROM vault_audit_log a "
-                "LEFT JOIN vault_cards v ON a.card_id = v.id "
-                "WHERE a.user_id=? AND a.card_id=? ORDER BY a.created DESC LIMIT ?",
-                (session["user_id"], card_filter, limit)
-            ).fetchall()
-        else:
-            rows = db.execute(
-                "SELECT a.id, a.card_id, a.action, a.detail, a.ip, a.created, "
-                "       COALESCE(a.card_title, v.title, a.card_id) AS card_title "
-                "FROM vault_audit_log a "
-                "LEFT JOIN vault_cards v ON a.card_id = v.id "
-                "WHERE a.user_id=? ORDER BY a.created DESC LIMIT ?",
-                (session["user_id"], limit)
-            ).fetchall()
+        rows = db.execute(
+            "SELECT a.id, a.card_id, a.action, a.detail, a.ip, a.created, "
+            "       v.title AS card_title "
+            "FROM vault_audit_log a "
+            "LEFT JOIN vault_cards v ON a.card_id = v.id "
+            "WHERE a.user_id=? ORDER BY a.created DESC LIMIT 50",
+            (session["user_id"],)
+        ).fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route("/api/vault/<cid>/audit", methods=["POST"])
@@ -1776,8 +1683,7 @@ def vault_audit_event(cid):
     d = request.json or {}
     action = (d.get("action") or "").strip()[:50]
     detail = (d.get("detail") or "").strip()[:200]
-    ALLOWED = {"reveal","copy","unlock","edit","add_row","delete_row","lock_card","unlock_card","rename","view"}
-    if action not in ALLOWED:
+    if action not in ("reveal", "copy", "unlock"):
         return jsonify({"error": "Invalid action"}), 400
     # Verify the card belongs to this user before logging
     with get_db() as db:
@@ -1992,8 +1898,8 @@ def create_project():
         for uid in members:
             if uid != session["user_id"]:
                 nid=f"n{int(datetime.now().timestamp()*1000)}"
-                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                           (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts(),pid,"project"))
+                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                           (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts()))
                 threading.Thread(target=push_notification_to_user,
                     args=(db,uid,f"📁 Added to project: {d['name']}",
                           f"{cname} added you to '{d['name']}'","/"),daemon=True).start()
@@ -2023,8 +1929,8 @@ def update_project(pid):
         for i,uid in enumerate(mems):
             if uid==session["user_id"]: continue
             nid=f"n{base_ts+i}"
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"project_added",f"{aname} updated project '{updated['name']}'",uid,0,ts(),pid,"project"))
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"project_added",f"{aname} updated project '{updated['name']}'",uid,0,ts()))
             threading.Thread(target=push_notification_to_user,
                 args=(db,uid,f"📁 Project updated: {updated['name']}",
                       f"{aname} made changes to '{updated['name']}'","/"),daemon=True).start()
@@ -2109,8 +2015,8 @@ def create_task():
         base_ts=int(datetime.now().timestamp()*1000)
         if d.get("assignee") and d["assignee"]!=session["user_id"]:
             nid=f"n{base_ts}"
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts(),tid,"task"))
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts()))
             assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(d["assignee"],)).fetchone()
             if assignee_user and assignee_user["email"]:
                 threading.Thread(target=send_task_assigned_email,
@@ -2129,8 +2035,8 @@ def create_task():
                 for i,uid in enumerate(members):
                     if uid==session["user_id"] or uid==d.get("assignee"): continue
                     nid2=f"n{base_ts+10+i}"
-                    db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                               (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts(),tid,"task"))
+                    db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                               (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts()))
                     threading.Thread(target=push_notification_to_user,
                         args=(db, uid, f"📋 New task in {proj['name']}",
                               f"{cname} created '{d['title']}'", "/"),
@@ -2229,9 +2135,9 @@ def update_task(tid):
             base_ts2=int(datetime.now().timestamp()*1000)
             if t["assignee"] and t["assignee"]!=session["user_id"]:
                 nid=f"n{base_ts2}"
-                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                            (nid,wid(),"status_change",f"Task '{t['title']}' moved to {d['stage']}",
-                            t["assignee"],0,ts(),tid,"task"))
+                            t["assignee"],0,ts()))
                 assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(t["assignee"],)).fetchone()
                 changer_user=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
                 changer_name=changer_user["name"] if changer_user else "Someone"
@@ -2253,8 +2159,8 @@ def update_task(tid):
                     for i2,uid in enumerate(members):
                         if uid==session["user_id"] or uid==t["assignee"]: continue
                         nid2=f"n{base_ts2+20+i2}"
-                        db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                                   (nid2,wid(),"status_change",f"{aname} moved '{t['title']}' → {d['stage']}",uid,0,ts(),tid,"task"))
+                        db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                                   (nid2,wid(),"status_change",f"{aname} moved '{t['title']}' → {d['stage']}",uid,0,ts()))
                         threading.Thread(target=push_notification_to_user,
                             args=(db, uid, f"🔄 {t['title']} → {d['stage']}",
                                   f"{aname} updated the task stage", "/"),
@@ -2275,9 +2181,9 @@ def update_task(tid):
                         f"💬 **{cname}** commented on **{t['title']}**: {latest.get('text','')}",ts(),1))
             if t["assignee"] and t["assignee"]!=session["user_id"]:
                 nid2=f"n{int(datetime.now().timestamp()*1000)+4}"
-                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                            (nid2,wid(),"comment",f"{cname} commented on '{t['title']}': {latest.get('text','')}",
-                            t["assignee"],0,ts(),tid,"task"))
+                            t["assignee"],0,ts()))
                 assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(t["assignee"],)).fetchone()
                 if assignee_user and assignee_user["email"]:
                     threading.Thread(target=send_comment_email,
@@ -2368,8 +2274,6 @@ def get_files():
         else: rows=[]
         return jsonify([dict(r) for r in rows])
 
-from werkzeug.utils import secure_filename as _secure_filename
-
 @app.route("/api/files",methods=["POST"])
 @login_required
 def upload_file():
@@ -2378,14 +2282,13 @@ def upload_file():
     fid=f"f{int(datetime.now().timestamp()*1000)}"
     data=f.read()
     if len(data)>150*1024*1024: return jsonify({"error":"File too large (max 150MB)"}),400
-    safe_name = _secure_filename(f.filename) or fid
     path=os.path.join(UPLOAD_DIR,fid)
     with open(path,"wb") as fp: fp.write(data)
     task_id=request.form.get("task_id","")
     project_id=request.form.get("project_id","")
     with get_db() as db:
         db.execute("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?)",
-                   (fid,wid(),safe_name,len(data),f.content_type,task_id,project_id,session["user_id"],ts()))
+                   (fid,wid(),f.filename,len(data),f.content_type,task_id,project_id,session["user_id"],ts()))
         row=db.execute("SELECT * FROM files WHERE id=? AND workspace_id=?",(fid,wid())).fetchone()
         return jsonify(dict(row))
 
@@ -2435,8 +2338,8 @@ def send_message():
         base_ts=int(datetime.now().timestamp()*1000)
         for i,m in enumerate(members):
             nid=f"n{base_ts+i}"
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",m["id"],0,ts(),d.get("project",""),"project"))
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"message",f"#{proj_name} — {sender_name}: {preview}",m["id"],0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM messages WHERE id=?",(mid,)).fetchone()))
 
 # ── Direct Messages ───────────────────────────────────────────────────────────
@@ -2466,11 +2369,11 @@ def send_dm():
         nid=f"n{int(datetime.now().timestamp()*1000)}"
         preview=d["content"][:60]+"..." if len(d["content"])>60 else d["content"]
         try:
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts(),session["user_id"],session["user_id"],"dm"))
+            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,sender_id) VALUES (?,?,?,?,?,?,?,?)",
+                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts(),session["user_id"]))
         except:
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts(),session["user_id"],"dm"))
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"dm",f"{sender_name}: {preview}",d["recipient"],0,ts()))
         return jsonify(dict(db.execute("SELECT * FROM direct_messages WHERE id=?",(mid,)).fetchone()))
 
 @app.route("/api/dm/unread")
@@ -2663,8 +2566,8 @@ def create_ticket():
             nid=f"n{int(datetime.now().timestamp()*1000)}"
             reporter=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
             rname=reporter["name"] if reporter else "Someone"
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"task_assigned",f"🎫 {rname} assigned ticket: {d['title']}",d["assignee"],0,now,tid,"ticket"))
+            db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
+                       (nid,wid(),"task_assigned",f"🎫 {rname} assigned ticket: {d['title']}",d["assignee"],0,now))
         return jsonify(dict(db.execute("SELECT * FROM tickets WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
 @login_required
 def update_ticket(tid):
@@ -2722,9 +2625,7 @@ def add_ticket_comment(tid):
 
 @app.route("/api/migrate-timelog", methods=["GET","POST"])
 def migrate_timelog_public():
-    """Migration endpoint — requires admin token. Hit this once after deploy to fix live DB schema."""
-    if not _require_admin():
-        return jsonify({"error": "Admin authentication required"}), 401
+    """Public migration — hit this URL once after deploy to fix live DB schema."""
     results = []
     steps = [
         ("CREATE time_logs base", """CREATE TABLE IF NOT EXISTS time_logs (
@@ -2753,7 +2654,7 @@ def migrate_timelog_public():
                     results.append({"step": label, "status": "error", "msg": str(e)})
             finally:
                 try: c.close()
-                except Exception as _e: print(f"[warn] {_e}")
+                except: pass
         except Exception as e:
             results.append({"step": label, "status": "connect_error", "msg": str(e)})
     print(f"[migrate-timelog] {results}")
@@ -3457,25 +3358,11 @@ def health():
 @app.route("/api/auth/emergency-reset-2fa", methods=["POST"])
 def emergency_reset_2fa():
     """Emergency endpoint to disable ALL 2FA workspace-wide.
-    Requires the workspace invite code + ADMIN_PASSWORD as proof of ownership.
+    Requires the workspace invite code as proof of ownership.
     Use this if you're locked out."""
-    # Rate-limit: max 5 attempts per IP per hour
-    ip = request.headers.get("X-Forwarded-For","").split(",")[0].strip() or request.remote_addr or "unknown"
-    rl_key = f"emergency:{ip}"
-    allowed, wait = _check_rate_limit(rl_key)
-    if not allowed:
-        return jsonify({"error": f"Too many attempts. Try again in {wait}s."}), 429
-
     d = request.json or {}
     invite_code = d.get("invite_code","").strip().upper()
     email = d.get("email","").strip().lower()
-    admin_pass = d.get("admin_password","").strip()
-
-    # Require ADMIN_PASSWORD env var as second factor
-    expected_admin = os.environ.get("ADMIN_PASSWORD","")
-    if not expected_admin or admin_pass != expected_admin:
-        return jsonify({"error": "Invalid admin password"}), 403
-
     if not invite_code or not email:
         return jsonify({"error":"invite_code and email required"}),400
     with get_db() as db:
@@ -4221,7 +4108,7 @@ def find_free_port(preferred=5000):
         try:
             s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
             s.bind(("",port)); s.close(); return port
-        except Exception as _e: print(f"[warn] {_e}")
+        except: pass
     return preferred
 
 def download_js():
