@@ -1561,9 +1561,11 @@ def register():
         return jsonify({"error":"Invalid mode"}),400
     try:
         with get_db() as db:
-            db.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (uid,ws_id,d["name"],d["email"],hash_pw(d["password"]),
-                        d.get("role","Developer"),av,c,ts(),None))
+            db.execute(
+                "INSERT INTO users (id,workspace_id,name,email,password,role,avatar,color,created,two_fa_enabled,totp_secret,totp_verified) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (uid,ws_id,d["name"],d["email"],hash_pw(d["password"]),
+                 d.get("role","Developer"),av,c,ts(),0,'',0))
             session.permanent=True
             session["user_id"]=uid
             session["workspace_id"]=ws_id
@@ -1981,25 +1983,34 @@ def create_project():
     pid=f"p{int(datetime.now().timestamp()*1000)}"
     members=d.get("members",[session["user_id"]])
     if session["user_id"] not in members: members.insert(0,session["user_id"])
-    with get_db() as db:
-        db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                   (pid,wid(),d["name"],d.get("description",""),session["user_id"],
-                    json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
-                    d.get("color","#5a8cff"),ts(),d.get("team_id","")))
-        p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
-        if not p: return jsonify({"error":"Failed to create project"}),500
-        creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        cname=creator["name"] if creator else "Someone"
-        base_ts=int(datetime.now().timestamp()*1000)
-        for i,uid in enumerate(members):
-            if uid != session["user_id"]:
-                nid=f"n{base_ts+i}"
-                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                           (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts(),pid,"project"))
-                threading.Thread(target=push_notification_to_user,
-                    args=(db,uid,f"📁 Added to project: {d['name']}",
-                          f"{cname} added you to '{d['name']}'","/"),daemon=True).start()
-        return jsonify(dict(p))
+    try:
+        with get_db() as db:
+            db.execute("BEGIN")
+            db.execute(
+                "INSERT INTO projects (id,workspace_id,name,description,owner,members,start_date,target_date,progress,color,created,team_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (pid,wid(),d["name"],d.get("description",""),session["user_id"],
+                 json.dumps(members),d.get("startDate",""),d.get("targetDate",""),0,
+                 d.get("color","#5a8cff"),ts(),d.get("team_id","")))
+            p=db.execute("SELECT * FROM projects WHERE id=? AND workspace_id=?",(pid,wid())).fetchone()
+            if not p:
+                db.execute("ROLLBACK")
+                return jsonify({"error":"Failed to create project"}),500
+            creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+            cname=creator["name"] if creator else "Someone"
+            base_ts=int(datetime.now().timestamp()*1000)
+            for i,uid in enumerate(members):
+                if uid != session["user_id"]:
+                    nid=f"n{base_ts+i}"
+                    db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                               (nid,wid(),"project_added",f"You were added to project '{d['name']}'",uid,0,ts(),pid,"project"))
+                    threading.Thread(target=push_notification_to_user,
+                        args=(db,uid,f"📁 Added to project: {d['name']}",
+                              f"{cname} added you to '{d['name']}'","/"),daemon=True).start()
+            db.execute("COMMIT")
+            return jsonify(dict(p))
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
 
 @app.route("/api/projects/<pid>",methods=["PUT"])
 @login_required
@@ -2099,55 +2110,67 @@ def next_task_id(db, ws):
 def create_task():
     d=request.json or {}
     if not d.get("title"): return jsonify({"error":"Title required"}),400
-    with get_db() as db:
-        tid=next_task_id(db,wid())
-        db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                   (tid,wid(),d["title"],d.get("description",""),d.get("project",""),
-                    d.get("assignee",""),d.get("priority","medium"),d.get("stage","backlog"),
-                    ts(),d.get("due",""),d.get("pct",0),json.dumps(d.get("comments",[])),
-                    d.get("team_id","")))
-        creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
-        cname=creator["name"] if creator else "Someone"
-        base_ts=int(datetime.now().timestamp()*1000)
-        if d.get("assignee") and d["assignee"]!=session["user_id"]:
-            nid=f"n{base_ts}"
-            db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                       (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts(),tid,"task"))
-            assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(d["assignee"],)).fetchone()
-            if assignee_user and assignee_user["email"]:
-                threading.Thread(target=send_task_assigned_email,
-                    args=(assignee_user["email"],assignee_user["name"],d["title"],cname,tid,wid()),
-                    daemon=True).start()
-            threading.Thread(target=push_notification_to_user,
-                args=(db, d["assignee"], f"✅ New task assigned: {d['title']}",
-                      f"{cname} assigned you this task [{d.get('priority','medium')}]", "/"),
-                daemon=True).start()
-        if d.get("project"):
-            proj=db.execute("SELECT name,members FROM projects WHERE id=? AND workspace_id=?",(d["project"],wid())).fetchone()
-            if proj:
-                try:
-                    members=json.loads(proj["members"] or "[]")
-                except: members=[]
-                for i,uid in enumerate(members):
-                    if uid==session["user_id"] or uid==d.get("assignee"): continue
-                    nid2=f"n{base_ts+10+i}"
-                    db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
-                               (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts(),tid,"task"))
-                    threading.Thread(target=push_notification_to_user,
-                        args=(db, uid, f"📋 New task in {proj['name']}",
-                              f"{cname} created '{d['title']}'", "/"),
+    try:
+        with get_db() as db:
+            db.execute("BEGIN")
+            tid=next_task_id(db,wid())
+            db.execute(
+                "INSERT INTO tasks (id,workspace_id,title,description,project,assignee,priority,stage,"
+                "created,due,pct,comments,team_id,parent_id,story_points,sprint,task_type,labels) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (tid,wid(),d["title"],d.get("description",""),d.get("project",""),
+                 d.get("assignee",""),d.get("priority","medium"),d.get("stage","backlog"),
+                 ts(),d.get("due",""),d.get("pct",0),json.dumps(d.get("comments",[])),
+                 d.get("team_id",""),d.get("parent_id",""),d.get("story_points",0),
+                 d.get("sprint",""),d.get("task_type","task"),json.dumps(d.get("labels",[]))))
+            creator=db.execute("SELECT name FROM users WHERE id=?",(session["user_id"],)).fetchone()
+            cname=creator["name"] if creator else "Someone"
+            base_ts=int(datetime.now().timestamp()*1000)
+            if d.get("assignee") and d["assignee"]!=session["user_id"]:
+                nid=f"n{base_ts}"
+                db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                           (nid,wid(),"task_assigned",f"{cname} assigned you to '{d['title']}'",d["assignee"],0,ts(),tid,"task"))
+                assignee_user=db.execute("SELECT name,email FROM users WHERE id=?",(d["assignee"],)).fetchone()
+                if assignee_user and assignee_user["email"]:
+                    threading.Thread(target=send_task_assigned_email,
+                        args=(assignee_user["email"],assignee_user["name"],d["title"],cname,tid,wid()),
                         daemon=True).start()
-        t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
-        if d.get("project"):
-            assignee_name=""
-            if d.get("assignee"):
-                au=db.execute("SELECT name FROM users WHERE id=?",(d["assignee"],)).fetchone()
-                if au: assignee_name=f" → assigned to {au['name']}"
-            sysmid=f"m{base_ts+1}"
-            msg=f"📋 **{cname}** created task **{d['title']}**{assignee_name} [{d.get('priority','medium').title()}]"
-            db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
-                       (sysmid,wid(),"system",d["project"],msg,ts(),1))
-        return jsonify(dict(t))
+                threading.Thread(target=push_notification_to_user,
+                    args=(db, d["assignee"], f"✅ New task assigned: {d['title']}",
+                          f"{cname} assigned you this task [{d.get('priority','medium')}]", "/"),
+                    daemon=True).start()
+            if d.get("project"):
+                proj=db.execute("SELECT name,members FROM projects WHERE id=? AND workspace_id=?",(d["project"],wid())).fetchone()
+                if proj:
+                    try:
+                        members=json.loads(proj["members"] or "[]")
+                    except: members=[]
+                    for i,uid in enumerate(members):
+                        if uid==session["user_id"] or uid==d.get("assignee"): continue
+                        nid2=f"n{base_ts+10+i}"
+                        db.execute("INSERT INTO notifications(id,workspace_id,type,content,user_id,read,ts,entity_id,entity_type) VALUES (?,?,?,?,?,?,?,?,?)",
+                                   (nid2,wid(),"task_assigned",f"{cname} created task '{d['title']}' in {proj['name']}",uid,0,ts(),tid,"task"))
+                        threading.Thread(target=push_notification_to_user,
+                            args=(db, uid, f"📋 New task in {proj['name']}",
+                                  f"{cname} created '{d['title']}'", "/"),
+                            daemon=True).start()
+            t=db.execute("SELECT * FROM tasks WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()
+            if not t:
+                db.execute("ROLLBACK")
+                return jsonify({"error":"Failed to create task"}),500
+            if d.get("project"):
+                assignee_name=""
+                if d.get("assignee"):
+                    au=db.execute("SELECT name FROM users WHERE id=?",(d["assignee"],)).fetchone()
+                    if au: assignee_name=f" → assigned to {au['name']}"
+                sysmid=f"m{base_ts+1}"
+                msg=f"📋 **{cname}** created task **{d['title']}**{assignee_name} [{d.get('priority','medium').title()}]"
+                db.execute("INSERT INTO messages VALUES (?,?,?,?,?,?,?)",
+                           (sysmid,wid(),"system",d["project"],msg,ts(),1))
+            db.execute("COMMIT")
+            return jsonify(dict(t))
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
 
 
 @app.route("/api/tasks/<tid>/events", methods=["GET"])
@@ -3069,11 +3092,14 @@ IMPORTANT: Always be helpful and concise. When performing actions, explain what 
             with get_db() as db:
                 if atype=="create_task":
                     tid=next_task_id(db,wid())
-                    db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                               (tid,wid(),act.get("title","New Task"),act.get("description",""),
-                                act.get("project",""),act.get("assignee",""),
-                                act.get("priority","medium"),act.get("stage","backlog"),
-                                ts(),act.get("due",""),0,"[]"))
+                    db.execute(
+                        "INSERT INTO tasks (id,workspace_id,title,description,project,assignee,priority,stage,"
+                        "created,due,pct,comments,team_id,parent_id,story_points,sprint,task_type,labels) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (tid,wid(),act.get("title","New Task"),act.get("description",""),
+                         act.get("project",""),act.get("assignee",""),
+                         act.get("priority","medium"),act.get("stage","backlog"),
+                         ts(),act.get("due",""),0,"[]","","",0,"","task","[]"))
                     action_results.append({"type":"create_task","id":tid,"title":act.get("title")})
                 elif atype=="update_task":
                     tid=act.get("task_id","")
@@ -3433,9 +3459,12 @@ def import_csv():
                     if u: assignee_id = u["id"]
                     else: assignee_id = ""
                 tid = next_task_id(db, wid())
-                db.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                           (tid, wid(), title, row.get("description",""), proj_id,
-                            assignee_id, pri, stage, ts(), due, pct, "[]"))
+                db.execute(
+                    "INSERT INTO tasks (id,workspace_id,title,description,project,assignee,priority,stage,"
+                    "created,due,pct,comments,team_id,parent_id,story_points,sprint,task_type,labels) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (tid, wid(), title, row.get("description",""), proj_id,
+                     assignee_id, pri, stage, ts(), due, pct, "[]","","",0,"","task","[]"))
                 created_tasks += 1
             except Exception as e:
                 errors.append(f"Row {i+2}: {e}")
