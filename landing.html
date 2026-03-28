@@ -1179,65 +1179,106 @@ footer{border-top:1px solid var(--b1);padding:64px 48px 40px;background:var(--bg
           <div class="mod-feat"><div class="mod-feat-dot" style="background:#ff9f0a"></div>Workspace-isolated — no cross-workspace leakage</div>
         </div>
       </div>
-      <div class="mod-visual reveal stagger-2">
-        <div style="font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px">Team Vault — Acme Corp</div>
-        <!-- Category pills -->
-        <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-          <span style="font-size:10px;padding:3px 10px;border-radius:980px;background:rgba(90,140,255,.12);color:#5a8cff;border:1px solid rgba(90,140,255,.25);font-weight:700">API Keys</span>
-          <span style="font-size:10px;padding:3px 10px;border-radius:980px;background:rgba(168,85,247,.08);color:var(--tx3);border:1px solid var(--b1);font-weight:600">DB Creds</span>
-          <span style="font-size:10px;padding:3px 10px;border-radius:980px;background:rgba(168,85,247,.08);color:var(--tx3);border:1px solid var(--b1);font-weight:600">SSH</span>
-          <span style="font-size:10px;padding:3px 10px;border-radius:980px;background:rgba(168,85,247,.08);color:var(--tx3);border:1px solid var(--b1);font-weight:600">OAuth</span>
-        </div>
-        <!-- Vault entries -->
-        <div style="display:flex;flex-direction:column;gap:7px">
-          <div style="background:var(--bg4);border:1px solid var(--b1);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:10px">
-            <div style="width:28px;height:28px;border-radius:7px;background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🔑</div>
-            <div style="flex:1;overflow:hidden">
-              <div style="font-size:12px;font-weight:700;color:var(--tx)">Anthropic API Key</div>
-              <div style="font-family:monospace;font-size:11px;color:var(--tx3);letter-spacing:.08em">sk-ant-••••••••••••••••••••</div>
-            </div>
-            <div style="display:flex;gap:5px">
-              <div style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--b1);color:var(--tx3);cursor:pointer">👁</div>
-              <div style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--b1);color:var(--tx3);cursor:pointer">📋</div>
-            </div>
+      <div class="mod-visual reveal stagger-2" style="padding:0;overflow:hidden;background:var(--bg3);">
+        <!-- Vault header bar -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--b1);background:rgba(0,0,0,.25)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#a855f7,#5a8cff);display:flex;align-items:center;justify-content:center;font-size:11px">🔒</div>
+            <span style="font-family:var(--font);font-size:13px;font-weight:800;color:var(--tx)">Team Vault</span>
+            <span style="font-size:10px;background:rgba(168,85,247,.12);color:#a855f7;border:1px solid rgba(168,85,247,.25);padding:2px 8px;border-radius:980px;font-weight:700">AES-256</span>
           </div>
-          <div style="background:var(--bg4);border:1px solid var(--b1);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:10px">
-            <div style="width:28px;height:28px;border-radius:7px;background:rgba(48,209,88,.1);border:1px solid rgba(48,209,88,.2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🗄️</div>
-            <div style="flex:1;overflow:hidden">
-              <div style="font-size:12px;font-weight:700;color:var(--tx)">Production DB Password</div>
-              <div style="font-family:monospace;font-size:11px;color:var(--tx3);letter-spacing:.08em">••••••••••••••••</div>
-            </div>
-            <div style="display:flex;gap:5px">
-              <div style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--b1);color:var(--tx3);cursor:pointer">👁</div>
-              <div style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--b1);color:var(--tx3);cursor:pointer">📋</div>
-            </div>
-          </div>
-          <div style="background:var(--bg4);border:1px solid var(--b1);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:10px">
-            <div style="width:28px;height:28px;border-radius:7px;background:rgba(255,214,10,.08);border:1px solid rgba(255,214,10,.2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🔐</div>
-            <div style="flex:1;overflow:hidden">
-              <div style="font-size:12px;font-weight:700;color:var(--tx)">AWS Secret Access Key</div>
-              <div style="font-family:monospace;font-size:11px;color:var(--tx3);letter-spacing:.08em">AKIA••••••••••••••••</div>
-            </div>
-            <div style="display:flex;gap:5px">
-              <div style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--b1);color:var(--tx3);cursor:pointer">👁</div>
-              <div style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--b1);color:var(--tx3);cursor:pointer">📋</div>
-            </div>
-          </div>
-          <div style="background:var(--bg4);border:1px solid rgba(168,85,247,.2);border-radius:9px;padding:11px 13px;display:flex;align-items:center;gap:10px">
-            <div style="width:28px;height:28px;border-radius:7px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🔒</div>
-            <div style="flex:1;overflow:hidden">
-              <div style="font-size:12px;font-weight:700;color:var(--tx)">Stripe Secret Key</div>
-              <div style="font-family:monospace;font-size:11px;color:#a855f7;letter-spacing:.08em">sk_live_••••••••••••••••</div>
-            </div>
-            <div style="display:flex;gap:5px">
-              <div style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(168,85,247,.3);color:#a855f7;cursor:pointer;background:rgba(168,85,247,.08)">👁 Revealed</div>
-            </div>
+          <div style="font-size:11px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:5px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;box-shadow:0 0 6px var(--green)"></span>Encrypted
           </div>
         </div>
-        <!-- Audit footer -->
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;font-size:11px">
-          <span style="color:var(--tx3)">4 secrets · Last accessed 2m ago</span>
-          <span style="color:var(--blue);cursor:pointer;font-weight:600">View audit log →</span>
+        <!-- Category filter tabs -->
+        <div style="display:flex;gap:0;border-bottom:1px solid var(--b1);background:rgba(0,0,0,.15);overflow-x:auto">
+          <div style="padding:8px 14px;font-size:11px;font-weight:700;color:#5a8cff;border-bottom:2px solid #5a8cff;white-space:nowrap;cursor:pointer">All (4)</div>
+          <div style="padding:8px 14px;font-size:11px;font-weight:600;color:var(--tx3);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer">🔑 API Keys</div>
+          <div style="padding:8px 14px;font-size:11px;font-weight:600;color:var(--tx3);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer">🗄️ DB Creds</div>
+          <div style="padding:8px 14px;font-size:11px;font-weight:600;color:var(--tx3);border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer">🔐 SSH</div>
+        </div>
+        <!-- Secret entries -->
+        <div style="display:flex;flex-direction:column;gap:0;padding:10px 14px">
+          <!-- Entry 1 — masked -->
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(90,140,255,.12);border:1px solid rgba(90,140,255,.2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🔑</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:2px">Anthropic API Key</div>
+              <div style="font-family:monospace;font-size:11px;color:var(--tx3);letter-spacing:.06em">sk-ant-api03-<span style="color:var(--tx3)">••••••••••••••••</span></div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--tx2);cursor:pointer;font-family:var(--body)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Reveal
+              </button>
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--tx2);cursor:pointer;font-family:var(--body)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy
+              </button>
+            </div>
+          </div>
+          <!-- Entry 2 — masked -->
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(48,209,88,.1);border:1px solid rgba(48,209,88,.2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🗄️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:2px">Production DB Password</div>
+              <div style="font-family:monospace;font-size:11px;color:var(--tx3);letter-spacing:.06em">postgres://<span style="color:var(--tx3)">••••••••••••</span>@db.acme.io</div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--tx2);cursor:pointer;font-family:var(--body)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Reveal
+              </button>
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--tx2);cursor:pointer;font-family:var(--body)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy
+              </button>
+            </div>
+          </div>
+          <!-- Entry 3 — REVEALED state, highlighted -->
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);background:rgba(168,85,247,.04);margin:0 -14px;padding-left:14px;padding-right:14px;border-left:2px solid #a855f7">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.25);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">💳</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+                <span style="font-size:12px;font-weight:700;color:var(--tx)">Stripe Secret Key</span>
+                <span style="font-size:9px;font-weight:700;background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3);padding:1px 6px;border-radius:4px">REVEALED</span>
+              </div>
+              <div style="font-family:monospace;font-size:11px;color:#a855f7;letter-spacing:.06em">sk_live_4xKj9mP2nQ8rT1wB</div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid rgba(168,85,247,.3);background:rgba(168,85,247,.1);color:#a855f7;cursor:pointer;font-family:var(--body)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>Hide
+              </button>
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid rgba(48,209,88,.3);background:rgba(48,209,88,.1);color:var(--green);cursor:pointer;font-family:var(--body)">✓ Copied</button>
+            </div>
+          </div>
+          <!-- Entry 4 — AWS -->
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0">
+            <div style="width:30px;height:30px;border-radius:8px;background:rgba(255,214,10,.08);border:1px solid rgba(255,214,10,.2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">☁️</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;color:var(--tx);margin-bottom:2px">AWS Secret Access Key</div>
+              <div style="font-family:monospace;font-size:11px;color:var(--tx3);letter-spacing:.06em">AKIA<span style="color:var(--tx3)">••••••••••••••••</span></div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--tx2);cursor:pointer;font-family:var(--body)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Reveal
+              </button>
+              <button style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid var(--b2);background:transparent;color:var(--tx2);cursor:pointer;font-family:var(--body)">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Audit log strip + Add button -->
+        <div style="border-top:1px solid var(--b1);padding:10px 14px;background:rgba(0,0,0,.2);display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--tx3)">
+              <span style="width:5px;height:5px;border-radius:50%;background:#a855f7;flex-shrink:0"></span>
+              <span><b style="color:var(--tx2)">Arjun C.</b> revealed Stripe Key · 2m ago</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--tx3)">
+              <span style="width:5px;height:5px;border-radius:50%;background:#5a8cff;flex-shrink:0"></span>
+              <span><b style="color:var(--tx2)">Bharat M.</b> copied DB Password · 18m ago</span>
+            </div>
+          </div>
+          <button style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:6px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#a855f7,#5a8cff);color:#fff;cursor:pointer;font-family:var(--font)">+ Add Secret</button>
         </div>
       </div>
     </div>
