@@ -6,7 +6,7 @@ Multi-tenant workspaces | AI Assistant | Stage Dropdown | Direct Messages
 import os, sys, json, hashlib, secrets, random, urllib.request, urllib.error
 import socket, threading, time, webbrowser, mimetypes, base64, smtplib
 import re, struct, traceback, hmac, math, zlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 try:
     import bcrypt as _bcrypt
@@ -224,6 +224,9 @@ def get_secret_key():
 
 app = Flask(__name__)
 app.secret_key = get_secret_key()
+APP_STARTED_MONOTONIC = time.monotonic()
+APP_VERSION = os.environ.get("APP_VERSION", "4.0")
+HEALTH_INCLUDE_ERROR_DETAILS = os.environ.get("HEALTH_INCLUDE_ERROR_DETAILS", "").lower() in ("1", "true", "on")
 _is_https = os.environ.get("HTTPS","").lower() in ("1","true","on") or              os.environ.get("RAILWAY_ENVIRONMENT","") != "" or              os.environ.get("RENDER","") != ""
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",SESSION_COOKIE_HTTPONLY=True,
@@ -3349,11 +3352,28 @@ def import_csv():
 # ── Serve ─────────────────────────────────────────────────────────────────────
 @app.route("/health")
 def health():
+    now = datetime.now(timezone.utc)
+    uptime_seconds = int(time.monotonic() - APP_STARTED_MONOTONIC)
+    response_payload = {
+        "status": "ok",
+        "service": "ProjectFlow",
+        "version": APP_VERSION,
+        "timestamp": now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "uptime_seconds": uptime_seconds,
+    }
     try:
-        with get_db() as db: db.execute("SELECT 1")
-        return jsonify({"status":"ok"}), 200
+        db_check_started = time.perf_counter()
+        with get_db() as db:
+            db.execute("SELECT 1")
+        db_latency_ms = round((time.perf_counter() - db_check_started) * 1000, 2)
+        response_payload["database"] = {"status": "ok", "latency_ms": db_latency_ms}
+        return jsonify(response_payload), 200
     except Exception as e:
-        return jsonify({"status":"error","detail":str(e)}), 500
+        response_payload["status"] = "error"
+        response_payload["database"] = {"status": "error"}
+        if HEALTH_INCLUDE_ERROR_DETAILS:
+            response_payload["database"]["detail"] = str(e)
+        return jsonify(response_payload), 500
 
 @app.route("/api/auth/emergency-reset-2fa", methods=["POST"])
 def emergency_reset_2fa():
