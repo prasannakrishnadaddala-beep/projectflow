@@ -188,20 +188,11 @@ tr:hover td{background:rgba(255,255,255,.018)}
 .back-btn:hover{border-color:var(--b2);color:var(--tx)}
 
 /* TOAST */
-.toast-stack-admin{position:fixed;bottom:22px;right:22px;z-index:9000;display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none;max-width:360px;width:360px}
-.toast{pointer-events:all;display:flex;align-items:center;gap:10px;padding:10px 12px 10px 13px;border-radius:11px;border:1px solid var(--b2);background:var(--bg3);box-shadow:0 6px 28px rgba(0,0,0,.45);position:relative;overflow:hidden;opacity:0;transform:translateX(80px);transition:opacity .28s cubic-bezier(.34,1.4,.64,1),transform .28s cubic-bezier(.34,1.4,.64,1)}
-.toast.show{opacity:1;transform:translateX(0)}
-.toast.hiding{opacity:0;transform:translateX(80px);transition:opacity .2s ease,transform .2s ease}
-.toast-accent-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:11px 0 0 11px}
-.toast-prog-bar{position:absolute;bottom:0;left:0;height:2px;transition:width .1s linear}
-.toast-a-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
-.toast-a-lines{flex:1;min-width:0}
-.toast-a-actor{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin-bottom:1px}
-.toast-a-msg{font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.toast-a-sub{font-size:11px;color:var(--tx3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.toast-a-time{font-size:10px;color:var(--tx3);flex-shrink:0;white-space:nowrap}
-.toast-a-close{background:none;border:none;color:var(--tx3);font-size:11px;cursor:pointer;padding:2px 5px;border-radius:4px;transition:background .12s;flex-shrink:0;line-height:1}
-.toast-a-close:hover{background:var(--b1);color:var(--tx)}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--bg3);border:1px solid var(--b2);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--tx);z-index:9000;transform:translateY(80px);opacity:0;transition:all .3s;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.tok{border-color:rgba(48,209,88,.3);color:var(--green)}
+.toast.terr{border-color:rgba(255,69,58,.3);color:var(--red)}
+.toast.twrn{border-color:rgba(255,159,10,.3);color:var(--orange)}
 
 /* EMPTY/LOADING */
 .empty{text-align:center;padding:60px 20px;color:var(--tx3)}
@@ -326,7 +317,7 @@ tr:hover td{background:rgba(255,255,255,.018)}
   </div>
 </div>
 
-<div class="toast-stack-admin" id="toast-stack"></div>
+<div class="toast" id="toast"></div>
 
 <script>
 'use strict';
@@ -334,6 +325,7 @@ let TOK = sessionStorage.getItem('v_atk') || '';
 let EMAIL = sessionStorage.getItem('v_ae') || '';
 let curPage = 'dashboard';
 let mCb = null;
+let _ttimer = null;
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (async function boot(){
@@ -463,52 +455,13 @@ function showPage(p){
   ({dashboard,workspaces,users,security,billing,audit,health,vault})[p]?.();
 }
 
-const _TOAST_CFG={
-  ok:  {color:'#22c55e',bg:'rgba(34,197,94,.14)',bar:'#22c55e',icon:'✓'},
-  err: {color:'#ef4444',bg:'rgba(239,68,68,.14)', bar:'#ef4444',icon:'✕'},
-  warn:{color:'#f59e0b',bg:'rgba(245,158,11,.14)',bar:'#f59e0b',icon:'!'},
-};
-function toast(msg, type='ok', sub=''){
-  const cfg=_TOAST_CFG[type]||_TOAST_CFG.ok;
-  const stack=document.getElementById('toast-stack');
-  const id='at'+Date.now();
-  const actor=EMAIL?'Admin · '+EMAIL:'Super Admin';
-  const now=new Date();
-  const timeStr=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  const div=document.createElement('div');
-  div.className='toast';
-  div.id=id;
-  div.innerHTML=`
-    <div class="toast-accent-bar" style="background:${cfg.color}"></div>
-    <div class="toast-a-icon" style="background:${cfg.bg};color:${cfg.color}">${cfg.icon}</div>
-    <div class="toast-a-lines">
-      <div class="toast-a-actor">${esc(actor)}</div>
-      <div class="toast-a-msg">${esc(msg)}</div>
-      ${sub?`<div class="toast-a-sub">${esc(sub)}</div>`:''}
-    </div>
-    <span class="toast-a-time">${timeStr}</span>
-    <button class="toast-a-close" onclick="dismissToast('${id}')">✕</button>
-    <div class="toast-prog-bar" id="tp-${id}" style="background:${cfg.bar};width:100%"></div>
-  `;
-  stack.appendChild(div);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>div.classList.add('show')));
-  const dur=4000,start=Date.now();
-  const tick=setInterval(()=>{
-    const pct=Math.max(0,100-((Date.now()-start)/dur*100));
-    const bar=document.getElementById('tp-'+id);
-    if(bar)bar.style.width=pct+'%';
-    if(pct<=0){clearInterval(tick);dismissToast(id);}
-  },80);
-  div._tick=tick;
-  const all=stack.querySelectorAll('.toast');
-  if(all.length>5)dismissToast(all[0].id);
-}
-function dismissToast(id){
-  const el=document.getElementById(id);
-  if(!el||el.classList.contains('hiding'))return;
-  if(el._tick)clearInterval(el._tick);
-  el.classList.add('hiding');
-  setTimeout(()=>el.remove(),220);
+function toast(msg, type='ok'){
+  const t = document.getElementById('toast');
+  const icons = {ok:'✓',err:'✕',warn:'⚠'};
+  t.textContent = (icons[type]||'•')+' '+msg;
+  t.className = `toast t${type} show`;
+  clearTimeout(_ttimer);
+  _ttimer = setTimeout(()=>t.classList.remove('show'), 3800);
 }
 
 function openModal(title, desc, formHtml, btnLabel, btnStyle, cb){
@@ -1464,6 +1417,7 @@ function vaultParseRows(raw){
 }
 
 
+function addUserToWorkspaceModal(wsId){
   openModal('Add User to Workspace','Create a new user account directly in this workspace.',
     `<div class="mfg"><label>Full Name</label><input id="m-name" placeholder="e.g. Priya Sharma"/></div>
      <div class="mfg"><label>Email</label><input id="m-email" type="email" placeholder="user@company.com"/></div>

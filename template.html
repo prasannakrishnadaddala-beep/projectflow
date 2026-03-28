@@ -668,34 +668,24 @@ textarea.inp{resize:vertical;min-height:66px;line-height:1.5}
 .section-count{font-size:11px;font-weight:600;color:var(--tx3);padding:2px 8px;border-radius:100px;background:var(--sf2);border:1px solid var(--bd)}
 
 /* ─── Toast system ─────────────────────────────────────────────── */
-.toast-stack{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:356px;width:356px}
+.toast-stack{position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:9px;pointer-events:none;max-width:360px;width:360px}
 .toast{
-  pointer-events:all;display:flex;align-items:flex-start;gap:10px;
-  padding:11px 12px 11px 14px;border-radius:13px;border:1px solid var(--bd);
+  pointer-events:all;display:flex;align-items:flex-start;gap:11px;
+  padding:13px 14px;border-radius:16px;border:1px solid var(--bd);
   background:var(--sf);
-  box-shadow:0 4px 24px rgba(0,0,0,.45),0 1px 4px rgba(0,0,0,.2);
-  cursor:pointer;transition:transform .18s,box-shadow .18s;position:relative;overflow:hidden;
-  backdrop-filter:blur(18px);
+  box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 0 1px rgba(90,94,247,0.1);
+  cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+  backdrop-filter:blur(20px);
 }
-.lm .toast{box-shadow:0 4px 20px rgba(0,0,0,.1),0 1px 3px rgba(0,0,0,.06)}
-.toast:hover{transform:translateX(-3px);box-shadow:0 8px 32px rgba(0,0,0,.55)}
-.lm .toast:hover{box-shadow:0 6px 24px rgba(0,0,0,.14)}
-/* left accent bar */
-.toast-accent{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:13px 0 0 13px}
-/* progress bar */
-.toast-bar{position:absolute;bottom:0;left:0;height:2px;border-radius:0;transition:width linear}
-/* type header row */
-.toast-hdr{display:flex;align-items:center;gap:5px;margin-bottom:3px}
-.toast-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.toast-type{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
-/* icon */
-.toast-icon{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:1px}
-/* body */
+.lm .toast{box-shadow:0 8px 32px rgba(0,0,0,.12),0 0 0 1px rgba(90,94,247,0.08)}
+.toast:hover{transform:translateX(-4px);box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.toast-bar{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 16px 16px;transition:width linear}
+.toast-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .toast-body{flex:1;min-width:0}
-.toast-title{font-size:12px;font-weight:700;color:var(--tx);line-height:1.35;margin-bottom:2px}
+.toast-title{font-size:12px;font-weight:700;color:var(--tx);line-height:1.3;margin-bottom:2px}
 .toast-msg{font-size:11px;color:var(--tx2);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.toast-time{font-size:9.5px;color:var(--tx3);margin-top:4px;display:flex;align-items:center;gap:3px}
-.toast-close{width:18px;height:18px;border-radius:5px;border:none;background:transparent;color:var(--tx3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;transition:all .12s;padding:0;align-self:flex-start;margin-top:1px}
+.toast-time{font-size:9px;color:var(--tx3);margin-top:3px;font-family:monospace}
+.toast-close{width:20px;height:20px;border-radius:6px;border:none;background:transparent;color:var(--tx3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;transition:all .12s;padding:0}
 .toast-close:hover{background:var(--sf2);color:var(--tx)}
 
 /* ─── Utility classes ──────────────────────────────────────────── */
@@ -6401,16 +6391,7 @@ function AIAssistant({cu,projects,tasks,users}){
 
 /* ─── Toast System ────────────────────────────────────────────────────────── */
 const TOAST_CFG={
-  dm:           {icon:'💬',color:'var(--ac)',  bg:'var(--ac3)',              label:'Message',      nav:'dm'},
-  call:         {icon:'📞',color:'var(--gn)',  bg:'rgba(62,207,110,.12)',    label:'Call',         nav:'dashboard'},
-  task_assigned:{icon:'✅',color:'var(--cy)',  bg:'rgba(34,211,238,.1)',     label:'Task assigned',nav:'tasks'},
-  status_change:{icon:'🔄',color:'var(--pu)',  bg:'rgba(167,139,250,.1)',    label:'Status update',nav:'tasks'},
-  comment:      {icon:'💬',color:'var(--pu)',  bg:'rgba(167,139,250,.1)',    label:'Comment',      nav:'tasks'},
-  deadline:     {icon:'⏰',color:'var(--am)',  bg:'rgba(245,158,11,.1)',     label:'Deadline',     nav:'tasks'},
-  project_added:{icon:'📁',color:'var(--or)',  bg:'rgba(251,146,60,.1)',     label:'Project',      nav:'projects'},
-  reminder:     {icon:'🔔',color:'var(--rd)',  bg:'rgba(255,68,68,.1)',      label:'Reminder',     nav:'reminders'},
-  message:      {icon:'#️⃣',color:'#a78bfa',  bg:'rgba(167,139,250,.1)',    label:'Channel',      nav:'messages'},
-  default:      {icon:'🔔',color:'var(--ac)',  bg:'var(--ac3)',              label:'Notification', nav:'notifs'},
+  dm:      {icon:'💬', color:'var(--ac)', bg:'var(--ac3)', nav:'dm'}, call:    {icon:'📞', color:'var(--gn)', bg:'rgba(62,207,110,.12)', nav:'dashboard'}, task_assigned:{icon:'✅',color:'var(--cy)', bg:'rgba(34,211,238,.1)', nav:'tasks'}, status_change:{icon:'🔄',color:'var(--pu)', bg:'rgba(167,139,250,.1)',nav:'tasks'}, comment: {icon:'💬', color:'var(--pu)', bg:'rgba(167,139,250,.1)', nav:'tasks'}, deadline:{icon:'⏰', color:'var(--am)', bg:'rgba(245,158,11,.1)', nav:'tasks'}, project_added:{icon:'📁',color:'var(--or)',bg:'rgba(251,146,60,.1)',nav:'projects'}, reminder:{icon:'⏰', color:'var(--rd)', bg:'rgba(255,68,68,.1)', nav:'reminders'}, message: {icon:'#️⃣', color:'#a78bfa', bg:'rgba(167,139,250,.1)', nav:'messages'}, default: {icon:'🔔', color:'var(--ac)', bg:'var(--ac3)', nav:'notifs'},
 };
 
 function ToastStack({toasts,onDismiss,onNav}){
@@ -6421,20 +6402,12 @@ function ToastStack({toasts,onDismiss,onNav}){
         return html`
           <div key=${t.id} class=${'toast'+(t.leaving?' leaving':'')}
             onClick=${()=>{onDismiss(t.id);onNav&&onNav(cfg.nav);}}>
-            <div class="toast-accent" style=${{background:cfg.color}}></div>
             <div class="toast-bar" style=${{width:t.progress+'%',background:cfg.color}}></div>
             <div class="toast-icon" style=${{background:cfg.bg,color:cfg.color}}>${cfg.icon}</div>
             <div class="toast-body">
-              <div class="toast-hdr">
-                <span class="toast-dot" style=${{background:cfg.color}}></span>
-                <span class="toast-type" style=${{color:cfg.color}}>${cfg.label}</span>
-              </div>
               <div class="toast-title">${t.title}</div>
               <div class="toast-msg">${t.body}</div>
-              <div class="toast-time">
-                <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><circle cx="4.5" cy="4.5" r="3.5" stroke="currentColor" stroke-width="1"/><path d="M4.5 2.5V4.5L5.8 5.5" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>
-                ${t.timeStr}
-              </div>
+              <div class="toast-time">${t.timeStr}</div>
             </div>
             <button class="toast-close" onClick=${e=>{e.stopPropagation();onDismiss(t.id);}}>✕</button>
           </div>`;
@@ -6698,7 +6671,12 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
           <button class=${'btn '+(showCompleted?'bp':'bg')} style=${{fontSize:12}} onClick=${()=>setShowCompleted(p=>!p)}>
             ${showCompleted?'Hide Completed':'Show Completed ('+completed.length+')'}
           </button>
-          <button class="btn bp" style=${{fontSize:12}} onClick=${()=>setShowAdd(true)}>+ Add Reminder</button>
+          <button class="btn bp" style=${{fontSize:12}} onClick=${()=>{
+            const now=new Date();
+            setAddDate(now.toISOString().split('T')[0]);
+            setAddTime(now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0'));
+            setShowAdd(true);
+          }}>+ Add Reminder</button>
         </div>
       </div>
 
@@ -6792,7 +6770,7 @@ function RemindersView({cu,tasks,projects,onSetReminder,onReload,initialView}){
               <div style=${{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
                 <div>
                   <label class="lbl">Date <span style=${{color:'var(--rd)',fontWeight:600}}>*</span></label>
-                  <input class="inp" type="date" value=${addDate} onChange=${e=>setAddDate(e.target.value)} min=${new Date().toISOString().split('T')[0]} onFocus=${e=>{if(!e.target.value)e.target.value=new Date().toISOString().split('T')[0];}}/>
+                  <input class="inp" type="date" value=${addDate} onChange=${e=>setAddDate(e.target.value)} min=${new Date().toISOString().split('T')[0]}/>
                 </div>
                 <div>
                   <label class="lbl">Time <span style=${{color:'var(--rd)',fontWeight:600}}>*</span></label>
@@ -8746,33 +8724,7 @@ function App(){
           addToast(n.type,title,n.content||'');
           showBrowserNotif(title,n.content||'',()=>{
             window.focus();
-            if(n.type==='dm'){
-              const sid=n.entity_id||n.sender_id||n.sender;
-              if(sid)setDmTargetUser(sid);
-              _setView('dm');
-            }
-            else if(n.entity_id && n.entity_type==='task'){
-              _setView('tasks');
-              setTimeout(()=>{
-                const taskEl=document.querySelector(`[data-task-id="${n.entity_id}"]`);
-                if(taskEl)taskEl.click();
-              },100);
-            }
-            else if(n.entity_id && n.entity_type==='project'){
-              setActiveProject(n.entity_id);
-              _setView('projects');
-            }
-            else if(n.entity_id && n.entity_type==='ticket'){
-              _setView('tickets');
-              setTimeout(()=>{
-                const ticketEl=document.querySelector(`[data-ticket-id="${n.entity_id}"]`);
-                if(ticketEl)ticketEl.click();
-              },100);
-            }
-            else if(n.entity_type==='message' && n.entity_id){
-              setActiveProject(n.entity_id);
-              _setView('messages');
-            }
+            if(n.type==='dm'){const sid=n.sender_id||n.sender;if(sid)setDmTargetUser(sid);_setView('dm');}
             else{_setView(nav);}
           },{tag:'notif-'+n.id});
           playSound('notif');
@@ -8844,7 +8796,7 @@ function App(){
         due.forEach(r=>{
           addToast('reminder','⏰ Reminder: '+r.task_title,'Click to view');
           showBrowserNotif('⏰ '+r.task_title,'Reminder is due now!',()=>{
-            setView('reminders');
+            _setView('reminders');
             if(window.electronAPI){window.electronAPI.focusWindow();}else{window.focus();}
           },{tag:'rem-'+r.id,requireInteraction:true});
           playSound('reminder');
@@ -8864,7 +8816,7 @@ function App(){
               firedEarlyRef.current.add(earlyKey);
               addToast('reminder','⏰ Coming up in '+minsBefore+'min',r.task_title);
               showBrowserNotif('⏰ Reminder in '+minsBefore+' min',r.task_title,()=>{
-                setView('reminders');
+                _setView('reminders');
                 if(window.electronAPI){window.electronAPI.focusWindow();}else{window.focus();}
               },{tag:earlyKey,requireInteraction:false});
               playSound('reminder');
@@ -8961,7 +8913,7 @@ function App(){
         />
       <div style=${{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
         <${Header} title=${info.title} sub=${info.sub} dark=${dark} setDark=${setDark} extra=${extra}
-          cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>setView('reminders')}
+          cu=${cu} setCu=${setCu} upcomingReminders=${upcomingReminders} onViewReminders=${()=>_setView('reminders')}
           notifs=${data.notifs}
           activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}
           onNotifClick=${async n=>{
@@ -8993,7 +8945,7 @@ function App(){
         <div style=${{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
           <${ErrorBoundary}>
             <div key=${baseView+'-'+(teamCtx||'all')} class="page-enter" style=${{flex:1,overflow: baseView==='vault'?'hidden':'hidden',display:'flex',flexDirection:'column',height:'100%'}}>
-            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
+            ${baseView==='dashboard'?html`<${Dashboard} cu=${cu} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} onNav=${_setView} activeTeam=${activeTeam} teams=${data.teams} setTeamCtx=${setTeamCtx}/>`:null}
             ${baseView==='projects'?html`<${ProjectsView} projects=${scopedProjects} tasks=${scopedTasks} users=${data.users} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam} initialProjectId=${initialProjectId} onClearInitial=${()=>setInitialProjectId(null)}/>`:null}
             ${baseView==='tasks'?html`<${TasksView} tasks=${scopedTasks} projects=${scopedProjects} users=${scopedUsers} cu=${cu} reload=${load} onSetReminder=${t=>{setReminderTask(t);}} teams=${data.teams} activeTeam=${activeTeam}
               initialStage=${taskFilterType==='stage'?taskFilterValue:null}
@@ -9121,7 +9073,7 @@ function App(){
         </div>
       </div>`:null}
 
-    <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${setView}/>
+    <${ToastStack} toasts=${toasts} onDismiss=${dismissToast} onNav=${_setView}/>
 
     ${showNotifBanner?html`
       <div style=${{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',zIndex:9100, background:'var(--sf)',border:'1px solid rgba(90,140,255,.30)',borderRadius:18, padding:'16px 20px',boxShadow:'0 8px 40px rgba(0,0,0,.7)', display:'flex',alignItems:'flex-start',gap:14,maxWidth:440, animation:'slideUp .3s cubic-bezier(.34,1.56,.64,1)'}}>
