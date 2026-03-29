@@ -2552,7 +2552,7 @@ def team_dashboard(tid):
                 "completed":len([t for t in mtasks if t["stage"]=="completed"]),
                 "in_progress":len([t for t in mtasks if t["stage"] in ("development","in-progress","code_review","testing","uat")]),
                 "blocked":len([t for t in mtasks if t["stage"]=="blocked"]),
-                "overdue":len([t for t in mtasks if t["due"] and t["due"]<datetime.utcnow().isoformat() and t["stage"]!="completed"]),
+                "overdue":len([t for t in mtasks if t["due"] and t["due"]<now_ist().strftime("%Y-%m-%dT%H:%M:%S") and t["stage"]!="completed"]),
             })
         total=len(team_tasks)
         return jsonify({
@@ -2753,7 +2753,7 @@ def create_timelog():
         wid(),
         session["user_id"],
         d.get("team_id", "") or "",
-        d.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
+        d.get("date", now_ist().strftime("%Y-%m-%d")),
         d.get("task_name", "") or "",
         d.get("project_id", "") or "",
         d.get("task_id", "") or "",
@@ -3802,7 +3802,7 @@ def admin_api_user_reset_password(uid):
         return jsonify({"error": "Password must be at least 8 characters"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE users SET password=:p0 WHERE id=:p1", (hash_pw(pw), uid))
+            db.execute("UPDATE users SET password=? WHERE id=?", (hash_pw(pw), uid))
             db.commit()
         _audit("reset_user_password", uid, "Password reset by admin")
         return jsonify({"ok": True})
@@ -3816,8 +3816,8 @@ def admin_api_user_reset_totp(uid):
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE id=:p0",
-                {"p0": uid}
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE id=?",
+                (uid,)
             )
             db.commit()
         _audit("reset_user_totp", uid, "2FA cleared by admin")
@@ -3836,7 +3836,7 @@ def admin_api_user_change_role(uid):
         return jsonify({"error": "Invalid role"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE users SET role=:p0 WHERE id=:p1", (role, uid))
+            db.execute("UPDATE users SET role=? WHERE id=?", (role, uid))
             db.commit()
         _audit("change_user_role", uid, f"Role changed to {role}")
         return jsonify({"ok": True})
@@ -3909,7 +3909,7 @@ def admin_api_dashboard():
             try:
                 cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
                 active = db.execute(
-                    "SELECT COUNT(*) FROM users WHERE last_active > :p0", {"p0": cutoff}
+                    "SELECT COUNT(*) FROM users WHERE last_active > ?", (cutoff,)
                 ).fetchone()[0]
             except Exception:
                 active = total_users
@@ -3948,12 +3948,12 @@ def admin_api_workspace_detail(ws_id):
         return jsonify({"error": "Unauthorized"}), 401
     try:
         with get_db() as db:
-            ws = db.execute("SELECT * FROM workspaces WHERE id=:p0", {"p0": ws_id}).fetchone()
+            ws = db.execute("SELECT * FROM workspaces WHERE id=?", (ws_id,)).fetchone()
             if not ws:
                 return jsonify({"error": "Workspace not found"}), 404
             members = db.execute(
-                "SELECT id, name, email, role, created FROM users WHERE workspace_id=:p0 ORDER BY created",
-                {"p0": ws_id}
+                "SELECT id, name, email, role, created FROM users WHERE workspace_id=? ORDER BY created",
+                (ws_id,)
             ).fetchall()
         return jsonify({"workspace": dict(ws), "members": [dict(m) for m in members]})
     except Exception as e:
@@ -3982,7 +3982,7 @@ def admin_api_delete_user(uid):
         return jsonify({"error": "Unauthorized"}), 401
     try:
         with get_db() as db:
-            db.execute("DELETE FROM users WHERE id=:p0", {"p0": uid})
+            db.execute("DELETE FROM users WHERE id=?", (uid,))
             db.commit()
         _audit("delete_user", uid, "User deleted by admin")
         return jsonify({"ok": True})
@@ -4013,7 +4013,7 @@ def admin_api_set_plan():
         return jsonify({"error": "Invalid plan"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE workspaces SET plan=:p0 WHERE id=:p1", (plan, ws_id))
+            db.execute("UPDATE workspaces SET plan=? WHERE id=?", (plan, ws_id))
             db.commit()
         _audit("set_plan", ws_id, f"Plan changed to {plan}")
         return jsonify({"ok": True})
@@ -4028,7 +4028,7 @@ def admin_api_suspend_workspace():
     ws_id = data.get("workspace_id")
     try:
         with get_db() as db:
-            db.execute("UPDATE workspaces SET suspended=TRUE WHERE id=:p0", {"p0": ws_id})
+            db.execute("UPDATE workspaces SET suspended=1 WHERE id=?", (ws_id,))
             db.commit()
         _audit("suspend_workspace", ws_id, "Workspace suspended")
         return jsonify({"ok": True})
@@ -4044,7 +4044,7 @@ def admin_api_reset_invite():
     new_code = secrets.token_urlsafe(8).upper()[:8]
     try:
         with get_db() as db:
-            db.execute("UPDATE workspaces SET invite_code=:p0 WHERE id=:p1", (new_code, ws_id))
+            db.execute("UPDATE workspaces SET invite_code=? WHERE id=?", (new_code, ws_id))
             db.commit()
         _audit("reset_invite_code", ws_id, f"New code: {new_code}")
         return jsonify({"ok": True, "invite_code": new_code})
@@ -4063,10 +4063,10 @@ def admin_api_reset_all_passwords():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET password=:p0 WHERE workspace_id=:p1",
+                "UPDATE users SET password=? WHERE workspace_id=?",
                 (hash_pw(pw), ws_id)
             )
-            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
+            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=?", (ws_id,))
             count = cur.fetchone()[0]
             db.commit()
         _audit("reset_all_passwords", ws_id, f"Bulk password reset for {count} users")
@@ -4083,10 +4083,10 @@ def admin_api_reset_all_totp():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE workspace_id=:p0",
-                {"p0": ws_id}
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE workspace_id=?",
+                (ws_id,)
             )
-            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
+            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=?", (ws_id,))
             count = cur.fetchone()[0]
             db.commit()
         _audit("reset_all_totp", ws_id, f"Bulk 2FA reset for {count} users")
@@ -4104,7 +4104,7 @@ def admin_api_toggle_2fa():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE workspaces SET otp_enabled=:p0 WHERE id=:p1",
+                "UPDATE workspaces SET otp_enabled=? WHERE id=?",
                 (1 if enabled else 0, ws_id)
             )
             db.commit()
@@ -4130,7 +4130,7 @@ def admin_api_add_user():
         with get_db() as db:
             db.execute(
                 "INSERT INTO users (id, name, email, password, role, workspace_id, created) "
-                "VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)",
+                "VALUES (?,?,?,?,?,?,?)",
                 (uid, name, email, hash_pw(pw), role, ws_id, ts())
             )
             db.commit()

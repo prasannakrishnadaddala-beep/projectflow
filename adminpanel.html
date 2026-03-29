@@ -691,7 +691,7 @@ async function viewWorkspace(wsId, wsName){
       <div class="scard">
         <div class="scard-h">Quick Actions</div>
         <div class="scard-b" style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="ab suc" style="padding:8px 16px;font-size:12.5px" onclick="addUserToWs('${esc(ws.id)}')">➕ Add User</button>
+          <button class="ab suc" style="padding:8px 16px;font-size:12.5px" onclick="addUserToWorkspaceModal('${esc(ws.id)}')">➕ Add User</button>
           <button class="ab wrn" style="padding:8px 16px;font-size:12.5px" onclick="resetAllPasswords('${esc(ws.id)}','${esc(ws.name)}')">🔑 Force Password Reset (All)</button>
           <button class="ab" style="padding:8px 16px;font-size:12.5px" onclick="resetAllTOTP('${esc(ws.id)}','${esc(ws.name)}')">📱 Reset All 2FA</button>
           <button class="ab" style="padding:8px 16px;font-size:12.5px" onclick="resetInviteCode('${esc(ws.id)}')">🔄 New Invite Code</button>
