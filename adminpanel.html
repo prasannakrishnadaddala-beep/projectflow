@@ -1124,18 +1124,16 @@ function vaultLoad(){
     })
     .catch(()=>{
       _vaultOnline = false;
-      // Offline: show whatever is in localStorage (read-only)
       try { vaultData = JSON.parse(localStorage.getItem(VAULT_KEY)||'[]'); } catch(_){ vaultData=[]; }
       renderVault();
-      // Warn user clearly so they don't create cards that won't persist
-      setTimeout(()=>toast('⚠️ Vault offline — changes will NOT be saved. Reload to retry.', 'warn'), 400);
+      setTimeout(function(){ toast('⚠️ Vault is offline — new cards will NOT be saved. Reload to reconnect.', 'warn'); }, 500);
     });
 }
 
 async function vaultSave(card){
   if(!_vaultOnline){
-    // Offline — do NOT silently save to localStorage as it won't sync to server
-    toast('⚠️ Vault is offline. Reload the page to reconnect before saving.', 'warn');
+    // Offline — do NOT silently save to localStorage; it won't sync to server on reconnect
+    toast('⚠️ Vault offline. Reload the page to reconnect before saving.', 'warn');
     return;
   }
   const payload = {
@@ -1204,8 +1202,7 @@ function renderVault(){
         <div class="ph-sub">Your personal credential &amp; data store — encrypted rows stay hidden behind passwords</div>
       </div>
       <div class="ph-actions">
-        ${!_vaultOnline ? '<div style="font-size:11px;color:var(--orange);background:rgba(255,159,10,.1);border:1px solid rgba(255,159,10,.25);padding:6px 12px;border-radius:8px;margin-right:8px;">⚠️ Offline — saves disabled</div>' : ''}
-        <button class="bpri" ${!_vaultOnline ? 'disabled style="opacity:.4;cursor:not-allowed" title="Vault offline — reload to reconnect"' : ''} onclick="if(_vaultOnline)vaultNewCardModal()">+ New Card</button>
+        <button class="bpri" onclick="vaultNewCardModal()">+ New Card</button>
       </div>
     </div>
     <div class="vault-toolbar">
