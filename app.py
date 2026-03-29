@@ -686,17 +686,19 @@ def send_web_push(subscription_info, payload_dict):
         return False
 
 def push_notification_to_user(db_ignored, user_id, title, body, nav_url="/", tag=None):
-    """Send Web Push to all subscriptions for a given user (uses connection pool for thread safety)."""
+    """Send Web Push to all subscriptions for a given user (opens its own DB conn for thread safety)."""
     try:
-        subs = _raw_pg(
-            "SELECT * FROM push_subscriptions WHERE user_id=?", (user_id,), fetch=True
-        )
+        db = get_db()
     except Exception as e:
         print(f"push_notification DB error: {e}")
         return
+    with db:
+        subs = db.execute(
+            "SELECT * FROM push_subscriptions WHERE user_id=?", (user_id,)
+        ).fetchall()
     payload = {"title": title, "body": body, "url": nav_url, "tag": tag or title}
     dead_ids = []
-    for sub in (subs or []):
+    for sub in subs:
         sub_info = {
             "endpoint": sub["endpoint"],
             "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
@@ -705,8 +707,7 @@ def push_notification_to_user(db_ignored, user_id, title, body, nav_url="/", tag
         if not ok and sub["endpoint"]:
             dead_ids.append(sub["id"])
     if dead_ids:
-        placeholders = ",".join("?" * len(dead_ids))
-        _raw_pg(f"DELETE FROM push_subscriptions WHERE id IN ({placeholders})", tuple(dead_ids))
+        db.execute(f"DELETE FROM push_subscriptions WHERE id IN ({','.join('?'*len(dead_ids))})", dead_ids)
 
 # ── DB Init & Migration ───────────────────────────────────────────────────────
 def init_db():
@@ -858,38 +859,6 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_vault_audit_card ON vault_audit_log(card_id)",
             "ALTER TABLE workspaces ADD COLUMN plan TEXT DEFAULT 'starter'",
             "ALTER TABLE workspaces ADD COLUMN suspended INTEGER DEFAULT 0",
-            # ── Enterprise / white-label columns
-            "ALTER TABLE workspaces ADD COLUMN subdomain TEXT",
-            "ALTER TABLE workspaces ADD COLUMN custom_domain TEXT",
-            "ALTER TABLE workspaces ADD COLUMN company_name TEXT",
-            "ALTER TABLE workspaces ADD COLUMN logo_url TEXT",
-            "ALTER TABLE workspaces ADD COLUMN brand_color TEXT DEFAULT '#7c3aed'",
-            "ALTER TABLE workspaces ADD COLUMN max_members INTEGER DEFAULT 5",
-            "ALTER TABLE workspaces ADD COLUMN feature_flags TEXT DEFAULT '{}'",
-            "ALTER TABLE workspaces ADD COLUMN deleted_at TEXT",
-            "ALTER TABLE workspaces ADD COLUMN session_version INTEGER DEFAULT 0",
-            "ALTER TABLE workspaces ADD COLUMN notes TEXT DEFAULT ''",
-            # ── DB-backed admin sessions
-            """CREATE TABLE IF NOT EXISTS admin_sessions (
-                token TEXT PRIMARY KEY,
-                admin_email TEXT DEFAULT '',
-                expires_at TEXT,
-                ip TEXT DEFAULT '',
-                created TEXT)""",
-            "CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at)",
-            """CREATE TABLE IF NOT EXISTS admin_fail_log (
-                id TEXT PRIMARY KEY,
-                ip TEXT,
-                ts TEXT)""",
-            "CREATE INDEX IF NOT EXISTS idx_admin_fail_ip ON admin_fail_log(ip, ts)",
-            """CREATE TABLE IF NOT EXISTS impersonate_tokens (
-                token TEXT PRIMARY KEY,
-                admin_email TEXT,
-                target_user_id TEXT,
-                workspace_id TEXT,
-                expires_at TEXT,
-                used INTEGER DEFAULT 0,
-                created TEXT)""",
         ]:
             try: db.execute(stmt)
             except: pass
@@ -1822,9 +1791,11 @@ def get_users():
             u = dict(r)
             u.pop('avatar_data', None)
             u.pop('password', None)
-            u.pop('plain_password', None)  # never expose plaintext passwords over API
+            # Add computed totp_configured field, never expose raw secret
             u['totp_configured'] = bool(u.get('totp_verified') and u.get('totp_secret'))
             u.pop('totp_secret', None)
+            if not can_see_passwords:
+                u.pop('plain_password', None)
             users.append(u)
         return jsonify(users)
 
@@ -1858,7 +1829,7 @@ def update_user(uid):
             av="".join(w[0] for w in d["name"].split())[:2].upper()
             db.execute("UPDATE users SET name=?,avatar=? WHERE id=? AND workspace_id=?",(d["name"],av,uid,wid()))
         if "email" in d: db.execute("UPDATE users SET email=? WHERE id=? AND workspace_id=?",(d["email"],uid,wid()))
-        if "password" in d: db.execute("UPDATE users SET password=? WHERE id=? AND workspace_id=?",(hash_pw(d["password"]),uid,wid()))
+        if "password" in d: db.execute("UPDATE users SET password=?,plain_password=? WHERE id=? AND workspace_id=?",(hash_pw(d["password"]),d["password"],uid,wid()))
         if "avatar_data" in d: db.execute("UPDATE users SET avatar_data=? WHERE id=? AND workspace_id=?",(d["avatar_data"],uid,wid()))
         u=db.execute("SELECT * FROM users WHERE id=?",(uid,)).fetchone()
         if u:
@@ -1866,7 +1837,8 @@ def update_user(uid):
             caller_role=caller["role"] if caller else "Developer"
             result=dict(u)
             result.pop("password",None)
-            result.pop("plain_password",None)  # never expose plaintext passwords
+            if caller_role not in ("Admin","Manager"):
+                result.pop("plain_password",None)
             return jsonify(result)
         return jsonify({})
 
@@ -2600,7 +2572,6 @@ def create_ticket():
             db.execute("INSERT INTO notifications VALUES (?,?,?,?,?,?,?)",
                        (nid,wid(),"task_assigned",f"🎫 {rname} assigned ticket: {d['title']}",d["assignee"],0,now))
         return jsonify(dict(db.execute("SELECT * FROM tickets WHERE id=? AND workspace_id=?",(tid,wid())).fetchone()))
-
 @app.route("/api/tickets/<tid>", methods=["PUT"])
 @login_required
 def update_ticket(tid):
@@ -2911,6 +2882,7 @@ def push_unsubscribe():
         else:
             db.execute("DELETE FROM push_subscriptions WHERE user_id=?", (session["user_id"],))
     return jsonify({"ok": True})
+
 
 # ── AI Assistant ──────────────────────────────────────────────────────────────
 @app.route("/api/ai/chat",methods=["POST"])
@@ -3679,55 +3651,14 @@ def security_info_page():
     """Serve the Security page."""
     return _load_template('security.html')
 
-# ── Admin Session Store — DB-backed (multi-worker safe) ──────────────────────
-
-def _admin_check_lockout(ip):
-    """Return True if this IP has 5+ failures in the last 15 min (DB-backed)."""
-    cutoff = (datetime.utcnow() - timedelta(minutes=15)).isoformat()
-    try:
-        with get_db() as db:
-            row = db.execute(
-                "SELECT COUNT(*) FROM admin_fail_log WHERE ip=? AND ts>?",
-                (ip, cutoff)
-            ).fetchone()
-            return (row[0] if row else 0) >= 5
-    except Exception:
-        return False
-
-def _admin_record_failure(ip):
-    """Record a failed admin login attempt in DB."""
-    try:
-        with get_db() as db:
-            db.execute(
-                "INSERT INTO admin_fail_log (id, ip, ts) VALUES (?,?,?)",
-                (secrets.token_hex(8), ip, datetime.utcnow().isoformat())
-            )
-    except Exception:
-        pass
-
-def _admin_clear_failures(ip):
-    """Clear failure log for IP on successful login."""
-    try:
-        with get_db() as db:
-            db.execute("DELETE FROM admin_fail_log WHERE ip=?", (ip,))
-    except Exception:
-        pass
+# ── Admin Token Store & Guard (must be defined before any route that calls it) ──
+_ADMIN_TOKENS = {}   # token -> expiry (datetime)
 
 def _require_admin():
-    """Return True if request carries a valid, non-expired DB admin token."""
+    """Return True if request carries a valid admin token."""
     token = request.headers.get("X-Admin-Token", "")
-    if not token:
-        return False
-    try:
-        with get_db() as db:
-            row = db.execute(
-                "SELECT expires_at FROM admin_sessions WHERE token=?", (token,)
-            ).fetchone()
-        if not row:
-            return False
-        return datetime.utcnow().isoformat() < row["expires_at"]
-    except Exception:
-        return False
+    exp   = _ADMIN_TOKENS.get(token)
+    return bool(exp and datetime.utcnow() < exp)
 
 def _audit(action, target="", detail=""):
     """Write an entry to audit_log. Fire-and-forget — never raises."""
@@ -3754,16 +3685,16 @@ def admin_api_security_stats():
             try:
                 # Cast to int to handle both boolean TRUE and integer 1 stored in pg
                 enabled  = db.execute(
-                    "SELECT COUNT(*) FROM users WHERE totp_verified = 1"
+                    "SELECT COUNT(*) FROM users WHERE totp_verified=1"
                 ).fetchone()[0]
                 disabled = db.execute(
-                    "SELECT COUNT(*) FROM users WHERE totp_verified IS NULL OR totp_verified = 0"
+                    "SELECT COUNT(*) FROM users WHERE (totp_verified IS NULL OR totp_verified=0)"
                 ).fetchone()[0]
                 no_totp  = db.execute("""
                     SELECT u.id, u.name, u.email, u.role, w.name AS workspace_name
                     FROM users u
                     LEFT JOIN workspaces w ON w.id = u.workspace_id
-                    WHERE u.totp_verified IS NULL OR u.totp_verified = 0
+                    WHERE (u.totp_verified IS NULL OR u.totp_verified=0)
                     ORDER BY u.created DESC LIMIT 100
                 """).fetchall()
             except Exception:
@@ -3811,7 +3742,7 @@ def admin_api_user_reset_password(uid):
         return jsonify({"error": "Password must be at least 8 characters"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE users SET password=:p0 WHERE id=:p1", (hash_pw(pw), uid))
+            db.execute("UPDATE users SET password=? WHERE id=?", (hash_pw(pw), uid))
             db.commit()
         _audit("reset_user_password", uid, "Password reset by admin")
         return jsonify({"ok": True})
@@ -3825,8 +3756,8 @@ def admin_api_user_reset_totp(uid):
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE id=:p0",
-                {"p0": uid}
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE id=?",
+                (uid,)
             )
             db.commit()
         _audit("reset_user_totp", uid, "2FA cleared by admin")
@@ -3845,7 +3776,7 @@ def admin_api_user_change_role(uid):
         return jsonify({"error": "Invalid role"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE users SET role=:p0 WHERE id=:p1", (role, uid))
+            db.execute("UPDATE users SET role=? WHERE id=?", (role, uid))
             db.commit()
         _audit("change_user_role", uid, f"Role changed to {role}")
         return jsonify({"ok": True})
@@ -3870,20 +3801,12 @@ def admin_api_login():
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@vewit.in").strip().lower()
     admin_pass  = os.environ.get("ADMIN_PASSWORD", "")
 
-    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")[:60]
-
-    if _admin_check_lockout(client_ip):
-        return jsonify({"error": "Too many failed attempts. Try again in 15 minutes."}), 429
-
     if not admin_pass:
         return jsonify({"error": "Admin password not configured. Set ADMIN_PASSWORD env var."}), 503
 
     if email != admin_email or password != admin_pass:
-        _admin_record_failure(client_ip)
-        remaining = 5 - len(_ADMIN_FAIL_LOG.get(client_ip, []))
-        return jsonify({"error": f"Invalid credentials. {max(remaining,0)} attempt(s) remaining before lockout."}), 401
+        return jsonify({"error": "Invalid credentials"}), 401
 
-    _admin_clear_failures(client_ip)
     token = secrets.token_hex(32)
     _ADMIN_TOKENS[token] = datetime.utcnow() + timedelta(hours=8)
     _audit("admin_login", "system", f"Admin logged in: {email}")
@@ -3918,7 +3841,7 @@ def admin_api_dashboard():
             try:
                 cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
                 active = db.execute(
-                    "SELECT COUNT(*) FROM users WHERE last_active > :p0", {"p0": cutoff}
+                    "SELECT COUNT(*) FROM users WHERE last_active > ?", (cutoff,)
                 ).fetchone()[0]
             except Exception:
                 active = total_users
@@ -3957,12 +3880,12 @@ def admin_api_workspace_detail(ws_id):
         return jsonify({"error": "Unauthorized"}), 401
     try:
         with get_db() as db:
-            ws = db.execute("SELECT * FROM workspaces WHERE id=:p0", {"p0": ws_id}).fetchone()
+            ws = db.execute("SELECT * FROM workspaces WHERE id=?", (ws_id,)).fetchone()
             if not ws:
                 return jsonify({"error": "Workspace not found"}), 404
             members = db.execute(
-                "SELECT id, name, email, role, created FROM users WHERE workspace_id=:p0 ORDER BY created",
-                {"p0": ws_id}
+                "SELECT id, name, email, role, created FROM users WHERE workspace_id=? ORDER BY created",
+                (ws_id,)
             ).fetchall()
         return jsonify({"workspace": dict(ws), "members": [dict(m) for m in members]})
     except Exception as e:
@@ -3991,7 +3914,7 @@ def admin_api_delete_user(uid):
         return jsonify({"error": "Unauthorized"}), 401
     try:
         with get_db() as db:
-            db.execute("DELETE FROM users WHERE id=:p0", {"p0": uid})
+            db.execute("DELETE FROM users WHERE id=?", (uid,))
             db.commit()
         _audit("delete_user", uid, "User deleted by admin")
         return jsonify({"ok": True})
@@ -4022,7 +3945,7 @@ def admin_api_set_plan():
         return jsonify({"error": "Invalid plan"}), 400
     try:
         with get_db() as db:
-            db.execute("UPDATE workspaces SET plan=:p0 WHERE id=:p1", (plan, ws_id))
+            db.execute("UPDATE workspaces SET plan=? WHERE id=?", (plan, ws_id))
             db.commit()
         _audit("set_plan", ws_id, f"Plan changed to {plan}")
         return jsonify({"ok": True})
@@ -4037,7 +3960,7 @@ def admin_api_suspend_workspace():
     ws_id = data.get("workspace_id")
     try:
         with get_db() as db:
-            db.execute("UPDATE workspaces SET suspended=TRUE WHERE id=:p0", {"p0": ws_id})
+            db.execute("UPDATE workspaces SET suspended=1 WHERE id=?", (ws_id,))
             db.commit()
         _audit("suspend_workspace", ws_id, "Workspace suspended")
         return jsonify({"ok": True})
@@ -4053,7 +3976,7 @@ def admin_api_reset_invite():
     new_code = secrets.token_urlsafe(8).upper()[:8]
     try:
         with get_db() as db:
-            db.execute("UPDATE workspaces SET invite_code=:p0 WHERE id=:p1", (new_code, ws_id))
+            db.execute("UPDATE workspaces SET invite_code=? WHERE id=?", (new_code, ws_id))
             db.commit()
         _audit("reset_invite_code", ws_id, f"New code: {new_code}")
         return jsonify({"ok": True, "invite_code": new_code})
@@ -4072,10 +3995,10 @@ def admin_api_reset_all_passwords():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET password=:p0 WHERE workspace_id=:p1",
+                "UPDATE users SET password=? WHERE workspace_id=?",
                 (hash_pw(pw), ws_id)
             )
-            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
+            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=?", (ws_id,))
             count = cur.fetchone()[0]
             db.commit()
         _audit("reset_all_passwords", ws_id, f"Bulk password reset for {count} users")
@@ -4092,10 +4015,10 @@ def admin_api_reset_all_totp():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE workspace_id=:p0",
-                {"p0": ws_id}
+                "UPDATE users SET totp_secret='', totp_verified=0, two_fa_enabled=0 WHERE workspace_id=?",
+                (ws_id,)
             )
-            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=:p0", {"p0": ws_id})
+            cur = db.execute("SELECT COUNT(*) FROM users WHERE workspace_id=?", (ws_id,))
             count = cur.fetchone()[0]
             db.commit()
         _audit("reset_all_totp", ws_id, f"Bulk 2FA reset for {count} users")
@@ -4113,7 +4036,7 @@ def admin_api_toggle_2fa():
     try:
         with get_db() as db:
             db.execute(
-                "UPDATE workspaces SET otp_enabled=:p0 WHERE id=:p1",
+                "UPDATE workspaces SET otp_enabled=? WHERE id=?",
                 (1 if enabled else 0, ws_id)
             )
             db.commit()
@@ -4138,9 +4061,9 @@ def admin_api_add_user():
     try:
         with get_db() as db:
             db.execute(
-                "INSERT INTO users (id, name, email, password, role, workspace_id, created) "
-                "VALUES (:p0, :p1, :p2, :p3, :p4, :p5, :p6)",
-                (uid, name, email, hash_pw(pw), role, ws_id, datetime.utcnow().isoformat())
+                "INSERT INTO users (id, workspace_id, name, email, password, role, avatar, color, created) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (uid, ws_id, name, email, hash_pw(pw), role, ''.join(w[0] for w in name.split())[:2].upper(), '#5a8cff', datetime.utcnow().isoformat())
             )
             db.commit()
         _audit("add_user", ws_id, f"User {name} ({email}) created with role {role}")
@@ -4231,7 +4154,7 @@ if __name__=="__main__":
         print("  ⚠ Some libraries failed. Check your internet connection.")
     port=find_free_port(5000)
     print(f"\n  ✓ Running at  http://localhost:{port}")
-    print(f"  ✓ Database:   {DATABASE_URL[:40]}...")
+    print(f"  ✓ Database:   {DATABASE_URL[:50] if DATABASE_URL else '(not set)'}")
     print(f"  ✓ Uploads:    {UPLOAD_DIR}")
     print(f"\n  Demo: alice@dev.io / pass123 (Admin)")
     print(f"  New company? Click 'Create Account' → 'New Workspace'")
