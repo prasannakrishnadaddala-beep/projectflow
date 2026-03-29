@@ -871,15 +871,14 @@ async function billing(){
               return `
               <tr data-search="${esc(w.name)} ${esc(w.plan||'starter')}" data-plan="${esc(w.plan||'starter')}">
                 <td><div class="tdm">${esc(w.name)}</div><div class="tds">${esc(w.id)}</div></td>
-                <td style="color:${(w.member_count||0)>=limit&&limit<9999?'var(--orange)':'var(--tx)';font-weight:600}">
+                <td style="color:${(w.member_count||0)>=limit&&limit<9999?'var(--orange)':'var(--tx)'};font-weight:600">
                   ${w.member_count||0}<span style="color:var(--tx3);font-size:11px"> / ${limit<9999?limit:'∞'}</span></td>
                 <td>${planBadge(w.plan)}</td>
                 <td>${w.plan==='starter'?'5 members':w.plan==='team'?'30 members':'Unlimited'}</td>
                 <td style="font-weight:600;color:${w.plan==='team'?'var(--green)':w.plan==='enterprise'?'var(--purple)':'var(--tx3)'}">
                   ${w.plan==='team'?'₹999':w.plan==='enterprise'?'Custom':'₹0'}</td>
                 <td style="min-width:100px">
-                  ${limit<9999?`<div style="font-size:11px;color:var(--tx3);margin-bottom:3px">${util}%</div>
-                  <div class="pb" style="margin-top:0"><div class="pf" style="width:${util}%;background:${util>=90?'var(--red)':util>=70?'var(--orange)':'var(--blue)'}"></div></div>`:'—'}
+                  ${limit<9999?('<div style="font-size:11px;color:var(--tx3);margin-bottom:3px">'+util+'%</div><div class="pb" style="margin-top:0"><div class="pf" style="width:'+util+'%;background:'+(util>=90?'var(--red)':util>=70?'var(--orange)':'var(--blue)')+'"></div></div>'):'—'}
                 </td>
                 <td>
                   <button class="ab suc" onclick="setPlan('${esc(w.id)}','${esc(w.name)}')">Change Plan</button>
